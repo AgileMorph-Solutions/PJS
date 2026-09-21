@@ -1,0 +1,122 @@
+// Dev datasource is SQLite (zero external services — see README for why). The schema is kept
+// portable on purpose: no SQLite-only features, plain string columns instead of native enums
+// (unsupported on SQLite), JSON stored as TEXT (Prisma's `Json` type isn't reliable across all
+// three providers this app may run under). Switching `provider` to "postgresql" and pointing
+// DATABASE_URL at the docker-compose `db` service is the whole production migration — see
+// backend/README.md.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Masters / reference tables ─────────────────────────────────────────────
+// Deliberately NOT foreign-keyed from Receipt/DryingJob below (see note there) — these exist so
+// the masters list/add endpoints (mirroring addSupplier/addWarehouse/addBin in the frontend's
+// TrackingContext) have somewhere real to read from and write to.
+
+model Supplier {
+  code String @id
+  name String
+}
+
+model Warehouse {
+  name String @id
+}
+
+model Bin {
+  code String @id
+  /// Free-text, not FK'd to Warehouse — the real seed data doesn't map bin -> warehouse today
+  /// (bins.json / warehouses.json are two independent flat lists), so don't invent the mapping.
+  warehouseName String?
+}
+
+model Origin {
+  name String @id
+}
+
+// ── Core entity ──────────────────────────────────────────────────────────
+// One truck = one Receipt = one Lot, always (confirmed client rule). lotNo is nullable because
+// it isn't assigned until the n-lot stage; unique because a Lot never spans two trucks.
+model Receipt {
+  id     String @id
+  source String // "imported" | "entered" — checked in application code, not a DB enum (see header note)
+
+  arrivalDate  String
+  supplierName String
+  lbaCode      String
+  vehicleNo    String
+  warehouse    String
+  origin       String?
+
+  lotNo String? @unique
+  /// The physical storage location. Intentionally NOT unique and NOT required to equal any
+  /// single receipt's warehouse — one Bin holds RCN from many Lots/trucks (confirmed rule).
+  binNo String?
+
+  /// Record<stageId, Record<fieldName, value>> — JSON-encoded. Mirrors frontend's
+  /// ReceiptRecord.stageData exactly; see frontend/src/data/stages.ts for the field dictionary
+  /// this is validated against.
+  stageData String @default("{}")
+  /// Record<stageId, branchId> for the three decision stages (n-qfs, n-drying, n-xferdec).
+  branches String @default("{}")
+
+  timeline TimelineEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([warehouse])
+  @@index([binNo])
+  @@index([supplierName])
+}
+
+/// Backs ReceiptRecord.timeline. Appended whenever a decision branch is set (setBranch), exactly
+/// matching the frontend's current behavior — see src/domain/receiptStatus.ts.
+model TimelineEntry {
+  id        Int      @id @default(autoincrement())
+  receiptId String
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  status    String
+  at        String
+  note      String?
+
+  @@index([receiptId])
+}
+
+/// Scoped to a specific Lot/quantity, never a whole Bin (confirmed rule — a Bin can mix Lots).
+/// lotNo is not FK'd to Receipt.lotNo for the same reason nothing else here is hard-FK'd to a
+/// master list: real drying history may reference a Lot from before this system existed.
+model DryingJob {
+  id          String @id
+  date        String
+  warehouse   String
+  bin         String
+  lotNo       String
+  ficheNo     String
+  status      String
+  dryType     String
+  destination String
+
+  @@index([lotNo])
+  @@index([bin])
+}
+
+/// One polymorphic table for all four jute bag ledgers (warehouse-stock, supplier-movement,
+/// factory-production-tracking, warehouse-to-warehouse-movement), discriminated by ledgerId,
+/// matching frontend's LedgerEntries = Record<ledgerId, LedgerRow[]> shape. `row` is a
+/// JSON-encoded Record<string,string> since each ledger has an entirely different column set
+/// (see frontend/src/data/juteBags.ts) — normalizing four different schemas into one table would
+/// mean either four tables (more ceremony for equally dynamic data) or a wide sparse table; this
+/// is the same call the frontend already made client-side.
+model JuteLedgerEntry {
+  id        Int      @id @default(autoincrement())
+  ledgerId  String
+  row       String
+  createdAt DateTime @default(now())
+
+  @@index([ledgerId])
+}

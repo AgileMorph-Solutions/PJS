@@ -1,0 +1,3520 @@
+[
+  {
+    "id": "REC-2026-0038",
+    "source": "imported",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "lbaCode": "LBA-009-SCO",
+    "vehicleNo": "338KX01",
+    "warehouse": "BOUAKE",
+    "origin": "BOUAKE",
+    "lotNo": "LOT-20260038",
+    "binNo": "BKE-003",
+    "stageData": {
+      "n-gate": {
+        "S N": "7",
+        "DATE OF ARRIVAL": "2026-02-17",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-003",
+        "VEHICLE NO.": "338KX01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOPPAS SCOOPS",
+        "LBA CODE": "LBA-009-SCO",
+        "FICHE CODE": "0426-0203",
+        "REF.": "811",
+        "FICHE": "72540",
+        "ORIGIN": "BOUAKE"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.5",
+        "NUT COUNT": "166",
+        "KOR": "48.57",
+        "FINAL KOR": "48.04"
+      },
+      "n-gross": {
+        "GROSS WT KGS": "35320"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260038",
+        "Truck reference": "338KX01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-02-17"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-003",
+        "Linked Lot Number(s)": "LOT-20260038",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-02-17",
+        "SACS (bags)": "425",
+        "BON SACS (good bags)": "400",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "25",
+        "Refraction": "100"
+      },
+      "n-netwt": {
+        "NET WT KGS": "34895",
+        "PAID WT": "34795"
+      },
+      "n-grn": {
+        "PRICE": "470",
+        "AMOUNT": "16353650"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "34895"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-17",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0003",
+    "source": "imported",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS HERE B",
+    "lbaCode": "LBA-003-HER",
+    "vehicleNo": "8287GH03",
+    "warehouse": "BOUAKE",
+    "origin": "NIAKARA",
+    "lotNo": "LOT-20260003",
+    "binNo": "BKE-003",
+    "stageData": {
+      "n-gate": {
+        "S N": "26",
+        "DATE OF ARRIVAL": "2026-02-19",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-003",
+        "VEHICLE NO.": "8287GH03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS HERE B",
+        "LBA CODE": "LBA-003-HER",
+        "FICHE CODE": "0426-0187",
+        "REF.": "824",
+        "FICHE": "72614",
+        "ORIGIN": "NIAKARA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.4",
+        "NUT COUNT": "163",
+        "KOR": "46.46",
+        "FINAL KOR": "46.11"
+      },
+      "n-gross": {
+        "GROSS WT KGS": "47800"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260003",
+        "Truck reference": "8287GH03",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-02-19"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-003",
+        "Linked Lot Number(s)": "LOT-20260003",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-02-19",
+        "SACS (bags)": "541",
+        "BON SACS (good bags)": "504",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "37",
+        "Refraction": "148"
+      },
+      "n-netwt": {
+        "NET WT KGS": "47259",
+        "PAID WT": "47111"
+      },
+      "n-grn": {
+        "PRICE": "475",
+        "AMOUNT": "22377725"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "47259"
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "9.4"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-19",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0018",
+    "source": "imported",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "lbaCode": "LBA-015-OUM",
+    "vehicleNo": "5500FL02",
+    "warehouse": "BOUAKE",
+    "origin": "BEOUMI",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "33",
+        "DATE OF ARRIVAL": "2026-02-19",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-003",
+        "VEHICLE NO.": "5500FL02"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS-OUMI/KONE SIDY",
+        "LBA CODE": "LBA-015-OUM",
+        "FICHE CODE": "0426-0347",
+        "REF.": "834",
+        "FICHE": "72563",
+        "ORIGIN": "BEOUMI"
+      }
+    },
+    "branches": {},
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-19",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0019",
+    "source": "imported",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "lbaCode": "LBA-012-KPE",
+    "vehicleNo": "AA057ER03",
+    "warehouse": "BOUAKE",
+    "origin": "DIANRA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "31",
+        "DATE OF ARRIVAL": "2026-02-19",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-003",
+        "VEHICLE NO.": "AA057ER03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS KPESSO",
+        "LBA CODE": "LBA-012-KPE",
+        "FICHE CODE": "0426-0365",
+        "REF.": "825",
+        "FICHE": "72549",
+        "ORIGIN": "DIANRA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.7",
+        "NUT COUNT": "178",
+        "KOR": "46.99",
+        "FINAL KOR": "47.34"
+      }
+    },
+    "branches": {
+      "n-qfs": "fail"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-19",
+        "note": "Failed QFS — moisture/KOR out of spec"
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0025",
+    "source": "imported",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS WEBE",
+    "lbaCode": "LBA-004-WEB",
+    "vehicleNo": "653KX01",
+    "warehouse": "BOUAKE",
+    "origin": "DABAKALA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "28",
+        "DATE OF ARRIVAL": "2026-02-19",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "653KX01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS WEBE",
+        "LBA CODE": "LBA-004-WEB",
+        "FICHE CODE": "0425-0212",
+        "REF.": "818",
+        "FICHE": "72566",
+        "ORIGIN": "DABAKALA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.4",
+        "NUT COUNT": "178",
+        "KOR": "47.69",
+        "FINAL KOR": "47.16"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-19",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0015",
+    "source": "imported",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS HERE B",
+    "lbaCode": "LBA-003-HER",
+    "vehicleNo": "AA459KL03",
+    "warehouse": "BOUAKE",
+    "origin": "NIAKARA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "90",
+        "DATE OF ARRIVAL": "2026-02-24",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "AA459KL03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS HERE B",
+        "LBA CODE": "LBA-003-HER",
+        "FICHE CODE": "0426-0187",
+        "REF.": "770",
+        "FICHE": "68664",
+        "ORIGIN": "NIAKARA"
+      }
+    },
+    "branches": {},
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-24",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0020",
+    "source": "imported",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOP ASER",
+    "lbaCode": "LBA-011-ASR",
+    "vehicleNo": "6253KV04",
+    "warehouse": "BOUAKE",
+    "origin": "ZOUKOUGBEU",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "96",
+        "DATE OF ARRIVAL": "2026-02-25",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "6253KV04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP ASER",
+        "LBA CODE": "LBA-011-ASR",
+        "FICHE CODE": "0426-0340",
+        "REF.": "776",
+        "FICHE": "68671",
+        "ORIGIN": "ZOUKOUGBEU"
+      }
+    },
+    "branches": {},
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-25",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0049",
+    "source": "imported",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "lbaCode": "LBA-014-BAY",
+    "vehicleNo": "2023 HF 01",
+    "warehouse": "BOUAKE",
+    "origin": "NIAKARA",
+    "lotNo": "LOT-20260049",
+    "binNo": "BKE-003",
+    "stageData": {
+      "n-gate": {
+        "S N": "95",
+        "DATE OF ARRIVAL": "2026-02-25",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-003",
+        "VEHICLE NO.": "2023 HF 01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS BAY SCOOPS",
+        "LBA CODE": "LBA-014-BAY",
+        "FICHE CODE": "0426-0194",
+        "REF.": "774",
+        "FICHE": "69771",
+        "ORIGIN": "NIAKARA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.6",
+        "NUT COUNT": "183",
+        "KOR": "47.69",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "21600"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260049",
+        "Truck reference": "2023 HF 01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-02-25"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-003",
+        "Linked Lot Number(s)": "LOT-20260049",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-02-25",
+        "SACS (bags)": "238",
+        "BON SACS (good bags)": "223",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "15",
+        "Refraction": "60"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-25",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0010",
+    "source": "imported",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOPADA SCOOPS",
+    "lbaCode": "DIS-001-SCO",
+    "vehicleNo": "4139GV01",
+    "warehouse": "BOUAKE",
+    "origin": "BOUAKE",
+    "lotNo": "LOT-20260010",
+    "binNo": "BKE-002",
+    "stageData": {
+      "n-gate": {
+        "S N": "105",
+        "DATE OF ARRIVAL": "2026-02-26",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "4139GV01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPADA SCOOPS",
+        "LBA CODE": "DIS-001-SCO",
+        "FICHE CODE": "0426-0424",
+        "REF.": "782",
+        "FICHE": "72599",
+        "ORIGIN": "BOUAKE"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.3",
+        "NUT COUNT": "172",
+        "KOR": "46.46",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "11220"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260010",
+        "Truck reference": "4139GV01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-02-26"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-002",
+        "Linked Lot Number(s)": "LOT-20260010",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-02-26",
+        "SACS (bags)": "124",
+        "BON SACS (good bags)": "124",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "0"
+      },
+      "n-netwt": {
+        "NET WT KGS": "11096",
+        "PAID WT": "11096"
+      },
+      "n-grn": {
+        "PRICE": "475",
+        "AMOUNT": "5270600"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "11096"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-26",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0002",
+    "source": "imported",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SOVA SCOOPS",
+    "lbaCode": "DIS-005-SOV",
+    "vehicleNo": "AA114NQ02",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "VAVOUA",
+    "lotNo": "LOT-20260002",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "115",
+        "DATE OF ARRIVAL": "2026-02-27",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "AA114NQ02"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SOVA SCOOPS",
+        "LBA CODE": "DIS-005-SOV",
+        "FICHE CODE": "0429-0361",
+        "REF.": "855",
+        "FICHE": "77585",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8",
+        "NUT COUNT": "185",
+        "KOR": "47.87",
+        "FINAL KOR": "47.34"
+      },
+      "n-gross": {
+        "GROSS WT KGS": "48800"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260002",
+        "Truck reference": "AA114NQ02",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-02-27"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260002",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-02-27",
+        "SACS (bags)": "658",
+        "BON SACS (good bags)": "633",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "25",
+        "Refraction": "80"
+      },
+      "n-netwt": {
+        "NET WT KGS": "48142",
+        "PAID WT": "48062"
+      },
+      "n-grn": {
+        "PRICE": "490",
+        "AMOUNT": "23550380"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "48142"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-02-27",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0008",
+    "source": "imported",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOP IMANE",
+    "lbaCode": "LBA-006-IMA",
+    "vehicleNo": "7558EJ03",
+    "warehouse": "BOUAKE",
+    "origin": "DIANRA",
+    "lotNo": "LOT-20260008",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "143",
+        "DATE OF ARRIVAL": "2026-03-02",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "7558EJ03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP IMANE",
+        "LBA CODE": "LBA-006-IMA",
+        "FICHE CODE": "0401-0007",
+        "REF.": "1206",
+        "FICHE": "72509",
+        "ORIGIN": "DIANRA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.9",
+        "NUT COUNT": "175",
+        "KOR": "46.11",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "39940"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260008",
+        "Truck reference": "7558EJ03",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-02"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260008",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-02",
+        "SACS (bags)": "462",
+        "BON SACS (good bags)": "441",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "21",
+        "Refraction": "80"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-02",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0041",
+    "source": "imported",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "lbaCode": "LBA-010-CAP",
+    "vehicleNo": "6305EP01",
+    "warehouse": "BOUAKE",
+    "origin": "NIAKARA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "164",
+        "DATE OF ARRIVAL": "2026-03-03",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "6305EP01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN CAPCD-SCOOPS",
+        "LBA CODE": "LBA-010-CAP",
+        "FICHE CODE": "0431-0277",
+        "REF.": "1225",
+        "FICHE": "69883/69881",
+        "ORIGIN": "NIAKARA"
+      }
+    },
+    "branches": {},
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-03",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0044",
+    "source": "imported",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "lbaCode": "LBA-009-SCO",
+    "vehicleNo": "7692GB04",
+    "warehouse": "BOUAKE",
+    "origin": "VAVOUA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "160",
+        "DATE OF ARRIVAL": "2026-03-03",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "7692GB04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOPPAS SCOOPS",
+        "LBA CODE": "LBA-009-SCO",
+        "FICHE CODE": "0426-0203",
+        "REF.": "1222",
+        "FICHE": "68653",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.9",
+        "NUT COUNT": "180",
+        "KOR": "45.4",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-03",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0027",
+    "source": "imported",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPS WEBE",
+    "lbaCode": "LBA-004-WEB",
+    "vehicleNo": "4981JR04",
+    "warehouse": "BOUAKE",
+    "origin": "DABAKALA",
+    "lotNo": "LOT-20260027",
+    "binNo": "BKE-003",
+    "stageData": {
+      "n-gate": {
+        "S N": "204",
+        "DATE OF ARRIVAL": "2026-03-06",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-003",
+        "VEHICLE NO.": "4981JR04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS WEBE",
+        "LBA CODE": "LBA-004-WEB",
+        "FICHE CODE": "0425-0212",
+        "REF.": "1250",
+        "FICHE": "77623",
+        "ORIGIN": "DABAKALA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.6",
+        "NUT COUNT": "167",
+        "KOR": "46.11",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "41780"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260027",
+        "Truck reference": "4981JR04",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-06"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-003",
+        "Linked Lot Number(s)": "LOT-20260027",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-06",
+        "SACS (bags)": "479",
+        "BON SACS (good bags)": "472",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "7",
+        "Refraction": "28"
+      },
+      "n-netwt": {
+        "NET WT KGS": "41301",
+        "PAID WT": "41273"
+      },
+      "n-grn": {
+        "PRICE": "485",
+        "AMOUNT": "20017405"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "41301"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-06",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0021",
+    "source": "imported",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "lbaCode": "LBA-002-SCA",
+    "vehicleNo": "AA944AR02",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "VAVOUA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "224",
+        "DATE OF ARRIVAL": "2026-03-07",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "AA944AR02"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCAAMT COOP CA",
+        "LBA CODE": "LBA-002-SCA",
+        "FICHE CODE": "0419-0180",
+        "REF.": "865",
+        "FICHE": "68686",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.4",
+        "NUT COUNT": "187",
+        "KOR": "45.76",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "fail"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-07",
+        "note": "Failed QFS — moisture/KOR out of spec"
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0045",
+    "source": "imported",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "lbaCode": "DIS-003-DEM",
+    "vehicleNo": "120GL01",
+    "warehouse": "BOUAKE",
+    "origin": "MANKONO",
+    "lotNo": "LOT-20260045",
+    "binNo": "BKE-002",
+    "stageData": {
+      "n-gate": {
+        "S N": "221",
+        "DATE OF ARRIVAL": "2026-03-07",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "120GL01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS DEMBOL",
+        "LBA CODE": "DIS-003-DEM",
+        "FICHE CODE": "0426-0440",
+        "REF.": "204",
+        "FICHE": "68678",
+        "ORIGIN": "MANKONO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.5",
+        "NUT COUNT": "165",
+        "KOR": "45.58",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "21200"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260045",
+        "Truck reference": "120GL01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-07"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-002",
+        "Linked Lot Number(s)": "LOT-20260045",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-07",
+        "SACS (bags)": "247",
+        "BON SACS (good bags)": "240",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "7",
+        "Refraction": "28"
+      },
+      "n-netwt": {
+        "NET WT KGS": "20953",
+        "PAID WT": "20925"
+      },
+      "n-grn": {
+        "PRICE": "485",
+        "AMOUNT": "10148625"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "20953"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-07",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0007",
+    "source": "imported",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "lbaCode": "LBA-016-NOU",
+    "vehicleNo": "3998HF01",
+    "warehouse": "BOUAKE",
+    "origin": "KATIOLA",
+    "lotNo": "LOT-20260007",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "229",
+        "DATE OF ARRIVAL": "2026-03-08",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "3998HF01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS AH AL NOUR",
+        "LBA CODE": "LBA-016-NOU",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "KATIOLA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.7",
+        "NUT COUNT": "165",
+        "KOR": "43.2",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260007",
+        "Truck reference": "3998HF01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-08"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260007",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-08",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-08",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0032",
+    "source": "imported",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOP ASER",
+    "lbaCode": "LBA-011-ASR",
+    "vehicleNo": "1652JE01",
+    "warehouse": "BOUAKE",
+    "origin": "BOTRO",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "226",
+        "DATE OF ARRIVAL": "2026-03-08",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "1652JE01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP ASER",
+        "LBA CODE": "LBA-011-ASR",
+        "FICHE CODE": "0426-0340",
+        "REF.": "207",
+        "FICHE": "77617",
+        "ORIGIN": "BOTRO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.9",
+        "NUT COUNT": "185",
+        "KOR": "45.14",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-08",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0022",
+    "source": "imported",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "lbaCode": "LBA-005-JAV",
+    "vehicleNo": "285LA01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "VAVOUA",
+    "lotNo": "LOT-20260022",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "239",
+        "DATE OF ARRIVAL": "2026-03-09",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "285LA01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN COP JAVA SCOOPS",
+        "LBA CODE": "LBA-005-JAV",
+        "FICHE CODE": "0429-0005",
+        "REF.": "867",
+        "FICHE": "77581",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.3",
+        "NUT COUNT": "178",
+        "KOR": "45.4",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "45400"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260022",
+        "Truck reference": "285LA01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-09"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260022",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-09",
+        "SACS (bags)": "604",
+        "BON SACS (good bags)": "584",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "20",
+        "Refraction": "80"
+      },
+      "n-netwt": {
+        "NET WT KGS": "44796",
+        "PAID WT": "44716"
+      },
+      "n-grn": {
+        "PRICE": "490",
+        "AMOUNT": "21910840"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "44796"
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "11.3"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-09",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0006",
+    "source": "imported",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "lbaCode": "LBA-013-DAG",
+    "vehicleNo": "9149EL04",
+    "warehouse": "BOUAKE",
+    "origin": "NIAKARA",
+    "lotNo": "LOT-20260006",
+    "binNo": "BKE-002",
+    "stageData": {
+      "n-gate": {
+        "S N": "251",
+        "DATE OF ARRIVAL": "2026-03-10",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "9149EL04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN DAGNOGO KARIM",
+        "LBA CODE": "LBA-013-DAG",
+        "FICHE CODE": "0425-0068",
+        "REF.": "220",
+        "FICHE": "77663",
+        "ORIGIN": "NIAKARA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "10.8",
+        "NUT COUNT": "160",
+        "KOR": "45.05",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "41040"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260006",
+        "Truck reference": "9149EL04",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-10"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-002",
+        "Linked Lot Number(s)": "LOT-20260006",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-10",
+        "SACS (bags)": "468",
+        "BON SACS (good bags)": "453",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "15",
+        "Refraction": "60"
+      },
+      "n-netwt": {
+        "NET WT KGS": "40572",
+        "PAID WT": "40512"
+      },
+      "n-grn": {
+        "PRICE": "485",
+        "AMOUNT": "19648320"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-10",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0005",
+    "source": "imported",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "lbaCode": "LBA-016-NOU",
+    "vehicleNo": "4137LG04",
+    "warehouse": "BOUAKE",
+    "origin": "DABAKALA",
+    "lotNo": "LOT-20260005",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "282",
+        "DATE OF ARRIVAL": "2026-03-12",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "4137LG04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS AH AL NOUR",
+        "LBA CODE": "LBA-016-NOU",
+        "FICHE CODE": "0425-0055",
+        "REF.": "239",
+        "FICHE": "64887",
+        "ORIGIN": "DABAKALA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "10.3",
+        "NUT COUNT": "182",
+        "KOR": "45.4",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "43420"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260005",
+        "Truck reference": "4137LG04",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-12"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260005",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-12",
+        "SACS (bags)": "517",
+        "BON SACS (good bags)": "502",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "15",
+        "Refraction": "60"
+      },
+      "n-netwt": {
+        "NET WT KGS": "42903",
+        "PAID WT": "42843"
+      },
+      "n-grn": {
+        "PRICE": "485",
+        "AMOUNT": "20778855"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "42903"
+      },
+      "n-otheract": {
+        "Movement between locations": "Moved to central bin"
+      },
+      "n-ledger": {
+        "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)": "weight",
+        "Performed by": "Warehouse Team"
+      },
+      "n-xferdec": {
+        "Decision (Stays / Transfers)": "Transfers",
+        "Driven by (space at warehouse)": "Space at unit warehouse"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-xferdec": "transfer"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-12",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0035",
+    "source": "imported",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOP ASER",
+    "lbaCode": "LBA-011-ASR",
+    "vehicleNo": "197KC01",
+    "warehouse": "BOUAKE",
+    "origin": "MANKONO",
+    "lotNo": "LOT-20260035",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "285",
+        "DATE OF ARRIVAL": "2026-03-12",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "197KC01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP ASER",
+        "LBA CODE": "LBA-011-ASR",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "MANKONO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "13",
+        "NUT COUNT": "177",
+        "KOR": "43.29",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260035",
+        "Truck reference": "197KC01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-12"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260035",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-12",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": "0"
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "13"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-12",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0043",
+    "source": "imported",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS PAPN",
+    "lbaCode": "DIS-018-PAP",
+    "vehicleNo": "3591LR01",
+    "warehouse": "BOUAKE",
+    "origin": "DABAKALA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "349",
+        "DATE OF ARRIVAL": "2026-03-17",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "3591LR01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS PAPN",
+        "LBA CODE": "DIS-018-PAP",
+        "FICHE CODE": "0426-0285",
+        "REF.": "118",
+        "FICHE": "78709",
+        "ORIGIN": "DABAKALA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "10.2",
+        "NUT COUNT": "192",
+        "KOR": "45.05",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "fail"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-17",
+        "note": "Failed QFS — moisture/KOR out of spec"
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0048",
+    "source": "imported",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "lbaCode": "DIS-008-FOU",
+    "vehicleNo": "4972KB01",
+    "warehouse": "BOUAKE",
+    "origin": "DIKODOUGOU",
+    "lotNo": "LOT-20260048",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "345",
+        "DATE OF ARRIVAL": "2026-03-17",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "4972KB01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS FOUNDARA",
+        "LBA CODE": "DIS-008-FOU",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "DIKODOUGOU"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.4",
+        "NUT COUNT": "168",
+        "KOR": "41.44",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260048",
+        "Truck reference": "4972KB01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-17"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260048",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-17",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "8.4"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-17",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0050",
+    "source": "imported",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCOOP IMANE",
+    "lbaCode": "LBA-006-IMA",
+    "vehicleNo": "28JZ01",
+    "warehouse": "BOUAKE",
+    "origin": "BOTRO",
+    "lotNo": "LOT-20260050",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "390",
+        "DATE OF ARRIVAL": "2026-03-23",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "28JZ01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP IMANE",
+        "LBA CODE": "LBA-006-IMA",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "BOTRO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "13",
+        "NUT COUNT": "155",
+        "KOR": "42.68",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260050",
+        "Truck reference": "28JZ01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-23"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260050",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-23",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-23",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0031",
+    "source": "imported",
+    "arrivalDate": "2026-03-28",
+    "supplierName": "RCN SCOOPS WEBE",
+    "lbaCode": "LBA-004-WEB",
+    "vehicleNo": "3937KT01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "ABENGOUKOU",
+    "lotNo": "LOT-20260031",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "430",
+        "DATE OF ARRIVAL": "2026-03-28",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "3937KT01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS WEBE",
+        "LBA CODE": "LBA-004-WEB",
+        "FICHE CODE": "0425-0212",
+        "REF.": "656",
+        "FICHE": "82495",
+        "ORIGIN": "ABENGOUKOU"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.9",
+        "NUT COUNT": "179",
+        "KOR": "44.17",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "46120"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260031",
+        "Truck reference": "3937KT01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-29"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260031",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-29",
+        "SACS (bags)": "530",
+        "BON SACS (good bags)": "510",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "20",
+        "Refraction": "80"
+      },
+      "n-netwt": {
+        "NET WT KGS": "45590",
+        "PAID WT": "45510"
+      },
+      "n-grn": {
+        "PRICE": "490",
+        "AMOUNT": "22299900"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "45590"
+      },
+      "n-otheract": {
+        "Movement between locations": "Moved to central bin"
+      },
+      "n-ledger": {
+        "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)": "weight",
+        "Performed by": "Warehouse Team"
+      },
+      "n-xferdec": {
+        "Decision (Stays / Transfers)": "Transfers",
+        "Driven by (space at warehouse)": "Space at unit warehouse"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-xferdec": "transfer"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-28",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0017",
+    "source": "imported",
+    "arrivalDate": "2026-03-29",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "lbaCode": "LBA-009-SCO",
+    "vehicleNo": "7692GB04",
+    "warehouse": "BOUAKE",
+    "origin": "VAVOUA",
+    "lotNo": "LOT-20260017",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "433",
+        "DATE OF ARRIVAL": "2026-03-29",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "7692GB04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOPPAS SCOOPS",
+        "LBA CODE": "LBA-009-SCO",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.3",
+        "NUT COUNT": "182",
+        "KOR": "40.21",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260017",
+        "Truck reference": "7692GB04",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-03-29"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260017",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-03-29",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-03-29",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0033",
+    "source": "imported",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "lbaCode": "LBA-002-SCA",
+    "vehicleNo": "3620KT01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "VAVOUA",
+    "lotNo": "LOT-20260033",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "460",
+        "DATE OF ARRIVAL": "2026-04-02",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "3620KT01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCAAMT COOP CA",
+        "LBA CODE": "LBA-002-SCA",
+        "FICHE CODE": "0419-0180",
+        "REF.": "665",
+        "FICHE": "78893",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.4",
+        "NUT COUNT": "183",
+        "KOR": "44.88",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "40480"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260033",
+        "Truck reference": "3620KT01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-02"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260033",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-02",
+        "SACS (bags)": "580",
+        "BON SACS (good bags)": "558",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "22",
+        "Refraction": "88"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-02",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0023",
+    "source": "imported",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "lbaCode": "LBA-010-CAP",
+    "vehicleNo": "6305EP01",
+    "warehouse": "BOUAKE",
+    "origin": "SAKASSAU",
+    "lotNo": "LOT-20260023",
+    "binNo": "BKE-002",
+    "stageData": {
+      "n-gate": {
+        "S N": "518",
+        "DATE OF ARRIVAL": "2026-04-08",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "6305EP01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN CAPCD-SCOOPS",
+        "LBA CODE": "LBA-010-CAP",
+        "FICHE CODE": "0431-0277",
+        "REF.": "1194",
+        "FICHE": "87017",
+        "ORIGIN": "SAKASSAU"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "12.2",
+        "NUT COUNT": "168",
+        "KOR": "42.32",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "34100"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260023",
+        "Truck reference": "6305EP01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-08"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-002",
+        "Linked Lot Number(s)": "LOT-20260023",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-08",
+        "SACS (bags)": "397",
+        "BON SACS (good bags)": "384",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "13",
+        "Refraction": "52"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-08",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0014",
+    "source": "imported",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "lbaCode": "DIS-027-BAO",
+    "vehicleNo": "AA379AD01/268WWCI01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "MAN",
+    "lotNo": "LOT-20260014",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "559",
+        "DATE OF ARRIVAL": "2026-04-11",
+        "RM/FG": "",
+        "CREDIT/CASH": "",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "AA379AD01/268WWCI01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS BAOBAB",
+        "LBA CODE": "DIS-027-BAO",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "MAN"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.3",
+        "NUT COUNT": "181",
+        "KOR": "40.12",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260014",
+        "Truck reference": "AA379AD01/268WWCI01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-11"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260014",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-11",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      },
+      "n-otheract": {
+        "Movement between locations": "Moved to central bin"
+      },
+      "n-ledger": {
+        "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)": "weight",
+        "Performed by": "Warehouse Team"
+      },
+      "n-xferdec": {
+        "Decision (Stays / Transfers)": "Transfers",
+        "Driven by (space at warehouse)": "Space at unit warehouse"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-xferdec": "transfer"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-11",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0026",
+    "source": "imported",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS AC SOURCING",
+    "lbaCode": "DIS-020-SOU",
+    "vehicleNo": "6166FT04",
+    "warehouse": "BOUAKE",
+    "origin": "DABAKALA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "575",
+        "DATE OF ARRIVAL": "2026-04-13",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "6166FT04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS AC SOURCING",
+        "LBA CODE": "DIS-020-SOU",
+        "FICHE CODE": "0401-0106",
+        "REF.": "1125",
+        "FICHE": "33853",
+        "ORIGIN": "DABAKALA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11",
+        "NUT COUNT": "166",
+        "KOR": "43.38",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "fail"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-13",
+        "note": "Failed QFS — moisture/KOR out of spec"
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0016",
+    "source": "imported",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SIMAYAT COOP CA",
+    "lbaCode": "DIS-025-SIM",
+    "vehicleNo": "4434EZ01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "ZOUKOUGBEU",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "605",
+        "DATE OF ARRIVAL": "2026-04-14",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "4434EZ01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SIMAYAT COOP CA",
+        "LBA CODE": "DIS-025-SIM",
+        "FICHE CODE": "0425-0122",
+        "REF.": "602",
+        "FICHE": "86148",
+        "ORIGIN": "ZOUKOUGBEU"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "12.2",
+        "NUT COUNT": "183",
+        "KOR": "43.38",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "fail"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-14",
+        "note": "Failed QFS — moisture/KOR out of spec"
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0034",
+    "source": "imported",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS WEBE",
+    "lbaCode": "LBA-004-WEB",
+    "vehicleNo": "138GL01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "AGNIBILEKRO",
+    "lotNo": "LOT-20260034",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "604",
+        "DATE OF ARRIVAL": "2026-04-14",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "138GL01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS WEBE",
+        "LBA CODE": "LBA-004-WEB",
+        "FICHE CODE": "0425-0212",
+        "REF.": "601",
+        "FICHE": "60071",
+        "ORIGIN": "AGNIBILEKRO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.3",
+        "NUT COUNT": "182",
+        "KOR": "44",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "43200"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260034",
+        "Truck reference": "138GL01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-15"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260034",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-15",
+        "SACS (bags)": "497",
+        "BON SACS (good bags)": "457",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "40",
+        "Refraction": "160"
+      },
+      "n-netwt": {
+        "NET WT KGS": "42703",
+        "PAID WT": "42543"
+      },
+      "n-grn": {
+        "PRICE": "515",
+        "AMOUNT": "21909645"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "42703"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-14",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0024",
+    "source": "imported",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS JPPAGG",
+    "lbaCode": "DIS-030-JPP",
+    "vehicleNo": "2706GN01",
+    "warehouse": "BOUAKE",
+    "origin": "BEOUMI",
+    "lotNo": "LOT-20260024",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "617",
+        "DATE OF ARRIVAL": "2026-04-15",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "2706GN01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS JPPAGG",
+        "LBA CODE": "DIS-030-JPP",
+        "FICHE CODE": "0426-0321",
+        "REF.": "1139",
+        "FICHE": "33034",
+        "ORIGIN": "BEOUMI"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.3",
+        "NUT COUNT": "160",
+        "KOR": "41.62",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "38780"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260024",
+        "Truck reference": "2706GN01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-16"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260024",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-16",
+        "SACS (bags)": "452",
+        "BON SACS (good bags)": "408",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "44",
+        "Refraction": "176"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-15",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0001",
+    "source": "imported",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "lbaCode": "LBA-018-COP",
+    "vehicleNo": "2766HC01",
+    "warehouse": "BOUAKE",
+    "origin": "KATIOLA",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "655",
+        "DATE OF ARRIVAL": "2026-04-18",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "2766HC01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS COOPRAKA",
+        "LBA CODE": "LBA-018-COP",
+        "FICHE CODE": "0425-0001",
+        "REF.": "258",
+        "FICHE": "18631",
+        "ORIGIN": "KATIOLA"
+      }
+    },
+    "branches": {},
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-18",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0029",
+    "source": "imported",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOP ASER",
+    "lbaCode": "LBA-011-ASR",
+    "vehicleNo": "AA398TS04",
+    "warehouse": "BOUAKE",
+    "origin": "BOUAKE",
+    "lotNo": "LOT-20260029",
+    "binNo": "BKE-002",
+    "stageData": {
+      "n-gate": {
+        "S N": "666",
+        "DATE OF ARRIVAL": "2026-04-18",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "AA398TS04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP ASER",
+        "LBA CODE": "LBA-011-ASR",
+        "FICHE CODE": "0426-0340",
+        "REF.": "261",
+        "FICHE": "31906",
+        "ORIGIN": "BOUAKE"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "7.8",
+        "NUT COUNT": "179",
+        "KOR": "41.09",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "53060"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260029",
+        "Truck reference": "AA398TS04",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-19"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-002",
+        "Linked Lot Number(s)": "LOT-20260029",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-19",
+        "SACS (bags)": "676",
+        "BON SACS (good bags)": "663",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "13",
+        "Refraction": "52"
+      },
+      "n-netwt": {
+        "NET WT KGS": "52384",
+        "PAID WT": "52332"
+      },
+      "n-grn": {
+        "PRICE": "500",
+        "AMOUNT": "26166000"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "52384"
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "7.8"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-18",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0011",
+    "source": "imported",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "lbaCode": "DIS-026-MOA",
+    "vehicleNo": "9406HV01",
+    "warehouse": "BOUAKE",
+    "origin": "DIDIEVI",
+    "lotNo": "LOT-20260011",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "693",
+        "DATE OF ARRIVAL": "2026-04-20",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "9406HV01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS MOAYE BKE",
+        "LBA CODE": "DIS-026-MOA",
+        "FICHE CODE": "0426-0386",
+        "REF.": "270",
+        "FICHE": "31507",
+        "ORIGIN": "DIDIEVI"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "10.9",
+        "NUT COUNT": "180",
+        "KOR": "42.32",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "45360"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260011",
+        "Truck reference": "9406HV01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-20"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260011",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-20",
+        "SACS (bags)": "526",
+        "BON SACS (good bags)": "516",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "10",
+        "Refraction": "40"
+      },
+      "n-netwt": {
+        "NET WT KGS": "44834",
+        "PAID WT": "44794"
+      },
+      "n-grn": {
+        "PRICE": "510",
+        "AMOUNT": "22844940"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "44834"
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "10.9"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-20",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0030",
+    "source": "imported",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "lbaCode": "LBA-010-CAP",
+    "vehicleNo": "4238HY04/8502BG04",
+    "warehouse": "BOUAKE",
+    "origin": "PRIKRO",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "719",
+        "DATE OF ARRIVAL": "2026-04-21",
+        "RM/FG": "",
+        "CREDIT/CASH": "",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "4238HY04/8502BG04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN CAPCD-SCOOPS",
+        "LBA CODE": "LBA-010-CAP",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "PRIKRO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "10.5",
+        "NUT COUNT": "178",
+        "KOR": "39.85962",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-21",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0042",
+    "source": "imported",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS SCNB",
+    "lbaCode": "DIS-035-SNC",
+    "vehicleNo": "4214JH03",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "TIEBISSOU",
+    "lotNo": "LOT-20260042",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "715",
+        "DATE OF ARRIVAL": "2026-04-21",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "4214JH03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS SCNB",
+        "LBA CODE": "DIS-035-SNC",
+        "FICHE CODE": "0401-0057",
+        "REF.": "645",
+        "FICHE": "36086",
+        "ORIGIN": "TIEBISSOU"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.8",
+        "NUT COUNT": "168",
+        "KOR": "42.59",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "39220"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260042",
+        "Truck reference": "4214JH03",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-21"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260042",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-21",
+        "SACS (bags)": "413",
+        "BON SACS (good bags)": "387",
+        "HUMID SACS (damp bags)": "26",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "208"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-21",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0009",
+    "source": "imported",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SANOGO SINDOU",
+    "lbaCode": "LBA-021-SAN",
+    "vehicleNo": "AA717FV03",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "MANKONO",
+    "lotNo": "LOT-20260009",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "755",
+        "DATE OF ARRIVAL": "2026-04-22",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "AA717FV03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SANOGO SINDOU",
+        "LBA CODE": "LBA-021-SAN",
+        "FICHE CODE": "",
+        "REF.": "705",
+        "FICHE": "89784",
+        "ORIGIN": "MANKONO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "12.5",
+        "NUT COUNT": "164",
+        "KOR": "43.03",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "39460"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260009",
+        "Truck reference": "AA717FV03",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-24"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260009",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-24",
+        "SACS (bags)": "477",
+        "BON SACS (good bags)": "470",
+        "HUMID SACS (damp bags)": "30",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "240"
+      },
+      "n-netwt": {
+        "NET WT KGS": "38983",
+        "PAID WT": "38743"
+      },
+      "n-grn": {
+        "PRICE": "515",
+        "AMOUNT": "19952645"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-22",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0028",
+    "source": "imported",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOP ASER",
+    "lbaCode": "LBA-011-ASR",
+    "vehicleNo": "7191CL03/3433HC01",
+    "warehouse": "BOUAKE",
+    "origin": "BOUAKE",
+    "lotNo": "LOT-20260028",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "734",
+        "DATE OF ARRIVAL": "2026-04-22",
+        "RM/FG": "",
+        "CREDIT/CASH": "",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "",
+        "VEHICLE NO.": "7191CL03/3433HC01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP ASER",
+        "LBA CODE": "LBA-011-ASR",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "BOUAKE"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "12.5",
+        "NUT COUNT": "161",
+        "KOR": "37.0377",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260028",
+        "Truck reference": "7191CL03/3433HC01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-22"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260028",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-22",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      },
+      "n-drying": {
+        "Decision (Direct to drying / Warehouse → Drying)": "Direct to drying",
+        "Moisture % — before drying": "12.5"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-drying": "direct"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-22",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0004",
+    "source": "imported",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS PAP",
+    "lbaCode": "DIS-037-PAP",
+    "vehicleNo": "AA187AQ01",
+    "warehouse": "BOUAKE",
+    "origin": "NIAKARA",
+    "lotNo": "LOT-20260004",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "760",
+        "DATE OF ARRIVAL": "2026-04-23",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "AA187AQ01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS PAP",
+        "LBA CODE": "DIS-037-PAP",
+        "FICHE CODE": "0426-0352",
+        "REF.": "295",
+        "FICHE": "22027",
+        "ORIGIN": "NIAKARA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.9",
+        "NUT COUNT": "158",
+        "KOR": "41.97",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "44220"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260004",
+        "Truck reference": "AA187AQ01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-24"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260004",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-24",
+        "SACS (bags)": "536",
+        "BON SACS (good bags)": "516",
+        "HUMID SACS (damp bags)": "20",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "160"
+      },
+      "n-netwt": {
+        "NET WT KGS": "43684",
+        "PAID WT": "43524"
+      },
+      "n-grn": {
+        "PRICE": "490",
+        "AMOUNT": "21326760"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "43684"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-23",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0012",
+    "source": "imported",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "lbaCode": "DIS-003-DEM",
+    "vehicleNo": "7650GS07",
+    "warehouse": "BOUAKE",
+    "origin": "BOUAKE",
+    "lotNo": "LOT-20260012",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "759",
+        "DATE OF ARRIVAL": "2026-04-23",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "7650GS07"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS DEMBOL",
+        "LBA CODE": "DIS-003-DEM",
+        "FICHE CODE": "0426-0440",
+        "REF.": "294",
+        "FICHE": "31754",
+        "ORIGIN": "BOUAKE"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11",
+        "NUT COUNT": "154",
+        "KOR": "41.09",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "40440"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260012",
+        "Truck reference": "7650GS07",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-24"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260012",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-24",
+        "SACS (bags)": "527",
+        "BON SACS (good bags)": "502",
+        "HUMID SACS (damp bags)": "25",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "200"
+      },
+      "n-netwt": {
+        "NET WT KGS": "39913",
+        "PAID WT": "39713"
+      },
+      "n-grn": {
+        "PRICE": "490",
+        "AMOUNT": "19459370"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "39913"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-23",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0047",
+    "source": "imported",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "lbaCode": "LBA-002-SCA",
+    "vehicleNo": "3620KT01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "VAVOUA",
+    "lotNo": "LOT-20260047",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "782",
+        "DATE OF ARRIVAL": "2026-04-23",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "3620KT01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCAAMT COOP CA",
+        "LBA CODE": "LBA-002-SCA",
+        "FICHE CODE": "0419-0180",
+        "REF.": "720",
+        "FICHE": "78889",
+        "ORIGIN": "VAVOUA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "11.6",
+        "NUT COUNT": "186",
+        "KOR": "44.44",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "42050"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260047",
+        "Truck reference": "3620KT01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-25"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260047",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-25",
+        "SACS (bags)": "512",
+        "BON SACS (good bags)": "509",
+        "HUMID SACS (damp bags)": "20",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "160"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-23",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0039",
+    "source": "imported",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS PSP",
+    "lbaCode": "DIS-CASH-003",
+    "vehicleNo": "AA547FT01/4022LU03",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "BROBO",
+    "lotNo": "LOT-20260039",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "778",
+        "DATE OF ARRIVAL": "2026-04-24",
+        "RM/FG": "",
+        "CREDIT/CASH": "",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "AA547FT01/4022LU03"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS PSP",
+        "LBA CODE": "DIS-CASH-003",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "BROBO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "10.3",
+        "NUT COUNT": "161",
+        "KOR": "41.35",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260039",
+        "Truck reference": "AA547FT01/4022LU03",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-24"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260039",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-24",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      },
+      "n-otheract": {
+        "Movement between locations": "Moved to central bin"
+      },
+      "n-ledger": {
+        "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)": "weight",
+        "Performed by": "Warehouse Team"
+      },
+      "n-xferdec": {
+        "Decision (Stays / Transfers)": "Transfers",
+        "Driven by (space at warehouse)": "Space at unit warehouse"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-xferdec": "transfer"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-24",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0040",
+    "source": "imported",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "lbaCode": "LBA-010-CAP",
+    "vehicleNo": "5947KJ04",
+    "warehouse": "BOUAKE",
+    "origin": "BOUAKE",
+    "lotNo": "",
+    "binNo": "",
+    "stageData": {
+      "n-gate": {
+        "S N": "826",
+        "DATE OF ARRIVAL": "2026-04-26",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "5947KJ04"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN CAPCD-SCOOPS",
+        "LBA CODE": "LBA-010-CAP",
+        "FICHE CODE": "0431-0277",
+        "REF.": "365",
+        "FICHE": "87097",
+        "ORIGIN": "BOUAKE"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "13.1",
+        "NUT COUNT": "161",
+        "KOR": "43.05",
+        "FINAL KOR": ""
+      }
+    },
+    "branches": {
+      "n-qfs": "fail"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-26",
+        "note": "Failed QFS — moisture/KOR out of spec"
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0036",
+    "source": "imported",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "lbaCode": "LBA-018-COP",
+    "vehicleNo": "2387JE01",
+    "warehouse": "BOUAKE",
+    "origin": "SEGUELA",
+    "lotNo": "LOT-20260036",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "829",
+        "DATE OF ARRIVAL": "2026-04-27",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-001",
+        "VEHICLE NO.": "2387JE01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS COOPRAKA",
+        "LBA CODE": "LBA-018-COP",
+        "FICHE CODE": "0425-0001",
+        "REF.": "368",
+        "FICHE": "37026",
+        "ORIGIN": "SEGUELA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "12",
+        "NUT COUNT": "162",
+        "KOR": "41.97",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "32160"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260036",
+        "Truck reference": "2387JE01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-27"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260036",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-27",
+        "SACS (bags)": "406",
+        "BON SACS (good bags)": "406",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "0",
+        "Refraction": "0"
+      },
+      "n-netwt": {
+        "NET WT KGS": "31754",
+        "PAID WT": "31754"
+      },
+      "n-grn": {
+        "PRICE": "500",
+        "AMOUNT": "15877000"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-27",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0037",
+    "source": "imported",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SANOGO SINDOU",
+    "lbaCode": "LBA-021-SAN",
+    "vehicleNo": "7063JA01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "DABAKALA",
+    "lotNo": "LOT-20260037",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "891",
+        "DATE OF ARRIVAL": "2026-04-30",
+        "RM/FG": "",
+        "CREDIT/CASH": "",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "7063JA01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SANOGO SINDOU",
+        "LBA CODE": "LBA-021-SAN",
+        "FICHE CODE": "",
+        "REF.": "",
+        "FICHE": "",
+        "ORIGIN": "DABAKALA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.7",
+        "NUT COUNT": "163",
+        "KOR": "40.82",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "0"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260037",
+        "Truck reference": "7063JA01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-04-30"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260037",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-04-30",
+        "SACS (bags)": "",
+        "BON SACS (good bags)": "",
+        "HUMID SACS (damp bags)": "",
+        "Sacs déchirés (torn bags)": "",
+        "Refraction": ""
+      },
+      "n-netwt": {
+        "NET WT KGS": "",
+        "PAID WT": "0"
+      },
+      "n-grn": {
+        "PRICE": "",
+        "AMOUNT": "0"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": ""
+      },
+      "n-otheract": {
+        "Movement between locations": "Moved to central bin"
+      },
+      "n-ledger": {
+        "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)": "weight",
+        "Performed by": "Warehouse Team"
+      },
+      "n-xferdec": {
+        "Decision (Stays / Transfers)": "Transfers",
+        "Driven by (space at warehouse)": "Space at unit warehouse"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass",
+      "n-xferdec": "transfer"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-04-30",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0013",
+    "source": "imported",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "lbaCode": "LBA-015-OUM",
+    "vehicleNo": "1026FL01",
+    "warehouse": "BOUAKE",
+    "origin": "MANKONO",
+    "lotNo": "LOT-20260013",
+    "binNo": "BKE-002",
+    "stageData": {
+      "n-gate": {
+        "S N": "914",
+        "DATE OF ARRIVAL": "2026-05-02",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CREDIT",
+        "WH LOCATION": "BOUAKE",
+        "WH NO.": "BKE-002",
+        "VEHICLE NO.": "1026FL01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOPS-OUMI/KONE SIDY",
+        "LBA CODE": "LBA-015-OUM",
+        "FICHE CODE": "0426-0347",
+        "REF.": "396",
+        "FICHE": "34015",
+        "ORIGIN": "MANKONO"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "8.4",
+        "NUT COUNT": "176",
+        "KOR": "41.97",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "34320"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260013",
+        "Truck reference": "1026FL01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-05-03"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-002",
+        "Linked Lot Number(s)": "LOT-20260013",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-05-03",
+        "SACS (bags)": "415",
+        "BON SACS (good bags)": "405",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "10",
+        "Refraction": "40"
+      },
+      "n-netwt": {
+        "NET WT KGS": "33905",
+        "PAID WT": "33865"
+      },
+      "n-grn": {
+        "PRICE": "460",
+        "AMOUNT": "15577900"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-05-02",
+        "note": null
+      }
+    ]
+  },
+  {
+    "id": "REC-2026-0046",
+    "source": "imported",
+    "arrivalDate": "2026-06-18",
+    "supplierName": "RCN SCOOP SAHS",
+    "lbaCode": "DIS-010-SAH",
+    "vehicleNo": "AA122GP01",
+    "warehouse": "YAKRO FACTORY",
+    "origin": "SAHANDRA",
+    "lotNo": "LOT-20260046",
+    "binNo": "BKE-001",
+    "stageData": {
+      "n-gate": {
+        "S N": "981",
+        "DATE OF ARRIVAL": "2026-06-18",
+        "RM/FG": "RM",
+        "CREDIT/CASH": "CASH",
+        "WH LOCATION": "YAKRO FACTORY",
+        "WH NO.": "",
+        "VEHICLE NO.": "AA122GP01"
+      },
+      "n-verify": {
+        "SUPPLIERS NAME": "RCN SCOOP SAHS",
+        "LBA CODE": "DIS-010-SAH",
+        "FICHE CODE": "0429-0202",
+        "REF.": "954",
+        "FICHE": "28967",
+        "ORIGIN": "SAHANDRA"
+      },
+      "n-qfs": {
+        "MOIS. (moisture)": "9.5",
+        "NUT COUNT": "185",
+        "KOR": "37.03",
+        "FINAL KOR": ""
+      },
+      "n-gross": {
+        "GROSS WT KGS": "28220"
+      },
+      "n-lot": {
+        "Lot Number": "LOT-20260046",
+        "Truck reference": "AA122GP01",
+        "Assigned by (Warehouse Team)": "Warehouse Team",
+        "Date/time assigned": "2026-06-18"
+      },
+      "n-bin": {
+        "Bin Number": "BKE-001",
+        "Linked Lot Number(s)": "LOT-20260046",
+        "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
+        "Finalised (same day / next day)": "Same day"
+      },
+      "n-unload": {
+        "DATE OF OFFLOADING": "2026-06-18",
+        "SACS (bags)": "346",
+        "BON SACS (good bags)": "342",
+        "HUMID SACS (damp bags)": "0",
+        "Sacs déchirés (torn bags)": "4",
+        "Refraction": "16"
+      },
+      "n-netwt": {
+        "NET WT KGS": "27874",
+        "PAID WT": "27858"
+      },
+      "n-grn": {
+        "PRICE": "330",
+        "AMOUNT": "9193140"
+      },
+      "n-stock": {
+        "Warehouse stock ledger entry": "Posted",
+        "Current stock balance": "27874"
+      }
+    },
+    "branches": {
+      "n-qfs": "pass"
+    },
+    "timeline": [
+      {
+        "status": "arrived",
+        "at": "2026-06-18",
+        "note": null
+      }
+    ]
+  }
+]

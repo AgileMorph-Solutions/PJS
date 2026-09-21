@@ -1,0 +1,38 @@
+/* Color/typography tokens ported from ../../../flow-xl-map/NewProcurement.html so this app reads
+   as a continuation of the process maps, not a different product. */
+:root {
+  --paper: #f3f1e7;
+  --paper-line: rgba(35, 57, 47, 0.07);
+  --ink: #23392f;
+  --ink-soft: #5b6b60;
+  --card: #fdfcf7;
+
+  --proc-fill: #e4eee1;
+  --proc-border: #4c7a5d;
+  --proc-text: #1f3b2e;
+
+  --dec-fill: #f7e1ae;
+  --dec-border: #b8811f;
+  --dec-text: #4a3510;
+
+  --doc-fill: #e3eaf3;
+  --doc-border: #3e6ea3;
+  --doc-text: #1c3a5c;
+
+  --sys-fill: #e8e5d8;
+  --sys-border: #7c775f;
+  --sys-text: #3a362a;
+
+  --term-fill: #d3ece6;
+  --term-border: #1f7a6c;
+  --term-text: #113f38;
+
+  --gap-fill: #f6dfd2;
+  --gap-border: #b5502a;
+  --gap-text: #5b2712;
+
+  --hl: #fff3cf;
+  --hl-border: #d9a520;
+
+  --shadow: 0 10px 30px rgba(35, 57, 47, 0.14);
+}

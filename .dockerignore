@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+**/.git
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+backend/prisma/migrations/**/migration.sql.bak
+frontend/dist

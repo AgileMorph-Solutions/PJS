@@ -1,0 +1,298 @@
+[
+  {
+    "code": "DIS-001-SCO",
+    "name": "RCN SCOOPADA SCOOPS"
+  },
+  {
+    "code": "DIS-002-COR",
+    "name": "RCN SCOOPS CORISPORT"
+  },
+  {
+    "code": "DIS-003-DEM",
+    "name": "RCN SCOOPS DEMBOL"
+  },
+  {
+    "code": "DIS-004-ANA",
+    "name": "RCN ANAGROCI UT-CCA"
+  },
+  {
+    "code": "DIS-005-SOV",
+    "name": "RCN SOVA SCOOPS"
+  },
+  {
+    "code": "DIS-006-DIE",
+    "name": "RCN SCOOPS DIENE"
+  },
+  {
+    "code": "DIS-007-SPA",
+    "name": "RCN SCOOPASS"
+  },
+  {
+    "code": "DIS-008-FOU",
+    "name": "RCN SCOOPS FOUNDARA"
+  },
+  {
+    "code": "DIS-009-YAO",
+    "name": "RCN YAO OUMIAN LAMBERT"
+  },
+  {
+    "code": "DIS-010-SAH",
+    "name": "RCN SCOOP SAHS"
+  },
+  {
+    "code": "DIS-011-SAM",
+    "name": "RCN SOCOSAM"
+  },
+  {
+    "code": "DIS-012-GOL",
+    "name": "RCN GOLDY AGRI MARKET"
+  },
+  {
+    "code": "DIS-013-BAB",
+    "name": "RCN SCOOPS BAOBAB"
+  },
+  {
+    "code": "DIS-014-DAV",
+    "name": "RCN DCARRE DAVID D JOUMAN"
+  },
+  {
+    "code": "DIS-015-ESP",
+    "name": "RCN  ESPI SCOOPS"
+  },
+  {
+    "code": "DIS-016-SIB",
+    "name": "RCN SCOOPS IB"
+  },
+  {
+    "code": "DIS-017-MAS",
+    "name": "RCN SCOOPS MASSATIGUI"
+  },
+  {
+    "code": "DIS-018-PAP",
+    "name": "RCN SCOOPS PAPN"
+  },
+  {
+    "code": "DIS-019-DEC",
+    "name": "RCN DECARRE DAVID &DJOUMAN"
+  },
+  {
+    "code": "DIS-020-SOU",
+    "name": "RCN SCOOPS AC SOURCING"
+  },
+  {
+    "code": "DIS-021-KOB",
+    "name": "RCN SCOOPS KOB S"
+  },
+  {
+    "code": "DIS-022-RES",
+    "name": "RCN SCOOPS COOPRES"
+  },
+  {
+    "code": "DIS-023-ICF",
+    "name": "RCN ICFB"
+  },
+  {
+    "code": "DIS-024-CAD",
+    "name": "RCN CADEPO COOP CA"
+  },
+  {
+    "code": "DIS-025-SIM",
+    "name": "RCN SIMAYAT COOP CA"
+  },
+  {
+    "code": "DIS-026-MOA",
+    "name": "RCN SCOOPS MOAYE BKE"
+  },
+  {
+    "code": "DIS-027-BAO",
+    "name": "RCN SCOOPS BAOBAB"
+  },
+  {
+    "code": "DIS-028-ALF",
+    "name": "RCN ALFCOUL GROUP"
+  },
+  {
+    "code": "DIS-029-CPA",
+    "name": "RCN CPAS SCOOPS"
+  },
+  {
+    "code": "DIS-030-JPP",
+    "name": "RCN SCOOPS JPPAGG"
+  },
+  {
+    "code": "DIS-031-ADA",
+    "name": "RCN ADAM IVOIRE"
+  },
+  {
+    "code": "DIS-032-SCM",
+    "name": "RCN SCMB COOP CA"
+  },
+  {
+    "code": "DIS-033-AJC",
+    "name": "RCN SCOOPS AJCB"
+  },
+  {
+    "code": "DIS-034-OCE",
+    "name": "RCN OCEAN NEGOSE"
+  },
+  {
+    "code": "DIS-035-SNC",
+    "name": "RCN SCOOPS SCNB"
+  },
+  {
+    "code": "DIS-036-SEY",
+    "name": "RCN COOPCA TOE SEYDOU"
+  },
+  {
+    "code": "DIS-037-PAP",
+    "name": "RCN SCOOPS PAP"
+  },
+  {
+    "code": "DIS-038-AKF",
+    "name": "RCN SCOOPS AKF"
+  },
+  {
+    "code": "DIS-039-ADD",
+    "name": "RCN SOCOOP ADD COOP CA"
+  },
+  {
+    "code": "DIS-040-SOL",
+    "name": "RCN SOLANDA-CI"
+  },
+  {
+    "code": "DIS-041-BRO",
+    "name": "RCN BROUMA SARL"
+  },
+  {
+    "code": "DIS-CASH-001",
+    "name": "RCN SCOOPS OUANIAGNACHION"
+  },
+  {
+    "code": "DIS-CASH-002",
+    "name": "RCN SCOOPS MANANA"
+  },
+  {
+    "code": "DIS-CASH-003",
+    "name": "RCN SCOOPS PSP"
+  },
+  {
+    "code": "DIS-CASH-004",
+    "name": "RCN BENI BUSINESS CENTER"
+  },
+  {
+    "code": "DIS-CASH-005",
+    "name": "RCN SCOPA"
+  },
+  {
+    "code": "DIS-CASH-006",
+    "name": "RCN SCOOPS ESPOIR"
+  },
+  {
+    "code": "DIS-CASH-007",
+    "name": "RCN KONE KOLOGO"
+  },
+  {
+    "code": "DIS-CASH-008",
+    "name": "RCN SCOOPS YIRIWA"
+  },
+  {
+    "code": "DIS-CASH-009",
+    "name": "RCN SCAAB"
+  },
+  {
+    "code": "LBA-001-SOC",
+    "name": "RCN SCOOPS-SOCOSIDJI"
+  },
+  {
+    "code": "LBA-002-SCA",
+    "name": "RCN SCAAMT COOP CA"
+  },
+  {
+    "code": "LBA-003-HER",
+    "name": "RCN SCOOPS HERE B"
+  },
+  {
+    "code": "LBA-004-WEB",
+    "name": "RCN SCOOPS WEBE"
+  },
+  {
+    "code": "LBA-005-JAV",
+    "name": "RCN COP JAVA SCOOPS"
+  },
+  {
+    "code": "LBA-006-IMA",
+    "name": "RCN SCOOP IMANE"
+  },
+  {
+    "code": "LBA-007-CAS",
+    "name": "RCN CASP-S SCOOPS"
+  },
+  {
+    "code": "LBA-008-COB",
+    "name": "RCN SCOOP-CA/COBAN"
+  },
+  {
+    "code": "LBA-009-SCO",
+    "name": "RCN SCOPPAS SCOOPS"
+  },
+  {
+    "code": "LBA-010-CAP",
+    "name": "RCN CAPCD-SCOOPS"
+  },
+  {
+    "code": "LBA-011-ASR",
+    "name": "RCN SCOOP ASER"
+  },
+  {
+    "code": "LBA-012-CPE",
+    "name": "RCN SCOOPS KPESSO"
+  },
+  {
+    "code": "LBA-012-KPE",
+    "name": "RCN SCOOPS KPESSO"
+  },
+  {
+    "code": "LBA-013-DAG",
+    "name": "RCN DAGNOGO KARIM"
+  },
+  {
+    "code": "LBA-014-BAY",
+    "name": "RCN SCOOPS BAY SCOOPS"
+  },
+  {
+    "code": "LBA-015-OUM",
+    "name": "RCN SCOOPS-OUMI/KONE SIDY"
+  },
+  {
+    "code": "LBA-016-NOU",
+    "name": "RCN SCOOPS AH AL NOUR"
+  },
+  {
+    "code": "LBA-017-DPV",
+    "name": "RCN SCOOPS DPVICA"
+  },
+  {
+    "code": "LBA-018-COP",
+    "name": "RCN SCOOPS COOPRAKA"
+  },
+  {
+    "code": "LBA-019-FRA",
+    "name": "RCN SCOOPS FRA PRO"
+  },
+  {
+    "code": "LBA-020-SKS",
+    "name": "RCN SCOOPS SKS"
+  },
+  {
+    "code": "LBA-021-SAN",
+    "name": "RCN SANOGO SINDOU"
+  },
+  {
+    "code": "LBA-022-NEG",
+    "name": "RCN SCOOPS AGRO NEGOCE"
+  },
+  {
+    "code": "LBA-023-AGR",
+    "name": "RCN AGRICAS IVOIRE"
+  }
+]
