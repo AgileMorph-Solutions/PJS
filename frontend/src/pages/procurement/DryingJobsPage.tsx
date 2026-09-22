@@ -1,6 +1,6 @@
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
-import { StatusPill } from "../../components/ui/StatusPill";
+import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { useTracking, useDryingJobs } from "../../state/TrackingContext";
 import type { DryingJob } from "../../repository/dryingRepo";
 import { deriveStatus } from "../../domain/receiptStatus";
@@ -44,7 +44,7 @@ export function DryingJobsPage() {
             <span className="fname">
               Lot {r.lotNo || "—"} · Bin {r.binNo || "—"} · {r.supplierName} · vehicle {r.vehicleNo || "—"}
             </span>
-            <StatusPill status={deriveStatus(r)} />
+            <ReceiptStatusPill status={deriveStatus(r)} />
           </div>
         ))}
       </div>

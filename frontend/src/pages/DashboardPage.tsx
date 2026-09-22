@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/ui/PageHeader";
 import { KpiTile } from "../components/ui/KpiTile";
-import { StatusPill } from "../components/ui/StatusPill";
+import { ReceiptStatusPill } from "../components/ReceiptStatusPill";
 import { useTracking } from "../state/TrackingContext";
 import { computeDashboardCounts, deriveStatus } from "../domain/receiptStatus";
 import { juteLedgers } from "../data/juteBags";
@@ -60,7 +60,7 @@ export function DashboardPage() {
               {r.lotNo ? `Lot ${r.lotNo}` : r.id} · {r.supplierName || "—"} · {r.vehicleNo || "—"}
               {r.lotNo && <span style={{ opacity: 0.6 }}> · receipt {r.id}</span>}
             </span>
-            <StatusPill status={deriveStatus(r)} />
+            <ReceiptStatusPill status={deriveStatus(r)} />
           </div>
         ))}
       </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { FilterBar } from "../../components/ui/FilterBar";
-import { StatusPill } from "../../components/ui/StatusPill";
+import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { useTracking } from "../../state/TrackingContext";
 import { deriveStatus, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
@@ -46,7 +46,7 @@ export function ReceiptsListPage() {
     { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
     { label: "Warehouse", render: (r) => r.warehouse || "—" },
     { label: "Lot / Bin", render: (r) => `${r.lotNo || "—"} / ${r.binNo || "—"}` },
-    { label: "Status", render: (r) => <StatusPill status={deriveStatus(r)} /> },
+    { label: "Status", render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
     {
       label: "Source",
       render: (r) => (

@@ -5,7 +5,7 @@ import { DECISION_BRANCHES } from "../../domain/decisions";
 import { stages, rejectStage } from "../../data/stages";
 import { StageForm } from "../../components/StageForm";
 import { DecisionBranch } from "../../components/DecisionBranch";
-import { StatusPill } from "../../components/ui/StatusPill";
+import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 
 export function ReceiptDetailPage() {
   const { id = "" } = useParams();
@@ -31,7 +31,7 @@ export function ReceiptDetailPage() {
           </p>
           <h2 className="page-title" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {primaryLabel}
-            <StatusPill status={status} />
+            <ReceiptStatusPill status={status} />
           </h2>
           <p className="page-lede">
             {receipt.supplierName || "No supplier yet"} · {receipt.vehicleNo ? `vehicle ${receipt.vehicleNo}` : "no vehicle no."} ·{" "}
@@ -101,7 +101,7 @@ export function ReceiptDetailPage() {
           <ul className="timeline-list">
             {[...receipt.timeline].reverse().map((e, i) => (
               <li key={i}>
-                <StatusPill status={e.status} />
+                <ReceiptStatusPill status={e.status} />
                 <span className="timeline-at">{new Date(e.at).toLocaleString()}</span>
                 {e.note && <p className="timeline-note">{e.note}</p>}
               </li>

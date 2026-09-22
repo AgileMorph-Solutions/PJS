@@ -29,6 +29,23 @@ export async function getReceipt(id: string) {
   return row ? toReceiptRecord(row) : null;
 }
 
+export interface ReceiptActivities {
+  otherActivities: unknown[];
+  activityLedger: unknown[];
+}
+
+/**
+ * The full 1:N history for n-otheract / n-ledger. ReceiptRecord.stageData can only carry the most
+ * recent row of each (see stageStore.ts) — this is the real sequence doc §7 asks for.
+ */
+export async function getReceiptActivities(id: string): Promise<ReceiptActivities> {
+  const [otherActivities, activityLedger] = await Promise.all([
+    prisma.otherActivity.findMany({ where: { receiptId: id }, orderBy: { seq: "asc" } }),
+    prisma.activityLedgerEntry.findMany({ where: { receiptId: id }, orderBy: { seq: "asc" } }),
+  ]);
+  return { otherActivities, activityLedger };
+}
+
 export async function listReceipts() {
   const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE, orderBy: { createdAt: "asc" } });
   return rows.map(toReceiptRecord);

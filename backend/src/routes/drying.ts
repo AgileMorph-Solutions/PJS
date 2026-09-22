@@ -4,35 +4,18 @@
 // the persistence + the one rule the clarification is explicit about: a drying job always names
 // a specific Lot, never just a Bin.
 import type { FastifyInstance } from "fastify";
-import { prisma } from "../db.js";
-import { assertDryingJobHasLot, ValidationError } from "../domain/validation.js";
+import { listDryingJobs, createDryingJob, type NewDryingJob } from "../services/drying.js";
+import { ValidationError } from "../domain/validation.js";
 
 export async function dryingRoutes(app: FastifyInstance) {
-  app.get("/api/drying-jobs", async () => {
-    return prisma.dryingJob.findMany({ orderBy: { date: "asc" } });
-  });
+  app.get("/api/drying-jobs", async () => listDryingJobs());
 
   app.post("/api/drying-jobs", async (req, reply) => {
-    const body = req.body as {
-      id: string;
-      date: string;
-      warehouse: string;
-      bin: string;
-      lotNo: string;
-      ficheNo: string;
-      status: string;
-      dryType: string;
-      destination: string;
-    };
-
     try {
-      assertDryingJobHasLot(body);
+      return reply.code(201).send(await createDryingJob(req.body as NewDryingJob));
     } catch (e) {
       if (e instanceof ValidationError) return reply.code(422).send({ error: e.message });
       throw e;
     }
-
-    const job = await prisma.dryingJob.create({ data: body });
-    return reply.code(201).send(job);
   });
 }

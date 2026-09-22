@@ -5,14 +5,14 @@
  *
  * All the real work is in services/receipts.ts, which the seeder shares.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { DECISION_BRANCHES } from "@anagroci/contract/domain/decisions";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
+import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { ValidationError } from "../domain/validation.js";
 import { UnknownStageFieldError } from "../stageStore.js";
-import { prisma } from "../db.js";
 import {
-  listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch,
+  listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities,
 } from "../services/receipts.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
 
@@ -23,14 +23,25 @@ export function sendError(reply: any, e: unknown) {
   throw e;
 }
 
+/**
+ * Every mutating receipt route needs "does this id exist" first — five of them repeated the same
+ * lookup-or-404. Centralised so the message and status code can't drift between them.
+ */
+async function requireReceipt(id: string, reply: FastifyReply): Promise<ReceiptRecord | null> {
+  const r = await getReceipt(id);
+  if (!r) {
+    reply.code(404).send({ error: `Receipt ${id} not found` });
+    return null;
+  }
+  return r;
+}
+
 export async function receiptRoutes(app: FastifyInstance) {
   app.get("/api/receipts", async () => listReceipts());
 
   app.get("/api/receipts/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    const r = await getReceipt(id);
-    if (!r) return reply.code(404).send({ error: `Receipt ${id} not found` });
-    return r;
+    return requireReceipt(id, reply);
   });
 
   app.post("/api/receipts", async (req, reply) => {
@@ -42,7 +53,7 @@ export async function receiptRoutes(app: FastifyInstance) {
 
   app.patch("/api/receipts/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    if (!(await getReceipt(id))) return reply.code(404).send({ error: `Receipt ${id} not found` });
+    if (!(await requireReceipt(id, reply))) return;
     try {
       const data = await patchReceipt(id, (req.body ?? {}) as Record<string, unknown>);
       return { data, warnings: warningsForReceipt(data) };
@@ -59,7 +70,7 @@ export async function receiptRoutes(app: FastifyInstance) {
     const { fields } = (req.body ?? {}) as { fields?: Record<string, string> };
     if (!STAGE_FIELD_MAP[stageId]) return reply.code(400).send({ error: `Unknown stage "${stageId}"` });
     if (!fields || typeof fields !== "object") return reply.code(400).send({ error: "body.fields is required" });
-    if (!(await getReceipt(id))) return reply.code(404).send({ error: `Receipt ${id} not found` });
+    if (!(await requireReceipt(id, reply))) return;
     try {
       const data = await setStageFields(id, stageId, fields);
       return { data, warnings: warningsForReceipt(data) };
@@ -74,7 +85,7 @@ export async function receiptRoutes(app: FastifyInstance) {
     if (!known || !known.some((b) => b.id === branchId)) {
       return reply.code(400).send({ error: `Unknown branch "${branchId}" for stage "${stageId}"` });
     }
-    if (!(await getReceipt(id))) return reply.code(404).send({ error: `Receipt ${id} not found` });
+    if (!(await requireReceipt(id, reply))) return;
     try {
       const data = await setBranch(id, stageId, branchId, reason);
       return { data, warnings: warningsForReceipt(data) };
@@ -88,11 +99,7 @@ export async function receiptRoutes(app: FastifyInstance) {
    */
   app.get("/api/receipts/:id/activities", async (req, reply) => {
     const { id } = req.params as { id: string };
-    if (!(await getReceipt(id))) return reply.code(404).send({ error: `Receipt ${id} not found` });
-    const [otherActivities, activityLedger] = await Promise.all([
-      prisma.otherActivity.findMany({ where: { receiptId: id }, orderBy: { seq: "asc" } }),
-      prisma.activityLedgerEntry.findMany({ where: { receiptId: id }, orderBy: { seq: "asc" } }),
-    ]);
-    return { otherActivities, activityLedger };
+    if (!(await requireReceipt(id, reply))) return;
+    return getReceiptActivities(id);
   });
 }
