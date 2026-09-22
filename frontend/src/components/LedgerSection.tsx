@@ -26,6 +26,9 @@ function blankRow(columns: JuteLedgerColumn[]): Row {
   return Object.fromEntries(columns.filter((c) => !DERIVED_COLUMNS.has(c.label)).map((c) => [c.label, ""]));
 }
 
+const inputCls =
+  "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
+
 export function LedgerSection({ ledger }: { ledger: JuteLedger }) {
   const { ledgerEntries, addLedgerEntry } = useTracking();
   const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label));
@@ -44,78 +47,98 @@ export function LedgerSection({ ledger }: { ledger: JuteLedger }) {
   }
 
   return (
-    <div className="card" id={ledger.id} style={{ scrollMarginTop: 24 }}>
-      <h3 style={{ marginBottom: 10 }}>{ledger.title}</h3>
+    <div id={ledger.id} className="scroll-mt-6 bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
+      <h3 className="text-lg font-bold text-warmstone-900 mb-2.5">{ledger.title}</h3>
       {ledger.file && (
-        <div className="file-chip">
-          📄 {ledger.file}
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warmstone-100 text-warmstone-600 text-[11px] font-medium mb-2.5">
+          <span className="material-symbols-outlined text-[13px]">description</span>
+          {ledger.file}
           {ledger.sheet ? ` · ${ledger.sheet}` : ""}
-        </div>
+        </span>
       )}
-      {ledger.description && (
-        <p className="stage-note" style={{ marginBottom: 14 }}>
-          {ledger.description}
-        </p>
-      )}
+      {ledger.description && <p className="text-[13px] text-warmstone-500 leading-relaxed mb-3.5">{ledger.description}</p>}
 
       <form onSubmit={handleSubmit}>
-        <div className="ledger-form-grid">
-          {inputColumns.map((c) => (
-            <div className="field-row" key={c.label}>
-              <div className="field-label">
-                <span>{c.label}</span>
-                <span className={`field-badge ${c.real ? "xl" : "new"}`}>{c.real ? "workbook" : "new"}</span>
-              </div>
-              {c.label === "Activities type" ? (
-                <>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {inputColumns.map((c) => {
+            const id = `ledger-${ledger.id}-${c.col}`;
+            return (
+              <div key={c.label}>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <label htmlFor={id} className="text-[12.5px] font-semibold text-warmstone-700">
+                    {c.label}
+                  </label>
+                  <span
+                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      c.real ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                    }`}
+                  >
+                    {c.real ? "workbook" : "new"}
+                  </span>
+                </div>
+                {c.label === "Activities type" ? (
+                  <>
+                    <input
+                      id={id}
+                      list="jute-activity-types"
+                      value={draft[c.label] ?? ""}
+                      onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
+                      placeholder="Movement category, or a supplier name"
+                      className={inputCls}
+                    />
+                    <datalist id="jute-activity-types">
+                      {KNOWN_ACTIVITY_TYPES.map((t) => (
+                        <option value={t} key={t} />
+                      ))}
+                    </datalist>
+                  </>
+                ) : (
                   <input
-                    list="jute-activity-types"
+                    id={id}
                     value={draft[c.label] ?? ""}
                     onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
-                    placeholder="Movement category, or a supplier name"
+                    placeholder={c.real ? "" : "Not captured anywhere today — try it out"}
+                    className={inputCls}
                   />
-                  <datalist id="jute-activity-types">
-                    {KNOWN_ACTIVITY_TYPES.map((t) => (
-                      <option value={t} key={t} />
-                    ))}
-                  </datalist>
-                </>
-              ) : (
-                <input
-                  value={draft[c.label] ?? ""}
-                  onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
-                  placeholder={c.real ? "" : "Not captured anywhere today — try it out"}
-                />
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
-        <button type="submit" className="btn btn-primary" style={{ marginTop: 4 }}>
-          + Add entry
+        <button
+          type="submit"
+          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
+        >
+          <span className="material-symbols-outlined text-[17px]">add</span>
+          Add entry
         </button>
       </form>
 
-      <div style={{ overflowX: "auto", marginTop: 22 }}>
-        <table className="ledger-table">
+      <div className="overflow-x-auto mt-6 border border-warmstone-200 rounded-xl">
+        <table className="w-full text-[12.5px] border-collapse">
           <thead>
-            <tr>
+            <tr className="border-b border-warmstone-200 bg-warmstone-50">
               {ledger.columns.map((c) => (
-                <th key={c.label}>{c.label}</th>
+                <th key={c.label} className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap">
+                  {c.label}
+                </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {allRows.length === 0 && (
               <tr>
-                <td colSpan={ledger.columns.length} style={{ color: "var(--ink-soft)", fontStyle: "italic" }}>
+                <td colSpan={ledger.columns.length} className="px-3 py-4 text-warmstone-400 italic">
                   No entries yet — add one above.
                 </td>
               </tr>
             )}
             {allRows.map((row, i) => (
-              <tr key={i}>
+              <tr key={i} className="border-b border-warmstone-100 last:border-0 hover:bg-warmstone-50">
                 {ledger.columns.map((c) => (
-                  <td key={c.label}>{row[c.label] || "—"}</td>
+                  <td key={c.label} className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
+                    {row[c.label] || "—"}
+                  </td>
                 ))}
               </tr>
             ))}
@@ -124,8 +147,11 @@ export function LedgerSection({ ledger }: { ledger: JuteLedger }) {
       </div>
 
       {ledger.flag && (
-        <p className="stage-note" style={{ marginTop: 14, marginBottom: 0 }}>
-          <b>Worth knowing:</b> {ledger.flag}
+        <p className="text-[12.5px] text-warmstone-500 leading-relaxed mt-3.5 flex items-start gap-1.5">
+          <span className="material-symbols-outlined text-[15px] text-ambernut-600 mt-0.5">info</span>
+          <span>
+            <b className="text-warmstone-700">Worth knowing:</b> {ledger.flag}
+          </span>
         </p>
       )}
     </div>

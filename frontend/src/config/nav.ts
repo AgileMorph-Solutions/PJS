@@ -1,50 +1,50 @@
 export interface NavLeaf {
   label: string;
   to: string;
+  /** Material Symbols Outlined icon name (e.g. "dashboard"). */
+  icon: string;
+  /** Match this route exactly, not by prefix — only the root "/" needs this. */
+  end?: boolean;
 }
 
 export interface NavSection {
   label: string;
-  basePath: string;
   items: NavLeaf[];
 }
 
-export type NavEntry = NavLeaf | NavSection;
-
-export function isSection(e: NavEntry): e is NavSection {
-  return "items" in e;
-}
-
-export const NAV: NavEntry[] = [
-  { label: "Dashboard", to: "/" },
+export const NAV: NavSection[] = [
   {
-    label: "Procurement",
-    basePath: "/procurement",
+    label: "Overview",
+    items: [{ label: "Dashboard", to: "/", icon: "dashboard", end: true }],
+  },
+  {
+    label: "Cashew Procurement",
     items: [
-      { label: "RCN Receipts", to: "/procurement/receipts" },
-      { label: "Delivery Plans", to: "/procurement/delivery-plans" },
-      { label: "Lots & Bins", to: "/procurement/stock" },
-      { label: "Drying Jobs", to: "/procurement/drying" },
+      { label: "RCN Receipts", to: "/procurement/receipts", icon: "receipt_long" },
+      { label: "Delivery Plans", to: "/procurement/delivery-plans", icon: "local_shipping" },
+      { label: "Lots & Bins", to: "/procurement/stock", icon: "grid_view" },
+      { label: "Drying Jobs", to: "/procurement/drying", icon: "wb_sunny" },
     ],
   },
   {
-    label: "Jute Management",
-    basePath: "/jute",
+    label: "Bag Management",
     items: [
-      { label: "Warehouse Stock", to: "/jute/warehouse-stock" },
-      { label: "Supplier Movement", to: "/jute/suppliers" },
-      { label: "Production Issue/Return", to: "/jute/production" },
-      { label: "Warehouse Transfers", to: "/jute/transfers" },
+      { label: "Warehouse Stock", to: "/jute/warehouse-stock", icon: "inventory_2" },
+      { label: "Supplier Movement", to: "/jute/suppliers", icon: "swap_horiz" },
+      { label: "Production Issue/Return", to: "/jute/production", icon: "sync_alt" },
+      { label: "Warehouse Transfers", to: "/jute/transfers", icon: "compare_arrows" },
     ],
   },
-  { label: "Production", to: "/production" },
+  {
+    label: "Production",
+    items: [{ label: "Production", to: "/production", icon: "precision_manufacturing" }],
+  },
   {
     label: "Masters",
-    basePath: "/masters",
     items: [
-      { label: "Suppliers", to: "/masters/suppliers" },
-      { label: "Warehouses", to: "/masters/warehouses" },
-      { label: "Bins", to: "/masters/bins" },
+      { label: "Suppliers", to: "/masters/suppliers", icon: "groups" },
+      { label: "Warehouses", to: "/masters/warehouses", icon: "domain" },
+      { label: "Bins", to: "/masters/bins", icon: "inventory" },
     ],
   },
 ];

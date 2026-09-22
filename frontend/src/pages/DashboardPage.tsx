@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Truck, PackageCheck, FileCheck, Clock, Package, XCircle, Warehouse, History, BarChart3, LineChart as LineChartIcon } from "lucide-react";
 import { PageHeader } from "../components/ui/PageHeader";
 import { KpiTile } from "../components/ui/KpiTile";
 import { ReceiptStatusPill } from "../components/ReceiptStatusPill";
@@ -13,6 +12,7 @@ import { lastBalance } from "../domain/jute";
 import type { LedgerRow } from "../repository/juteRepo";
 
 const WAREHOUSE_LEDGER_ID = "warehouse-stock";
+const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
 
 /** Inclusive lexicographic range check — arrivalDate is always "YYYY-MM-DD", so string comparison
  * is chronological comparison. Empty from/to means unbounded on that side. */
@@ -39,6 +39,31 @@ function ledgerRowInRange(row: LedgerRow, range: DateRange): boolean {
   return true;
 }
 
+function ChartCard({
+  icon: iconName,
+  title,
+  note,
+  children,
+  className = "",
+}: {
+  icon: string;
+  title: string;
+  note?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs ${className}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="material-symbols-outlined text-[18px] text-chart-primary">{iconName}</span>
+        <h3 className="text-[17px] font-bold text-warmstone-900">{title}</h3>
+      </div>
+      {note && <p className="text-[13px] text-warmstone-500 leading-relaxed mb-4">{note}</p>}
+      {children}
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { receipts, ledgerEntries } = useTracking();
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
@@ -55,19 +80,19 @@ export function DashboardPage() {
   // juteBags.ts's hardcoded demo sample rows ahead of the real server-loaded rows, which was
   // already identified and removed from LedgerSection.tsx for the same reason: the server now
   // serves the real rows, the samples are among them, prepending them again double-counts.
-  const warehouseRows = ledgerEntries[WAREHOUSE_LEDGER_ID] ?? [];
+  // Memoized because `?? []` would otherwise create a new array identity every render when the
+  // key is absent, which then falsely invalidates the memoization below it every time.
+  const warehouseRows = useMemo(() => ledgerEntries[WAREHOUSE_LEDGER_ID] ?? [], [ledgerEntries]);
   const filteredWarehouseRows = useMemo(
     () => (isFiltered ? warehouseRows.filter((r) => ledgerRowInRange(r, range)) : warehouseRows),
     [warehouseRows, range, isFiltered]
   );
   const balance = lastBalance(filteredWarehouseRows);
 
-  const recent = [...filteredReceipts]
-    .sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1))
-    .slice(0, 8);
+  const recent = [...filteredReceipts].sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1)).slice(0, 8);
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
         kicker="ANAGROCI · TRACKING"
         title="Dashboard"
@@ -76,72 +101,59 @@ export function DashboardPage() {
 
       <DateRangeFilter value={range} onChange={setRange} />
 
-      <div className="kpi-grid">
-        <KpiTile icon={<Truck />} label="Total received" value={counts.totalReceived} to="/procurement/receipts" />
-        <KpiTile icon={<PackageCheck />} label="Accepted & unloaded" value={counts.acceptedUnloaded} to="/procurement/receipts?status=unloaded" />
-        <KpiTile icon={<FileCheck />} label="GRN completed" value={counts.grnCompleted} to="/procurement/receipts?status=grn_completed" />
-        <KpiTile icon={<Clock />} label="Pending QA" value={counts.pendingQa} to="/procurement/receipts?status=pending_qa" />
-        <KpiTile icon={<Package />} label="Pending unload after QA" value={counts.pendingUnload} to="/procurement/receipts?status=pending_unload" />
-        <KpiTile icon={<XCircle />} label="Rejected" value={counts.rejected} to="/procurement/receipts?status=rejected" tone="gap" />
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <KpiTile icon={icon("local_shipping")} label="Total received" value={counts.totalReceived} to="/procurement/receipts" />
+        <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to="/procurement/receipts?status=unloaded" />
+        <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to="/procurement/receipts?status=grn_completed" />
+        <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to="/procurement/receipts?status=pending_qa" />
+        <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to="/procurement/receipts?status=pending_unload" />
+        <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to="/procurement/receipts?status=rejected" tone="gap" />
       </div>
 
-      <div className="card">
-        <div className="chart-card-heading">
-          <BarChart3 aria-hidden="true" />
-          <h3>Receipts by status</h3>
-        </div>
-        <p className="chart-card-note">
-          Every one of the 10 statuses a receipt can be in{isFiltered ? ", for the selected date range" : ""} — the 6 tiles
-          above roll a few of these up; this is the full breakdown.
-        </p>
+      <ChartCard
+        icon="bar_chart"
+        title="Receipts by status"
+        note={`Every one of the 10 statuses a receipt can be in${isFiltered ? ", for the selected date range" : ""} — the 6 tiles above roll a few of these up; this is the full breakdown.`}
+      >
         <ReceiptsByStatusChart receipts={filteredReceipts} />
-      </div>
+      </ChartCard>
 
-      <div className="card">
-        <div className="chart-card-heading">
-          <Warehouse aria-hidden="true" />
-          <h3>Jute bag warehouse stock</h3>
+      <ChartCard
+        icon="warehouse"
+        title="Jute bag warehouse stock"
+        note="Running balance from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx, continued by anything entered in this app."
+      >
+        <div className="max-w-xs">
+          <KpiTile label="Current balance (bags)" value={balance} to="/jute/warehouse-stock" tone={balance < 0 ? "gap" : "default"} />
         </div>
-        <p className="chart-card-note">
-          Running balance from <span className="mono">BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx</span>, continued by
-          anything entered in this app.
-        </p>
-        <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
-          <KpiTile
-            label="Current balance (bags)"
-            value={balance}
-            to="/jute/warehouse-stock"
-            tone={balance < 0 ? "gap" : "default"}
-          />
-        </div>
-        <div className="chart-card-heading" style={{ marginTop: 20 }}>
-          <LineChartIcon aria-hidden="true" />
-          <h3>Balance over time</h3>
+        <div className="flex items-center gap-2 mt-5 mb-1">
+          <span className="material-symbols-outlined text-[18px] text-chart-primary">show_chart</span>
+          <h4 className="text-[14px] font-bold text-warmstone-900">Balance over time</h4>
         </div>
         <JuteBalanceTrendChart rows={filteredWarehouseRows} />
-      </div>
+      </ChartCard>
 
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div className="chart-card-heading" style={{ marginBottom: 0 }}>
-            <History aria-hidden="true" />
-            <h3>Recent activity</h3>
+      <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-chart-primary">history</span>
+            <h3 className="text-[17px] font-bold text-warmstone-900">Recent activity</h3>
           </div>
-          <Link to="/procurement/receipts" style={{ fontSize: 12.5, fontWeight: 600 }}>
+          <Link to="/procurement/receipts" className="text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">
             Open register →
           </Link>
         </div>
-        {recent.length === 0 && <p className="chart-empty">No receipts in this date range.</p>}
+        {recent.length === 0 && <p className="text-center py-8 text-[13px] text-warmstone-400">No receipts in this date range.</p>}
         {recent.map((r) => (
-          <div className="summary-row" key={r.id}>
-            <span className="fname">
+          <div key={r.id} className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px]">
+            <span className="text-warmstone-600">
               {r.lotNo ? `Lot ${r.lotNo}` : r.id} · {r.supplierName || "—"} · {r.vehicleNo || "—"}
-              {r.lotNo && <span style={{ opacity: 0.6 }}> · receipt {r.id}</span>}
+              {r.lotNo && <span className="opacity-60"> · receipt {r.id}</span>}
             </span>
             <ReceiptStatusPill status={deriveStatus(r)} />
           </div>
         ))}
       </div>
-    </>
+    </div>
   );
 }

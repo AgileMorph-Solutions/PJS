@@ -25,13 +25,26 @@ import { BinsPage } from "./pages/masters/BinsPage";
 function LoadGate({ children }: { children: React.ReactNode }) {
   const { loading, error, receipts } = useTracking();
   if (loading && receipts.length === 0) {
-    return <div style={{ padding: 32, color: "var(--ink-soft)" }}>Loading…</div>;
+    return (
+      <div className="p-10 space-y-4 animate-pulse">
+        <div className="h-8 w-64 bg-warmstone-200 rounded-lg" />
+        <div className="h-4 w-96 bg-warmstone-100 rounded-lg" />
+        <div className="grid grid-cols-4 gap-4 pt-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-24 bg-warmstone-100 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
   }
   if (error && receipts.length === 0) {
     return (
-      <div style={{ padding: 32 }}>
-        <h2 style={{ marginBottom: 8 }}>Can't reach the server</h2>
-        <p className="stage-note">{error}</p>
+      <div className="p-10 max-w-md">
+        <div className="w-11 h-11 rounded-2xl bg-danger-100 text-danger-700 flex items-center justify-center mb-4">
+          <span className="material-symbols-outlined">cloud_off</span>
+        </div>
+        <h2 className="text-lg font-bold text-warmstone-900 mb-1.5">Can't reach the server</h2>
+        <p className="text-sm text-warmstone-500 leading-relaxed">{error}</p>
       </div>
     );
   }

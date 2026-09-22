@@ -39,11 +39,11 @@ export function parseLedgerDate(raw: string): number | null {
  * into negative territory (a genuine client-facing data-quality finding, not a chart artifact) is
  * visible rather than only a static current figure.
  *
- * One series, one hue (--chart-primary) — per the dataviz skill, a single line needs no legend
- * box; the chart's own heading names it. The area below the zero baseline is washed in the
- * reserved danger tone (--chart-danger-wash) as a secondary encoding of "this is the bad side of
- * the line," matching the same tone the KPI tile above already flips to when the balance is
- * negative — not a second series, just the zone below a meaningful threshold.
+ * One series, one hue (--color-chart-primary) — a single line needs no legend box; the chart's own
+ * heading names it. The area below the zero baseline is washed in the reserved danger tone as a
+ * secondary encoding of "this is the bad side of the line," matching the same tone the KPI tile
+ * above already flips to when the balance is negative — not a second series, just the zone below a
+ * meaningful threshold.
  */
 export function JuteBalanceTrendChart({ rows }: Props) {
   const points: Point[] = useMemo(() => {
@@ -60,7 +60,7 @@ export function JuteBalanceTrendChart({ rows }: Props) {
   }, [rows]);
 
   if (points.length === 0) {
-    return <p className="chart-empty">No jute warehouse-stock movements in this date range.</p>;
+    return <p className="text-center py-10 text-[13px] text-warmstone-400">No jute warehouse-stock movements in this date range.</p>;
   }
 
   const values = points.map((p) => p.balance);
@@ -73,12 +73,11 @@ export function JuteBalanceTrendChart({ rows }: Props) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <LineChart data={points} margin={{ top: 20, right: 48, bottom: 8, left: 0 }}>
-        <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="0" />
+        <CartesianGrid vertical={false} stroke="#e7e5e4" strokeDasharray="0" />
         {minBalance < 0 && (
           <>
-            {/* The below-zero band, washed in the same reserved danger tone the KPI tile above
-                already flips to when this balance goes negative — a secondary encoding of "this
-                is the bad side," not a second series. */}
+            {/* The below-zero band, washed in the reserved danger tone the KPI tile above already
+                flips to when this balance goes negative — a secondary encoding, not a series. */}
             {/* recharts 3.10's public ReferenceArea prop type omits `fill`/`style` (an upstream
                 type-surface gap — the prop works fine at runtime, just not through its own JSX
                 props), so the fill is applied via `shape`, its documented custom-render escape
@@ -88,56 +87,56 @@ export function JuteBalanceTrendChart({ rows }: Props) {
               y2={0}
               ifOverflow="extendDomain"
               shape={(props: { x?: number; y?: number; width?: number; height?: number }) => (
-                <rect x={props.x} y={props.y} width={props.width} height={props.height} fill="var(--chart-danger-wash)" />
+                <rect x={props.x} y={props.y} width={props.width} height={props.height} fill="rgb(185 28 28 / 10%)" />
               )}
             />
             <ReferenceLine
               y={0}
-              stroke="var(--chart-axis)"
+              stroke="#d6d3d1"
               strokeWidth={1}
-              label={{ value: "0", position: "insideLeft", fill: "var(--ink-soft)", fontSize: 11 }}
+              label={{ value: "0", position: "insideLeft", fill: "#78716c", fontSize: 11 }}
             />
           </>
         )}
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 11, fill: "var(--ink-soft)", fontFamily: "IBM Plex Mono, monospace" }}
+          tick={{ fontSize: 11, fill: "#78716c", fontFamily: "Inter, sans-serif" }}
           tickLine={false}
-          axisLine={{ stroke: "var(--chart-axis)" }}
+          axisLine={{ stroke: "#d6d3d1" }}
           interval={tickInterval}
           minTickGap={24}
         />
         <YAxis
           domain={[minBalance, maxBalance]}
-          tick={{ fontSize: 11, fill: "var(--ink-soft)", fontFamily: "IBM Plex Mono, monospace" }}
+          tick={{ fontSize: 11, fill: "#78716c", fontFamily: "Inter, sans-serif" }}
           tickLine={false}
           axisLine={false}
           width={56}
           tickFormatter={(v: number) => v.toLocaleString()}
         />
-        <Tooltip cursor={{ stroke: "var(--chart-axis)", strokeWidth: 1 }} content={<BalanceTooltip />} />
+        <Tooltip cursor={{ stroke: "#d6d3d1", strokeWidth: 1 }} content={<BalanceTooltip />} />
         <Line
           type="monotone"
           dataKey="balance"
-          stroke="var(--chart-primary)"
+          stroke="#0d9488"
           strokeWidth={2}
           dot={false}
-          activeDot={{ r: 5, fill: "var(--chart-primary)", stroke: "var(--chart-surface)", strokeWidth: 2 }}
+          activeDot={{ r: 5, fill: "#0d9488", stroke: "#ffffff", strokeWidth: 2 }}
           isAnimationActive={false}
         />
         <ReferenceDot
           x={last.date}
           y={last.balance}
           r={5}
-          fill={last.balance < 0 ? "var(--danger-border)" : "var(--chart-primary)"}
-          stroke="var(--chart-surface)"
+          fill={last.balance < 0 ? "#b91c1c" : "#0d9488"}
+          stroke="#ffffff"
           strokeWidth={2}
           label={{
             value: last.balance.toLocaleString(),
             position: "right",
-            fill: last.balance < 0 ? "var(--danger-border)" : "var(--ink)",
+            fill: last.balance < 0 ? "#b91c1c" : "#1c1917",
             fontSize: 12,
-            fontFamily: "IBM Plex Mono, monospace",
+            fontFamily: "Inter, sans-serif",
             fontWeight: 600,
           }}
         />
@@ -150,26 +149,11 @@ function BalanceTooltip({ active, payload }: { active?: boolean; payload?: { pay
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
-    <div
-      style={{
-        background: "var(--chart-tooltip-bg)",
-        border: "1px solid var(--chart-tooltip-border)",
-        borderRadius: 8,
-        padding: "8px 12px",
-        boxShadow: "var(--shadow-sm)",
-      }}
-    >
-      <div
-        style={{
-          fontFamily: "IBM Plex Mono, monospace",
-          fontSize: 16,
-          fontWeight: 600,
-          color: p.balance < 0 ? "var(--danger-border)" : "var(--ink)",
-        }}
-      >
+    <div className="bg-white border border-warmstone-200 rounded-lg px-3 py-2 shadow-sm">
+      <div className={`text-[16px] font-bold tabular-nums ${p.balance < 0 ? "text-danger-700" : "text-warmstone-900"}`}>
         {p.balance.toLocaleString()} bags
       </div>
-      <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>{p.date}</div>
+      <div className="text-[12px] text-warmstone-500">{p.date}</div>
     </div>
   );
 }

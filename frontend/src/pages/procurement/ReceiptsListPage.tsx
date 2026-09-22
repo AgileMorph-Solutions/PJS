@@ -14,7 +14,8 @@ const phaseWorkbooks = getPhaseWorkbooks();
 export function ReceiptsListPage() {
   const { receipts, masters, createReceipt } = useTracking();
   const [params, setParams] = useSearchParams();
-  const [q, setQ] = useState("");
+  // Reads an initial ?q= from the global header search so a search there lands here pre-filled.
+  const [q, setQ] = useState(() => params.get("q") ?? "");
   const navigate = useNavigate();
 
   const status = params.get("status") ?? "";
@@ -39,10 +40,10 @@ export function ReceiptsListPage() {
   }, [receipts, status, warehouse, q]);
 
   const columns: Column<ReceiptRecord>[] = [
-    { label: "Receipt ID", render: (r) => <span className="mono">{r.id}</span> },
+    { label: "Receipt ID", render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> },
     { label: "Arrival date", render: (r) => r.arrivalDate || "—" },
     { label: "Supplier", render: (r) => r.supplierName || "—" },
-    { label: "LBA code", render: (r) => <span className="mono">{r.lbaCode || "—"}</span> },
+    { label: "LBA code", render: (r) => <span className="font-mono text-[12.5px]">{r.lbaCode || "—"}</span> },
     { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
     { label: "Warehouse", render: (r) => r.warehouse || "—" },
     { label: "Lot / Bin", render: (r) => `${r.lotNo || "—"} / ${r.binNo || "—"}` },
@@ -50,7 +51,11 @@ export function ReceiptsListPage() {
     {
       label: "Source",
       render: (r) => (
-        <span className={`field-badge ${r.source === "imported" ? "xl" : "new"}`}>
+        <span
+          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+            r.source === "imported" ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+          }`}
+        >
           {r.source === "imported" ? "imported" : "entered"}
         </span>
       ),
@@ -70,31 +75,39 @@ export function ReceiptsListPage() {
         title="RCN Receipts"
         lede="Every RCN receipt, one row each — from delivery plan through arrival, Lot/Bin, drying, and transfer. Filter, search, and open any record to fill or review its stages in any order."
         actions={
-          <button className="btn btn-primary" onClick={handleNewReceipt}>
-            + New RCN receipt
+          <button
+            onClick={handleNewReceipt}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[17px]">add</span>
+            New RCN receipt
           </button>
         }
       />
 
-      <details className="stage-section" style={{ marginBottom: 20 }}>
-        <summary>
-          <span className="stage-dot done" />
-          Source workbooks by phase
-          <span className="stage-phase-tag">where each stage's format was extracted from</span>
+      <details className="bg-white border border-warmstone-200 rounded-2xl mb-5 shadow-xs overflow-hidden">
+        <summary className="list-none cursor-pointer px-5 py-3.5 flex items-center gap-2.5 hover:bg-warmstone-50 transition-colors">
+          <span className="material-symbols-outlined text-[18px] text-success-700">folder_special</span>
+          <span className="text-[13px] font-semibold text-warmstone-800">Source workbooks by phase</span>
+          <span className="text-[11px] text-warmstone-400">where each stage's format was extracted from</span>
         </summary>
-        <div className="stage-section-body">
+        <div className="px-5 pb-4 pt-1 border-t border-warmstone-100 bg-warmstone-50/60">
           {phaseWorkbooks.map(({ phase, files }) => (
-            <div className="summary-row" key={phase} style={{ alignItems: "flex-start" }}>
-              <span className="fname" style={{ fontWeight: 600 }}>
-                {phase}
-              </span>
-              <span className="fval" style={{ textAlign: "right" }}>
+            <div key={phase} className="flex items-start justify-between gap-4 py-2 border-b border-warmstone-100 last:border-0 text-[13px]">
+              <span className="font-semibold text-warmstone-700">{phase}</span>
+              <span className="text-right">
                 {files.length === 0 ? (
-                  <span className="field-badge new">no workbook yet — doc-only</span>
+                  <span className="px-2 py-0.5 rounded-full bg-ambernut-100 text-ambernut-800 text-[10px] font-bold">
+                    no workbook yet — doc-only
+                  </span>
                 ) : (
                   files.map((f) => (
-                    <span className="file-chip" style={{ marginBottom: 0, marginLeft: 8 }} key={f.file}>
-                      📄 {f.file}
+                    <span
+                      key={f.file}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warmstone-100 text-warmstone-600 text-[11px] font-medium ml-2 mb-1"
+                    >
+                      <span className="material-symbols-outlined text-[12px]">description</span>
+                      {f.file}
                       {f.sheet ? ` · ${f.sheet}` : ""}
                     </span>
                   ))
@@ -110,7 +123,7 @@ export function ReceiptsListPage() {
           placeholder="Search vehicle, supplier, LBA code, Lot, receipt ID…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          style={{ minWidth: 260 }}
+          className="min-w-[260px]"
         />
         <select value={status} onChange={(e) => setParams((p) => setOrDelete(p, "status", e.target.value))}>
           <option value="">All statuses</option>
@@ -128,7 +141,7 @@ export function ReceiptsListPage() {
             </option>
           ))}
         </select>
-        <span style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--ink-soft)" }}>{rows.length} receipts</span>
+        <span className="ml-auto text-[12.5px] text-warmstone-500">{rows.length} receipts</span>
       </FilterBar>
 
       <DataTable

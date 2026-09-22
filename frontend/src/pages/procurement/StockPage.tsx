@@ -8,8 +8,8 @@ export function StockPage() {
   const withLot = receipts.filter((r) => r.stageData["n-lot"] || r.stageData["n-bin"]);
 
   const columns: Column<ReceiptRecord>[] = [
-    { label: "Lot Number", render: (r) => <span className="mono">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "—"}</span> },
-    { label: "Bin Number", render: (r) => <span className="mono">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "—"}</span> },
+    { label: "Lot Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "—"}</span> },
+    { label: "Bin Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "—"}</span> },
     { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
     { label: "Supplier", render: (r) => r.supplierName || "—" },
     { label: "Warehouse", render: (r) => r.warehouse || "—" },
@@ -24,13 +24,7 @@ export function StockPage() {
         title="Lots & Bins"
         lede="Confirmed model: Lot = truck-level traceability, always one truck = one Lot. Bin = physical storage, decided separately and can hold several Lots at once."
       />
-      <DataTable
-        columns={columns}
-        rows={withLot}
-        keyFn={(r) => r.id}
-        rowHref={(r) => `/procurement/receipts/${r.id}`}
-        emptyTitle="No Lots or Bins assigned yet"
-      />
+      <DataTable columns={columns} rows={withLot} keyFn={(r) => r.id} rowHref={(r) => `/procurement/receipts/${r.id}`} emptyTitle="No Lots or Bins assigned yet" />
     </>
   );
 }

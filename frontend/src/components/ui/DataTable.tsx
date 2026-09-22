@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState } from "./EmptyState";
 
@@ -24,13 +24,27 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
     return <EmptyState title={emptyTitle ?? "Nothing here yet"} hint={emptyHint} />;
   }
 
+  function go(row: T) {
+    if (rowHref) navigate(rowHref(row));
+  }
+  function onKeyDown(e: KeyboardEvent<HTMLTableRowElement>, row: T) {
+    if (rowHref && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      go(row);
+    }
+  }
+
   return (
-    <div className="data-table-wrap">
-      <table className="data-table">
+    <div className="overflow-x-auto bg-white border border-warmstone-200 rounded-2xl shadow-xs">
+      <table className="w-full text-[13px] border-collapse">
         <thead>
-          <tr>
+          <tr className="border-b border-warmstone-200">
             {columns.map((c) => (
-              <th key={c.label} style={c.width ? { width: c.width } : undefined}>
+              <th
+                key={c.label}
+                style={c.width ? { width: c.width } : undefined}
+                className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap"
+              >
                 {c.label}
               </th>
             ))}
@@ -40,11 +54,18 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
           {rows.map((row) => (
             <tr
               key={keyFn(row)}
-              className={rowHref ? "clickable" : undefined}
-              onClick={rowHref ? () => navigate(rowHref(row)) : undefined}
+              className={`border-b border-warmstone-100 last:border-0 ${
+                rowHref ? "cursor-pointer hover:bg-warmstone-50 focus-visible:bg-warmstone-50 outline-none" : ""
+              }`}
+              onClick={rowHref ? () => go(row) : undefined}
+              role={rowHref ? "button" : undefined}
+              tabIndex={rowHref ? 0 : undefined}
+              onKeyDown={rowHref ? (e) => onKeyDown(e, row) : undefined}
             >
               {columns.map((c) => (
-                <td key={c.label}>{c.render(row)}</td>
+                <td key={c.label} className="px-4 py-3 text-warmstone-800 align-middle">
+                  {c.render(row)}
+                </td>
               ))}
             </tr>
           ))}

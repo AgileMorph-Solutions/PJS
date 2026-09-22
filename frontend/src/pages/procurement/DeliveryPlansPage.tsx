@@ -10,7 +10,7 @@ export function DeliveryPlansPage() {
   const planned = receipts.filter((r) => r.stageData["n-delplan"]);
 
   const columns: Column<ReceiptRecord>[] = [
-    { label: "Receipt ID", render: (r) => <span className="mono">{r.id}</span> },
+    { label: "Receipt ID", render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> },
     { label: "Supplier / source", render: (r) => r.stageData["n-delplan"]?.["Supplier / source"] || "—" },
     { label: "Expected qty / truck type", render: (r) => r.stageData["n-delplan"]?.["Expected quantity or truck type"] || "—" },
     { label: "Expected arrival", render: (r) => r.stageData["n-delplan"]?.["Expected arrival date"] || "—" },
@@ -31,8 +31,12 @@ export function DeliveryPlansPage() {
         title="Delivery Plans"
         lede="What's expected before a truck arrives (doc §2) — supplier/source, expected quantity, expected date, destination warehouse. Compared against actual arrival once the receipt is logged."
         actions={
-          <button className="btn btn-primary" onClick={handleNew}>
-            + New delivery plan
+          <button
+            onClick={handleNew}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[17px]">add</span>
+            New delivery plan
           </button>
         }
       />

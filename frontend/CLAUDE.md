@@ -30,13 +30,13 @@ src/pages/                  Route-level composition. Pull data from useTracking(
                              pass it to components. Business logic here should be "which components,
                              with which props" — not validation or derivation (that's the contract
                              package or the backend).
-src/components/dashboard/   Domain-aware components scoped to one page (currently just Dashboard —
-                             DateRangeFilter, the two chart components). Same reasoning as the
-                             components/ vs components/ui/ split, one level more specific: a
-                             component that knows about receipt statuses or jute balances belongs
-                             next to the page that owns that domain, not in the shared components/
-                             root. If a second page needs a genuinely reusable version of one of
-                             these, promote it — don't fork it.
+src/components/dashboard/   Domain-aware components scoped to one page (Dashboard — DateRangeFilter,
+                             the two chart components). Same reasoning as the components/ vs
+                             components/ui/ split, one level more specific: a component that knows
+                             about receipt statuses or jute balances belongs next to the page that
+                             owns that domain, not in the shared components/ root. If a second page
+                             needs a genuinely reusable version of one of these, promote it — don't
+                             fork it.
 ```
 
 **Rule of thumb for a new UI feature:** if the same rendering logic would apply to a different
@@ -87,24 +87,44 @@ avoid, a new buffering rule), that's the first place this repo should grow front
 something like Vitest + Testing Library — check whether recent work has already added the
 dependency before assuming a fresh setup.
 
-## Styling / component conventions
+## Styling — Tailwind v4, a warm terracotta/warmstone identity
 
-- Design tokens live in `src/styles/tokens.css`; component styles read from CSS custom properties,
-  not hardcoded values — see `KpiTile`/`Pill`'s use of `tone` props mapped to token classes.
-- `tokens.css` also has a spacing/type/radius/shadow scale (`--space-*`/`--text-*`/`--radius-*`/
-  `--shadow-*`), added for the Dashboard maturity pass. Only Dashboard's own CSS actually uses it
-  today — this was a deliberate, scoped addition, not a signal that the rest of the app has been
-  migrated onto it. Reach for these tokens in new work rather than another hardcoded pixel value;
-  don't assume every existing selector already does.
-- Charts (`recharts`, added for the Dashboard) use their own small token set —
-  `--chart-primary`/`--danger-border`/`--chart-*-wash`/`--chart-grid`/`--chart-axis` — chosen by
-  running the `dataviz` skill's `validate_palette.js` against the actual `--card` chart surface,
-  not eyeballed. **Load the `dataviz` skill before adding or changing a chart color**, and if you
-  change `--chart-primary` or `--danger-border`, re-run the validator (the exact command is in
-  `tokens.css`'s comment above those tokens) — they're validated as a pair, not independently.
-- Icons are `lucide-react` (added for the Dashboard's KPI tiles and card headings) — small,
-  tree-shakeable, import only the icons actually used. Not yet adopted elsewhere in the app;
-  extend deliberately, not by reflex, if another page wants icons.
+The app was rebuilt end to end (Sept 2026) on **Tailwind CSS v4** (`@tailwindcss/vite`, wired in
+`vite.config.ts`) with **Material Symbols Outlined** for icons, replacing the earlier hand-rolled
+CSS-custom-property system (`tokens.css` — deleted) and `lucide-react`. This is the current, only
+styling approach; there is no legacy CSS to bridge or migrate away from anymore.
+
+- **Theme lives in `src/styles/global.css`'s `@theme` block** — `@import "tailwindcss";` at the top,
+  then every custom color/shadow token as a `--color-*`/`--shadow-*` CSS variable, which Tailwind
+  v4 auto-generates utility classes from (`--color-brand-700` → `bg-brand-700`/`text-brand-700`/
+  etc., no `tailwind.config.js` needed). Five semantic color families: `brand` (terracotta —
+  primary actions, the active/current step), `warmstone` (neutrals — surfaces, borders, muted
+  text, "automatic/system" states), `ambernut` (highlights, pending/decision states), `success`
+  (passed/done/good), `danger` (rejected/critical — kept deliberately distinct from `brand` so a
+  primary-action button and a "rejected" badge never share a color).
+- **`Pill`'s tone prop** (`entry`/`decision`/`system`/`term`/`gap`) maps onto that palette —
+  `entry`→success, `decision`→ambernut, `system`→warmstone, `term`→brand (muted weight, never the
+  vivid CTA weight, so a terminal-state badge never reads as a button), `gap`→danger. See
+  `Pill.tsx`'s header comment before changing the mapping.
+- **Chart colors are their own dedicated tokens** (`--color-chart-primary` plus its wash
+  variants), not reused from `brand`/`success` — both were tried first and failed the CVD-safety
+  check against `danger` (classic red/green and red/red-adjacent confusion), which is exactly why
+  a separate, validated pair exists. **Load the `dataviz` skill before adding or changing a chart
+  color**, and re-run the validator (the exact command is in `global.css`'s comment above those
+  tokens) before changing `--color-chart-primary` or `--color-danger-700` — they're validated as a
+  pair, not independently.
+- **Icons are Material Symbols Outlined**, loaded as a variable web font in `index.html` (alongside
+  Plus Jakarta Sans for headings/UI and Inter for body text — also replaced Spectral/IBM Plex
+  Mono). Used as `<span className="material-symbols-outlined">icon_name</span>`; add `.fill` for
+  the filled variant. Numeric alignment uses `.tabular-nums` (or Tailwind's `tabular-nums`
+  utility) on values that need to line up in a column — not a dedicated mono typeface anymore.
+- **This redesign is style-only, real data only** — it took its color/type/icon/card language from
+  a Stitch mockup of the Receipt Detail page, but every invented field in that mockup (Crop Year,
+  Harvest Batch, a National Board Code, a security seal, per-layer bag-stacking detail, a
+  fictional fixed "5 steps") was left out. `ReceiptDetailPage.tsx` still walks the real ~16-stage
+  model from `stages.ts`, and every stat block only renders when the underlying stage field is
+  actually present — never a placeholder number. Follow this precedent for future design
+  references: take the visual language, not whatever data the reference happened to display.
 - A `field.v === ""` (real vs `gap` field) or a ledger column's `real: false` drives a visible
   "workbook" vs "new" badge in the UI (`FieldInput`, `LedgerSection`) — this is intentional product
   behavior (the client can see which fields are real today vs proposed), not leftover debug UI.

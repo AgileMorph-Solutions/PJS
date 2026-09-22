@@ -5,6 +5,13 @@ import { DecisionBranch } from "../../../components/DecisionBranch";
 import { DECISION_BRANCHES } from "../../../domain/decisions";
 import { useTracking } from "../../../state/TrackingContext";
 
+const btnPrimary =
+  "inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none";
+const btnSecondary =
+  "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-semibold hover:bg-warmstone-50 transition-all";
+const btnDanger =
+  "inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-danger-700 hover:bg-danger-800 text-white text-[13px] font-bold transition-all shadow-sm";
+
 /** Guided "new RCN receipt" intake — one stage at a time, in order, scoped to a single receipt id.
  * The receipt detail page is the canonical record view; this is just a friendlier on-ramp for a
  * gate operator entering a brand-new truck arrival end to end. */
@@ -19,26 +26,32 @@ export function IntakeWizardPage() {
   if (stageId === "n-reject") {
     const values = receipt.stageData["n-reject"] ?? {};
     return (
-      <>
-        <p className="kicker">New RCN receipt · {id} · Branch outcome</p>
-        <h2 className="page-title">{rejectStage.title}</h2>
-        <div className="card">
+      <div className="space-y-5">
+        <div>
+          <p className="text-[11px] font-bold text-warmstone-500 uppercase tracking-wider mb-1.5">
+            New RCN receipt · {id} · Branch outcome
+          </p>
+          <h1 className="text-2xl font-bold text-warmstone-900 tracking-tight">{rejectStage.title}</h1>
+        </div>
+        <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
           <StageForm
             stage={rejectStage}
             values={values}
             onFieldChange={(fieldName, value) => setStageField(id, "n-reject", fieldName, value)}
-                    onFieldBlur={() => flushStage(id, "n-reject")}
+            onFieldBlur={() => flushStage(id, "n-reject")}
           />
         </div>
-        <div className="stage-actions">
-          <button className="btn btn-secondary" onClick={() => navigate(`/procurement/receipts/new/${id}/n-qfs`)}>
-            ← Back to Quality analysis
+        <div className="flex items-center justify-between">
+          <button className={btnSecondary} onClick={() => navigate(`/procurement/receipts/new/${id}/n-qfs`)}>
+            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            Back to Quality analysis
           </button>
-          <button className="btn btn-danger" onClick={() => navigate(`/procurement/receipts/${id}`)}>
-            Confirm rejection →
+          <button className={btnDanger} onClick={() => navigate(`/procurement/receipts/${id}`)}>
+            Confirm rejection
+            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
           </button>
         </div>
-      </>
+      </div>
     );
   }
 
@@ -67,40 +80,48 @@ export function IntakeWizardPage() {
   const nextDisabled = Boolean(branchOptions) && !chosen;
 
   return (
-    <>
-      <p className="kicker">
-        New RCN receipt · {id} · Step {stage.num ?? "—"} of {stages.length} · {stage.phase}
-      </p>
-      <h2 className="page-title">{stage.title}</h2>
+    <div className="space-y-5">
+      <div>
+        <p className="text-[11px] font-bold text-warmstone-500 uppercase tracking-wider mb-1.5">
+          New RCN receipt · {id} · Step {stage.num ?? "—"} of {stages.length} · {stage.phase}
+        </p>
+        <h1 className="text-2xl font-bold text-warmstone-900 tracking-tight">{stage.title}</h1>
+      </div>
 
-      <div className="card">
+      <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <StageForm
           stage={stage}
           values={values}
           onFieldChange={(fieldName, value) => setStageField(id, stageId, fieldName, value)}
-                    onFieldBlur={() => flushStage(id, stageId)}
+          onFieldBlur={() => flushStage(id, stageId)}
         />
         {branchOptions && (
-          <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(id, stageId, b)} />
+          <div className="mt-4">
+            <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(id, stageId, b)} />
+          </div>
         )}
       </div>
 
-      <div className="stage-actions">
+      <div className="flex items-center justify-between">
         {prev ? (
-          <button className="btn btn-secondary" onClick={() => navigate(`/procurement/receipts/new/${id}/${prev.id}`)}>
-            ← Back
+          <button className={btnSecondary} onClick={() => navigate(`/procurement/receipts/new/${id}/${prev.id}`)}>
+            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            Back
           </button>
         ) : (
           <span />
         )}
-        <button className="btn btn-primary" onClick={handleNext} disabled={nextDisabled}>
-          {stageId === "n-xferdec" ? "Finish → open record" : "Continue →"}
+        <button className={btnPrimary} onClick={handleNext} disabled={nextDisabled}>
+          {stageId === "n-xferdec" ? "Finish — open record" : "Continue"}
+          <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
         </button>
       </div>
 
-      <p style={{ marginTop: 24, fontSize: 12, color: "var(--ink-soft)" }}>
-        <Link to={`/procurement/receipts/${id}`}>Skip to the full record →</Link>
+      <p className="text-xs text-warmstone-400">
+        <Link to={`/procurement/receipts/${id}`} className="text-brand-700 hover:text-brand-800 font-medium">
+          Skip to the full record →
+        </Link>
       </p>
-    </>
+    </div>
   );
 }
