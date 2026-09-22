@@ -30,6 +30,13 @@ src/pages/                  Route-level composition. Pull data from useTracking(
                              pass it to components. Business logic here should be "which components,
                              with which props" — not validation or derivation (that's the contract
                              package or the backend).
+src/components/dashboard/   Domain-aware components scoped to one page (currently just Dashboard —
+                             DateRangeFilter, the two chart components). Same reasoning as the
+                             components/ vs components/ui/ split, one level more specific: a
+                             component that knows about receipt statuses or jute balances belongs
+                             next to the page that owns that domain, not in the shared components/
+                             root. If a second page needs a genuinely reusable version of one of
+                             these, promote it — don't fork it.
 ```
 
 **Rule of thumb for a new UI feature:** if the same rendering logic would apply to a different
@@ -84,6 +91,20 @@ dependency before assuming a fresh setup.
 
 - Design tokens live in `src/styles/tokens.css`; component styles read from CSS custom properties,
   not hardcoded values — see `KpiTile`/`Pill`'s use of `tone` props mapped to token classes.
+- `tokens.css` also has a spacing/type/radius/shadow scale (`--space-*`/`--text-*`/`--radius-*`/
+  `--shadow-*`), added for the Dashboard maturity pass. Only Dashboard's own CSS actually uses it
+  today — this was a deliberate, scoped addition, not a signal that the rest of the app has been
+  migrated onto it. Reach for these tokens in new work rather than another hardcoded pixel value;
+  don't assume every existing selector already does.
+- Charts (`recharts`, added for the Dashboard) use their own small token set —
+  `--chart-primary`/`--danger-border`/`--chart-*-wash`/`--chart-grid`/`--chart-axis` — chosen by
+  running the `dataviz` skill's `validate_palette.js` against the actual `--card` chart surface,
+  not eyeballed. **Load the `dataviz` skill before adding or changing a chart color**, and if you
+  change `--chart-primary` or `--danger-border`, re-run the validator (the exact command is in
+  `tokens.css`'s comment above those tokens) — they're validated as a pair, not independently.
+- Icons are `lucide-react` (added for the Dashboard's KPI tiles and card headings) — small,
+  tree-shakeable, import only the icons actually used. Not yet adopted elsewhere in the app;
+  extend deliberately, not by reflex, if another page wants icons.
 - A `field.v === ""` (real vs `gap` field) or a ledger column's `real: false` drives a visible
   "workbook" vs "new" badge in the UI (`FieldInput`, `LedgerSection`) — this is intentional product
   behavior (the client can see which fields are real today vs proposed), not leftover debug UI.
