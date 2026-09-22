@@ -1,41 +1,44 @@
-// Mirrors ledgerEntries / addLedgerEntry on TrackingApi. Ledger *definitions* (columns, which
-// are real vs. new, sample rows, data-quality flags) are static content owned by
-// frontend/src/data/juteBags.ts — same relationship as stages.ts to the receipt routes — so this
-// only persists the dynamic part: rows a user actually adds via "+ Add entry".
-//
-// Known simplification (documented, not hidden): this endpoint doesn't hardcode per-ledger
-// column knowledge (that would duplicate juteBags.ts and risk drifting from it). Instead the
-// caller states which of the columns it's submitting are derived, and the server computes them —
-// see withDerivedColumns. Today only the warehouse-stock ledger's "S N"/"Balance" columns are
-// derived (frontend/src/components/LedgerSection.tsx's DERIVED_COLUMNS).
+/**
+ * Mirrors ledgerEntries / addLedgerEntry on TrackingApi.
+ *
+ * Rows are normalized into four real tables (one per ledger) and re-keyed onto the workbook's own
+ * column labels on the way out, via the generated LEDGER_COLUMN_MAP. Two things moved server-side
+ * that the frontend used to compute in LedgerSection.tsx: the serial number and the running
+ * balance — both race when two people add a row at once, and the balance now comes from a SQL
+ * view that has no column to drift.
+ */
 import type { FastifyInstance } from "fastify";
-import { prisma } from "../db.js";
-import { withDerivedColumns } from "../domain/jute.js";
-import { JUTE_LEDGER_IDS, type LedgerRow } from "../types.js";
+import { LEDGER_COLUMN_MAP, LEDGER_IDS } from "@anagroci/contract/generated/stageFieldMap";
+import type { LedgerRow } from "@anagroci/contract/types/receipt";
+import { listLedgerRows, addLedgerRow } from "../services/ledgers.js";
+import { reconciliation, jsonSafe } from "../domain/juteBalance.js";
 
 export async function ledgerRoutes(app: FastifyInstance) {
+  /** All four ledgers at once — matches the frontend's LedgerEntries shape. */
+  app.get("/api/jute-ledgers", async () => {
+    const out: Record<string, LedgerRow[]> = {};
+    for (const id of LEDGER_IDS) out[id] = await listLedgerRows(id);
+    return out;
+  });
+
   app.get("/api/jute-ledgers/:ledgerId/entries", async (req, reply) => {
     const { ledgerId } = req.params as { ledgerId: string };
-    if (!JUTE_LEDGER_IDS.includes(ledgerId as (typeof JUTE_LEDGER_IDS)[number])) {
-      return reply.code(404).send({ error: `Unknown ledger "${ledgerId}"` });
-    }
-    const rows = await prisma.juteLedgerEntry.findMany({ where: { ledgerId }, orderBy: { id: "asc" } });
-    return rows.map((r) => JSON.parse(r.row) as LedgerRow);
+    if (!LEDGER_COLUMN_MAP[ledgerId]) return reply.code(404).send({ error: `Unknown ledger "${ledgerId}"` });
+    return listLedgerRows(ledgerId);
   });
 
   app.post("/api/jute-ledgers/:ledgerId/entries", async (req, reply) => {
     const { ledgerId } = req.params as { ledgerId: string };
-    if (!JUTE_LEDGER_IDS.includes(ledgerId as (typeof JUTE_LEDGER_IDS)[number])) {
-      return reply.code(404).send({ error: `Unknown ledger "${ledgerId}"` });
-    }
-    const { row, derivedColumns } = req.body as { row: LedgerRow; derivedColumns?: string[] };
-
-    const existingRaw = await prisma.juteLedgerEntry.findMany({ where: { ledgerId }, orderBy: { id: "asc" } });
-    const existingRows = existingRaw.map((r) => JSON.parse(r.row) as LedgerRow);
-
-    const finalRow = withDerivedColumns(row, existingRows, derivedColumns ?? []);
-    await prisma.juteLedgerEntry.create({ data: { ledgerId, row: JSON.stringify(finalRow) } });
-
-    return finalRow;
+    if (!LEDGER_COLUMN_MAP[ledgerId]) return reply.code(404).send({ error: `Unknown ledger "${ledgerId}"` });
+    const { row } = (req.body ?? {}) as { row?: LedgerRow };
+    if (!row || typeof row !== "object") return reply.code(400).send({ error: "body.row is required" });
+    const created = await addLedgerRow(ledgerId, row);
+    return reply.code(201).send({ data: created, warnings: [] });
   });
+
+  /**
+   * opening + receipts + transfers in − issues − damaged/discarded − transfers out = closing,
+   * per warehouse and period, computed across all four ledgers.
+   */
+  app.get("/api/jute-ledgers/reconciliation", async () => jsonSafe(await reconciliation()));
 }

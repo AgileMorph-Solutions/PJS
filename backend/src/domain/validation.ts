@@ -1,8 +1,9 @@
-// Server-side enforcement of the Sept 2026 clarification's binding rules (see
-// backend/BACKEND_BUILD_PROMPT.md §2). The frontend only ever showed these as notes/labels — it
-// never blocked a bad write. This is the layer that actually enforces them, since localStorage
-// never could.
-import type { ReceiptRecord } from "../types.js";
+// Server-side enforcement of the Sept 2026 clarification's binding rules. The frontend only ever
+// showed these as notes — it never blocked a bad write, and localStorage never could.
+//
+// Note the split: these are HARD rules that reject a write (422). Data-quality findings are a
+// different thing entirely — they are warnings attached to a successful write, because the real
+// client data violates them and blocking would make it unimportable. See domain/dataQuality/.
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -15,8 +16,8 @@ export class ValidationError extends Error {
  * Confirmed rule: "after the Lot Number is assigned, the Warehouse Team decides the Bin Number."
  * A Bin can never be allocated before its Lot exists.
  */
-export function assertLotBeforeBin(receipt: Pick<ReceiptRecord, "lotNo">, incomingBinNo: string | null | undefined): void {
-  if (incomingBinNo && !receipt.lotNo) {
+export function assertLotBeforeBin(currentLotNo: string | null | undefined, incomingBinNo: string | null | undefined): void {
+  if (incomingBinNo && incomingBinNo.trim() && !(currentLotNo && currentLotNo.trim())) {
     throw new ValidationError(
       "Cannot allocate a Bin before this receipt has a Lot Number — the Lot Number is assigned first, at truck-unload approval."
     );
@@ -25,8 +26,12 @@ export function assertLotBeforeBin(receipt: Pick<ReceiptRecord, "lotNo">, incomi
 
 /**
  * Confirmed rule: "a rejected truck must stay visible in the system — Status = Rejected, with a
- * reason — not disappear." Enforced by requiring a reason at the moment n-qfs is set to fail,
- * rather than trusting a later, optional write to the reject stage.
+ * reason — not disappear." Enforced at the moment n-qfs is set to fail, rather than trusting a
+ * later optional write to the reject stage.
+ *
+ * NOTE: the 50 seeded receipts include 6 that are already rejected with no reason recorded. The
+ * seeder therefore goes through the service layer with bypassValidation, and those 6 are reported
+ * as a `rejected_without_reason` finding rather than being silently given an invented reason.
  */
 export function assertRejectionHasReason(branchId: string, reason: string | null | undefined): void {
   if (branchId === "fail" && (!reason || !reason.trim())) {
@@ -35,10 +40,8 @@ export function assertRejectionHasReason(branchId: string, reason: string | null
 }
 
 /**
- * Confirmed rule: "Even when the RCN is stored in a Bin, the specific Lot/truck and quantity
- * being issued for drying must be identified and recorded. We should not treat the entire Bin as
- * one single drying batch." A drying job must reference a real Lot, never be created against a
- * Bin alone.
+ * Confirmed rule: drying is always issued and tracked at the specific Lot/quantity level, never at
+ * the whole-Bin level — one Bin can mix several Lots, so "dry this Bin" is not a valid operation.
  */
 export function assertDryingJobHasLot(job: { lotNo?: string | null; bin?: string | null }): void {
   if (!job.lotNo || !job.lotNo.trim()) {

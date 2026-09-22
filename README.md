@@ -36,33 +36,61 @@ instead; the vehicle/truck is kept only as provenance on the record.
     - Delivery Plans, Lots & Bins, Drying Jobs — filtered views over the same receipt records (Lots &
       Bins), plus real drying-job history from `Drying_Report_Factory_warehouse.xlsx`.
   - **Jute Management** — the four ledgers as their own pages. Warehouse Stock is backed by real
-    data from `BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx` with a running balance that
-    continues correctly when you add an entry; the other three are ready for data, flagged as such.
+    data from `BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx` — all 298 rows, with the running
+    balance computed server-side by a SQL window function so it has no stored column to drift.
+    Warehouse-to-warehouse is backed by its own 367 real rows; the other two have no row-level
+    source in the client's workbooks yet and are flagged as such rather than filled with invented
+    rows.
   - **Production** (`/production`) — explicit placeholder: not built, phases/workbooks listed so the
     module list stays honest about what's coming rather than hiding it.
   - **Masters** — Suppliers, Warehouses, Bins, seeded from the real LBA codes and warehouse/bin
     codes in the workbook, with an add form for anything new.
-  - Every read/write goes through `src/repository/` (localStorage today, versioned key) so swapping
-    in a real backend later touches one layer, not every page.
-- `backend/` — placeholder only, not started. See `backend/README.md`.
+  - Every read/write goes through `src/repository/` — now `api.ts` against the backend. That swap
+    landed as designed: it touched the repository layer and `TrackingContext`, and of the eleven
+    consumer pages, seven needed no change at all. `TrackingApi` kept its shape, with reads staying
+    synchronous and writes going optimistic; only `createReceipt` became async, because the id is
+    assigned by the server and both call sites navigate straight to it.
+- `backend/` — **built**: Fastify + Prisma + PostgreSQL, with the 17 stages normalized into real
+  tables and the jute reconciliation as a SQL view. See `backend/README.md`.
+- `packages/contract/` — the shared source of truth for both sides: the stage/ledger dictionaries,
+  the domain types, and `deriveStatus()`. The backend used to hand-copy these files; now there is
+  one copy, and a codegen step plus four tests keep the field dictionary and the database schema
+  from drifting apart.
 - `tools/extract-seed.py` — regenerable: reads the real client workbooks with openpyxl and writes
   `frontend/src/data/seed/*.json`. Re-run it and rebuild if the source workbooks change; the app
   never reads `.xlsx` directly.
+- `tools/extract-jute.py` — the same, for the two jute ledgers that have real row-level source data
+  (298 warehouse movements, 367 transfer receipts). Mixed-type cells are kept verbatim in a `*Raw`
+  twin rather than coerced.
 
 ## Running it
 
+The whole stack, from an empty database:
+
 ```bash
-cd frontend
-npm install
-npm run dev       # http://localhost:5173
+docker compose up --build
+# http://localhost:8080
 ```
 
-Or via Docker:
+That starts Postgres, waits for it to be healthy, applies the migrations, seeds the real data, and
+serves the app with `/api` proxied same-origin — so the browser never needs CORS.
+
+For development, with hot reload:
 
 ```bash
-docker compose build
-docker compose up
-# http://localhost:8080
+npm install                  # workspace root: packages/contract, backend, frontend
+docker compose up -d db
+npm -w backend run prisma:migrate
+npm -w backend run seed
+npm -w backend run dev       # :3000
+npm -w frontend run dev      # :5173, proxies /api to :3000
+```
+
+Tests and the codegen drift check:
+
+```bash
+npm -w backend test          # needs the db running
+npm run gen:check            # fails if the generated stage map is stale
 ```
 
 ## Seed data

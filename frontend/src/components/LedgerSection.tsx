@@ -1,7 +1,10 @@
 import { useState, type FormEvent } from "react";
 import type { JuteLedger, JuteLedgerColumn } from "../types/stage";
 import { useTracking } from "../state/TrackingContext";
-import { allRowsFor, lastBalance } from "../domain/jute";
+// NOTE: allRowsFor() is deliberately NOT used any more. It prepended juteBags.ts's hardcoded
+// sampleRows to the entered rows, which was right when the ledger was empty demo data. The API now
+// serves the real 298/367 workbook rows — and those sample rows are among them — so prepending
+// would show three rows twice and corrupt the running balance.
 
 type Row = Record<string, string>;
 
@@ -25,25 +28,18 @@ function blankRow(columns: JuteLedgerColumn[]): Row {
 
 export function LedgerSection({ ledger }: { ledger: JuteLedger }) {
   const { ledgerEntries, addLedgerEntry } = useTracking();
-  const hasRunningBalance = ledger.columns.some((c) => c.label === "Balance");
   const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label));
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
 
-  const entered = ledgerEntries[ledger.id] ?? [];
-  const allRows = allRowsFor(ledger, entered);
+  // Every row comes from the server, sample rows included.
+  const allRows = ledgerEntries[ledger.id] ?? [];
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const row: Row = { ...draft };
-    if (hasRunningBalance) {
-      const received = Number(draft["Bags received"] || 0);
-      const issued = Number(draft["Bags issued"] || 0);
-      row["Balance"] = String(lastBalance(allRows) + received - issued);
-    }
-    if (ledger.columns.some((c) => c.label === "S N")) {
-      row["S N"] = String(allRows.length + 1);
-    }
-    addLedgerEntry(ledger.id, row);
+    // "S N" and "Balance" are assigned by the server: computing them here raced whenever two
+    // people added a row at once, and the balance is now a SQL window function with no column to
+    // drift. The row that comes back is what gets displayed.
+    addLedgerEntry(ledger.id, { ...draft });
     setDraft(blankRow(ledger.columns));
   }
 

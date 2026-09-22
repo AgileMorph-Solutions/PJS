@@ -1,25 +1,17 @@
-import suppliersSeed from "../data/seed/suppliers.json";
-import warehousesSeed from "../data/seed/warehouses.json";
-import binsSeed from "../data/seed/bins.json";
-import originsSeed from "../data/seed/origins.json";
+import suppliers from "../data/seed/suppliers.json";
+import warehouses from "../data/seed/warehouses.json";
+import bins from "../data/seed/bins.json";
+import origins from "../data/seed/origins.json";
+import type { Masters, Supplier } from "@anagroci/contract/types/receipt";
 
-export interface Supplier {
-  code: string;
-  name: string;
-}
+export type { Masters, Supplier };
 
-export interface Masters {
-  suppliers: Supplier[];
-  warehouses: string[];
-  bins: string[];
-  origins: string[];
-}
-
+/** Offline fallback only — the API is the real source of masters. */
 export function loadSeedMasters(): Masters {
   return {
-    suppliers: suppliersSeed as Supplier[],
-    warehouses: warehousesSeed as string[],
-    bins: binsSeed as string[],
-    origins: originsSeed as string[],
+    suppliers: suppliers as Supplier[],
+    warehouses: warehouses as string[],
+    bins: bins as string[],
+    origins: origins as string[],
   };
 }

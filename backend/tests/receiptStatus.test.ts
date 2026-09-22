@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { deriveStatus, computeDashboardCounts } from "../src/domain/receiptStatus.js";
-import type { ReceiptRecord } from "../src/types.js";
+import { deriveStatus, computeDashboardCounts } from "@anagroci/contract/domain/receiptStatus";
+import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 
 // Real fixtures — lifted from frontend/src/data/seed/receipts.json (REC-2026-0038, -0019,
 // -0005) rather than invented, so this test exercises the same real records the app ships with.

@@ -103,13 +103,19 @@ def build_stage_data(row, stages_included, tier_name, idx):
     if "n-gross" in stages_included:
         sd["n-gross"] = {"GROSS WT KGS": row["GROSS WT KGS"]}
     if "n-lot" in stages_included:
+        # Lot Number is left EMPTY on purpose. The OFFLOADINGS sheet has no Lot column — that is
+        # exactly why n-lot is a `gap` stage — so any value here would be fabricated. The stage is
+        # still marked as reached (the truck did get this far); the blank is reported by
+        # /api/data-quality rather than filled in with an invented identifier.
         sd["n-lot"] = {
-            "Lot Number": f"LOT-{2026}{idx:04d}", "Truck reference": row["VEHICLE NO."],
+            "Lot Number": "", "Truck reference": row["VEHICLE NO."],
             "Assigned by (Warehouse Team)": "Warehouse Team", "Date/time assigned": row["DATE OF OFFLOADING"] or row["DATE OF ARRIVAL"],
         }
     if "n-bin" in stages_included:
         sd["n-bin"] = {
-            "Bin Number": row["WH NO."] or "BKE-001", "Linked Lot Number(s)": f"LOT-{2026}{idx:04d}",
+            # WH NO. really does carry the BKE-00x codes that bins.json lists as bins, so this
+            # mapping is read from real data. The "or BKE-001" default was not — a blank stays blank.
+            "Bin Number": row["WH NO."] or "", "Linked Lot Number(s)": "",
             "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
             "Finalised (same day / next day)": "Same day",
         }
@@ -119,6 +125,10 @@ def build_stage_data(row, stages_included, tier_name, idx):
             "BON SACS (good bags)": row["BON SACS"], "HUMID SACS (damp bags)": row["HUMID SACS"],
             "Sacs déchirés (torn bags)": row["Sacs déchirés"], "Refraction": row["Refraction"],
         }
+    if "n-tare" in stages_included:
+        # Present but empty, deliberately: the tare reading is taken in reality but the OFFLOADINGS
+        # sheet has no column for it, so it is lost today. Surfaced as `tare_never_recorded`.
+        sd["n-tare"] = {"Tare / empty truck weight (kg)": ""}
     if "n-netwt" in stages_included:
         sd["n-netwt"] = {"NET WT KGS": row["NET WT KGS"], "PAID WT": row["PAID WT"]}
     if "n-grn" in stages_included:

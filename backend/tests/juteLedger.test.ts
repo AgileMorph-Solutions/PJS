@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { lastBalance, withDerivedColumns, checkReconciliation } from "../src/domain/jute.js";
-import type { LedgerRow } from "../src/types.js";
+import { lastBalance, withDerivedColumns, checkReconciliation } from "@anagroci/contract/domain/jute";
+import type { LedgerRow } from "@anagroci/contract/types/receipt";
 
 // Real fixture — the exact 3 sample rows from frontend/src/data/juteBags.ts's "warehouse-stock"
 // ledger, read directly from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx with openpyxl.

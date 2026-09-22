@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { TrackingProvider } from "./state/TrackingContext";
+import { TrackingProvider, useTracking } from "./state/TrackingContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionPage } from "./pages/ProductionPage";
@@ -21,11 +21,29 @@ import { SuppliersPage } from "./pages/masters/SuppliersPage";
 import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
 
+/** Holds the first render until the initial load finishes, so pages never flash an empty dataset. */
+function LoadGate({ children }: { children: React.ReactNode }) {
+  const { loading, error, receipts } = useTracking();
+  if (loading && receipts.length === 0) {
+    return <div style={{ padding: 32, color: "var(--ink-soft)" }}>Loading…</div>;
+  }
+  if (error && receipts.length === 0) {
+    return (
+      <div style={{ padding: 32 }}>
+        <h2 style={{ marginBottom: 8 }}>Can't reach the server</h2>
+        <p className="stage-note">{error}</p>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <TrackingProvider>
       <BrowserRouter>
         <Layout>
+          <LoadGate>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
 
@@ -49,6 +67,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </LoadGate>
         </Layout>
       </BrowserRouter>
     </TrackingProvider>

@@ -1,5 +1,7 @@
-// Generic localStorage helpers. Every persisted read/write in the app goes through here, so
-// swapping this for real API calls later touches one file, not every page.
+// Small localStorage helpers, wrapped so blocked or corrupt storage degrades instead of crashing.
+//
+// This used to hold the whole application state. The server owns that now; what's left here is
+// per-browser convenience only. Nothing the app needs to be correct lives in here.
 
 export function loadJSON<T>(key: string, fallback: T): T {
   try {
@@ -18,3 +20,18 @@ export function saveJSON<T>(key: string, value: T): void {
     // best-effort persistence only
   }
 }
+
+export function removeKey(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * The pre-API state blob. It must be cleared on boot: it holds a full copy of the receipts, and a
+ * stale copy shadowing freshly-loaded server data is the worst possible failure here — the user
+ * sees old numbers with no indication they're old.
+ */
+export const LEGACY_STATE_KEY = "anagroci-tracking-v2";

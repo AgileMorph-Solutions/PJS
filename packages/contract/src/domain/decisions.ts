@@ -1,11 +1,8 @@
-// Ported from frontend/src/domain/decisions.ts — used server-side to validate that a posted
-// branch id is actually a legal outcome for that decision stage before accepting it.
-export interface BranchOutcome {
-  id: string;
-  label: string;
-  note: string;
-}
+import type { BranchOutcome } from "../types/stage.js";
 
+// The three decisions in the flow don't share one shape, so their branch options are spelled
+// out explicitly rather than generalised. Shared between the intake wizard and the truck
+// detail page's decision controls.
 export const DECISION_BRANCHES: Record<string, BranchOutcome[]> = {
   "n-qfs": [
     { id: "pass", label: "Pass — quality ok", note: "Continue on to Weight truck (Gross weight)." },

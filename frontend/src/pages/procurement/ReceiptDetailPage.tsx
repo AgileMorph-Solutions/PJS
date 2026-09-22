@@ -9,7 +9,7 @@ import { StatusPill } from "../../components/ui/StatusPill";
 
 export function ReceiptDetailPage() {
   const { id = "" } = useParams();
-  const { getReceipt, setStageField, setBranch } = useTracking();
+  const { getReceipt, setStageField, setBranch, flushStage } = useTracking();
   const receipt = getReceipt(id);
 
   if (!receipt) return <Navigate to="/procurement/receipts" replace />;
@@ -62,6 +62,7 @@ export function ReceiptDetailPage() {
                     stage={stage}
                     values={values}
                     onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
+                    onFieldBlur={() => flushStage(receipt.id, stage.id)}
                   />
                   {branchOptions && (
                     <DecisionBranch
@@ -87,6 +88,7 @@ export function ReceiptDetailPage() {
                   stage={rejectStage}
                   values={receipt.stageData["n-reject"] ?? {}}
                   onFieldChange={(fieldName, value) => setStageField(receipt.id, "n-reject", fieldName, value)}
+                    onFieldBlur={() => flushStage(receipt.id, "n-reject")}
                 />
               </div>
             </details>

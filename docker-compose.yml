@@ -1,20 +1,49 @@
 services:
-  frontend:
-    build:
-      context: ./frontend
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: anagroci
+      POSTGRES_PASSWORD: anagroci
+      POSTGRES_DB: anagroci
     ports:
-      - "8080:80"
+      # Published so `prisma migrate dev` / `npm run seed` work from the host against this same DB.
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Without this the backend races the DB and `prisma migrate deploy` fails on first boot.
+      test: ["CMD-SHELL", "pg_isready -U anagroci -d anagroci"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://anagroci:anagroci@db:5432/anagroci?schema=public
+      PORT: "3000"
+      # Browser hits the frontend on :8080; nginx proxies /api, but a direct dev call needs CORS.
+      CORS_ORIGIN: http://localhost:8080
     ports:
       - "3000:3000"
-    volumes:
-      - backend-db:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      # Repo root, not ./frontend — the app depends on the @anagroci/contract workspace package.
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
     restart: unless-stopped
 
 volumes:
-  backend-db:
+  pgdata:

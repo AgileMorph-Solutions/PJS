@@ -18,8 +18,9 @@ export function DeliveryPlansPage() {
     { label: "Actual arrival", render: (r) => r.arrivalDate || "not yet arrived" },
   ];
 
-  function handleNew() {
-    const id = createReceipt();
+  async function handleNew() {
+    // Async now: the id is assigned by the server and we navigate straight to it.
+    const id = await createReceipt();
     navigate(`/procurement/receipts/new/${id}/n-delplan`);
   }
 

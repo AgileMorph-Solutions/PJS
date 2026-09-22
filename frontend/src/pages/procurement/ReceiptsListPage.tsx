@@ -57,8 +57,9 @@ export function ReceiptsListPage() {
     },
   ];
 
-  function handleNewReceipt() {
-    const id = createReceipt();
+  async function handleNewReceipt() {
+    // Async now: the id is assigned by the server and we navigate straight to it.
+    const id = await createReceipt();
     navigate(`/procurement/receipts/new/${id}/n-delplan`);
   }
 

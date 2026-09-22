@@ -4,6 +4,8 @@ interface Props {
   field: StageField;
   value: string;
   onChange: (value: string) => void;
+  /** Flush buffered edits immediately — writes are coalesced, so blur is the natural commit point. */
+  onBlur?: () => void;
 }
 
 /** One field row: label + "from <file>" / "new" badge + a controlled input.
@@ -11,7 +13,7 @@ interface Props {
  * the actual displayed value always comes from the record itself via `value`, never from the
  * generic sample in the field dictionary, so one receipt's blank field can't show another
  * receipt's sample data. Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange }: Props) {
+export function FieldInput({ field, value, onChange, onBlur }: Props) {
   const isMock = field.v !== "";
   const placeholder = !isMock
     ? "Not captured anywhere today — type a value to try it out"
@@ -27,7 +29,7 @@ export function FieldInput({ field, value, onChange }: Props) {
           {isMock ? "from workbook" : "new field"}
         </span>
       </div>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <input value={value} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} placeholder={placeholder} />
     </div>
   );
 }

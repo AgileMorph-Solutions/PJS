@@ -11,7 +11,7 @@ import { useTracking } from "../../../state/TrackingContext";
 export function IntakeWizardPage() {
   const { id = "", stageId = "" } = useParams();
   const navigate = useNavigate();
-  const { getReceipt, setStageField, setBranch } = useTracking();
+  const { getReceipt, setStageField, setBranch, flushStage } = useTracking();
   const receipt = getReceipt(id);
 
   if (!receipt) return <Navigate to="/procurement/receipts" replace />;
@@ -27,6 +27,7 @@ export function IntakeWizardPage() {
             stage={rejectStage}
             values={values}
             onFieldChange={(fieldName, value) => setStageField(id, "n-reject", fieldName, value)}
+                    onFieldBlur={() => flushStage(id, "n-reject")}
           />
         </div>
         <div className="stage-actions">
@@ -77,6 +78,7 @@ export function IntakeWizardPage() {
           stage={stage}
           values={values}
           onFieldChange={(fieldName, value) => setStageField(id, stageId, fieldName, value)}
+                    onFieldBlur={() => flushStage(id, stageId)}
         />
         {branchOptions && (
           <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(id, stageId, b)} />

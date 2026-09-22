@@ -8,7 +8,7 @@
     "vehicleNo": "338KX01",
     "warehouse": "BOUAKE",
     "origin": "BOUAKE",
-    "lotNo": "LOT-20260038",
+    "lotNo": "",
     "binNo": "BKE-003",
     "stageData": {
       "n-gate": {
@@ -38,14 +38,14 @@
         "GROSS WT KGS": "35320"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260038",
+        "Lot Number": "",
         "Truck reference": "338KX01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-02-17"
       },
       "n-bin": {
         "Bin Number": "BKE-003",
-        "Linked Lot Number(s)": "LOT-20260038",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -56,6 +56,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "25",
         "Refraction": "100"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "34895",
@@ -90,7 +93,7 @@
     "vehicleNo": "8287GH03",
     "warehouse": "BOUAKE",
     "origin": "NIAKARA",
-    "lotNo": "LOT-20260003",
+    "lotNo": "",
     "binNo": "BKE-003",
     "stageData": {
       "n-gate": {
@@ -120,14 +123,14 @@
         "GROSS WT KGS": "47800"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260003",
+        "Lot Number": "",
         "Truck reference": "8287GH03",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-02-19"
       },
       "n-bin": {
         "Bin Number": "BKE-003",
-        "Linked Lot Number(s)": "LOT-20260003",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -138,6 +141,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "37",
         "Refraction": "148"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "47259",
@@ -388,7 +394,7 @@
     "vehicleNo": "2023 HF 01",
     "warehouse": "BOUAKE",
     "origin": "NIAKARA",
-    "lotNo": "LOT-20260049",
+    "lotNo": "",
     "binNo": "BKE-003",
     "stageData": {
       "n-gate": {
@@ -418,14 +424,14 @@
         "GROSS WT KGS": "21600"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260049",
+        "Lot Number": "",
         "Truck reference": "2023 HF 01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-02-25"
       },
       "n-bin": {
         "Bin Number": "BKE-003",
-        "Linked Lot Number(s)": "LOT-20260049",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -458,7 +464,7 @@
     "vehicleNo": "4139GV01",
     "warehouse": "BOUAKE",
     "origin": "BOUAKE",
-    "lotNo": "LOT-20260010",
+    "lotNo": "",
     "binNo": "BKE-002",
     "stageData": {
       "n-gate": {
@@ -488,14 +494,14 @@
         "GROSS WT KGS": "11220"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260010",
+        "Lot Number": "",
         "Truck reference": "4139GV01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-02-26"
       },
       "n-bin": {
         "Bin Number": "BKE-002",
-        "Linked Lot Number(s)": "LOT-20260010",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -506,6 +512,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "0",
         "Refraction": "0"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "11096",
@@ -540,8 +549,8 @@
     "vehicleNo": "AA114NQ02",
     "warehouse": "YAKRO FACTORY",
     "origin": "VAVOUA",
-    "lotNo": "LOT-20260002",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "115",
@@ -570,14 +579,14 @@
         "GROSS WT KGS": "48800"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260002",
+        "Lot Number": "",
         "Truck reference": "AA114NQ02",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-02-27"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260002",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -588,6 +597,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "25",
         "Refraction": "80"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "48142",
@@ -622,7 +634,7 @@
     "vehicleNo": "7558EJ03",
     "warehouse": "BOUAKE",
     "origin": "DIANRA",
-    "lotNo": "LOT-20260008",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -652,14 +664,14 @@
         "GROSS WT KGS": "39940"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260008",
+        "Lot Number": "",
         "Truck reference": "7558EJ03",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-02"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260008",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -778,7 +790,7 @@
     "vehicleNo": "4981JR04",
     "warehouse": "BOUAKE",
     "origin": "DABAKALA",
-    "lotNo": "LOT-20260027",
+    "lotNo": "",
     "binNo": "BKE-003",
     "stageData": {
       "n-gate": {
@@ -808,14 +820,14 @@
         "GROSS WT KGS": "41780"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260027",
+        "Lot Number": "",
         "Truck reference": "4981JR04",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-06"
       },
       "n-bin": {
         "Bin Number": "BKE-003",
-        "Linked Lot Number(s)": "LOT-20260027",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -826,6 +838,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "7",
         "Refraction": "28"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "41301",
@@ -907,7 +922,7 @@
     "vehicleNo": "120GL01",
     "warehouse": "BOUAKE",
     "origin": "MANKONO",
-    "lotNo": "LOT-20260045",
+    "lotNo": "",
     "binNo": "BKE-002",
     "stageData": {
       "n-gate": {
@@ -937,14 +952,14 @@
         "GROSS WT KGS": "21200"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260045",
+        "Lot Number": "",
         "Truck reference": "120GL01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-07"
       },
       "n-bin": {
         "Bin Number": "BKE-002",
-        "Linked Lot Number(s)": "LOT-20260045",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -955,6 +970,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "7",
         "Refraction": "28"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "20953",
@@ -989,8 +1007,8 @@
     "vehicleNo": "3998HF01",
     "warehouse": "BOUAKE",
     "origin": "KATIOLA",
-    "lotNo": "LOT-20260007",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "229",
@@ -1019,14 +1037,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260007",
+        "Lot Number": "",
         "Truck reference": "3998HF01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-08"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260007",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1037,6 +1055,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -1118,8 +1139,8 @@
     "vehicleNo": "285LA01",
     "warehouse": "YAKRO FACTORY",
     "origin": "VAVOUA",
-    "lotNo": "LOT-20260022",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "239",
@@ -1148,14 +1169,14 @@
         "GROSS WT KGS": "45400"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260022",
+        "Lot Number": "",
         "Truck reference": "285LA01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-09"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260022",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1166,6 +1187,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "20",
         "Refraction": "80"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "44796",
@@ -1205,7 +1229,7 @@
     "vehicleNo": "9149EL04",
     "warehouse": "BOUAKE",
     "origin": "NIAKARA",
-    "lotNo": "LOT-20260006",
+    "lotNo": "",
     "binNo": "BKE-002",
     "stageData": {
       "n-gate": {
@@ -1235,14 +1259,14 @@
         "GROSS WT KGS": "41040"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260006",
+        "Lot Number": "",
         "Truck reference": "9149EL04",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-10"
       },
       "n-bin": {
         "Bin Number": "BKE-002",
-        "Linked Lot Number(s)": "LOT-20260006",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1253,6 +1277,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "15",
         "Refraction": "60"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "40572",
@@ -1283,7 +1310,7 @@
     "vehicleNo": "4137LG04",
     "warehouse": "BOUAKE",
     "origin": "DABAKALA",
-    "lotNo": "LOT-20260005",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -1313,14 +1340,14 @@
         "GROSS WT KGS": "43420"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260005",
+        "Lot Number": "",
         "Truck reference": "4137LG04",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-12"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260005",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1331,6 +1358,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "15",
         "Refraction": "60"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "42903",
@@ -1377,8 +1407,8 @@
     "vehicleNo": "197KC01",
     "warehouse": "BOUAKE",
     "origin": "MANKONO",
-    "lotNo": "LOT-20260035",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "285",
@@ -1407,14 +1437,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260035",
+        "Lot Number": "",
         "Truck reference": "197KC01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-12"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260035",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1425,6 +1455,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": "0"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -1511,8 +1544,8 @@
     "vehicleNo": "4972KB01",
     "warehouse": "BOUAKE",
     "origin": "DIKODOUGOU",
-    "lotNo": "LOT-20260048",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "345",
@@ -1541,14 +1574,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260048",
+        "Lot Number": "",
         "Truck reference": "4972KB01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-17"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260048",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1559,6 +1592,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -1598,8 +1634,8 @@
     "vehicleNo": "28JZ01",
     "warehouse": "BOUAKE",
     "origin": "BOTRO",
-    "lotNo": "LOT-20260050",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "390",
@@ -1628,14 +1664,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260050",
+        "Lot Number": "",
         "Truck reference": "28JZ01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-23"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260050",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1646,6 +1682,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -1680,8 +1719,8 @@
     "vehicleNo": "3937KT01",
     "warehouse": "YAKRO FACTORY",
     "origin": "ABENGOUKOU",
-    "lotNo": "LOT-20260031",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "430",
@@ -1710,14 +1749,14 @@
         "GROSS WT KGS": "46120"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260031",
+        "Lot Number": "",
         "Truck reference": "3937KT01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-29"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260031",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1728,6 +1767,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "20",
         "Refraction": "80"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "45590",
@@ -1774,8 +1816,8 @@
     "vehicleNo": "7692GB04",
     "warehouse": "BOUAKE",
     "origin": "VAVOUA",
-    "lotNo": "LOT-20260017",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "433",
@@ -1804,14 +1846,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260017",
+        "Lot Number": "",
         "Truck reference": "7692GB04",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-03-29"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260017",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1844,8 +1886,8 @@
     "vehicleNo": "3620KT01",
     "warehouse": "YAKRO FACTORY",
     "origin": "VAVOUA",
-    "lotNo": "LOT-20260033",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "460",
@@ -1874,14 +1916,14 @@
         "GROSS WT KGS": "40480"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260033",
+        "Lot Number": "",
         "Truck reference": "3620KT01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-02"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260033",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1914,7 +1956,7 @@
     "vehicleNo": "6305EP01",
     "warehouse": "BOUAKE",
     "origin": "SAKASSAU",
-    "lotNo": "LOT-20260023",
+    "lotNo": "",
     "binNo": "BKE-002",
     "stageData": {
       "n-gate": {
@@ -1944,14 +1986,14 @@
         "GROSS WT KGS": "34100"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260023",
+        "Lot Number": "",
         "Truck reference": "6305EP01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-08"
       },
       "n-bin": {
         "Bin Number": "BKE-002",
-        "Linked Lot Number(s)": "LOT-20260023",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -1984,8 +2026,8 @@
     "vehicleNo": "AA379AD01/268WWCI01",
     "warehouse": "YAKRO FACTORY",
     "origin": "MAN",
-    "lotNo": "LOT-20260014",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "559",
@@ -2014,14 +2056,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260014",
+        "Lot Number": "",
         "Truck reference": "AA379AD01/268WWCI01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-11"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260014",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2032,6 +2074,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -2172,8 +2217,8 @@
     "vehicleNo": "138GL01",
     "warehouse": "YAKRO FACTORY",
     "origin": "AGNIBILEKRO",
-    "lotNo": "LOT-20260034",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "604",
@@ -2202,14 +2247,14 @@
         "GROSS WT KGS": "43200"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260034",
+        "Lot Number": "",
         "Truck reference": "138GL01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-15"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260034",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2220,6 +2265,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "40",
         "Refraction": "160"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "42703",
@@ -2254,7 +2302,7 @@
     "vehicleNo": "2706GN01",
     "warehouse": "BOUAKE",
     "origin": "BEOUMI",
-    "lotNo": "LOT-20260024",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -2284,14 +2332,14 @@
         "GROSS WT KGS": "38780"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260024",
+        "Lot Number": "",
         "Truck reference": "2706GN01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-16"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260024",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2363,7 +2411,7 @@
     "vehicleNo": "AA398TS04",
     "warehouse": "BOUAKE",
     "origin": "BOUAKE",
-    "lotNo": "LOT-20260029",
+    "lotNo": "",
     "binNo": "BKE-002",
     "stageData": {
       "n-gate": {
@@ -2393,14 +2441,14 @@
         "GROSS WT KGS": "53060"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260029",
+        "Lot Number": "",
         "Truck reference": "AA398TS04",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-19"
       },
       "n-bin": {
         "Bin Number": "BKE-002",
-        "Linked Lot Number(s)": "LOT-20260029",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2411,6 +2459,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "13",
         "Refraction": "52"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "52384",
@@ -2450,7 +2501,7 @@
     "vehicleNo": "9406HV01",
     "warehouse": "BOUAKE",
     "origin": "DIDIEVI",
-    "lotNo": "LOT-20260011",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -2480,14 +2531,14 @@
         "GROSS WT KGS": "45360"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260011",
+        "Lot Number": "",
         "Truck reference": "9406HV01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-20"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260011",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2498,6 +2549,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "10",
         "Refraction": "40"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "44834",
@@ -2584,8 +2638,8 @@
     "vehicleNo": "4214JH03",
     "warehouse": "YAKRO FACTORY",
     "origin": "TIEBISSOU",
-    "lotNo": "LOT-20260042",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "715",
@@ -2614,14 +2668,14 @@
         "GROSS WT KGS": "39220"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260042",
+        "Lot Number": "",
         "Truck reference": "4214JH03",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-21"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260042",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2654,8 +2708,8 @@
     "vehicleNo": "AA717FV03",
     "warehouse": "YAKRO FACTORY",
     "origin": "MANKONO",
-    "lotNo": "LOT-20260009",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "755",
@@ -2684,14 +2738,14 @@
         "GROSS WT KGS": "39460"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260009",
+        "Lot Number": "",
         "Truck reference": "AA717FV03",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-24"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260009",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2702,6 +2756,9 @@
         "HUMID SACS (damp bags)": "30",
         "Sacs déchirés (torn bags)": "0",
         "Refraction": "240"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "38983",
@@ -2732,8 +2789,8 @@
     "vehicleNo": "7191CL03/3433HC01",
     "warehouse": "BOUAKE",
     "origin": "BOUAKE",
-    "lotNo": "LOT-20260028",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "734",
@@ -2762,14 +2819,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260028",
+        "Lot Number": "",
         "Truck reference": "7191CL03/3433HC01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-22"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260028",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2780,6 +2837,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -2819,7 +2879,7 @@
     "vehicleNo": "AA187AQ01",
     "warehouse": "BOUAKE",
     "origin": "NIAKARA",
-    "lotNo": "LOT-20260004",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -2849,14 +2909,14 @@
         "GROSS WT KGS": "44220"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260004",
+        "Lot Number": "",
         "Truck reference": "AA187AQ01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-24"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260004",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2867,6 +2927,9 @@
         "HUMID SACS (damp bags)": "20",
         "Sacs déchirés (torn bags)": "0",
         "Refraction": "160"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "43684",
@@ -2901,7 +2964,7 @@
     "vehicleNo": "7650GS07",
     "warehouse": "BOUAKE",
     "origin": "BOUAKE",
-    "lotNo": "LOT-20260012",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -2931,14 +2994,14 @@
         "GROSS WT KGS": "40440"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260012",
+        "Lot Number": "",
         "Truck reference": "7650GS07",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-24"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260012",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -2949,6 +3012,9 @@
         "HUMID SACS (damp bags)": "25",
         "Sacs déchirés (torn bags)": "0",
         "Refraction": "200"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "39913",
@@ -2983,8 +3049,8 @@
     "vehicleNo": "3620KT01",
     "warehouse": "YAKRO FACTORY",
     "origin": "VAVOUA",
-    "lotNo": "LOT-20260047",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "782",
@@ -3013,14 +3079,14 @@
         "GROSS WT KGS": "42050"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260047",
+        "Lot Number": "",
         "Truck reference": "3620KT01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-25"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260047",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -3053,8 +3119,8 @@
     "vehicleNo": "AA547FT01/4022LU03",
     "warehouse": "YAKRO FACTORY",
     "origin": "BROBO",
-    "lotNo": "LOT-20260039",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "778",
@@ -3083,14 +3149,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260039",
+        "Lot Number": "",
         "Truck reference": "AA547FT01/4022LU03",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-24"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260039",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -3101,6 +3167,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -3194,7 +3263,7 @@
     "vehicleNo": "2387JE01",
     "warehouse": "BOUAKE",
     "origin": "SEGUELA",
-    "lotNo": "LOT-20260036",
+    "lotNo": "",
     "binNo": "BKE-001",
     "stageData": {
       "n-gate": {
@@ -3224,14 +3293,14 @@
         "GROSS WT KGS": "32160"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260036",
+        "Lot Number": "",
         "Truck reference": "2387JE01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-27"
       },
       "n-bin": {
         "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260036",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -3242,6 +3311,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "0",
         "Refraction": "0"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "31754",
@@ -3272,8 +3344,8 @@
     "vehicleNo": "7063JA01",
     "warehouse": "YAKRO FACTORY",
     "origin": "DABAKALA",
-    "lotNo": "LOT-20260037",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "891",
@@ -3302,14 +3374,14 @@
         "GROSS WT KGS": "0"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260037",
+        "Lot Number": "",
         "Truck reference": "7063JA01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-04-30"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260037",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -3320,6 +3392,9 @@
         "HUMID SACS (damp bags)": "",
         "Sacs déchirés (torn bags)": "",
         "Refraction": ""
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "",
@@ -3366,7 +3441,7 @@
     "vehicleNo": "1026FL01",
     "warehouse": "BOUAKE",
     "origin": "MANKONO",
-    "lotNo": "LOT-20260013",
+    "lotNo": "",
     "binNo": "BKE-002",
     "stageData": {
       "n-gate": {
@@ -3396,14 +3471,14 @@
         "GROSS WT KGS": "34320"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260013",
+        "Lot Number": "",
         "Truck reference": "1026FL01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-05-03"
       },
       "n-bin": {
         "Bin Number": "BKE-002",
-        "Linked Lot Number(s)": "LOT-20260013",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -3414,6 +3489,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "10",
         "Refraction": "40"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "33905",
@@ -3444,8 +3522,8 @@
     "vehicleNo": "AA122GP01",
     "warehouse": "YAKRO FACTORY",
     "origin": "SAHANDRA",
-    "lotNo": "LOT-20260046",
-    "binNo": "BKE-001",
+    "lotNo": "",
+    "binNo": "",
     "stageData": {
       "n-gate": {
         "S N": "981",
@@ -3474,14 +3552,14 @@
         "GROSS WT KGS": "28220"
       },
       "n-lot": {
-        "Lot Number": "LOT-20260046",
+        "Lot Number": "",
         "Truck reference": "AA122GP01",
         "Assigned by (Warehouse Team)": "Warehouse Team",
         "Date/time assigned": "2026-06-18"
       },
       "n-bin": {
-        "Bin Number": "BKE-001",
-        "Linked Lot Number(s)": "LOT-20260046",
+        "Bin Number": "",
+        "Linked Lot Number(s)": "",
         "Basis for allocation (moisture / quality / KOR / space)": "Moisture within range, space available",
         "Finalised (same day / next day)": "Same day"
       },
@@ -3492,6 +3570,9 @@
         "HUMID SACS (damp bags)": "0",
         "Sacs déchirés (torn bags)": "4",
         "Refraction": "16"
+      },
+      "n-tare": {
+        "Tare / empty truck weight (kg)": ""
       },
       "n-netwt": {
         "NET WT KGS": "27874",

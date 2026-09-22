@@ -1,0 +1,13 @@
+{
+  "name": "anagroci-cashew-management",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["packages/*", "backend", "frontend"],
+  "scripts": {
+    "gen": "npm -w @anagroci/contract run gen",
+    "gen:check": "npm -w @anagroci/contract run gen:check",
+    "test": "npm -w @anagroci/contract test && npm -w backend test",
+    "dev:backend": "npm -w backend run dev",
+    "dev:frontend": "npm -w frontend run dev"
+  }
+}

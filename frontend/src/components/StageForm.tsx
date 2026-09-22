@@ -12,12 +12,14 @@ interface Props {
   stage: Stage;
   values: Record<string, string>;
   onFieldChange: (fieldName: string, value: string) => void;
+  /** Called when a field loses focus, so the caller can flush its coalesced writes. */
+  onFieldBlur?: () => void;
 }
 
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, onFieldChange }: Props) {
+export function StageForm({ stage, values, onFieldChange, onFieldBlur }: Props) {
   return (
     <>
       <span className={`kind-chip kind-${stage.kind}`}>{KIND_LABEL[stage.kind]}</span>
@@ -29,7 +31,7 @@ export function StageForm({ stage, values, onFieldChange }: Props) {
       )}
       <p className="stage-note">{stage.note}</p>
       {stage.fields.map((f) => (
-        <FieldInput key={f.n} field={f} value={values[f.n] ?? ""} onChange={(v) => onFieldChange(f.n, v)} />
+        <FieldInput key={f.n} field={f} value={values[f.n] ?? ""} onChange={(v) => onFieldChange(f.n, v)} onBlur={onFieldBlur} />
       ))}
     </>
   );

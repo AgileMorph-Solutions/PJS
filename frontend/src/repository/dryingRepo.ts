@@ -1,17 +1,9 @@
-import dryingJobsSeed from "../data/seed/dryingJobs.json";
+import dryingJobs from "../data/seed/dryingJobs.json";
+import type { DryingJob } from "@anagroci/contract/types/receipt";
 
-export interface DryingJob {
-  id: string;
-  date: string;
-  warehouse: string;
-  bin: string;
-  lotNo: string;
-  ficheNo: string;
-  status: string;
-  dryType: string;
-  destination: string;
-}
+export type { DryingJob };
 
+/** Offline fallback only — DryingJobsPage reads the API through useDryingJobs(). */
 export function loadSeedDryingJobs(): DryingJob[] {
-  return dryingJobsSeed as DryingJob[];
+  return dryingJobs as DryingJob[];
 }

@@ -13,7 +13,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.88.0",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.4",
+    "@anagroci/contract": "*"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

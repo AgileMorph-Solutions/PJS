@@ -1,13 +1,15 @@
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { StatusPill } from "../../components/ui/StatusPill";
-import { useTracking } from "../../state/TrackingContext";
-import { loadSeedDryingJobs, type DryingJob } from "../../repository/dryingRepo";
+import { useTracking, useDryingJobs } from "../../state/TrackingContext";
+import type { DryingJob } from "../../repository/dryingRepo";
 import { deriveStatus } from "../../domain/receiptStatus";
 
 export function DryingJobsPage() {
   const { receipts } = useTracking();
-  const jobs = loadSeedDryingJobs();
+  // Drying jobs come from the API, deliberately via their own hook rather than TrackingApi —
+  // that keeps the TrackingApi interface unchanged by this migration.
+  const { jobs } = useDryingJobs();
   const inDrying = receipts.filter((r) => deriveStatus(r) === "in_drying");
 
   const jobColumns: Column<DryingJob>[] = [
