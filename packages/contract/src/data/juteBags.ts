@@ -15,7 +15,7 @@ export const juteLedgers: JuteLedger[] = [
     file: "BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx",
     sheet: "JUTE BAGS ISSUED · 10 columns · 229 rows",
     flag:
-      'ACTIVITIES TYPE is overloaded — sometimes a process category ("JUTE BAGS PURCHASED/UNLOADINGS", "REBAGGING DURING UNLOADING/DRYING/LOADING/STACKING"), sometimes a supplier name. The running BALANCE goes negative from row 195 onward, down to −11,027 by the last row — a real data-quality signal worth raising with the client, not assumed away. No good/damaged/repairable condition split exists anywhere in this sheet.',
+      "ACTIVITIES TYPE mixes process categories and supplier names. The running Balance goes negative (down to −11,027) — real, not a display bug.",
     columns: [
       { label: "S N", real: true , col: "sn"},
       { label: "Date", real: true , col: "movementDate"},
@@ -75,8 +75,7 @@ export const juteLedgers: JuteLedger[] = [
     title: "2. Supplier movement",
     file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx",
     sheet: "JUte Bag Record · per-supplier discharge totals + an undated hand tally, not a dated ledger",
-    flag:
-      'The raw rows already exist in ledger 1\'s real sheet (ACTIVITIES TYPE holding a supplier name, e.g. "CAPCD SCOOPS", with Supplier code = the same LBA code captured at Verify supplier documents) but aren\'t yet rolled up into a per-supplier running balance. This workbook also has a per-supplier "Bag Discharged" total for every LBA/DIS code (e.g. SCAAMT COOP CA 54,212; COP JAVA SCOOP 11,902 — 187 suppliers listed), plus, further down the same sheet, a hand-typed summary with no dates or transaction IDs that tracks exactly this ledger\'s numbers as one-off running totals: "Total Issued to Supplier" 135,851, "Reccondition"/"Total Recondition" 21,705, "Total Balance" 22,119. So the concepts are captured on paper today — just not as a per-supplier dated log with a running balance, which is what the columns below assume.',
+    flag: "Not yet a dated per-supplier ledger — today's numbers exist only as a hand-tallied summary, with no dates or transaction IDs.",
     columns: [
       { label: "Bags issued to supplier", real: false , col: "bagsIssuedToSupplier"},
       { label: "Returned through RCN deliveries", real: false , col: "returnedViaDeliveries"},
@@ -90,8 +89,7 @@ export const juteLedgers: JuteLedger[] = [
     title: "3. Factory/Production tracking",
     file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx",
     sheet: "JUte Bag Record · same undated hand tally as ledger 2",
-    flag:
-      'The same undated summary block that backs ledger 2 also carries this ledger\'s numbers: "Issued to Drying" 10,000; "Issued to Calibrator" 33,240 / "Received from Calibrator"; a good-vs-damaged split at that stage, "Good Bag" 25,235 vs "Damaged Bag" 8,215; "Bag Stiched" (repaired and put back into rotation) 6,866; and an overall "Good Bag Balance" 3,675 vs "Balance Bag (Damaged Bag)" 18,444. That maps roughly onto Good bags recovered / Completely damaged / Partially damaged (repair) below — but again as one static tally with no date or transaction ID, not the row-per-event ledger these columns assume.',
+    flag: "Same caveat as Supplier Movement — today's numbers exist only in an undated hand-tally, not a row-per-event ledger.",
     columns: [
       { label: "Issued to Production", real: false , col: "issuedToProduction"},
       { label: "Good bags recovered", real: false , col: "goodBagsRecovered"},
@@ -108,8 +106,7 @@ export const juteLedgers: JuteLedger[] = [
     sheet: "Bouake Stock Reciving · 367 real rows",
     description:
       "A transfer reduces the source warehouse's stock and increases the destination's, recorded as its own movement (e.g. Warehouse A → Warehouse B).",
-    flag:
-      'This sheet is literally titled "Stock transfer receipt" and is the Yamoussoukro-side receiving log for exactly the Bouaké transfers ledger 1 only shows as an outgoing deduction (e.g. its 26,625-bag "TRANSFFER TO YAMOUSSOUKRO" row on 2026-02-24). Every one of the 367 rows here is BOUAKE → Yamoussoukro (the "Transfer -Bouake" column is a constant "BOUAKE"; there is no other source warehouse in the data yet) — "Origin" is the RCN\'s upstream supply town (29 of them, e.g. MANKONO, NIAKARA), not a warehouse. DAMAGED BAG (92/367 rows) and NEW JUTE BAG USED (85/367) are real but sparse; RECONDITION is filled in only 6/367 rows. DIFF is always exactly −(Received Bags) in all 367 filled rows — a redundant/likely-broken formula column, not independent data. FINAL BAGS AFTER REBAGGING W/H exists as a header but is empty in all 459 rows of the sheet (including the 92 beyond row 367) — a template column nobody fills in.',
+    flag: "Diffrence in Bag at Receiving is always exactly −(Received Bags) — a broken formula column, not independent data.",
     columns: [
       { label: "SN", real: true , col: "sn"},
       { label: "Date", real: true , col: "receivedDate"},
@@ -172,7 +169,4 @@ export const juteLedgers: JuteLedger[] = [
 ];
 
 export const juteReconciliationRule =
-  "opening + receipts + transfers in − issues − damaged/discarded − transfers out = closing stock. Every movement traces to Warehouse → Supplier/Department → Activity → Quantity → Movement Type → Responsible Person/Team → Date, and links back to the Truck/Lot/RCN delivery where applicable. Ledger 1 already approximates this with its running Balance column; ledgers 2–4 still need to be split out of it.";
-
-export const juteFlowTouchpoints =
-  "step 7 (Unload) is where bag counts are actually checked, updating the Warehouse and Supplier ledgers; the transfer decision at the bottom is where a warehouse-to-warehouse bag movement would be triggered alongside any RCN transfer.";
+  "opening + receipts + transfers in − issues − damaged/discarded − transfers out = closing stock";

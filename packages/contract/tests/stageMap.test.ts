@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { stages, rejectStage } from "../src/data/stages.js";
 import { juteLedgers } from "../src/data/juteBags.js";
 import { STAGE_FIELD_MAP, LEDGER_COLUMN_MAP, colFor } from "../src/generated/stageFieldMap.js";
-import { deriveStatus } from "../src/domain/receiptStatus.js";
+import { deriveStatus, getStageProgress, isStageBlank } from "../src/domain/receiptStatus.js";
 import { DECISION_BRANCHES } from "../src/domain/decisions.js";
 
 const allStages = [...stages, rejectStage];
@@ -90,5 +90,53 @@ describe("deriveStatus", () => {
       expect(STAGE_FIELD_MAP[stageId], stageId).toBeTruthy();
       expect(outcomes.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("getStageProgress", () => {
+  it("treats a stage as reached on PRESENCE, matching deriveStatus's rule", () => {
+    const p = getStageProgress({ stageData: { "n-gate": {} }, branches: {} });
+    expect(p.doneIds.has("n-gate")).toBe(true);
+    expect(p.doneCount).toBe(1);
+  });
+
+  it("counts a decision stage done only once a branch is actually chosen, not on stageData presence", () => {
+    const withFieldsOnly = getStageProgress({ stageData: { "n-qfs": { MOIS: "10" } }, branches: {} });
+    expect(withFieldsOnly.doneIds.has("n-qfs")).toBe(false);
+    const withBranch = getStageProgress({ stageData: {}, branches: { "n-qfs": "pass" } });
+    expect(withBranch.doneIds.has("n-qfs")).toBe(true);
+  });
+
+  it("anchors activeStage on the FURTHEST reached stage, not the first gap (n-delplan)", () => {
+    // n-delplan is stage 1, a "gap" left blank on nearly every imported receipt — activeStage
+    // must not regress to it just because it was never filled in.
+    const p = getStageProgress({ stageData: { "n-gate": {}, "n-verify": {} }, branches: {} });
+    expect(p.activeStage?.id).not.toBe("n-delplan");
+  });
+
+  it("activeStage is undefined once every stage is reached", () => {
+    const allData = Object.fromEntries(stages.map((s) => [s.id, {}]));
+    const allBranches = Object.fromEntries(stages.filter((s) => s.kind === "decision").map((s) => [s.id, "x"]));
+    const p = getStageProgress({ stageData: allData, branches: allBranches });
+    expect(p.activeStage).toBeUndefined();
+    expect(p.doneCount).toBe(p.totalCount);
+  });
+});
+
+describe("isStageBlank", () => {
+  it("is true for a reached stage with no field values at all", () => {
+    expect(isStageBlank({})).toBe(true);
+  });
+
+  it("is true when every value is blank or whitespace", () => {
+    expect(isStageBlank({ "S N": "", Notes: "   " })).toBe(true);
+  });
+
+  it("is false once any field has real content", () => {
+    expect(isStageBlank({ "S N": "", "NET WT KGS": "1200" })).toBe(false);
+  });
+
+  it("is false for a stage that hasn't been reached at all", () => {
+    expect(isStageBlank(undefined)).toBe(false);
   });
 });

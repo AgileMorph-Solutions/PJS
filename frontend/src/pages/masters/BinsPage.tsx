@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useTracking } from "../../state/TrackingContext";
 
@@ -18,7 +19,7 @@ export function BinsPage() {
       <PageHeader
         kicker="Masters"
         title="Bins"
-        lede="Physical storage locations. One Bin can hold RCN from several different Lots/trucks at once."
+        lede="A Bin can hold several different Lots at once."
       />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <form onSubmit={handleSubmit} className="flex gap-4 items-end">
@@ -45,13 +46,20 @@ export function BinsPage() {
       </div>
       <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
         {masters.bins.map((b) => (
-          <div key={b} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
+          <Link
+            key={b}
+            to={`/masters/bins/${b}`}
+            className="flex items-center justify-between gap-4 px-5 py-3 text-[13px] hover:bg-warmstone-50 transition-colors"
+          >
             <span className="font-mono font-semibold text-warmstone-800 flex items-center gap-2">
               <span className="material-symbols-outlined text-[17px] text-brand-700 font-sans">inventory</span>
               {b}
             </span>
-            <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.binNo === b).length} Lots stored</span>
-          </div>
+            <span className="flex items-center gap-2 text-warmstone-500 tabular-nums">
+              {receipts.filter((r) => r.binNo === b).length} Lots stored
+              <span className="material-symbols-outlined text-[16px] text-warmstone-300">chevron_right</span>
+            </span>
+          </Link>
         ))}
       </div>
     </div>

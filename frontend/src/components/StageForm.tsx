@@ -41,7 +41,6 @@ export function StageForm({ stage, values, onFieldChange, onFieldBlur }: Props) 
           </span>
         )}
       </div>
-      <p className="text-[13px] text-warmstone-500 leading-relaxed">{stage.note}</p>
       <div className="grid sm:grid-cols-2 gap-4">
         {stage.fields.map((f) => (
           <FieldInput

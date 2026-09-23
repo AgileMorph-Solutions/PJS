@@ -10,7 +10,7 @@ export function ProductionIssuePage() {
       <PageHeader
         kicker="Jute Bag Management"
         title="Production Issue / Return"
-        lede="Bags the Factory Warehouse issues to Production for processing, and what's recovered — good, damaged, and repairable."
+        lede="Bags issued to Production, and what's recovered — good, damaged, or repairable."
       />
       <LedgerSection ledger={ledger} />
     </div>

@@ -10,7 +10,7 @@ export function SupplierMovementPage() {
       <PageHeader
         kicker="Jute Bag Management"
         title="Supplier Movement"
-        lede="Bags issued to suppliers in advance, and what comes back with their RCN deliveries. Not yet rolled up automatically from the Warehouse Stock ledger's supplier-issue rows — track it here for now."
+        lede="Bags issued to suppliers, and what comes back with their deliveries."
       />
       <LedgerSection ledger={ledger} />
     </div>

@@ -121,10 +121,14 @@ Fifteen findings ship against the real data, including:
 | GET/POST | `/api/drying-jobs` | Rejects a job with no Lot |
 | GET | `/api/dashboard?from=&to=` | Doc §3's six figures, for any period |
 | GET | `/api/data-quality` | |
+| GET | `/api/imports/types` | The 4 known workbook shapes this app can import |
+| POST | `/api/imports/preview` | Multipart `.xlsx` upload → parsed rows + findings, cached under a token |
+| POST | `/api/imports/:token/commit` | Writes the previewed rows — see `docs/UPLOAD_GUIDE.md` |
 
 Hard rules answer **422** (lot-before-bin, lot uniqueness, rejection-needs-reason,
 drying-needs-lot); an unknown stage or field label answers **400** rather than silently dropping
-the write.
+the write. See `../docs/UPLOAD_GUIDE.md` for which real workbook feeds which endpoint above, what's
+deliberately not importable, and the dedup rules each importer applies.
 
 ## Known deviations from the source documents
 

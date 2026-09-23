@@ -17,7 +17,12 @@ afterAll(() => prisma.$disconnect());
 describe("golden seed round-trip", () => {
   let rows: any[];
   beforeAll(async () => {
-    rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE, orderBy: { id: "asc" } });
+    rows = await prisma.receipt.findMany({
+      where: { stageDataShadow: { not: null } }, // scopes to the original 50-receipt demo seed —
+      // uploaded/interactively-created receipts never set this shadow column (only prisma/seed.ts
+      // does), so this stays exactly the golden cohort regardless of how much real data is imported.
+      include: RECEIPT_INCLUDE, orderBy: { id: "asc" },
+    });
   });
 
   it("has the seeded receipts", () => {

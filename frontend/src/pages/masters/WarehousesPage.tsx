@@ -18,7 +18,7 @@ export function WarehousesPage() {
       <PageHeader
         kicker="Masters"
         title="Warehouses"
-        lede="Village, Regional Central, or Factory warehouses — the same truck arrival sequence applies at any of them."
+        lede="Village, Regional Central, and Factory warehouses."
       />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <form onSubmit={handleSubmit} className="flex gap-4 items-end">

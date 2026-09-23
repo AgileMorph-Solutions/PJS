@@ -11,15 +11,10 @@ export function ProductionPage() {
       <PageHeader
         kicker="Production"
         title="Production"
-        lede="Not built yet — planned as the next module after Procurement. Left here as a placeholder so the module list is honest about what's coming, not hidden."
+        lede="Not built yet — planned as the next module after Procurement."
       />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
-        <h3 className="text-[17px] font-bold text-warmstone-900 mb-2">Known shape, from Production.html</h3>
-        <p className="text-[13px] leading-relaxed text-warmstone-500 mb-4">
-          The client's production flow chart maps onto these 8 phases and 21 source workbooks (see{" "}
-          <span className="font-mono text-[12.5px]">flow-xl-map/Production.html</span> for the full process map this will be built
-          from, same way Procurement was).
-        </p>
+        <h3 className="text-[17px] font-bold text-warmstone-900 mb-2">Planned phases</h3>
         <div className="flex flex-wrap gap-2">
           {PHASES.map((p) => (
             <span key={p} className="px-3 py-1.5 rounded-full bg-warmstone-100 text-warmstone-600 text-[12.5px] font-medium">

@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useTracking } from "../../state/TrackingContext";
-import { deriveStatus } from "../../domain/receiptStatus";
+import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
 import { DECISION_BRANCHES } from "../../domain/decisions";
 import { stages, rejectStage } from "../../data/stages";
 import { StageForm } from "../../components/StageForm";
 import { DecisionBranch } from "../../components/DecisionBranch";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
+import { StatBlock } from "../../components/ui/StatBlock";
 
 /** Real fields only — no invented Crop Year/Harvest Batch/security-seal chrome. Pulled straight
  * out of the actual stage data the record already has, or left out if the record doesn't have it
@@ -30,23 +31,12 @@ export function ReceiptDetailPage() {
   if (!receipt) return <Navigate to="/procurement/receipts" replace />;
 
   const status = deriveStatus(receipt);
-  const completedIds = new Set(Object.keys(receipt.stageData));
-  const isDone = (stageId: string, kind: string) =>
-    kind === "decision" ? receipt.branches[stageId] !== undefined : completedIds.has(stageId);
-  const doneCount = stages.filter((s) => isDone(s.id, s.kind)).length;
-  // "Active" = the stage right after the FURTHEST one this receipt has actually reached, not the
-  // first gap scanning from the start. n-delplan ("Create delivery plan") is a real gap — the
-  // client's own OFFLOADINGS sheet never captured it, so it's blank on nearly every imported
-  // receipt — and a naive first-undone scan would anchor "current progress" on it even for
-  // receipts that are already through drying, which is exactly backwards.
-  const lastDoneIndex = stages.reduce((max, s, i) => (isDone(s.id, s.kind) ? i : max), -1);
-  const activeStageId = stages[lastDoneIndex + 1]?.id;
+  const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
 
   // Once a Lot exists, that's the record's real-world identity from here on — the receipt id
   // stays as the underlying record key, but the page leads with what a warehouse user actually
   // calls it.
   const primaryLabel = receipt.lotNo ? `Lot ${receipt.lotNo}` : receipt.id;
-  const activeStage = stages.find((s) => s.id === activeStageId);
 
   const netWt = realStat(receipt.stageData["n-netwt"], "NET WT KGS");
   const sacs = realStat(receipt.stageData["n-unload"], "SACS (bags)");
@@ -113,7 +103,7 @@ export function ReceiptDetailPage() {
             </p>
           </div>
 
-          <div className="bg-warmstone-50 border border-warmstone-200 rounded-2xl p-4 min-w-[300px] lg:w-96">
+          <div className="bg-warmstone-50 border border-warmstone-200 rounded-2xl p-4 w-full lg:w-96">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Current progress</span>
               <span className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-full">
@@ -122,7 +112,7 @@ export function ReceiptDetailPage() {
             </div>
             <div className="text-sm font-bold text-warmstone-900 mb-2 flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px] text-brand-700">arrow_forward</span>
-              <span>{activeStage ? activeStage.title : "All real-workbook stages recorded"}</span>
+              <span>{activeStage ? activeStage.title : "All stages recorded"}</span>
             </div>
             <div className="w-full bg-warmstone-200 h-2.5 rounded-full overflow-hidden">
               <div
@@ -160,17 +150,16 @@ export function ReceiptDetailPage() {
               <span className="material-symbols-outlined text-[19px] text-brand-700">fact_check</span>
               Delivery stages
             </h2>
-            <span className="text-xs font-medium text-warmstone-500">
-              The real process — {stages.length} stages, filled in any order
-            </span>
+            <span className="text-xs font-medium text-warmstone-500">{stages.length} stages, any order</span>
           </div>
 
           {stages.map((stage) => {
-            const done = isDone(stage.id, stage.kind);
-            const isActive = stage.id === activeStageId;
+            const done = doneIds.has(stage.id);
+            const isActive = stage.id === activeStage?.id;
             const branchOptions = DECISION_BRANCHES[stage.id];
             const chosen = receipt.branches[stage.id];
             const values = receipt.stageData[stage.id] ?? {};
+            const blank = done && isStageBlank(values);
 
             return (
               <details
@@ -187,20 +176,33 @@ export function ReceiptDetailPage() {
                 >
                   <span
                     className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${
-                      done
-                        ? "bg-success-100 text-success-700 border border-success-200"
-                        : isActive
-                          ? "bg-brand-700 text-white ring-4 ring-brand-100"
-                          : "bg-warmstone-100 text-warmstone-400"
+                      blank
+                        ? "bg-ambernut-100 text-ambernut-700 border border-ambernut-200"
+                        : done
+                          ? "bg-success-100 text-success-700 border border-success-200"
+                          : isActive
+                            ? "bg-brand-700 text-white ring-4 ring-brand-100"
+                            : "bg-warmstone-100 text-warmstone-400"
                     }`}
                   >
-                    {done ? <span className="material-symbols-outlined text-[18px]">check</span> : stage.num ?? "•"}
+                    {blank ? (
+                      <span className="material-symbols-outlined text-[18px]">warning</span>
+                    ) : done ? (
+                      <span className="material-symbols-outlined text-[18px]">check</span>
+                    ) : (
+                      (stage.num ?? "•")
+                    )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-bold text-warmstone-900">{stage.title}</span>
                       {isActive && (
                         <span className="px-2.5 py-0.5 rounded-full bg-brand-700 text-white text-[11px] font-bold">In progress</span>
+                      )}
+                      {blank && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-ambernut-100 text-ambernut-800 text-[11px] font-bold">
+                          Reached, not filled in
+                        </span>
                       )}
                       {stage.kind === "decision" && chosen && (
                         <span className="px-2 py-0.5 rounded-full bg-success-100 text-success-800 text-[11px] font-semibold">
@@ -252,26 +254,6 @@ export function ReceiptDetailPage() {
             </details>
           )}
 
-          {/* Real domain rule, not decoration — the same "one truck = one Lot, a Bin holds many
-              Lots" rule documented throughout this app's data model. Uses this receipt's own real
-              lot/bin, or stays generic before they're assigned. */}
-          <div className="bg-brand-50 rounded-2xl border border-brand-200 p-4.5 flex items-start gap-3.5">
-            <div className="w-9 h-9 rounded-xl bg-brand-700 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-              <span className="material-symbols-outlined text-[20px]">lightbulb</span>
-            </div>
-            <div className="space-y-1 text-xs">
-              <div className="text-sm font-bold text-warmstone-900">Lot vs. Bin</div>
-              <p className="text-warmstone-600 leading-relaxed">
-                <strong className="text-warmstone-900 font-semibold">The Lot Number</strong> belongs to this one truck —{" "}
-                {receipt.lotNo ? <strong className="text-warmstone-900">{receipt.lotNo}</strong> : "not assigned yet"}. One truck is
-                always exactly one Lot.
-                <br />
-                <strong className="text-warmstone-900 font-semibold">The Bin</strong> is the physical storage location —{" "}
-                {receipt.binNo ? <strong className="text-warmstone-900">{receipt.binNo}</strong> : "not allocated yet"} — and can hold
-                RCN from many different Lots and trucks at once.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Right: real cross-references only */}
@@ -284,9 +266,7 @@ export function ReceiptDetailPage() {
                   Decision needed
                 </span>
               </div>
-              <p className="text-xs text-warmstone-500 leading-relaxed">
-                This receipt has reached a decision point that hasn't been made yet — open the stage below to record it.
-              </p>
+              <p className="text-xs text-warmstone-500 leading-relaxed">Open the stage below to record it.</p>
             </div>
           )}
 
@@ -297,9 +277,12 @@ export function ReceiptDetailPage() {
                   <span className="material-symbols-outlined text-brand-700 text-[20px]">warehouse</span>
                   <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Also in this Bin</span>
                 </div>
-                <span className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-md">
+                <Link
+                  to={`/masters/bins/${receipt.binNo}`}
+                  className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-md hover:bg-brand-100 transition-colors"
+                >
                   {receipt.binNo}
-                </span>
+                </Link>
               </div>
               {otherInSameBin.length === 0 ? (
                 <p className="text-[12.5px] text-warmstone-500">No other receipts share this Bin right now.</p>
@@ -336,37 +319,6 @@ export function ReceiptDetailPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatBlock({
-  icon,
-  label,
-  value,
-  sub,
-  tone = "default",
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: "default" | "success" | "danger";
-}) {
-  const toneCls =
-    tone === "success"
-      ? "bg-success-50 border-success-200 [&_.stat-label]:text-success-700 [&_.stat-value]:text-success-900 [&_.stat-sub]:text-success-700 [&_.stat-icon]:text-success-700"
-      : tone === "danger"
-        ? "bg-danger-50 border-danger-200 [&_.stat-label]:text-danger-700 [&_.stat-value]:text-danger-900 [&_.stat-sub]:text-danger-700 [&_.stat-icon]:text-danger-700"
-        : "bg-warmstone-50 border-warmstone-200 hover:bg-warmstone-100";
-  return (
-    <div className={`rounded-xl p-4 border transition-all ${toneCls}`}>
-      <div className="flex items-center justify-between text-xs font-bold text-warmstone-500 stat-label uppercase mb-1">
-        <span>{label}</span>
-        <span className="material-symbols-outlined text-[19px] text-brand-700 stat-icon">{icon}</span>
-      </div>
-      <div className="text-xl font-bold text-warmstone-900 tracking-tight tabular-nums stat-value">{value}</div>
-      {sub && <div className="text-xs text-warmstone-500 mt-0.5 font-medium stat-sub">{sub}</div>}
     </div>
   );
 }

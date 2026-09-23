@@ -29,7 +29,7 @@ export function DeliveryPlansPage() {
       <PageHeader
         kicker="Procurement"
         title="Delivery Plans"
-        lede="What's expected before a truck arrives (doc §2) — supplier/source, expected quantity, expected date, destination warehouse. Compared against actual arrival once the receipt is logged."
+        lede="What's expected before a truck arrives, compared against the actual receipt once it's logged."
         actions={
           <button
             onClick={handleNew}

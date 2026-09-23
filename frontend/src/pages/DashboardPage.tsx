@@ -96,7 +96,7 @@ export function DashboardPage() {
       <PageHeader
         kicker="ANAGROCI · TRACKING"
         title="Dashboard"
-        lede="RCN receipt status counts as required by the Sept 2026 process notes (doc §3) — every tile links into the register, pre-filtered."
+        lede="Receipt status counts — click a tile to see the filtered list."
       />
 
       <DateRangeFilter value={range} onChange={setRange} />

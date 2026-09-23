@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
@@ -11,6 +13,14 @@ export function DryingJobsPage() {
   // that keeps the TrackingApi interface unchanged by this migration.
   const { jobs } = useDryingJobs();
   const inDrying = receipts.filter((r) => deriveStatus(r) === "in_drying");
+
+  // Historical drying jobs can predate today's receipts (imported from the source workbook), so
+  // not every job has a matching receipt to link to — rows without a match stay non-clickable.
+  const receiptIdByLot = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of receipts) if (r.lotNo) m.set(r.lotNo, r.id);
+    return m;
+  }, [receipts]);
 
   const jobColumns: Column<DryingJob>[] = [
     { label: "Job ID", render: (j) => <span className="font-mono text-[12.5px]">{j.id}</span> },
@@ -29,23 +39,23 @@ export function DryingJobsPage() {
       <PageHeader
         kicker="Procurement"
         title="Drying Jobs"
-        lede="Drying is issued and tracked at the specific Lot/quantity level, never as a whole Bin — confirmed by the client. Historical jobs below are real rows from Drying_Report_Factory_warehouse.xlsx."
+        lede="Drying is tracked per Lot, never per Bin."
       />
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[17px] font-bold text-warmstone-900 mb-2">Lots currently in drying</h3>
-        <p className="text-[13px] text-warmstone-500 leading-relaxed mb-3.5">
-          Once a truck is assigned a Lot Number, that Lot — not the truck — is what's tracked from here on, through its Bin and into
-          drying. The truck/vehicle is kept only as provenance.
-        </p>
         {inDrying.length === 0 && <p className="text-[13px] text-warmstone-400">None right now.</p>}
         {inDrying.map((r) => (
-          <div key={r.id} className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px]">
+          <Link
+            key={r.id}
+            to={`/procurement/receipts/${r.id}`}
+            className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px] hover:bg-warmstone-50 -mx-1 px-1 rounded-lg transition-colors"
+          >
             <span className="text-warmstone-600">
               Lot {r.lotNo || "—"} · Bin {r.binNo || "—"} · {r.supplierName} · vehicle {r.vehicleNo || "—"}
             </span>
             <ReceiptStatusPill status={deriveStatus(r)} />
-          </div>
+          </Link>
         ))}
       </div>
 
@@ -55,7 +65,16 @@ export function DryingJobsPage() {
           <span className="material-symbols-outlined text-[13px]">description</span>
           Drying_Report_Factory_warehouse.xlsx · FINAL DRY RCN-YAKRO-2026
         </span>
-        <DataTable columns={jobColumns} rows={jobs} keyFn={(j) => j.id} emptyTitle="No drying jobs recorded" />
+        <DataTable
+          columns={jobColumns}
+          rows={jobs}
+          keyFn={(j) => j.id}
+          rowHref={(j) => {
+            const receiptId = j.lotNo ? receiptIdByLot.get(j.lotNo) : undefined;
+            return receiptId ? `/procurement/receipts/${receiptId}` : undefined;
+          }}
+          emptyTitle="No drying jobs recorded"
+        />
       </div>
     </div>
   );

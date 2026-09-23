@@ -140,6 +140,10 @@ model Receipt {
   @@index([warehouse])
   @@index([supplierName])
   @@index([arrivalDate])
+  /// Backs the excel-import dedup heuristic (vehicleNo + arrivalDate + supplierName) — the
+  /// receipts importer has no natural unique key from the source sheet, so this triple is checked
+  /// on every uploaded row and needs to not be a table scan.
+  @@index([vehicleNo])
 }
 
 /// The single source of truth for "has this receipt reached this stage?" — the only thing

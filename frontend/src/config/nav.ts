@@ -5,6 +5,9 @@ export interface NavLeaf {
   icon: string;
   /** Match this route exactly, not by prefix — only the root "/" needs this. */
   end?: boolean;
+  /** Short pill shown after the label, e.g. "Soon" for a page that's an intentional placeholder
+   * (see ProductionPage.tsx) — so clicking into it isn't mistaken for a broken link. */
+  badge?: string;
 }
 
 export interface NavSection {
@@ -27,7 +30,10 @@ export const NAV: NavSection[] = [
     ],
   },
   {
-    label: "Bag Management",
+    // Matches every page in this section's own kicker ("Jute Bag Management") — the old label
+    // ("Bag Management") didn't say jute, and this section sits right below the RCN/cashew
+    // stock pages, which is exactly where that ambiguity bit.
+    label: "Jute Bag Management",
     items: [
       { label: "Warehouse Stock", to: "/jute/warehouse-stock", icon: "inventory_2" },
       { label: "Supplier Movement", to: "/jute/suppliers", icon: "swap_horiz" },
@@ -37,7 +43,9 @@ export const NAV: NavSection[] = [
   },
   {
     label: "Production",
-    items: [{ label: "Production", to: "/production", icon: "precision_manufacturing" }],
+    items: [
+      { label: "Production", to: "/production", icon: "precision_manufacturing", badge: "Soon" },
+    ],
   },
   {
     label: "Masters",
@@ -46,5 +54,9 @@ export const NAV: NavSection[] = [
       { label: "Warehouses", to: "/masters/warehouses", icon: "domain" },
       { label: "Bins", to: "/masters/bins", icon: "inventory" },
     ],
+  },
+  {
+    label: "Data",
+    items: [{ label: "Import Data", to: "/import", icon: "upload_file" }],
   },
 ];

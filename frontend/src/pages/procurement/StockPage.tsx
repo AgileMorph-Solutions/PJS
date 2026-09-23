@@ -22,7 +22,7 @@ export function StockPage() {
       <PageHeader
         kicker="Procurement"
         title="Lots & Bins"
-        lede="Confirmed model: Lot = truck-level traceability, always one truck = one Lot. Bin = physical storage, decided separately and can hold several Lots at once."
+        lede="Lot = one truck. Bin = physical storage, and can hold several Lots."
       />
       <DataTable columns={columns} rows={withLot} keyFn={(r) => r.id} rowHref={(r) => `/procurement/receipts/${r.id}`} emptyTitle="No Lots or Bins assigned yet" />
     </>

@@ -4,6 +4,7 @@ import { TrackingProvider, useTracking } from "./state/TrackingContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionPage } from "./pages/ProductionPage";
+import { ImportPage } from "./pages/ImportPage";
 
 import { ReceiptsListPage } from "./pages/procurement/ReceiptsListPage";
 import { ReceiptDetailPage } from "./pages/procurement/ReceiptDetailPage";
@@ -20,6 +21,7 @@ import { WarehouseTransfersPage } from "./pages/jute/WarehouseTransfersPage";
 import { SuppliersPage } from "./pages/masters/SuppliersPage";
 import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
+import { BinDetailPage } from "./pages/masters/BinDetailPage";
 
 /** Holds the first render until the initial load finishes, so pages never flash an empty dataset. */
 function LoadGate({ children }: { children: React.ReactNode }) {
@@ -29,7 +31,7 @@ function LoadGate({ children }: { children: React.ReactNode }) {
       <div className="p-10 space-y-4 animate-pulse">
         <div className="h-8 w-64 bg-warmstone-200 rounded-lg" />
         <div className="h-4 w-96 bg-warmstone-100 rounded-lg" />
-        <div className="grid grid-cols-4 gap-4 pt-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="h-24 bg-warmstone-100 rounded-2xl" />
           ))}
@@ -77,6 +79,9 @@ export default function App() {
             <Route path="/masters/suppliers" element={<SuppliersPage />} />
             <Route path="/masters/warehouses" element={<WarehousesPage />} />
             <Route path="/masters/bins" element={<BinsPage />} />
+            <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />
+
+            <Route path="/import" element={<ImportPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

@@ -1,4 +1,6 @@
 import type { ReceiptRecord, ReceiptStatus } from "../types/receipt.js";
+import type { Stage } from "../types/stage.js";
+import { stages } from "../data/stages.js";
 
 /**
  * The status inputs. Narrowed to what deriveStatus actually reads, so the backend can derive a
@@ -24,6 +26,43 @@ export function deriveStatus(r: StatusInputs): ReceiptStatus {
   if (r.stageData["n-verify"]) return "pending_qa";
   if (r.stageData["n-gate"]) return "arrived";
   return "planned";
+}
+
+export interface StageProgress {
+  /** Stage ids counted as "reached" — decision stages by having a chosen branch, everything else
+   * by key PRESENCE in stageData. Mirrors deriveStatus's presence-not-content rule exactly, so this
+   * is the only other place that rule is allowed to live. */
+  doneIds: Set<string>;
+  doneCount: number;
+  totalCount: number;
+  /** The stage right after the FURTHEST one reached — not the first gap scanning from the start.
+   * n-delplan ("Create delivery plan") is a real gap that the client's own OFFLOADINGS sheet never
+   * captured, so it's blank on nearly every imported receipt — a naive first-undone scan would
+   * anchor "current progress" on it even for a receipt already through drying, which is exactly
+   * backwards. Undefined once every stage in stageList is done. */
+  activeStage?: Stage;
+}
+
+export function getStageProgress(r: StatusInputs, stageList: Stage[] = stages): StageProgress {
+  const completedIds = new Set(Object.keys(r.stageData));
+  const isDone = (s: Stage) => (s.kind === "decision" ? r.branches[s.id] !== undefined : completedIds.has(s.id));
+  const doneIds = new Set(stageList.filter(isDone).map((s) => s.id));
+  const lastDoneIndex = stageList.reduce((max, s, i) => (isDone(s) ? i : max), -1);
+  return {
+    doneIds,
+    doneCount: doneIds.size,
+    totalCount: stageList.length,
+    activeStage: stageList[lastDoneIndex + 1],
+  };
+}
+
+/** True when a stage has been reached (its key exists in stageData) but every field in it is still
+ * blank/whitespace — the same ambiguity the backend's `stage_present_but_empty` data-quality check
+ * flags server-side (backend/src/domain/dataQuality/checks.ts), computed here instantly from data
+ * the client already has, no round trip needed. */
+export function isStageBlank(values: Record<string, string> | undefined): boolean {
+  if (!values) return false; // not reached at all — a different state, not this one
+  return Object.values(values).every((v) => !v || !v.trim());
 }
 
 export const STATUS_LABELS: Record<ReceiptStatus, string> = {

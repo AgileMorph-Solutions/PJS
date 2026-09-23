@@ -30,7 +30,7 @@ export function SuppliersPage() {
       <PageHeader
         kicker="Masters"
         title="Suppliers"
-        lede={`${masters.suppliers.length} suppliers, seeded from the real LBA codes in Rcn Offloading Details 2026.xlsx.`}
+        lede={`${masters.suppliers.length} suppliers.`}
       />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <form onSubmit={handleSubmit} className="grid sm:grid-cols-[1fr_1fr_auto] gap-4 items-end">

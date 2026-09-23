@@ -1,21 +1,50 @@
 import { NavLink } from "react-router-dom";
 import { NAV } from "../config/nav";
 
-export function AppNav() {
+interface Props {
+  /** Mobile/tablet only — below `lg` the nav is an off-canvas drawer, closed by default. At `lg`
+   * and up it's always visible (see the `lg:translate-x-0` below) and these props are unused. */
+  open: boolean;
+  onClose: () => void;
+}
+
+export function AppNav({ open, onClose }: Props) {
   return (
-    <aside className="fixed left-0 top-0 h-screen w-72 bg-white border-r border-warmstone-200 flex flex-col z-50 select-none shadow-[1px_0_12px_rgba(28,25,23,0.03)]">
+    <>
+      {/* Backdrop — mobile/tablet only, and only while the drawer is open. */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-warmstone-900/40 z-40 lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed left-0 top-0 h-screen w-72 bg-white border-r border-warmstone-200 flex flex-col z-50 select-none shadow-[1px_0_12px_rgba(28,25,23,0.03)] transition-transform duration-200 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        } lg:translate-x-0`}
+      >
       {/* Brand header */}
       <div className="p-6 border-b border-warmstone-100">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-md shadow-brand-700/20 ring-4 ring-brand-100">
-            <span className="material-symbols-outlined text-white text-[22px]">eco</span>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-[16px] tracking-tight text-warmstone-900">ANAGROCI</span>
+        <div className="flex items-center justify-between gap-3.5">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-brand-600 to-brand-800 flex items-center justify-center shadow-md shadow-brand-700/20 ring-4 ring-brand-100">
+              <span className="material-symbols-outlined text-white text-[22px]">eco</span>
             </div>
-            <div className="text-[12px] font-medium text-warmstone-500">RCN Tracking</div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-[16px] tracking-tight text-warmstone-900">ANAGROCI</span>
+              </div>
+              <div className="text-[12px] font-medium text-warmstone-500">RCN Tracking</div>
+            </div>
           </div>
+          <button
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="lg:hidden -mr-1.5 p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
         </div>
         {/* Real data, not decoration: the two warehouses this app actually tracks. */}
         <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-warmstone-50 border border-warmstone-200 text-[11.5px] font-medium text-warmstone-600">
@@ -36,6 +65,7 @@ export function AppNav() {
                 key={item.to}
                 to={item.to}
                 end={item.end}
+                onClick={onClose}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-colors font-medium text-[13.5px] ${
                     isActive
@@ -51,7 +81,16 @@ export function AppNav() {
                     >
                       {item.icon}
                     </span>
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md ${
+                          isActive ? "bg-white/15 text-white" : "bg-ambernut-100 text-ambernut-700"
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
                   </>
                 )}
               </NavLink>
@@ -70,6 +109,7 @@ export function AppNav() {
           </p>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

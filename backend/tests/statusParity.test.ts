@@ -14,9 +14,15 @@ import { RECEIPT_INCLUDE, assembleStageData, assembleBranches } from "../src/sta
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
+// Scopes every query below to the original 50-receipt demo seed — stageDataShadow is set only by
+// prisma/seed.ts, never by the interactive create-receipt path or the excel-importer's
+// commitReceipts(), so this stays exactly the golden cohort no matter how much real data is
+// imported later (see backend/tests/roundTrip.test.ts's beforeAll for the same reasoning).
+const SEED_ONLY = { stageDataShadow: { not: null } } as const;
+
 describe("status parity with the pre-normalization data", () => {
   it("every receipt derives the same status from the tables as from the original JSON", async () => {
-    const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
+    const rows = await prisma.receipt.findMany({ where: SEED_ONLY, include: RECEIPT_INCLUDE });
     const drift: string[] = [];
     for (const row of rows) {
       const before = deriveStatus({
@@ -30,7 +36,7 @@ describe("status parity with the pre-normalization data", () => {
   });
 
   it("the dashboard counts are unchanged, and match what doc §3 asks for", async () => {
-    const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
+    const rows = await prisma.receipt.findMany({ where: SEED_ONLY, include: RECEIPT_INCLUDE });
     const after = computeDashboardCounts(
       rows.map((r) => ({ stageData: assembleStageData(r), branches: assembleBranches(r) }))
     );
@@ -46,10 +52,13 @@ describe("status parity with the pre-normalization data", () => {
   });
 
   it("n-stock is never auto-created — that alone would move four receipts", async () => {
-    const withGrn = await prisma.stageEntry.findMany({ where: { stageId: "n-grn" }, select: { receiptId: true } });
+    const withGrn = await prisma.stageEntry.findMany({
+      where: { stageId: "n-grn", receipt: SEED_ONLY }, select: { receiptId: true },
+    });
     const withStock = new Set(
-      (await prisma.stageEntry.findMany({ where: { stageId: "n-stock" }, select: { receiptId: true } }))
-        .map((e) => e.receiptId)
+      (await prisma.stageEntry.findMany({
+        where: { stageId: "n-stock", receipt: SEED_ONLY }, select: { receiptId: true },
+      })).map((e) => e.receiptId)
     );
     // Four receipts have a GRN but no stock posting. They must stay grn_completed.
     const grnOnly = withGrn.filter((e) => !withStock.has(e.receiptId));

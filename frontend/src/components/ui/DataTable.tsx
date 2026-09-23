@@ -12,7 +12,9 @@ interface Props<T> {
   columns: Column<T>[];
   rows: T[];
   keyFn: (row: T) => string;
-  rowHref?: (row: T) => string;
+  /** May return undefined for a specific row to leave that row non-clickable (e.g. a historical
+   * record with no matching detail page to link to) while other rows in the same table are links. */
+  rowHref?: (row: T) => string | undefined;
   emptyTitle?: string;
   emptyHint?: string;
 }
@@ -24,13 +26,10 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
     return <EmptyState title={emptyTitle ?? "Nothing here yet"} hint={emptyHint} />;
   }
 
-  function go(row: T) {
-    if (rowHref) navigate(rowHref(row));
-  }
-  function onKeyDown(e: KeyboardEvent<HTMLTableRowElement>, row: T) {
-    if (rowHref && (e.key === "Enter" || e.key === " ")) {
+  function onKeyDown(e: KeyboardEvent<HTMLTableRowElement>, href: string) {
+    if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
-      go(row);
+      navigate(href);
     }
   }
 
@@ -51,24 +50,27 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr
-              key={keyFn(row)}
-              className={`border-b border-warmstone-100 last:border-0 ${
-                rowHref ? "cursor-pointer hover:bg-warmstone-50 focus-visible:bg-warmstone-50 outline-none" : ""
-              }`}
-              onClick={rowHref ? () => go(row) : undefined}
-              role={rowHref ? "button" : undefined}
-              tabIndex={rowHref ? 0 : undefined}
-              onKeyDown={rowHref ? (e) => onKeyDown(e, row) : undefined}
-            >
-              {columns.map((c) => (
-                <td key={c.label} className="px-4 py-3 text-warmstone-800 align-middle">
-                  {c.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const href = rowHref?.(row);
+            return (
+              <tr
+                key={keyFn(row)}
+                className={`border-b border-warmstone-100 last:border-0 ${
+                  href ? "cursor-pointer hover:bg-warmstone-50 focus-visible:bg-warmstone-50 outline-none" : ""
+                }`}
+                onClick={href ? () => navigate(href) : undefined}
+                role={href ? "button" : undefined}
+                tabIndex={href ? 0 : undefined}
+                onKeyDown={href ? (e) => onKeyDown(e, href) : undefined}
+              >
+                {columns.map((c) => (
+                  <td key={c.label} className="px-4 py-3 text-warmstone-800 align-middle">
+                    {c.render(row)}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

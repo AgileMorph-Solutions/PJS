@@ -14,11 +14,28 @@ export class ApiError extends Error {
   // Written out longhand rather than as a parameter property: the app's tsconfig sets
   // erasableSyntaxOnly, which disallows that shorthand.
   status: number;
-  constructor(message: string, status: number) {
+  /** The `detail` field a rejected import carries (e.g. expected-vs-actual header on a shape
+   * mismatch) — undefined for every other endpoint, which never sends one. */
+  detail?: unknown;
+  constructor(message: string, status: number, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
+}
+
+/** Reads a fetch Response's {error, detail?} body, falling back to the status line for a
+ * non-JSON error — shared by the JSON request() path and the raw multipart upload below. */
+async function errorFromResponse(res: Response): Promise<ApiError> {
+  let message = `${res.status} ${res.statusText}`;
+  let detail: unknown;
+  try {
+    const body = await res.json();
+    if (body?.error) message = body.error;
+    detail = body?.detail;
+  } catch { /* non-JSON error body */ }
+  return new ApiError(message, res.status, detail);
 }
 
 /** Writes answer { data, warnings } so a data-quality problem can surface at the point of capture. */
@@ -29,14 +46,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
-  if (!res.ok) {
-    let message = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      if (body?.error) message = body.error;
-    } catch { /* non-JSON error body */ }
-    throw new ApiError(message, res.status);
-  }
+  if (!res.ok) throw await errorFromResponse(res);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
@@ -88,4 +98,58 @@ export const api = {
     return request<Record<string, unknown>>(`/dashboard${s ? `?${s}` : ""}`);
   },
   dataQuality: () => request<{ generatedAt: string; checks: unknown[] }>("/data-quality"),
+
+  listImporterTypes: () => request<ImporterTypeInfo[]>("/imports/types"),
+
+  /** Multipart upload — the one call in this file that isn't JSON, so it can't go through
+   * request(): a FormData body needs the browser's own multipart Content-Type (with boundary),
+   * never the hardcoded "application/json" header every other call sends. */
+  previewImport: async (file: File, importerId?: string): Promise<PreviewImportResponse> => {
+    const form = new FormData();
+    form.append("file", file);
+    if (importerId) form.append("importerId", importerId);
+    const res = await fetch(`${BASE}/imports/preview`, { method: "POST", body: form });
+    if (!res.ok) throw await errorFromResponse(res);
+    return res.json();
+  },
+
+  commitImport: (token: string, skipFlagged: boolean) =>
+    request<CommitImportResponse>(`/imports/${encodeURIComponent(token)}/commit`, {
+      method: "POST", body: JSON.stringify({ skipFlagged }),
+    }),
 };
+
+export interface ImporterTypeInfo {
+  id: string;
+  label: string;
+  exampleFilename: string;
+  expectedSheet: string;
+}
+
+export interface ImportFinding {
+  id: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  entity: string;
+  affectedCount: number;
+  sampleIds: string[];
+  evidence: string;
+}
+
+export interface PreviewImportResponse {
+  token: string;
+  importerId: string;
+  label: string;
+  rowCount: number;
+  skippedCount: number;
+  duplicateCount: number;
+  findings: ImportFinding[];
+  sampleRows: unknown[];
+}
+
+export interface CommitImportResponse {
+  importerId: string;
+  created: number;
+  skippedDuplicates: number;
+  skippedInvalid: number;
+}

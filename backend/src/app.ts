@@ -1,13 +1,16 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import { receiptRoutes } from "./routes/receipts.js";
 import { ledgerRoutes } from "./routes/ledgers.js";
 import { masterRoutes } from "./routes/masters.js";
 import { dryingRoutes } from "./routes/drying.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataQualityRoutes } from "./routes/dataQuality.js";
+import { importRoutes } from "./routes/imports.js";
 import { ValidationError } from "./domain/validation.js";
 import { UnknownStageFieldError } from "./stageStore.js";
+import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
 
 export function buildApp() {
   const app = Fastify({ logger: true });
@@ -18,10 +21,16 @@ export function buildApp() {
     .split(",").map((o) => o.trim()).filter(Boolean);
   app.register(cors, { origin: origins, methods: ["GET", "POST", "PATCH", "PUT", "DELETE"] });
 
+  // 20MB cap — the largest real workbook is ~395KB; this is headroom against a wrong/huge file,
+  // not a tight fit. Row/column guards on top of this live in services/imports.ts.
+  app.register(multipart, { limits: { fileSize: 20 * 1024 * 1024 } });
+
   // Without this a Prisma unique-constraint violation surfaces as an opaque 500.
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof ValidationError) return reply.code(422).send({ error: err.message });
     if (err instanceof UnknownStageFieldError) return reply.code(400).send({ error: err.message });
+    if (err instanceof ImportRejectedError) return reply.code(422).send({ error: err.message, detail: err.detail });
+    if (err instanceof ImportTokenError) return reply.code(404).send({ error: err.message });
     const code = (err as { code?: string }).code;
     if (code === "P2002") return reply.code(409).send({ error: "That value is already taken.", meta: (err as any).meta });
     if (code === "P2003") return reply.code(422).send({ error: "Referenced record does not exist.", meta: (err as any).meta });
@@ -38,6 +47,7 @@ export function buildApp() {
   app.register(dryingRoutes);
   app.register(dashboardRoutes);
   app.register(dataQualityRoutes);
+  app.register(importRoutes);
 
   return app;
 }
