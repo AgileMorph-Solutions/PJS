@@ -1,0 +1,67 @@
+# Production stack for https://pjs.agilemorph.in, integrated with this host's existing shared
+# Traefik instance (/docker/traefik — one reverse proxy in front of every app on this VPS, already
+# listening on 80/443 and issuing its own Let's Encrypt certs per Host() router via Docker labels).
+# See DEPLOY.md.
+#
+# Nothing here publishes a host port. `nginx` is reachable only by Traefik, which discovers it via
+# the `traefik.*` labels below and proxies plain HTTP to its container port 8080 — Traefik does the
+# TLS termination for the whole box. `db` and `backend` aren't reachable from outside this compose
+# network at all. `nginx` itself never runs as root (nginxinc/nginx-unprivileged, see
+# frontend/Dockerfile.prod); neither does `backend` (backend/Dockerfile.prod).
+#
+# Copy .env.prod.example to .env.prod and fill in a real POSTGRES_PASSWORD before running this.
+
+name: pjs
+
+networks:
+  pjs-net:
+    driver: bridge
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-anagroci}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-anagroci}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-anagroci} -d ${POSTGRES_DB:-anagroci}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [pjs-net]
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-anagroci}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-anagroci}?schema=public
+      PORT: "3000"
+      # Browser reaches /api same-origin through nginx; this only matters for direct calls.
+      CORS_ORIGIN: https://${DOMAIN:-pjs.agilemorph.in}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [pjs-net]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.prod
+    restart: unless-stopped
+    depends_on: [backend]
+    networks: [pjs-net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pjs.rule=Host(`${DOMAIN:-pjs.agilemorph.in}`)
+      - traefik.http.routers.pjs.entrypoints=websecure
+      - traefik.http.routers.pjs.tls.certresolver=letsencrypt
+      - traefik.http.services.pjs.loadbalancer.server.port=8080
+
+volumes:
+  pgdata:

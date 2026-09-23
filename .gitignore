@@ -13,6 +13,7 @@ build/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # Prisma local database
 backend/prisma/dev.db
