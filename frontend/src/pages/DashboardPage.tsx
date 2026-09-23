@@ -113,7 +113,7 @@ export function DashboardPage() {
       <ChartCard
         icon="bar_chart"
         title="Receipts by status"
-        note={`Every one of the 10 statuses a receipt can be in${isFiltered ? ", for the selected date range" : ""} — the 6 tiles above roll a few of these up; this is the full breakdown.`}
+        note={`All 10 statuses${isFiltered ? ", for the selected date range" : ""}.`}
       >
         <ReceiptsByStatusChart receipts={filteredReceipts} />
       </ChartCard>

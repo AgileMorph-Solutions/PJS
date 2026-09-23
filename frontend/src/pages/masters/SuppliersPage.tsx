@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { useTracking } from "../../state/TrackingContext";
 import type { Supplier } from "../../repository/mastersRepo";
 
@@ -32,7 +33,7 @@ export function SuppliersPage() {
         title="Suppliers"
         lede={`${masters.suppliers.length} suppliers.`}
       />
-      <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
+      <CollapsibleCard title="Add supplier">
         <form onSubmit={handleSubmit} className="grid sm:grid-cols-[1fr_1fr_auto] gap-4 items-end">
           <div>
             <label htmlFor="supplier-code" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
@@ -54,7 +55,7 @@ export function SuppliersPage() {
             Add supplier
           </button>
         </form>
-      </div>
+      </CollapsibleCard>
       <DataTable columns={columns} rows={masters.suppliers} keyFn={(s) => s.code} emptyTitle="No suppliers yet" />
     </div>
   );

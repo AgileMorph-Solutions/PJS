@@ -2,7 +2,7 @@
  * The load-bearing test for the normalization.
  *
  * `stageDataShadow` holds each receipt's pre-normalization JSON, exactly as it was in
- * seed/receipts.json. If assembling stageData from the 17 stage tables reproduces that byte for
+ * seed/receipts.json. If assembling stageData from the 16 stage tables reproduces that byte for
  * byte, the migration lost nothing. That oracle is why the shadow column exists.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -53,7 +53,7 @@ describe("golden seed round-trip", () => {
   });
 });
 
-describe("every one of the 74 (stage, field) pairs round-trips", () => {
+describe("every one of the 69 (stage, field) pairs round-trips", () => {
   const RECEIPT = "REC-ROUNDTRIP-TEST";
 
   beforeAll(async () => {

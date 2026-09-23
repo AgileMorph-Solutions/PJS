@@ -1,10 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
+import { usePagination } from "../../components/ui/usePagination";
+import { Pagination } from "../../components/ui/Pagination";
 import { useTracking } from "../../state/TrackingContext";
 
 export function WarehousesPage() {
   const { masters, addWarehouse, receipts } = useTracking();
   const [name, setName] = useState("");
+  const page = usePagination(masters.warehouses);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,7 +24,7 @@ export function WarehousesPage() {
         title="Warehouses"
         lede="Village, Regional Central, and Factory warehouses."
       />
-      <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
+      <CollapsibleCard title="Add warehouse">
         <form onSubmit={handleSubmit} className="flex gap-4 items-end">
           <div className="flex-1">
             <label htmlFor="warehouse-name" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
@@ -42,9 +46,9 @@ export function WarehousesPage() {
             Add warehouse
           </button>
         </form>
-      </div>
+      </CollapsibleCard>
       <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
-        {masters.warehouses.map((w) => (
+        {page.pageRows.map((w) => (
           <div key={w} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
             <span className="font-semibold text-warmstone-800 flex items-center gap-2">
               <span className="material-symbols-outlined text-[17px] text-brand-700">domain</span>
@@ -53,6 +57,7 @@ export function WarehousesPage() {
             <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w).length} receipts</span>
           </div>
         ))}
+        <Pagination state={page} />
       </div>
     </div>
   );

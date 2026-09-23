@@ -1,5 +1,6 @@
-import { NavLink } from "react-router-dom";
-import { NAV } from "../config/nav";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { NAV, type NavLeaf } from "../config/nav";
 
 interface Props {
   /** Mobile/tablet only — below `lg` the nav is an off-canvas drawer, closed by default. At `lg`
@@ -8,7 +9,44 @@ interface Props {
   onClose: () => void;
 }
 
+/** Mirrors react-router's default (non-`end`) NavLink matching, so "which section is the current
+ * route in" agrees with which nav item actually lights up. */
+function isItemActive(pathname: string, item: NavLeaf): boolean {
+  if (item.end) return pathname === item.to;
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
+function sectionForPath(pathname: string): string | undefined {
+  return NAV.find((section) => section.items.some((item) => isItemActive(pathname, item)))?.label;
+}
+
 export function AppNav({ open, onClose }: Props) {
+  const location = useLocation();
+  // Starts on whichever section holds the current route; a section with only one item has
+  // nothing to hide, so it's never collapsible in the first place (see the render below).
+  const [openSections, setOpenSections] = useState<Set<string>>(() => {
+    const active = sectionForPath(location.pathname);
+    return new Set(active ? [active] : []);
+  });
+
+  // Following a link into a different section reveals it, without collapsing a section the user
+  // opened by hand — this only ever adds to the set, a manual header click is the only way to
+  // remove from it.
+  useEffect(() => {
+    const active = sectionForPath(location.pathname);
+    if (!active) return;
+    setOpenSections((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
+  }, [location.pathname]);
+
+  function toggleSection(label: string) {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+
   return (
     <>
       {/* Backdrop — mobile/tablet only, and only while the drawer is open. */}
@@ -46,21 +84,35 @@ export function AppNav({ open, onClose }: Props) {
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        {/* Real data, not decoration: the two warehouses this app actually tracks. */}
-        <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-warmstone-50 border border-warmstone-200 text-[11.5px] font-medium text-warmstone-600">
-          <span className="w-2 h-2 rounded-full bg-ambernut-600" />
-          <span>Bouaké &amp; Yakro Network</span>
-        </div>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
-        {NAV.map((section) => (
+        {NAV.map((section) => {
+          const collapsible = section.items.length > 1;
+          const isOpen = !collapsible || openSections.has(section.label);
+          return (
           <div className="space-y-1" key={section.label}>
-            <div className="px-3 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
-              {section.label}
-            </div>
-            {section.items.map((item) => (
+            {collapsible ? (
+              <button
+                type="button"
+                onClick={() => toggleSection(section.label)}
+                className="w-full flex items-center justify-between px-3 py-1 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider hover:text-warmstone-600 transition-colors"
+                aria-expanded={isOpen}
+              >
+                {section.label}
+                <span
+                  className={`material-symbols-outlined text-[16px] transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
+                >
+                  expand_more
+                </span>
+              </button>
+            ) : (
+              <div className="px-3 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
+                {section.label}
+              </div>
+            )}
+            {isOpen && section.items.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -96,19 +148,9 @@ export function AppNav({ open, onClose }: Props) {
               </NavLink>
             ))}
           </div>
-        ))}
+          );
+        })}
       </nav>
-
-      {/* No accounts in this app (single shared workspace) — kept honest rather than a fabricated
-          user profile, styled to match the new sidebar chrome. */}
-      <div className="p-4 border-t border-warmstone-100 bg-warmstone-50">
-        <div className="bg-white border border-warmstone-200 rounded-xl px-3 py-2.5 flex items-center gap-2.5">
-          <span className="material-symbols-outlined text-[18px] text-warmstone-400">groups</span>
-          <p className="text-[11.5px] text-warmstone-500 leading-snug">
-            No accounts yet — a shared workspace, everyone sees the same data.
-          </p>
-        </div>
-      </div>
       </aside>
     </>
   );

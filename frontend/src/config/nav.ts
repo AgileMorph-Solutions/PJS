@@ -24,7 +24,6 @@ export const NAV: NavSection[] = [
     label: "Cashew Procurement",
     items: [
       { label: "RCN Receipts", to: "/procurement/receipts", icon: "receipt_long" },
-      { label: "Delivery Plans", to: "/procurement/delivery-plans", icon: "local_shipping" },
       { label: "Lots & Bins", to: "/procurement/stock", icon: "grid_view" },
       { label: "Drying Jobs", to: "/procurement/drying", icon: "wb_sunny" },
     ],
@@ -54,9 +53,5 @@ export const NAV: NavSection[] = [
       { label: "Warehouses", to: "/masters/warehouses", icon: "domain" },
       { label: "Bins", to: "/masters/bins", icon: "inventory" },
     ],
-  },
-  {
-    label: "Data",
-    items: [{ label: "Import Data", to: "/import", icon: "upload_file" }],
   },
 ];

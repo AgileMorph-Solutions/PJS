@@ -14,6 +14,7 @@ import { UnknownStageFieldError } from "../stageStore.js";
 import {
   listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities,
 } from "../services/receipts.js";
+import { getReceiptLinks } from "../services/receiptLinks.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
 
 /** Hard rules reject (422); unknown stage/field is a client bug (400). */
@@ -101,5 +102,15 @@ export async function receiptRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     if (!(await requireReceipt(id, reply))) return;
     return getReceiptActivities(id);
+  });
+
+  /**
+   * Cross-references this receipt to drying jobs / transfer receipts about the same physical
+   * batch, joined on FICHE (see services/receiptLinks.ts's header for why FICHE and not Lot/Bin).
+   */
+  app.get("/api/receipts/:id/links", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply))) return;
+    return getReceiptLinks(id);
   });
 }

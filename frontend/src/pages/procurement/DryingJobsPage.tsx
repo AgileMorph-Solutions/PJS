@@ -3,6 +3,10 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
+import { usePagination } from "../../components/ui/usePagination";
+import { Pagination } from "../../components/ui/Pagination";
+import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
+import { ImportPanel } from "../../components/ImportPanel";
 import { useTracking, useDryingJobs } from "../../state/TrackingContext";
 import type { DryingJob } from "../../repository/dryingRepo";
 import { deriveStatus } from "../../domain/receiptStatus";
@@ -11,8 +15,9 @@ export function DryingJobsPage() {
   const { receipts } = useTracking();
   // Drying jobs come from the API, deliberately via their own hook rather than TrackingApi —
   // that keeps the TrackingApi interface unchanged by this migration.
-  const { jobs } = useDryingJobs();
+  const { jobs, refetch } = useDryingJobs();
   const inDrying = receipts.filter((r) => deriveStatus(r) === "in_drying");
+  const inDryingPage = usePagination(inDrying);
 
   // Historical drying jobs can predate today's receipts (imported from the source workbook), so
   // not every job has a matching receipt to link to — rows without a match stay non-clickable.
@@ -42,10 +47,14 @@ export function DryingJobsPage() {
         lede="Drying is tracked per Lot, never per Bin."
       />
 
+      <CollapsibleCard title="Import from workbook">
+        <ImportPanel importerId="dryingJobs" onCommitted={() => void refetch()} />
+      </CollapsibleCard>
+
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[17px] font-bold text-warmstone-900 mb-2">Lots currently in drying</h3>
         {inDrying.length === 0 && <p className="text-[13px] text-warmstone-400">None right now.</p>}
-        {inDrying.map((r) => (
+        {inDryingPage.pageRows.map((r) => (
           <Link
             key={r.id}
             to={`/procurement/receipts/${r.id}`}
@@ -57,6 +66,7 @@ export function DryingJobsPage() {
             <ReceiptStatusPill status={deriveStatus(r)} />
           </Link>
         ))}
+        <Pagination state={inDryingPage} />
       </div>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">

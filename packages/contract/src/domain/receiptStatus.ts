@@ -36,7 +36,7 @@ export interface StageProgress {
   doneCount: number;
   totalCount: number;
   /** The stage right after the FURTHEST one reached — not the first gap scanning from the start.
-   * n-delplan ("Create delivery plan") is a real gap that the client's own OFFLOADINGS sheet never
+   * n-lot ("Assign Lot Number") is a real gap that the client's own OFFLOADINGS sheet never
    * captured, so it's blank on nearly every imported receipt — a naive first-undone scan would
    * anchor "current progress" on it even for a receipt already through drying, which is exactly
    * backwards. Undefined once every stage in stageList is done. */

@@ -4,11 +4,9 @@ import { TrackingProvider, useTracking } from "./state/TrackingContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionPage } from "./pages/ProductionPage";
-import { ImportPage } from "./pages/ImportPage";
 
 import { ReceiptsListPage } from "./pages/procurement/ReceiptsListPage";
 import { ReceiptDetailPage } from "./pages/procurement/ReceiptDetailPage";
-import { DeliveryPlansPage } from "./pages/procurement/DeliveryPlansPage";
 import { StockPage } from "./pages/procurement/StockPage";
 import { DryingJobsPage } from "./pages/procurement/DryingJobsPage";
 import { IntakeWizardPage } from "./pages/procurement/intake/IntakeWizardPage";
@@ -65,7 +63,6 @@ export default function App() {
             <Route path="/procurement/receipts" element={<ReceiptsListPage />} />
             <Route path="/procurement/receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
             <Route path="/procurement/receipts/:id" element={<ReceiptDetailPage />} />
-            <Route path="/procurement/delivery-plans" element={<DeliveryPlansPage />} />
             <Route path="/procurement/stock" element={<StockPage />} />
             <Route path="/procurement/drying" element={<DryingJobsPage />} />
 
@@ -80,8 +77,6 @@ export default function App() {
             <Route path="/masters/warehouses" element={<WarehousesPage />} />
             <Route path="/masters/bins" element={<BinsPage />} />
             <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />
-
-            <Route path="/import" element={<ImportPage />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

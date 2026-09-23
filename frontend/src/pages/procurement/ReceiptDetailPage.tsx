@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
-import { useTracking } from "../../state/TrackingContext";
+import { useTracking, useReceiptLinks } from "../../state/TrackingContext";
 import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
 import { DECISION_BRANCHES } from "../../domain/decisions";
 import { stages, rejectStage } from "../../data/stages";
@@ -8,6 +8,9 @@ import { StageForm } from "../../components/StageForm";
 import { DecisionBranch } from "../../components/DecisionBranch";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { StatBlock } from "../../components/ui/StatBlock";
+import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
+import { usePagination } from "../../components/ui/usePagination";
+import { Pagination } from "../../components/ui/Pagination";
 
 /** Real fields only — no invented Crop Year/Harvest Batch/security-seal chrome. Pulled straight
  * out of the actual stage data the record already has, or left out if the record doesn't have it
@@ -27,6 +30,8 @@ export function ReceiptDetailPage() {
     () => (receipt?.binNo ? receipts.filter((r) => r.binNo === receipt.binNo && r.id !== receipt.id) : []),
     [receipts, receipt?.binNo, receipt?.id]
   );
+  const timelinePage = usePagination(receipt ? [...receipt.timeline].reverse() : []);
+  const { links, loading: linksLoading } = useReceiptLinks(receipt?.id);
 
   if (!receipt) return <Navigate to="/procurement/receipts" replace />;
 
@@ -90,7 +95,7 @@ export function ReceiptDetailPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-ambernut-100 text-ambernut-800 text-xs font-semibold border border-ambernut-200">
               <span className="w-2 h-2 rounded-full bg-ambernut-600" />
-              {receipt.warehouse || "Warehouse not set"} · {receipt.source === "imported" ? "Imported from workbook" : "Entered manually"}
+              {receipt.warehouse || "Warehouse not set"}
             </div>
             <h1 className="text-2xl lg:text-3xl font-bold text-warmstone-900 tracking-tight flex items-center gap-3 flex-wrap">
               {primaryLabel}
@@ -124,7 +129,7 @@ export function ReceiptDetailPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
-          <StatBlock icon="scale" label="Net weight" value={netWt ? `${netWt} kg` : "—"} sub={netWt ? "From n-netwt stage" : "Not yet weighed"} />
+          <StatBlock icon="scale" label="Net weight" value={netWt ? `${netWt} kg` : "—"} sub={netWt ? "Weighed" : "Not yet weighed"} />
           <StatBlock
             icon="inventory_2"
             label="Bag count"
@@ -164,7 +169,7 @@ export function ReceiptDetailPage() {
             return (
               <details
                 key={stage.id}
-                open={done || stage.kind === "decision" || isActive}
+                open={isActive}
                 className={`bg-white rounded-2xl overflow-hidden transition-all ${
                   isActive ? "border-2 border-brand-700 shadow-md shadow-brand-700/10" : "border border-warmstone-200 shadow-xs"
                 }`}
@@ -270,18 +275,18 @@ export function ReceiptDetailPage() {
             </div>
           )}
 
+          {(linksLoading || links) && (
+            <LinkedRecordsCard links={links} loading={linksLoading} />
+          )}
+
           {receipt.binNo && (
-            <div className="bg-white rounded-2xl border border-warmstone-200 p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between pb-3 border-b border-warmstone-100">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-brand-700 text-[20px]">warehouse</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Also in this Bin</span>
-                </div>
+            <CollapsibleCard title="Also in this Bin" meta={otherInSameBin.length}>
+              <div className="mb-3">
                 <Link
                   to={`/masters/bins/${receipt.binNo}`}
                   className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-md hover:bg-brand-100 transition-colors"
                 >
-                  {receipt.binNo}
+                  View Bin {receipt.binNo}
                 </Link>
               </div>
               {otherInSameBin.length === 0 ? (
@@ -301,14 +306,13 @@ export function ReceiptDetailPage() {
                   ))}
                 </ul>
               )}
-            </div>
+            </CollapsibleCard>
           )}
 
-          <div className="bg-white rounded-2xl border border-warmstone-200 p-5 shadow-sm">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-warmstone-500 mb-3">Activity timeline</h3>
+          <CollapsibleCard title="Activity timeline" meta={receipt.timeline.length}>
             {receipt.timeline.length === 0 && <p className="text-[12.5px] text-warmstone-400">Nothing recorded yet.</p>}
             <ul className="space-y-3">
-              {[...receipt.timeline].reverse().map((e, i) => (
+              {timelinePage.pageRows.map((e, i) => (
                 <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
                   <ReceiptStatusPill status={e.status} />
                   <span className="text-[11px] text-warmstone-400">{new Date(e.at).toLocaleString()}</span>
@@ -316,9 +320,116 @@ export function ReceiptDetailPage() {
                 </li>
               ))}
             </ul>
-          </div>
+            <Pagination state={timelinePage} />
+          </CollapsibleCard>
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Cross-references this receipt to drying jobs / transfer receipts about the same physical batch,
+ * joined server-side on FICHE (see backend/src/services/receiptLinks.ts's header for why FICHE and
+ * not Lot/Bin). Three honest states beyond "found something": still checking, no FICHE recorded at
+ * all, and a FICHE recorded but nothing matches it yet (the batch likely hasn't moved past this
+ * stage) — none of them look like a broken card.
+ */
+function LinkedRecordsCard({
+  links,
+  loading,
+}: {
+  links: import("../../repository/api").ReceiptLinks | null;
+  loading: boolean;
+}) {
+  return (
+    <CollapsibleCard
+      title="Linked records"
+      meta={loading ? "checking…" : links?.fiche ? `FICHE ${links.fiche}` : "no FICHE"}
+      defaultOpen={!loading && Boolean(links?.fiche)}
+    >
+      {loading || !links ? (
+        <p className="text-[12.5px] text-warmstone-400 animate-pulse">Checking linked records…</p>
+      ) : !links.fiche ? (
+        <p className="text-[12.5px] text-warmstone-500">
+          No FICHE (paper docket) number recorded on this receipt yet — that's the one identifier that
+          actually carries across the drying report and the transfer ledger, so there's nothing to
+          cross-reference until it's captured.
+        </p>
+      ) : links.dryingJobs.length === 0 && links.transfers.length === 0 ? (
+        <p className="text-[12.5px] text-warmstone-500">
+          FICHE {links.fiche} is recorded, but no drying job or warehouse transfer matches it yet —
+          this batch likely hasn't moved past this stage.
+        </p>
+      ) : (
+        <div className="space-y-3.5">
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
+              Lot &amp; Bin observed elsewhere
+            </p>
+            {/* Per-source, deliberately never merged into one "the bin" — the same batch is
+                genuinely in a different bin at each stage (received vs. moved for drying). */}
+            <ul className="space-y-1">
+              {links.transfers.map((t) => (
+                <li key={`t-${t.sn}`} className="text-[12.5px] text-warmstone-700">
+                  Lot {t.lotNo || "—"} · Bin {t.binNo || "—"}{" "}
+                  <span className="text-warmstone-400">— transfer SN {t.sn}</span>
+                </li>
+              ))}
+              {links.dryingJobs.map((d) => (
+                <li key={`d-${d.id}`} className="text-[12.5px] text-warmstone-700">
+                  Lot {d.lotNo || "—"} · Bin {d.bin || "—"}{" "}
+                  <span className="text-warmstone-400">— drying {d.id}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {links.transfers.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">Warehouse transfers</p>
+                <Link to="/jute/transfers" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-1.5">
+                {links.transfers.map((t) => (
+                  <li
+                    key={t.sn}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+                  >
+                    <span>SN {t.sn} · {t.sourceWarehouse}</span>
+                    <span className="text-warmstone-400">{t.receivedDate || "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {links.dryingJobs.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">Drying jobs</p>
+                <Link to="/procurement/drying" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-1.5">
+                {links.dryingJobs.map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+                  >
+                    <span>{d.id} · {d.status}</span>
+                    <span className="text-warmstone-400">{d.date || "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </CollapsibleCard>
   );
 }

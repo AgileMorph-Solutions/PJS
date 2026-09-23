@@ -239,13 +239,36 @@ export function useTracking(): TrackingApi {
 export function useDryingJobs() {
   const [jobs, setJobs] = useState<import("@anagroci/contract/types/receipt").DryingJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.dryingJobs()
+      .then(setJobs)
+      .catch(() => { /* page renders empty; the provider surfaces connection errors */ });
+  }, []);
   useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { jobs, loading, refetch };
+}
+
+/**
+ * A receipt's cross-references to drying jobs / transfer receipts about the same physical batch
+ * (joined server-side on FICHE — see backend/src/services/receiptLinks.ts). Same shape as
+ * useDryingJobs, but keyed on receiptId so navigating between receipts refetches instead of
+ * showing the previous receipt's links.
+ */
+export function useReceiptLinks(receiptId: string | undefined) {
+  const [links, setLinks] = useState<import("../repository/api").ReceiptLinks | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!receiptId) { setLinks(null); setLoading(false); return; }
     let alive = true;
-    api.dryingJobs()
-      .then((j) => { if (alive) setJobs(j); })
-      .catch(() => { /* page renders empty; the provider surfaces connection errors */ })
+    setLoading(true);
+    api.receiptLinks(receiptId)
+      .then((l) => { if (alive) setLinks(l); })
+      .catch(() => { if (alive) setLinks(null); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, []);
-  return { jobs, loading };
+  }, [receiptId]);
+  return { links, loading };
 }

@@ -27,14 +27,14 @@ instead; the vehicle/truck is kept only as provenance on the record.
     register pre-filtered, plus the jute warehouse-stock running balance and recent activity.
   - **Procurement**
     - RCN Receipts (`/procurement/receipts`) — the register: search, filter by status/warehouse, sort. Once a receipt has a Lot Number, it's known by that Lot from then on, not by the truck that delivered it.
-    - Receipt detail (`/procurement/receipts/:id`) — the canonical record. All 16 stages as collapsible
+    - Receipt detail (`/procurement/receipts/:id`) — the canonical record. All 15 stages as collapsible
       sections editable **in any order**, decision controls for QFS/Drying/Transfer, and an activity
       timeline (doc §7's activity ledger).
     - New RCN receipt (`/procurement/receipts/new/:id/:stageId`) — the guided intake wizard, for a
       gate operator entering a brand-new truck end to end. Writes into the same record the detail
       page shows.
-    - Delivery Plans, Lots & Bins, Drying Jobs — filtered views over the same receipt records (Lots &
-      Bins), plus real drying-job history from `Drying_Report_Factory_warehouse.xlsx`.
+    - Lots & Bins, Drying Jobs — filtered views over the same receipt records (Lots & Bins), plus
+      real drying-job history from `Drying_Report_Factory_warehouse.xlsx`.
   - **Jute Management** — the four ledgers as their own pages. Warehouse Stock is backed by real
     data from `BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx` — all 298 rows, with the running
     balance computed server-side by a SQL window function so it has no stored column to drift.
@@ -49,8 +49,8 @@ instead; the vehicle/truck is kept only as provenance on the record.
     landed as designed: it touched the repository layer and `TrackingContext`, and of the eleven
     consumer pages, seven needed no change at all. `TrackingApi` kept its shape, with reads staying
     synchronous and writes going optimistic; only `createReceipt` became async, because the id is
-    assigned by the server and both call sites navigate straight to it.
-- `backend/` — **built**: Fastify + Prisma + PostgreSQL, with the 17 stages normalized into real
+    assigned by the server and its call site navigates straight to it.
+- `backend/` — **built**: Fastify + Prisma + PostgreSQL, with the 16 stages normalized into real
   tables and the jute reconciliation as a SQL view. See `backend/README.md`.
 - `packages/contract/` — the shared source of truth for both sides: the stage/ledger dictionaries,
   the domain types, and `deriveStatus()`. The backend used to hand-copy these files; now there is

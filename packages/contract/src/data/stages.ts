@@ -4,23 +4,8 @@ import type { Stage } from "../types/stage.js";
 
 export const stages: Stage[] = [
   {
-    id: "n-delplan",
-    num: 1,
-    title: "Create delivery plan (expected arrivals)",
-    phase: "Phase 1 · Delivery plan",
-    kind: "gap",
-    note: "New requirement (doc §2): before a truck arrives, capture what's expected for the day so actual receiving can be compared against the plan. Nothing captures this today.",
-    fields: [
-      { n: "Supplier / source", v: "" , col: "supplierSource"},
-      { n: "Expected quantity or truck type", v: "" , col: "expectedQtyOrTruckType"},
-      { n: "Expected arrival date", v: "" , col: "expectedArrivalDate"},
-      { n: "Destination warehouse", v: "" , col: "destinationWarehouse"},
-      { n: "Status (planned)", v: "" , col: "plannedStatus"},
-    ],
-  },
-  {
     id: "n-gate",
-    num: 2,
+    num: 1,
     title: "Truck arrives at warehouse (Gate entry)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -40,7 +25,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-verify",
-    num: 3,
+    num: 2,
     title: "Verify supplier documents",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -73,7 +58,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-gross",
-    num: 4,
+    num: 3,
     title: "Weight truck (Gross weight)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -86,7 +71,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-lot",
-    num: 5,
+    num: 4,
     title: "Assign Lot Number to truck",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "gap",
@@ -100,7 +85,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-bin",
-    num: 6,
+    num: 5,
     title: "Allocate Bin (physical storage location)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "gap",
@@ -114,7 +99,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-unload",
-    num: 7,
+    num: 6,
     title: "Unload RCN at warehouse",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -136,7 +121,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-tare",
-    num: 8,
+    num: 7,
     title: "Weigh truck (Empty – Tare weight)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -147,7 +132,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-netwt",
-    num: 9,
+    num: 8,
     title: "Calculate net weight",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
@@ -161,7 +146,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-grn",
-    num: 10,
+    num: 9,
     title: "Generate RCN reception record (GRN)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -176,7 +161,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-stock",
-    num: 11,
+    num: 10,
     title: "Update warehouse RCN stock (System)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
@@ -205,7 +190,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-otheract",
-    num: 12,
+    num: 11,
     title: "Other warehouse activities",
     phase: "Phase 4 · Other activities, ledger & traceability",
     kind: "gap",
@@ -221,7 +206,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-ledger",
-    num: 13,
+    num: 12,
     title: "Activity ledger (sequence of record)",
     phase: "Phase 4 · Other activities, ledger & traceability",
     kind: "gap",

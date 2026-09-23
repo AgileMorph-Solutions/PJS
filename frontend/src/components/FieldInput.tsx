@@ -10,18 +10,13 @@ interface Props {
   idPrefix?: string;
 }
 
-/** One field row: label + "from <file>" / "new" badge + a controlled input.
- * `field.v` only ever decides the badge (does a real workbook capture this *kind* of field) —
- * the actual displayed value always comes from the record itself via `value`, never from the
- * generic sample in the field dictionary, so one receipt's blank field can't show another
- * receipt's sample data. Purely presentational — the caller owns where the value lives. */
+/** One field row: label + an optional "new" badge + a controlled input. `field.v` only ever
+ * decides the badge (is this a proposed field with no real workbook backing it) — the actual
+ * displayed value always comes from the record itself via `value`, never from the generic sample
+ * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
+ * Purely presentational — the caller owns where the value lives. */
 export function FieldInput({ field, value, onChange, onBlur, idPrefix }: Props) {
-  const isMock = field.v !== "";
-  const placeholder = !isMock
-    ? "Not captured anywhere today — type a value to try it out"
-    : value
-      ? ""
-      : "Not yet recorded for this receipt";
+  const isNew = field.v === "";
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
 
   return (
@@ -30,20 +25,16 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix }: Props) 
         <label htmlFor={id} className="text-[12.5px] font-semibold text-warmstone-700">
           {field.n}
         </label>
-        <span
-          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-            isMock ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-          }`}
-        >
-          {isMock ? "from workbook" : "new field"}
-        </span>
+        {isNew && (
+          <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-ambernut-100 text-ambernut-800">new</span>
+        )}
       </div>
       <input
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
-        placeholder={placeholder}
+        placeholder={value ? "" : "Not recorded yet"}
         className="w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
       />
     </div>

@@ -64,10 +64,10 @@ local text. Don't "simplify" this to a plain `.then(setState)` — that reintrod
 
 **`createReceipt()` is the one method that had to become `Promise<string>`.** Everything else on
 `TrackingApi` kept its original signature. This is deliberate, not an oversight: the returned id is
-server-assigned and both call sites (`DeliveryPlansPage`, `ReceiptsListPage`) navigate straight into
-a URL containing it — a client-guessed provisional id would 404 on reload. If you add a new method
-that needs a server-generated value before the caller can proceed, follow this pattern (async,
-narrowly), rather than making unrelated methods async "for consistency."
+server-assigned and its call site (`ReceiptsListPage`) navigates straight into a URL containing it
+— a client-guessed provisional id would 404 on reload. If you add a new method that needs a
+server-generated value before the caller can proceed, follow this pattern (async, narrowly),
+rather than making unrelated methods async "for consistency."
 
 ## `TrackingApi` is a frozen interface — extend, don't reshape
 

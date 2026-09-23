@@ -1,6 +1,8 @@
 import type { ReactNode, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState } from "./EmptyState";
+import { usePagination } from "./usePagination";
+import { Pagination } from "./Pagination";
 
 export interface Column<T> {
   label: string;
@@ -21,6 +23,7 @@ interface Props<T> {
 
 export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyHint }: Props<T>) {
   const navigate = useNavigate();
+  const page = usePagination(rows);
 
   if (rows.length === 0) {
     return <EmptyState title={emptyTitle ?? "Nothing here yet"} hint={emptyHint} />;
@@ -50,7 +53,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {page.pageRows.map((row) => {
             const href = rowHref?.(row);
             return (
               <tr
@@ -73,6 +76,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
           })}
         </tbody>
       </table>
+      <Pagination state={page} />
     </div>
   );
 }

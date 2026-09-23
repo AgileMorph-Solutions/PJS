@@ -124,6 +124,20 @@ export async function addLedgerRow(ledgerId: string, row: LedgerRow): Promise<Le
     else if (d) data.rawDate = d;
   }
 
+  // Ledgers 2 and 3 are manual-entry-only (no import, no historical rows to preserve), so an
+  // unparseable date is simply dropped rather than kept in a *Raw twin the way ledgers 1/4 do.
+  if (ledgerId === "supplier-movement" || ledgerId === "factory-production-tracking") {
+    const d = (row["Date"] ?? "").trim();
+    const parsed = d ? new Date(d) : null;
+    data.movementDate = parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+  }
+
+  if (ledgerId === "supplier-movement") {
+    // supplierCode is NOT NULL on JuteSupplierMovement; the generic loop above would otherwise
+    // send `null` for a blank input and fail the write outright.
+    data.supplierCode = (row["Supplier code"] ?? "").trim();
+  }
+
   const model = (prisma as any)[DELEGATE[ledgerId]];
   const created = await model.create({ data });
 

@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll, afterEach } from "vitest";
+import { PrismaClient } from "@prisma/client";
 import { lastBalance, withDerivedColumns, checkReconciliation } from "@anagroci/contract/domain/jute";
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
+import { addLedgerRow } from "../src/services/ledgers.js";
+
+const prisma = new PrismaClient();
+afterAll(() => prisma.$disconnect());
 
 // Real fixture — the exact 3 sample rows from frontend/src/data/juteBags.ts's "warehouse-stock"
 // ledger, read directly from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx with openpyxl.
@@ -109,5 +114,69 @@ describe("checkReconciliation", () => {
     });
     expect(result.balanced).toBe(true);
     expect(result.expectedClosing).toBe(-400);
+  });
+});
+
+// Ledgers 2 and 3 had zero write-path coverage before this: `supplierCode` is NOT NULL on
+// JuteSupplierMovement but had no column in juteBags.ts, so `addLedgerRow` would have thrown on
+// every real submission. These prove the newly-wired traceability fields (Sept 2026 clarification:
+// Warehouse -> Supplier/Department -> Activity -> Quantity -> Movement Type -> Responsible
+// Person/Team -> Date) round-trip, and that a blank required field no longer crashes the write.
+describe("addLedgerRow — supplier-movement and factory-production-tracking", () => {
+  const TEST_SUPPLIER = "TEST-SENTINEL-SUPPLIER";
+  const TEST_DEPT = "TEST-SENTINEL-DEPT";
+
+  // Cleaned up after EVERY test, not batched to afterAll: dataQuality.test.ts's
+  // "ledger_has_no_row_level_source" check asserts these two tables are always empty, and that
+  // check can run concurrently (a separate test file, same live database) — keeping the window
+  // where a sentinel row exists to a single test avoids a spurious cross-file failure there.
+  afterEach(async () => {
+    await prisma.juteSupplierMovement.deleteMany({ where: { supplierCode: { startsWith: "TEST-SENTINEL" } } });
+    await prisma.juteProductionMovement.deleteMany({ where: { department: TEST_DEPT } });
+  });
+
+  it("writes and reads back Date/Warehouse/Activity/Movement Type/Responsible Person on supplier-movement", async () => {
+    const row = await addLedgerRow("supplier-movement", {
+      "Supplier code": TEST_SUPPLIER,
+      Date: "2026-04-01",
+      Warehouse: "BOUAKE",
+      Activity: "Issued in advance",
+      "Bags issued to supplier": "500",
+      "Movement Type": "Issue",
+      "Responsible Person/Team": "J. Kouassi",
+    });
+    expect(row["Supplier code"]).toBe(TEST_SUPPLIER);
+    expect(row.Date).toBe("2026-04-01");
+    expect(row.Warehouse).toBe("BOUAKE");
+    expect(row.Activity).toBe("Issued in advance");
+    expect(row["Bags issued to supplier"]).toBe("500");
+    expect(row["Movement Type"]).toBe("Issue");
+    expect(row["Responsible Person/Team"]).toBe("J. Kouassi");
+  });
+
+  it("does not crash when Supplier code is left blank (supplierCode is NOT NULL)", async () => {
+    const row = await addLedgerRow("supplier-movement", { "Supplier code": TEST_SUPPLIER, "Bags issued to supplier": "10" });
+    expect(row["Supplier code"]).toBe(TEST_SUPPLIER);
+  });
+
+  it("writes and reads back Date/Warehouse/Department/Responsible Person on factory-production-tracking", async () => {
+    const row = await addLedgerRow("factory-production-tracking", {
+      Date: "2026-04-02",
+      Warehouse: "BOUAKE",
+      Department: TEST_DEPT,
+      Activity: "Issued to Production",
+      "Issued to Production": "200",
+      "Movement Type": "Issue",
+      "Responsible Person/Team": "M. Diallo",
+    });
+    expect(row.Date).toBe("2026-04-02");
+    expect(row.Department).toBe(TEST_DEPT);
+    expect(row["Issued to Production"]).toBe("200");
+    expect(row["Responsible Person/Team"]).toBe("M. Diallo");
+  });
+
+  it("drops an unparseable date rather than sending an invalid string to a DateTime column", async () => {
+    const row = await addLedgerRow("supplier-movement", { "Supplier code": TEST_SUPPLIER, Date: "not-a-date" });
+    expect(row.Date).toBe("");
   });
 });

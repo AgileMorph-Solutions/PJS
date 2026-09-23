@@ -11,7 +11,7 @@ import type { JuteLedger } from "../types/stage.js";
 export const juteLedgers: JuteLedger[] = [
   {
     id: "warehouse-stock",
-    title: "1. Warehouse stock — now backed by a real workbook",
+    title: "Warehouse stock",
     file: "BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx",
     sheet: "JUTE BAGS ISSUED · 10 columns · 229 rows",
     flag:
@@ -72,36 +72,53 @@ export const juteLedgers: JuteLedger[] = [
   },
   {
     id: "supplier-movement",
-    title: "2. Supplier movement",
+    title: "Supplier movement",
     file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx",
-    sheet: "JUte Bag Record · per-supplier discharge totals + an undated hand tally, not a dated ledger",
+    sheet: "JUte Bag Record",
     flag: "Not yet a dated per-supplier ledger — today's numbers exist only as a hand-tallied summary, with no dates or transaction IDs.",
     columns: [
+      // Traceability required by the Sept 2026 clarification (every bag movement should trace to
+      // Warehouse -> Supplier/Department -> Activity -> Quantity -> Movement Type -> Responsible
+      // Person/Team -> Date). The Prisma columns already existed (JuteSupplierMovement) but were
+      // never exposed here, so they never appeared in the form or table.
+      { label: "Supplier code", real: false , col: "supplierCode"},
+      { label: "Date", real: false , col: "movementDate"},
+      { label: "Warehouse", real: false , col: "whLocation"},
+      { label: "Activity", real: false , col: "activity"},
       { label: "Bags issued to supplier", real: false , col: "bagsIssuedToSupplier"},
       { label: "Returned through RCN deliveries", real: false , col: "returnedViaDeliveries"},
       { label: "Pending/balance with supplier", real: false , col: "pendingWithSupplier"},
       { label: "Damaged", real: false , col: "damaged"},
       { label: "Reusable/reconditionable", real: false , col: "reusable"},
+      { label: "Movement Type", real: false , col: "movementType"},
+      { label: "Responsible Person/Team", real: false , col: "responsibleParty"},
     ],
   },
   {
     id: "factory-production-tracking",
-    title: "3. Factory/Production tracking",
+    title: "Factory/Production tracking",
     file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx",
-    sheet: "JUte Bag Record · same undated hand tally as ledger 2",
+    sheet: "JUte Bag Record",
     flag: "Same caveat as Supplier Movement — today's numbers exist only in an undated hand-tally, not a row-per-event ledger.",
     columns: [
+      // Same traceability gap as Supplier Movement — see the comment there.
+      { label: "Date", real: false , col: "movementDate"},
+      { label: "Warehouse", real: false , col: "whLocation"},
+      { label: "Department", real: false , col: "department"},
+      { label: "Activity", real: false , col: "activity"},
       { label: "Issued to Production", real: false , col: "issuedToProduction"},
       { label: "Good bags recovered", real: false , col: "goodBagsRecovered"},
       { label: "Completely damaged", real: false , col: "completelyDamaged"},
       { label: "Partially damaged (repair)", real: false , col: "partiallyDamaged"},
       { label: "Returned to warehouse", real: false , col: "returnedToWarehouse"},
       { label: "Closing balance", real: false , col: "closingBalance"},
+      { label: "Movement Type", real: false , col: "movementType"},
+      { label: "Responsible Person/Team", real: false , col: "responsibleParty"},
     ],
   },
   {
     id: "warehouse-to-warehouse-movement",
-    title: "4. Warehouse-to-warehouse movement — now backed by a real workbook",
+    title: "Warehouse-to-warehouse movement",
     file: "BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx",
     sheet: "Bouake Stock Reciving · 367 real rows",
     description:

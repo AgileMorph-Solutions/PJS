@@ -34,7 +34,7 @@ npm -w backend test
 | **TypeScript / Fastify** | The frontend is TypeScript, and `deriveStatus()` must be identical on both sides. Sharing the module is better than reimplementing it — the previous version hand-copied four files and their headers admitted they would drift. |
 | **PostgreSQL** | Needed for things SQLite only approximates: the **partial unique index** that makes "one truck = one Lot" expressible without rewriting `''`→`NULL` on every write, **window functions** for the jute running balance, and real FK enforcement. |
 | **Prisma** | Real migrations, and a DMMF that tests can introspect — that's what lets `stageMap.schema.test.ts` prove the field dictionary matches the database. |
-| **Normalized per-stage tables** | Chosen over one JSONB `stage_data` column. 17 stage tables, 74 typed columns, queryable and constrainable. The cost is a label↔column mapping, which is generated, and a round-trip test proving nothing is lost. |
+| **Normalized per-stage tables** | Chosen over one JSONB `stage_data` column. 16 stage tables, 69 typed columns, queryable and constrainable. The cost is a label↔column mapping, which is generated, and a round-trip test proving nothing is lost. |
 
 ## How stage data works
 
@@ -149,7 +149,7 @@ Raised rather than resolved — see `/api/data-quality` for the measured evidenc
 ## Layout
 
 ```
-prisma/schema.prisma        32 models; the 17 stage tables are generated from stages.ts
+prisma/schema.prisma        31 models; the 16 stage tables are generated from stages.ts
 prisma/migrations/          init + the partial index and the four views
 prisma/seed.ts              real data, via the service layer with bypassValidation
 src/stageStore.ts           stageData <-> per-stage tables; where round-trip fidelity lives

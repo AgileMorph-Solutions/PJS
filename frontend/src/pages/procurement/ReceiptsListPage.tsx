@@ -4,12 +4,21 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
+import { ImportPanel } from "../../components/ImportPanel";
 import { useTracking } from "../../state/TrackingContext";
 import { deriveStatus, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
+import { stages } from "../../data/stages";
 import type { ReceiptRecord } from "../../types/receipt";
 
+/** The real per-truck paperwork, straight from the OFFLOADINGS sheet's "Verify supplier documents"
+ * stage — not top-level ReceiptRecord fields, so a small reader avoids repeating the stageData path
+ * at every call site. FICHE is the identifier the "Linked records" card (detail page) joins on. */
+const verifyField = (r: ReceiptRecord, label: string) => r.stageData["n-verify"]?.[label] ?? "";
+const fiche = (r: ReceiptRecord) => verifyField(r, "FICHE");
+
 export function ReceiptsListPage() {
-  const { receipts, masters, createReceipt } = useTracking();
+  const { receipts, masters, createReceipt, refresh } = useTracking();
   const [params, setParams] = useSearchParams();
   // Reads an initial ?q= from the global header search so a search there lands here pre-filled.
   const [q, setQ] = useState(() => params.get("q") ?? "");
@@ -30,7 +39,8 @@ export function ReceiptsListPage() {
           r.supplierName.toLowerCase().includes(needle) ||
           r.id.toLowerCase().includes(needle) ||
           r.lbaCode.toLowerCase().includes(needle) ||
-          (r.lotNo ?? "").toLowerCase().includes(needle)
+          (r.lotNo ?? "").toLowerCase().includes(needle) ||
+          fiche(r).toLowerCase().includes(needle)
         );
       })
       .sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1));
@@ -41,6 +51,9 @@ export function ReceiptsListPage() {
     { label: "Arrival date", render: (r) => r.arrivalDate || "—" },
     { label: "Supplier", render: (r) => r.supplierName || "—" },
     { label: "LBA code", render: (r) => <span className="font-mono text-[12.5px]">{r.lbaCode || "—"}</span> },
+    { label: "Fiche", render: (r) => <span className="font-mono text-[12.5px]">{fiche(r) || "—"}</span> },
+    { label: "Fiche code", render: (r) => <span className="font-mono text-[12.5px]">{verifyField(r, "FICHE CODE") || "—"}</span> },
+    { label: "Ref.", render: (r) => <span className="font-mono text-[12.5px]">{verifyField(r, "REF.") || "—"}</span> },
     { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
     { label: "Warehouse", render: (r) => r.warehouse || "—" },
     { label: "Lot / Bin", render: (r) => `${r.lotNo || "—"} / ${r.binNo || "—"}` },
@@ -62,7 +75,7 @@ export function ReceiptsListPage() {
   async function handleNewReceipt() {
     // Async now: the id is assigned by the server and we navigate straight to it.
     const id = await createReceipt();
-    navigate(`/procurement/receipts/new/${id}/n-delplan`);
+    navigate(`/procurement/receipts/new/${id}/${stages[0].id}`);
   }
 
   return (
@@ -82,9 +95,15 @@ export function ReceiptsListPage() {
         }
       />
 
+      <div className="mb-5">
+        <CollapsibleCard title="Import from workbook">
+          <ImportPanel importerId="receipts" onCommitted={() => void refresh()} />
+        </CollapsibleCard>
+      </div>
+
       <FilterBar>
         <input
-          placeholder="Search vehicle, supplier, LBA code, Lot, receipt ID…"
+          placeholder="Search vehicle, supplier, LBA code, Fiche, Lot, receipt ID…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="w-full sm:w-64"
@@ -105,7 +124,6 @@ export function ReceiptsListPage() {
             </option>
           ))}
         </select>
-        <span className="ml-auto text-[12.5px] text-warmstone-500">{rows.length} receipts</span>
       </FilterBar>
 
       <DataTable

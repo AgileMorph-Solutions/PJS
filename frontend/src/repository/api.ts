@@ -90,6 +90,7 @@ export const api = {
   addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
 
   dryingJobs: () => request<DryingJob[]>("/drying-jobs"),
+  receiptLinks: (id: string) => request<ReceiptLinks>(`/receipts/${encodeURIComponent(id)}/links`),
   dashboard: (from?: string, to?: string) => {
     const q = new URLSearchParams();
     if (from) q.set("from", from);
@@ -152,4 +153,33 @@ export interface CommitImportResponse {
   created: number;
   skippedDuplicates: number;
   skippedInvalid: number;
+}
+
+/** A batch's real FICHE (paper docket) linking it to other records about the same batch — see
+ * backend/src/services/receiptLinks.ts's header for why FICHE and not Lot/Bin. */
+export interface LinkedDryingJob {
+  id: string;
+  date: string;
+  warehouse: string;
+  bin: string;
+  lotNo: string;
+  status: string;
+  dryType: string;
+  destination: string;
+}
+
+export interface LinkedTransfer {
+  sn: number;
+  receivedDate: string | null;
+  lotNo: string | null;
+  binNo: string | null;
+  truckRegistration: string | null;
+  bagsReceived: number | null;
+  sourceWarehouse: string;
+}
+
+export interface ReceiptLinks {
+  fiche: string | null;
+  dryingJobs: LinkedDryingJob[];
+  transfers: LinkedTransfer[];
 }

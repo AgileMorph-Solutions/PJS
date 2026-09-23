@@ -17,11 +17,11 @@ src/services/*.ts       The actual work. receipts.ts and ledgers.ts are shared b
 src/domain/             Pure-ish logic that isn't Prisma-shaped: validation.ts (hard rules that
                         reject a write), dataQuality/ (soft findings that never block),
                         juteBalance.ts (reads the SQL views).
-src/stageStore.ts       The bridge between the 17 normalized stage tables and the wire-format
+src/stageStore.ts       The bridge between the 16 normalized stage tables and the wire-format
                         stageData object. This is where round-trip fidelity lives or dies — read
                         its header comment before changing it.
 src/serialize.ts        toReceiptRecord(): row -> wire shape, with status attached (never stored).
-prisma/schema.prisma    32 models. The 17 stage tables are GENERATED (see packages/contract's
+prisma/schema.prisma    31 models. The 16 stage tables are GENERATED (see packages/contract's
                         gen-prisma-models.ts) — don't hand-edit their columns; regenerate.
 prisma/seed.ts          Loads real data via the service layer with bypassValidation: true. See
                         "Why bypassValidation exists" below before assuming it's a shortcut to copy.

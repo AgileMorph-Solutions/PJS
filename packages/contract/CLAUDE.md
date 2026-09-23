@@ -11,7 +11,7 @@ comments admitted they'd drift, and eventually they would have.
 src/types/{stage,receipt}.ts     The wire-format types. ReceiptRecord.stageData is
                                   Record<stageId, Record<fieldLabel, string>> — every value is a
                                   string on the wire, always, even numbers and dates.
-src/data/stages.ts               The 17 stage records, 74 fields. THE SPEC — transcribed from real
+src/data/stages.ts               The 16 stage records, 69 fields. THE SPEC — transcribed from real
                                   workbooks, not invented. Each field has {n, v, col}: n is the
                                   display label (exact workbook column name), v is a sample value
                                   (or "" if new), col is the storage column name.
@@ -22,7 +22,7 @@ src/domain/receiptStatus.ts      deriveStatus() — the ONLY place status is com
 src/domain/decisions.ts          The 3 decision stages' branch options (n-qfs, n-drying, n-xferdec).
 src/domain/jute.ts               Running-balance helpers + the reconciliation checker.
 scripts/gen-stage-map.ts         Generates src/generated/stageFieldMap.ts from stages.ts/juteBags.ts.
-scripts/gen-prisma-models.ts     Emits Prisma model blocks for the 17 stage tables from the same map,
+scripts/gen-prisma-models.ts     Emits Prisma model blocks for the 16 stage tables from the same map,
                                   pasted into backend/prisma/schema.prisma by hand.
 src/generated/stageFieldMap.ts   COMMITTED, generated. Do not hand-edit.
 ```
@@ -59,7 +59,7 @@ internally consistent. It does **not** by itself guarantee the database agrees; 
 `backend/tests/roundTrip.test.ts`'s job (every `(model, col)` pair exists in the live Prisma schema).
 
 `packages/contract/tests/stageMap.test.ts` covers the parts that don't need a database: field/label
-counts (17 stages, 74 fields), the 63-byte limit, uniqueness, the cross-stage reused-label case, and
+counts (16 stages, 69 fields), the 63-byte limit, uniqueness, the cross-stage reused-label case, and
 that `deriveStatus()` keys off stage *presence*, not stage *content* (see next section) — write new
 cases here for any new rule in `stages.ts`, before wiring up the database side.
 

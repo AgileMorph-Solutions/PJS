@@ -1,11 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
+import { usePagination } from "../../components/ui/usePagination";
+import { Pagination } from "../../components/ui/Pagination";
 import { useTracking } from "../../state/TrackingContext";
 
 export function BinsPage() {
   const { masters, addBin, receipts } = useTracking();
   const [name, setName] = useState("");
+  const page = usePagination(masters.bins);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -21,7 +25,7 @@ export function BinsPage() {
         title="Bins"
         lede="A Bin can hold several different Lots at once."
       />
-      <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
+      <CollapsibleCard title="Add bin">
         <form onSubmit={handleSubmit} className="flex gap-4 items-end">
           <div className="flex-1">
             <label htmlFor="bin-code" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
@@ -43,9 +47,9 @@ export function BinsPage() {
             Add bin
           </button>
         </form>
-      </div>
+      </CollapsibleCard>
       <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
-        {masters.bins.map((b) => (
+        {page.pageRows.map((b) => (
           <Link
             key={b}
             to={`/masters/bins/${b}`}
@@ -61,6 +65,7 @@ export function BinsPage() {
             </span>
           </Link>
         ))}
+        <Pagination state={page} />
       </div>
     </div>
   );

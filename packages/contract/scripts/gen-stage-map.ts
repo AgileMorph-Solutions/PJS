@@ -17,7 +17,6 @@ const OUT = join(HERE, "..", "src", "generated", "stageFieldMap.ts");
 
 /** stageId -> Prisma model + cardinality. Declared, because the model name is a schema decision. */
 const STAGE_MODELS: Record<string, { model: string; relation: string; cardinality: "one" | "many" }> = {
-  "n-delplan": { model: "StageDeliveryPlan", relation: "delplan", cardinality: "one" },
   "n-gate": { model: "StageGateEntry", relation: "gate", cardinality: "one" },
   "n-verify": { model: "StageVerifyDocs", relation: "verify", cardinality: "one" },
   "n-qfs": { model: "StageQualityQfs", relation: "qfs", cardinality: "one" },

@@ -56,7 +56,7 @@ export function IntakeWizardPage() {
   }
 
   const stage = stageById[stageId];
-  if (!stage) return <Navigate to={`/procurement/receipts/new/${id}/n-delplan`} replace />;
+  if (!stage) return <Navigate to={`/procurement/receipts/new/${id}/${stages[0].id}`} replace />;
 
   const idx = stages.findIndex((s) => s.id === stageId);
   const prev = idx > 0 ? stages[idx - 1] : null;
@@ -119,7 +119,7 @@ export function IntakeWizardPage() {
 
       <p className="text-xs text-warmstone-400">
         <Link to={`/procurement/receipts/${id}`} className="text-brand-700 hover:text-brand-800 font-medium">
-          Skip to the full record →
+          Open full record
         </Link>
       </p>
     </div>

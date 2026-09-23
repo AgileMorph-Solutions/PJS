@@ -13,10 +13,10 @@ import { DECISION_BRANCHES } from "../src/domain/decisions.js";
 const allStages = [...stages, rejectStage];
 
 describe("stage dictionary", () => {
-  it("covers all 17 stage records and 74 fields", () => {
-    expect(allStages.length).toBe(17);
-    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(74);
-    expect(Object.keys(STAGE_FIELD_MAP).length).toBe(17);
+  it("covers all 16 stage records and 69 fields", () => {
+    expect(allStages.length).toBe(16);
+    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(69);
+    expect(Object.keys(STAGE_FIELD_MAP).length).toBe(16);
   });
 
   it("gives every field a column name that Postgres can actually hold", () => {
@@ -107,11 +107,11 @@ describe("getStageProgress", () => {
     expect(withBranch.doneIds.has("n-qfs")).toBe(true);
   });
 
-  it("anchors activeStage on the FURTHEST reached stage, not the first gap (n-delplan)", () => {
-    // n-delplan is stage 1, a "gap" left blank on nearly every imported receipt — activeStage
-    // must not regress to it just because it was never filled in.
-    const p = getStageProgress({ stageData: { "n-gate": {}, "n-verify": {} }, branches: {} });
-    expect(p.activeStage?.id).not.toBe("n-delplan");
+  it("anchors activeStage on the FURTHEST reached stage, not an earlier untouched gap (n-lot)", () => {
+    // n-lot ("Assign Lot Number") is an early gap stage left blank on nearly every imported
+    // receipt — activeStage must not regress to it just because it was never filled in.
+    const p = getStageProgress({ stageData: { "n-unload": {} }, branches: {} });
+    expect(p.activeStage?.id).not.toBe("n-lot");
   });
 
   it("activeStage is undefined once every stage is reached", () => {
