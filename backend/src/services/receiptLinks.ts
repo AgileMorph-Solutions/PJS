@@ -11,6 +11,11 @@
  */
 import { prisma } from "../db.js";
 
+// Extended to production: a linked transfer's own `idTransfer` column IS the production BTM
+// number (45 production BTMs were confirmed to match real `idTransfer` values before this was
+// added) — one more hop, transfer.idTransfer -> BtmIntake.btmNo, surfaces the production side of
+// the same physical batch without inventing a new join key.
+
 export interface LinkedDryingJob {
   id: string;
   date: string;
@@ -32,10 +37,16 @@ export interface LinkedTransfer {
   sourceWarehouse: string;
 }
 
+export interface LinkedBtmIntake {
+  btmNo: string;
+  binNo: string;
+}
+
 export interface ReceiptLinks {
   fiche: string | null;
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
+  btmIntakes: LinkedBtmIntake[];
 }
 
 /** DATE -> "YYYY-MM-DD"; falls back to the hand-typed original text when the source cell wasn't a
@@ -52,7 +63,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
     select: { fiche: true },
   });
   const fiche = verify?.fiche?.trim() || null;
-  if (!fiche) return { fiche: null, dryingJobs: [], transfers: [] };
+  if (!fiche) return { fiche: null, dryingJobs: [], transfers: [], btmIntakes: [] };
 
   const [dryingRows, transferRows] = await Promise.all([
     prisma.dryingJob.findMany({
@@ -64,11 +75,18 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       where: { noFiche: fiche },
       select: {
         sn: true, receivedDate: true, rawDate: true, lotNo: true, binNo: true,
-        truckRegistration: true, bagsReceived: true, sourceWarehouse: true,
+        truckRegistration: true, bagsReceived: true, sourceWarehouse: true, idTransfer: true,
       },
       orderBy: { sn: "asc" },
     }),
   ]);
+
+  // One more hop: idTransfer on a linked transfer is the production BTM number. Several transfers
+  // can (rarely) share an idTransfer, so dedupe before the BtmIntake lookup.
+  const btmNos = [...new Set(transferRows.map((r) => r.idTransfer?.trim()).filter((v): v is string => !!v))];
+  const btmIntakes = btmNos.length
+    ? await prisma.btmIntake.findMany({ where: { btmNo: { in: btmNos } }, select: { btmNo: true, binNo: true }, orderBy: { btmNo: "asc" } })
+    : [];
 
   return {
     fiche,
@@ -82,5 +100,6 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       bagsReceived: r.bagsReceived,
       sourceWarehouse: r.sourceWarehouse,
     })),
+    btmIntakes,
   };
 }

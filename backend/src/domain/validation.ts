@@ -50,3 +50,30 @@ export function assertDryingJobHasLot(job: { lotNo?: string | null; bin?: string
     );
   }
 }
+
+/**
+ * Confirmed against the real data: a BTM lands in exactly one destination Bin (0/104 violations in
+ * "1. RCN Receipts.xlsx", even the 7 BTMs that have more than one line because they drew RCN from
+ * more than one source bin — the source bin varies per line, the destination bin never does).
+ */
+export function assertOneBinPerBtm(existingBinNo: string | null | undefined, incomingBinNo: string): void {
+  if (existingBinNo && existingBinNo.trim() && incomingBinNo && incomingBinNo.trim() && existingBinNo !== incomingBinNo) {
+    throw new ValidationError(
+      `This BTM is already recorded against Bin "${existingBinNo}" — a BTM lands in exactly one Bin. ` +
+      `Got "${incomingBinNo}" instead.`
+    );
+  }
+}
+
+/**
+ * Same rule, Lot side: confirmed 0/107 violations in "6. Cooking Process Report.xlsx". A Lot is
+ * created at Cooking and belongs to exactly one Bin from then on.
+ */
+export function assertOneBinPerLot(existingBinNo: string | null | undefined, incomingBinNo: string): void {
+  if (existingBinNo && existingBinNo.trim() && incomingBinNo && incomingBinNo.trim() && existingBinNo !== incomingBinNo) {
+    throw new ValidationError(
+      `This Lot is already recorded against Bin "${existingBinNo}" — a Lot belongs to exactly one Bin. ` +
+      `Got "${incomingBinNo}" instead.`
+    );
+  }
+}

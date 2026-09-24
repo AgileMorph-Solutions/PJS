@@ -38,7 +38,9 @@ describe("receipt links (FICHE cross-reference)", () => {
     });
     expect(noFiche, "expected at least one receipt with no fiche in the real data").toBeTruthy();
     const links = await getReceiptLinks(noFiche!.id);
-    expect(links).toEqual({ fiche: null, dryingJobs: [], transfers: [] });
+    // btmIntakes added alongside the production cross-reference (services/receiptLinks.ts) — still
+    // empty here for exactly the same reason dryingJobs/transfers are: no fiche, nothing to join.
+    expect(links).toEqual({ fiche: null, dryingJobs: [], transfers: [], btmIntakes: [] });
   });
 
   it("coverage across all receipts matches what was measured before building this", async () => {
@@ -61,5 +63,35 @@ describe("receipt links (FICHE cross-reference)", () => {
     const transfer = links.transfers[0]!;
     expect(transfer.receivedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(typeof transfer.bagsReceived === "number" || transfer.bagsReceived === null).toBe(true);
+  });
+
+  it("a linked transfer's idTransfer resolves to a real BtmIntake, once one exists", async () => {
+    // No production data is seeded yet (the extractor is a later pass — see the plan's "Deferred"
+    // section), so this proves the JOIN rather than asserting a measured real count: find any real
+    // transfer with a non-blank idTransfer, insert a disposable BtmIntake for that exact number,
+    // and confirm getReceiptLinks resolves it. Found dynamically, not hardcoded — same convention
+    // the no-fiche test above already uses.
+    const transfer = await prisma.juteWarehouseTransferReceipt.findFirst({
+      where: { idTransfer: { not: null } },
+      select: { idTransfer: true, noFiche: true },
+    });
+    expect(transfer?.idTransfer, "expected at least one real transfer with an idTransfer").toBeTruthy();
+    const receipt = await prisma.stageVerifyDocs.findFirst({
+      where: { fiche: transfer!.noFiche ?? undefined },
+      select: { receiptId: true },
+    });
+    expect(receipt, "expected a receipt whose fiche matches this transfer's noFiche").toBeTruthy();
+
+    const btmNo = transfer!.idTransfer!.trim();
+    const binNo = "TEST-RECEIPTLINKS-BIN";
+    await prisma.productionBin.upsert({ where: { binNo }, update: {}, create: { binNo } });
+    await prisma.btmIntake.upsert({ where: { btmNo }, update: {}, create: { btmNo, binNo } });
+    try {
+      const links = await getReceiptLinks(receipt!.receiptId);
+      expect(links.btmIntakes.map((b) => b.btmNo)).toContain(btmNo);
+    } finally {
+      await prisma.btmIntake.deleteMany({ where: { btmNo, binNo } });
+      await prisma.productionBin.deleteMany({ where: { binNo } });
+    }
   });
 });

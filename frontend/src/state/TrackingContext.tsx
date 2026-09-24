@@ -272,3 +272,79 @@ export function useReceiptLinks(receiptId: string | undefined) {
   }, [receiptId]);
   return { links, loading };
 }
+
+/**
+ * Production — its own hooks, same reasoning as useDryingJobs: a new capability stays out of
+ * TrackingApi so existing consumers never need to change. List hooks expose `refetch` for after a
+ * write (no optimistic/coalesced-write machinery yet — production writes are infrequent,
+ * per-record submissions, not per-keystroke stage edits, so a refetch-on-success is enough).
+ */
+export function useBtmIntakes() {
+  const [rows, setRows] = useState<import("../repository/api").BtmIntake[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listBtmIntakes().then(setRows).catch(() => {}), []);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+export function useBtmIntake(btmNo: string | undefined) {
+  const [row, setRow] = useState<import("../repository/api").BtmIntakeDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    if (!btmNo) { setRow(null); return Promise.resolve(); }
+    return api.getBtmIntake(btmNo).then(setRow).catch(() => setRow(null));
+  }, [btmNo]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { row, loading, refetch };
+}
+
+export function useProductionBins() {
+  const [rows, setRows] = useState<import("../repository/api").ProductionBinSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listProductionBins().then(setRows).catch(() => {}), []);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+export function useProductionBin(binNo: string | undefined) {
+  const [row, setRow] = useState<import("../repository/api").ProductionBinDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    if (!binNo) { setRow(null); return Promise.resolve(); }
+    return api.getProductionBin(binNo).then(setRow).catch(() => setRow(null));
+  }, [binNo]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { row, loading, refetch };
+}
+
+/** The Bin page's Phase 1-2 accordion data — separate from useProductionBin since it's a distinct
+ * endpoint (aggregate fractions across a Bin's BTMs), not part of the plain Bin row. */
+export function useBinPhaseProgress(binNo: string | undefined) {
+  const [steps, setSteps] = useState<import("../repository/api").BinPhaseStep[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    if (!binNo) { setSteps([]); return Promise.resolve(); }
+    return api.getBinPhaseProgress(binNo).then(setSteps).catch(() => setSteps([]));
+  }, [binNo]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { steps, loading, refetch };
+}
+
+export function useProductionLots() {
+  const [rows, setRows] = useState<import("../repository/api").ProductionLot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listLots().then(setRows).catch(() => {}), []);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+export function useLot(lotNo: string | undefined) {
+  const [row, setRow] = useState<import("../repository/api").LotDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    if (!lotNo) { setRow(null); return Promise.resolve(); }
+    return api.getLot(lotNo).then(setRow).catch(() => setRow(null));
+  }, [lotNo]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { row, loading, refetch };
+}

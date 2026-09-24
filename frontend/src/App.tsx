@@ -1,9 +1,16 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionPage } from "./pages/ProductionPage";
+import { BtmListPage } from "./pages/production/BtmListPage";
+import { BtmDetailPage } from "./pages/production/BtmDetailPage";
+import { ProductionBinsListPage } from "./pages/production/ProductionBinsListPage";
+import { ProductionBinDetailPage } from "./pages/production/ProductionBinDetailPage";
+import { LotsListPage } from "./pages/production/LotsListPage";
+import { LotDetailPage } from "./pages/production/LotDetailPage";
+import { StandaloneTablePage } from "./pages/production/StandaloneTablePage";
 
 import { ReceiptsListPage } from "./pages/procurement/ReceiptsListPage";
 import { ReceiptDetailPage } from "./pages/procurement/ReceiptDetailPage";
@@ -21,9 +28,13 @@ import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
 import { BinDetailPage } from "./pages/masters/BinDetailPage";
 
-/** Holds the first render until the initial load finishes, so pages never flash an empty dataset. */
+/** Holds the first render until the initial load finishes, so pages never flash an empty dataset.
+ * /production/* is exempted: those pages fetch their own data independently (useBtmIntakes,
+ * useProductionBins, ...), so a slow or erroring procurement load has no reason to block them. */
 function LoadGate({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
   const { loading, error, receipts } = useTracking();
+  if (pathname.startsWith("/production")) return <>{children}</>;
   if (loading && receipts.length === 0) {
     return (
       <div className="p-10 space-y-4 animate-pulse">
@@ -71,6 +82,15 @@ export default function App() {
             <Route path="/jute/production" element={<ProductionIssuePage />} />
             <Route path="/jute/transfers" element={<WarehouseTransfersPage />} />
 
+            <Route path="/production/btm" element={<BtmListPage />} />
+            <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />
+            <Route path="/production/bins" element={<ProductionBinsListPage />} />
+            <Route path="/production/bins/:binNo" element={<ProductionBinDetailPage />} />
+            <Route path="/production/lots" element={<LotsListPage />} />
+            <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
+            <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
+            {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) — every
+                route above still works if visited directly; only the sidebar entry point changed. */}
             <Route path="/production" element={<ProductionPage />} />
 
             <Route path="/masters/suppliers" element={<SuppliersPage />} />

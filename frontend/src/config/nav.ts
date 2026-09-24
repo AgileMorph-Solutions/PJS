@@ -41,6 +41,11 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    // Reverted to the single placeholder entry on request — the BTM/Bin/Lot pages, backend
+    // services, and seeded real data behind this section all still exist and work (see
+    // frontend/src/pages/production/, backend/src/routes/production.ts); they're just not linked
+    // from the sidebar while this is revisited. Un-reverting is: swap this one item back for the
+    // list that was here (git history has it), no other code changes needed.
     label: "Production",
     items: [
       { label: "Production", to: "/production", icon: "precision_manufacturing", badge: "Soon" },

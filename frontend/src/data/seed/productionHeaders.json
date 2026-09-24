@@ -1,0 +1,999 @@
+{
+ "btmIntakes": [
+  {
+   "btmNo": "1001",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1002",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1004",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1005",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1006",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1007",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1008",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1009",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "101",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1010",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1011",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1012",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1013",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1014",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1015",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1016",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1018",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1019",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "102",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1020",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1021",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1022",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1023",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1026",
+   "binNo": "ANA-01"
+  },
+  {
+   "btmNo": "1027",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "1028",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "1029",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "103",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1030",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "1031",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "1032",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "1033",
+   "binNo": "ANA-02"
+  },
+  {
+   "btmNo": "1034",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1035",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1036",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1037",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1038",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1039",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "104",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1040",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1041",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1042",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1043",
+   "binNo": "ANA-05A"
+  },
+  {
+   "btmNo": "1044",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1045",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1046",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1047",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1048",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1049",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "105",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1050",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1051",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1052",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1053",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1054",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "1055",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "106",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "107",
+   "binNo": "ANA-02A"
+  },
+  {
+   "btmNo": "108",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "109",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "110",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "111",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "112",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "113",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "114",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "115",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "116",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "117",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "118",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "119",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "120",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "121",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "122",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "123",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "124",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "125",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "126",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "127",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "128",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "129",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "130",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "131",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "132",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "133",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "134",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "135",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "136",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "137",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "138",
+   "binNo": "ANA-03B"
+  },
+  {
+   "btmNo": "139",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "140",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "141",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "142",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "143",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "144",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "145",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "146",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "147",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "148",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "149",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "150",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "151",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "152",
+   "binNo": "ANA-07"
+  },
+  {
+   "btmNo": "153",
+   "binNo": "ANA-07"
+  }
+ ],
+ "lots": [
+  {
+   "lotNo": "ANG26E01",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E02",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E03",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E04",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E05",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E06",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E07",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E08",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E09",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E10",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E11",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E12",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E13",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E14",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E15",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E16",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E17",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26E18",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26F01",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26F02",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26F03",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26F04",
+   "binNo": "ANA-01"
+  },
+  {
+   "lotNo": "ANG26F05",
+   "binNo": "ANA-02"
+  },
+  {
+   "lotNo": "ANG26F06",
+   "binNo": "ANA-02"
+  },
+  {
+   "lotNo": "ANG26F07",
+   "binNo": "ANA-02"
+  },
+  {
+   "lotNo": "ANG26F08",
+   "binNo": "ANA-02"
+  },
+  {
+   "lotNo": "ANG26F09",
+   "binNo": "ANA-02"
+  },
+  {
+   "lotNo": "ANG26F10",
+   "binNo": "ANA-02"
+  },
+  {
+   "lotNo": "ANG26F11",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F12",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F13",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F14",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F15",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F16",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F17",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F18",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F19",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F20A",
+   "binNo": "ANA-05A"
+  },
+  {
+   "lotNo": "ANG26F20B",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26F21",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26F22",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26F23",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26F24",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26F25",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G01",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G02",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G03",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G04",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G05",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G06",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G07",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G08",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G09",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G10",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G11",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G12",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G13",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G14",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G15",
+   "binNo": "ANA-02A"
+  },
+  {
+   "lotNo": "ANG26G16",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G17",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G18",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G19",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G20",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G21",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G22",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G23",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G24",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G25",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26G26",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H01",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H02",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H03",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H04",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H05",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H06",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H07",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H08",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H09",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H10",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H11",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H12",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H13",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H14",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H15",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H16",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H17",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H18",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H19",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H20",
+   "binNo": "ANA-03B"
+  },
+  {
+   "lotNo": "ANG26H21",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26H22",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26H23",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26H24",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I01",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I02",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I03",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I04",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I05",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I06",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I07",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I08",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I09",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I10",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I11",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I12",
+   "binNo": "ANA-07"
+  },
+  {
+   "lotNo": "ANG26I13",
+   "binNo": "ANA-07"
+  }
+ ],
+ "bins": [
+  "ANA-01",
+  "ANA-02",
+  "ANA-02A",
+  "ANA-03B",
+  "ANA-03B/10/16",
+  "ANA-05A",
+  "ANA-07",
+  "ANA-10",
+  "ANA-15",
+  "ANA-16",
+  "ANA-2A",
+  "ANA-3B",
+  "ANG26E01",
+  "ANG26E02",
+  "ANG26E03",
+  "ANG26E04",
+  "ANG26E05",
+  "ANG26E06",
+  "ANG26E07",
+  "ANG26E08",
+  "ANG26E09",
+  "ANG26E10",
+  "ANG26E11",
+  "ANG26E12",
+  "ANG26E13",
+  "ANG26E14",
+  "ANG26E15",
+  "ANG26E16",
+  "ANG26E17",
+  "ANG26E18",
+  "ANG26F01",
+  "ANG26F02",
+  "ANG26F03",
+  "ANG26F04",
+  "ANG26F05",
+  "ANG26F06",
+  "ANG26F07",
+  "ANG26F08",
+  "ANG26F09",
+  "ANG26F10",
+  "ANG26F11",
+  "ANG26F12",
+  "ANG26F13",
+  "ANG26F14",
+  "ANG26F15",
+  "ANG26F16",
+  "ANG26F17",
+  "ANG26F18",
+  "ANG26F19",
+  "ANG26F20A",
+  "ANG26F20B",
+  "ANG26F21",
+  "ANG26F22",
+  "ANG26F23",
+  "ANG26F24",
+  "ANG26F25",
+  "ANG26G01",
+  "ANG26G02",
+  "ANG26G03",
+  "ANG26G04",
+  "ANG26G05",
+  "ANG26G06",
+  "ANG26G07",
+  "ANG26G08",
+  "ANG26G09",
+  "ANG26G10",
+  "ANG26G11",
+  "ANG26G12",
+  "ANG26G13",
+  "ANG26G14",
+  "ANG26G15",
+  "ANG26G16",
+  "ANG26G17",
+  "ANG26G18",
+  "ANG26G19",
+  "ANG26G20",
+  "ANG26G21",
+  "ANG26G22",
+  "ANG26G23",
+  "ANG26G24",
+  "ANG26G25",
+  "ANG26G26",
+  "ANG26H01",
+  "ANG26H02",
+  "ANG26H03",
+  "ANG26H04",
+  "ANG26H05",
+  "ANG26H06",
+  "ANG26H07",
+  "ANG26H08",
+  "ANG26H09",
+  "ANG26H10",
+  "ANG26H11",
+  "ANG26H12",
+  "ANG26H13",
+  "ANG26H14",
+  "ANG26H15",
+  "ANG26H16",
+  "ANG26H17",
+  "ANG26H18",
+  "ANG26H19",
+  "ANG26H20",
+  "ANG26H21",
+  "ANG26H22",
+  "ANG26H23",
+  "ANG26H24",
+  "ANG26I01",
+  "ANG26I02",
+  "ANG26I03",
+  "ANG26I04",
+  "ANG26I05",
+  "ANG26I06",
+  "ANG26I07",
+  "ANG26I08",
+  "ANG26I09",
+  "ANG26I10",
+  "ANG26I11",
+  "ANG26I12",
+  "ANG26I13",
+  "BIN-001",
+  "BIN-001A",
+  "BIN-002",
+  "BIN-003",
+  "BIN-004",
+  "BIN-005",
+  "BIN-006",
+  "BIN-007",
+  "BIN-008B",
+  "BIN-009",
+  "BIN-010",
+  "BIN-011",
+  "BIN-012",
+  "BIN-013",
+  "BIN-015",
+  "BIN-016",
+  "BIN-02A",
+  "BIN-03A",
+  "BIN-03B",
+  "BIN-03C",
+  "BIN-04A",
+  "BIN-05B",
+  "BIN-06A",
+  "BIN-07",
+  "BIN-07A",
+  "BIN-08B",
+  "BIN-10",
+  "BIN-11"
+ ]
+}

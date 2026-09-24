@@ -380,4 +380,118 @@ export const CHECKS: Check[] = [
       };
     },
   },
+
+  // ── Production checks below. All degrade gracefully to null against empty tables — there is no
+  // seeded production data yet (the extractor is a later pass); these are written and tested now
+  // against disposable fixture rows so the logic is proven ahead of real data arriving. ──────────
+
+  {
+    id: "production_btm_namespace_split",
+    async run({ prisma }) {
+      const rows = await prisma.btmIntake.findMany({ select: { btmNo: true } });
+      if (!rows.length) return null;
+      const nums = rows.map((r) => r.btmNo).filter((b) => /^\d+$/.test(b)).map(Number);
+      const low = nums.filter((n) => n < 1000);
+      const high = nums.filter((n) => n >= 1000);
+      if (!low.length || !high.length) return null;
+      return {
+        id: "production_btm_namespace_split", severity: "info",
+        title: "BTM numbers span two disjoint ranges",
+        entity: "BtmIntake", affectedCount: nums.length,
+        sampleIds: [...low.slice(0, 3), ...high.slice(0, 2)].map(String),
+        evidence:
+          `BTM numbers observed in two disjoint ranges (e.g. 101-153 and 1001-1055 in the real ` +
+          `"1. RCN Receipts.xlsx") — ${low.length} below 1000, ${high.length} at or above. Not an ` +
+          "error, just two numbering series in the source data; kept verbatim.",
+      };
+    },
+  },
+  {
+    id: "production_source_bin_spelling_drift",
+    async run({ prisma }) {
+      const rows = await prisma.btmReceipt.findMany({ select: { sourceBinNo: true } });
+      const vals = rows.map((r) => r.sourceBinNo).filter((v): v is string => !!v && v.trim() !== "");
+      if (!vals.length) return null;
+      const byNorm = new Map<string, Set<string>>();
+      for (const v of vals) {
+        const norm = v.trim().replace(/^BIN[\s-]?0*/i, "").replace(/^0+(?=\d)/, "");
+        if (!norm) continue;
+        if (!byNorm.has(norm)) byNorm.set(norm, new Set());
+        byNorm.get(norm)!.add(v.trim());
+      }
+      const drifted = [...byNorm.entries()].filter(([, spellings]) => spellings.size > 1);
+      if (!drifted.length) return null;
+      const affected = drifted.reduce((n, [, s]) => n + s.size, 0);
+      return {
+        id: "production_source_bin_spelling_drift", severity: "warning",
+        title: "The same source bin is spelled more than one way",
+        entity: "BtmReceipt", affectedCount: affected,
+        sampleIds: drifted.slice(0, 5).flatMap(([, s]) => [...s]).slice(0, 5),
+        evidence:
+          `${drifted.length} bin(s) recorded under more than one spelling in "Source Bin No" (e.g. ` +
+          `"BIN-010" vs "BIN-10", bare numerics like "95") — up to three spellings for the same ` +
+          "physical bin in the real workbook. Stored verbatim, never normalised.",
+      };
+    },
+  },
+  {
+    id: "production_composite_cell",
+    async run({ prisma }) {
+      const [samples, trolleys] = await Promise.all([
+        prisma.finalOutputSample.findMany({ select: { id: true, lotNo: true } }),
+        prisma.bormaTrolleyRow.findMany({ select: { id: true, binNo: true } }),
+      ]);
+      const compositeLots = samples.filter((s) => s.lotNo && /[,/]/.test(s.lotNo));
+      const compositeBins = trolleys.filter((t) => t.binNo && /[,/]/.test(t.binNo));
+      const affected = compositeLots.length + compositeBins.length;
+      if (!affected) return null;
+      return {
+        id: "production_composite_cell", severity: "warning",
+        title: "A lot/bin cell names more than one lot or bin",
+        entity: "FinalOutputSample / BormaTrolleyRow", affectedCount: affected,
+        sampleIds: [...compositeLots.slice(0, 3).map((s) => s.id), ...compositeBins.slice(0, 2).map((t) => t.id)],
+        evidence:
+          `Composite cells like "ANG26E01,E02" (a sample spanning two cooking lots) and ` +
+          `"ANA-03B/10/16" (a trolley routed through more than one bin) are real — confirmed against ` +
+          "flow-xl-map/ANAGROCI_Data_Capture_Audit_Questions.md §2.8, evidence that lots genuinely " +
+          "combine downstream of cooking. Stored verbatim, never split or picked-first.",
+      };
+    },
+  },
+  {
+    id: "production_silo_batch_bin_column_shift",
+    async run({ prisma }) {
+      const rows = await prisma.silosStockRow.findMany({ select: { id: true, batchNo: true } });
+      const shifted = rows.filter((r) => r.batchNo && /^\d+$/.test(r.batchNo.trim()));
+      if (!shifted.length) return null;
+      return {
+        id: "production_silo_batch_bin_column_shift", severity: "warning",
+        title: "Silo stock's Batch No / BIN No columns look shifted",
+        entity: "SilosStockRow", affectedCount: shifted.length, sampleIds: shifted.slice(0, 5).map((r) => r.id),
+        evidence:
+          'The real "5. Calibrated RCN Silos Stock report.xlsx" holds small integers (matching ' +
+          'Adjusted Qty) in what its header calls "Batch No", not a bin code or batch identifier — ' +
+          "confirmed against flow-xl-map/ANAGROCI_Data_Capture_Audit_Questions.md §2.4. Stored " +
+          "verbatim under the sheet's own column name, never remapped.",
+      };
+    },
+  },
+  {
+    id: "production_input_quality_lot_column_mislabeled",
+    async run({ prisma }) {
+      const rows = await prisma.btmInputQuality.findMany({ select: { id: true, lotNo: true } });
+      const populated = rows.filter((r) => r.lotNo && r.lotNo.trim());
+      if (!populated.length) return null;
+      return {
+        id: "production_input_quality_lot_column_mislabeled", severity: "info",
+        title: "2. Input RCN Quality report's own Lot No column holds Source Bin values",
+        entity: "BtmInputQuality", affectedCount: populated.length, sampleIds: populated.slice(0, 5).map((r) => r.id),
+        evidence:
+          'The real workbook\'s "Lot No" column holds the same values as "1. RCN Receipts.xlsx"\'s ' +
+          '"Source Bin No" column (e.g. 96, 95, 122) — a Lot does not exist until Cooking, so these ' +
+          "cannot be real Lot numbers. Same disjoint-namespace confusion procurement's " +
+          "lot_namespace_conflict already documents. Stored verbatim under the sheet's own column name.",
+      };
+    },
+  },
 ];

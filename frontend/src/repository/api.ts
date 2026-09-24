@@ -118,7 +118,114 @@ export const api = {
     request<CommitImportResponse>(`/imports/${encodeURIComponent(token)}/commit`, {
       method: "POST", body: JSON.stringify({ skipFlagged }),
     }),
+
+  // ── Production — its own capability, not part of TrackingApi (see repository/api.ts's header:
+  // same reasoning as dryingJobs/receiptLinks — a new hook, not a reshaped context). ─────────────
+  listBtmIntakes: () => request<BtmIntake[]>("/production/btm"),
+  getBtmIntake: (btmNo: string) => request<BtmIntakeDetail>(`/production/btm/${encodeURIComponent(btmNo)}`),
+  addBtmRow: async (btmNo: string, kind: "receipt-lines" | "quality" | "calibration", binNo: string, fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/btm/${encodeURIComponent(btmNo)}/${kind}`, {
+      method: "POST", body: JSON.stringify({ binNo, fields }),
+    })),
+
+  listProductionBins: () => request<ProductionBinSummary[]>("/production/bins"),
+  getProductionBin: (binNo: string) => request<ProductionBinDetail>(`/production/bins/${encodeURIComponent(binNo)}`),
+  getBinPhaseProgress: (binNo: string) => request<BinPhaseStep[]>(`/production/bins/${encodeURIComponent(binNo)}/phase-progress`),
+
+  listLots: () => request<ProductionLot[]>("/production/lots"),
+  getLot: (lotNo: string) => request<LotDetail>(`/production/lots/${encodeURIComponent(lotNo)}`),
+  cookLot: async (lotNo: string, binNo: string, fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/lots/${encodeURIComponent(lotNo)}/cooking`, {
+      method: "POST", body: JSON.stringify({ binNo, fields }),
+    })),
+  addLotRow: async (lotNo: string, kind: "shelling" | "borma" | "packing", fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/lots/${encodeURIComponent(lotNo)}/${kind}`, {
+      method: "POST", body: JSON.stringify({ fields }),
+    })),
+
+  // Generic per-table access — covers every production table beyond the named endpoints above
+  // (see backend/src/routes/production.ts's "Generic per-table access" section).
+  listBtmTableRows: (btmNo: string, tableId: string) =>
+    request<Record<string, unknown>[]>(`/production/btm/${encodeURIComponent(btmNo)}/tables/${encodeURIComponent(tableId)}`),
+  addBtmTableRow: async (btmNo: string, tableId: string, binNo: string, fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/btm/${encodeURIComponent(btmNo)}/tables/${encodeURIComponent(tableId)}`, {
+      method: "POST", body: JSON.stringify({ binNo, fields }),
+    })),
+  listLotTableRows: (lotNo: string, tableId: string) =>
+    request<Record<string, unknown>[]>(`/production/lots/${encodeURIComponent(lotNo)}/tables/${encodeURIComponent(tableId)}`),
+  addLotTableRow: async (lotNo: string, tableId: string, fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/lots/${encodeURIComponent(lotNo)}/tables/${encodeURIComponent(tableId)}`, {
+      method: "POST", body: JSON.stringify({ fields }),
+    })),
+  listBinTableRows: (binNo: string, tableId: string, limit?: number) =>
+    request<Record<string, unknown>[]>(`/production/bins/${encodeURIComponent(binNo)}/tables/${encodeURIComponent(tableId)}${limit ? `?limit=${limit}` : ""}`),
+  addBinTableRow: async (binNo: string, tableId: string, fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/bins/${encodeURIComponent(binNo)}/tables/${encodeURIComponent(tableId)}`, {
+      method: "POST", body: JSON.stringify({ fields }),
+    })),
+  listStandaloneTable: (tableId: string, limit?: number) =>
+    request<Record<string, unknown>[]>(`/production/standalone/${encodeURIComponent(tableId)}${limit ? `?limit=${limit}` : ""}`),
+  addStandaloneRow: async (tableId: string, fields: Record<string, string>) =>
+    unwrap(await request<Written<unknown>>(`/production/standalone/${encodeURIComponent(tableId)}`, {
+      method: "POST", body: JSON.stringify({ fields }),
+    })),
 };
+
+export interface BtmIntake {
+  btmNo: string;
+  binNo: string;
+  source: string | null;
+  createdAt: string;
+}
+
+export interface BtmIntakeDetail extends BtmIntake {
+  tables: Record<string, boolean>;
+  status: string;
+}
+
+export interface ProductionBinSummary {
+  binNo: string;
+  source: string | null;
+  btmCount: number;
+  lotCount: number;
+}
+
+export interface ProductionLot {
+  lotNo: string;
+  binNo: string;
+  source: string | null;
+  createdAt: string;
+}
+
+export interface BinStockRow {
+  binNo: string;
+  date: string;
+  qty_in: string;
+  qty_out: string;
+  movement_type: string;
+  running_balance: string;
+}
+
+export interface ProductionBinDetail extends ProductionBinSummary {
+  btmIntakes: BtmIntake[];
+  lots: ProductionLot[];
+  stock: BinStockRow[];
+  silo: unknown[];
+}
+
+export interface BinPhaseStep {
+  tableId: string;
+  label: string;
+  phase: string;
+  kind: "aggregate" | "direct";
+  doneCount: number;
+  totalCount: number;
+}
+
+export interface LotDetail extends ProductionLot {
+  tables: Record<string, boolean>;
+  status: string;
+}
 
 export interface ImporterTypeInfo {
   id: string;

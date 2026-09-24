@@ -24,5 +24,7 @@ RUN npx prisma generate
 ENV PORT=3000
 EXPOSE 3000
 
-# DATABASE_URL comes from compose (the `db` service). Migrate, seed (idempotent), then serve.
-CMD npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx src/server.ts
+# DATABASE_URL comes from compose (the `db` service). Migrate, seed (idempotent) — procurement then
+# production, each with its own idempotency guard since seed.ts's `receipt.count() > 0` guard would
+# otherwise skip production seeding forever on a DB seeded before this file existed — then serve.
+CMD npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx prisma/seedProduction.ts && npx tsx src/server.ts

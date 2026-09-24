@@ -38,3 +38,18 @@ export function warningsForReceipt(r: ReceiptRecord): string[] {
   }
   return w;
 }
+
+/**
+ * The production twins of warningsForReceipt, for the { data, warnings } envelope
+ * routes/production.ts returns on every mutating call. Deliberately minimal right now: this pass
+ * has no seeded production data yet (see the plan's "Deferred" section — the extractor is a later
+ * pass), so there is no measured real-data pattern to warn about yet the way warningsForReceipt's
+ * three checks were built from the 50 real seeded receipts. Extension points, not empty forever.
+ */
+export function warningsForBtm(_row: { btmNo: string; binNo: string }): string[] {
+  return [];
+}
+
+export function warningsForLot(_row: { lotNo: string; binNo: string }): string[] {
+  return [];
+}
