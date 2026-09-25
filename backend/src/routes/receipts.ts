@@ -110,7 +110,8 @@ export async function receiptRoutes(app: FastifyInstance) {
 
   /**
    * Cross-references this receipt to drying jobs / transfer receipts about the same physical
-   * batch, joined on FICHE (see services/receiptLinks.ts's header for why FICHE and not Lot/Bin).
+   * batch, joined on Lot Number (see services/receiptLinks.ts's header for the accuracy tradeoff
+   * this accepts vs. joining on FICHE).
    */
   app.get("/api/receipts/:id/links", async (req, reply) => {
     const { id } = req.params as { id: string };

@@ -40,7 +40,10 @@ interface TrackingApi {
 
   masters: Masters;
   addSupplier: (s: Supplier) => void;
-  addWarehouse: (name: string) => void;
+  /** `classification` is either `{ kind }` (a new SITE) or `{ site }` (a STORE under an existing
+   * site) — never both, matching Warehouse's Site -> Store hierarchy. Omitted entirely, the
+   * warehouse is added unclassified, same as this method's original behavior. */
+  addWarehouse: (name: string, classification?: { kind?: string; site?: string }) => void;
   addBin: (name: string) => void;
 
   /** Flush any buffered edits for a stage immediately — call on blur / before navigating away. */
@@ -207,12 +210,11 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         setMasters((prev) => ({ ...prev, suppliers: [...prev.suppliers, s] }));
         api.addSupplier(s).catch((e) => { fail(e); void refresh(); });
       },
-      addWarehouse: (name) => {
-        // kind/site stay null on the optimistic row, matching the backend: addWarehouse() only
-        // ever upserts a bare name — classifying it into a site/store is a separate, deliberate
-        // step (see warehouse_alias_inferred), never guessed from how it was added.
-        setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind: null, site: null }] }));
-        api.addWarehouse(name).catch((e) => { fail(e); void refresh(); });
+      addWarehouse: (name, classification) => {
+        const kind = classification?.kind ?? null;
+        const site = classification?.site ?? null;
+        setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind, site }] }));
+        api.addWarehouse(name, classification).catch((e) => { fail(e); void refresh(); });
       },
       addBin: (name) => {
         setMasters((prev) => ({ ...prev, bins: [...prev.bins, name] }));
@@ -278,6 +280,35 @@ export function useWarehouseDispatches(warehouse?: string) {
   return { lines, loading, refetch };
 }
 
+/** Drying Batch (consolidated, both sites) — the Drying page's primary source, replacing
+ * DryingJob (see services/dryingBatches.ts's header comment for why). */
+export function useDryingBatches(warehouse?: string) {
+  const [batches, setBatches] = useState<import("../repository/api").DryingBatch[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.listDryingBatches(warehouse).then(setBatches).catch(() => {});
+  }, [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { batches, loading, refetch };
+}
+
+/** Drying & Sorting Report (Bouaké detail) — the Drying page's secondary source. */
+export function useDryingSortingReports(warehouse?: string) {
+  const [reports, setReports] = useState<import("../repository/api").DryingSortingReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.listDryingSortingReports(warehouse).then(setReports).catch(() => {});
+  }, [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { reports, loading, refetch };
+}
+
 /**
  * One ledger's rows, scoped to a site — deliberately NOT a replacement for TrackingApi's
  * `ledgerEntries` (the unfiltered, globally-loaded set stays the zero-latency "All sites" default);
@@ -300,9 +331,9 @@ export function useJuteLedgerEntries(ledgerId: string, warehouse: string | undef
 
 /**
  * A receipt's cross-references to drying jobs / transfer receipts about the same physical batch
- * (joined server-side on FICHE — see backend/src/services/receiptLinks.ts). Same shape as
- * useDryingJobs, but keyed on receiptId so navigating between receipts refetches instead of
- * showing the previous receipt's links.
+ * (joined server-side on Lot Number — see backend/src/services/receiptLinks.ts for the accuracy
+ * tradeoff this accepts). Same shape as useDryingJobs, but keyed on receiptId so navigating
+ * between receipts refetches instead of showing the previous receipt's links.
  */
 export function useReceiptLinks(receiptId: string | undefined) {
   const [links, setLinks] = useState<import("../repository/api").ReceiptLinks | null>(null);

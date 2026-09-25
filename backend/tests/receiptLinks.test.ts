@@ -1,9 +1,9 @@
 /**
- * The FICHE-based receipt-to-batch linkage, asserted against the measured reality of the imported
- * data (see docs/UPLOAD_GUIDE.md and services/receiptLinks.ts's header for why FICHE, not Lot/Bin).
- * These counts are not arbitrary: each was measured directly against the live import. If one
- * changes, either the imported data changed or the linkage logic silently regressed — both worth
- * failing over, same convention as dataQuality.test.ts.
+ * The Lot-Number-based receipt-to-batch linkage, asserted against the measured reality of the real
+ * data (see services/receiptLinks.ts's header for why this join is known to be mostly wrong, and
+ * why it was switched to Lot anyway). These counts are not arbitrary: each was measured directly
+ * against the live import. If one changes, either the imported data changed or the linkage logic
+ * silently regressed — both worth failing over, same convention as dataQuality.test.ts.
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -12,52 +12,39 @@ import { getReceiptLinks } from "../src/services/receiptLinks.js";
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
-describe("receipt links (FICHE cross-reference)", () => {
-  it("REC-2026-0025 (fiche 72566) resolves to drying DRY-4 and transfer SN 27, both Lot 20", async () => {
+describe("receipt links (Lot Number cross-reference)", () => {
+  it("REC-2026-0025 (Lot 17 at BOUAKE) resolves to a DIFFERENT batch than the FICHE join would", async () => {
     const links = await getReceiptLinks("REC-2026-0025");
-    expect(links.fiche).toBe("72566");
-
-    expect(links.dryingJobs).toHaveLength(1);
-    expect(links.dryingJobs[0]).toMatchObject({ id: "DRY-4", lotNo: "20", bin: "BIN-09A", status: "OK" });
-
-    expect(links.transfers).toHaveLength(1);
-    expect(links.transfers[0]).toMatchObject({ sn: 27, lotNo: "20", binNo: "BIN-03C" });
-    // The two sources independently agreeing on Lot 20 for the same fiche is the proof this link
-    // is real, not coincidence — and the bins genuinely differ (received vs. moved-for-drying), so
-    // they must never be merged into a single "the bin".
-    expect(links.dryingJobs[0]!.lotNo).toBe(links.transfers[0]!.lotNo);
-    expect(links.dryingJobs[0]!.bin).not.toBe(links.transfers[0]!.binNo);
-  });
-
-  it("REC-2026-0025's OWN lot (assigned at its unit warehouse) disagrees with both downstream records — measured, not a bug", async () => {
-    const links = await getReceiptLinks("REC-2026-0025");
-    // The unit-warehouse discharge sheet (the Lot-first import) says this truck is Lot 17 at
-    // BOUAKE, while drying and the transfer ledger both independently say Lot 20 downstream — the
-    // exact per-site renumbering `lot_namespace_disagreement` reports in aggregate. lotAgrees must
-    // be false on both, and must say so rather than silently picking one number as "the" lot.
     expect(links.lotNo).toBe("17");
     expect(links.lotWarehouse).toBe("BOUAKE");
-    expect(links.dryingJobs[0]!.lotAgrees).toBe(false);
-    expect(links.transfers[0]!.lotAgrees).toBe(false);
+    expect(links.fiche).toBe("72566");
+
+    // Lot-matching finds transfer SN 13 (also Lot 17) — but its FICHE is 72563, not this receipt's
+    // 72566, proving it's a different truck that merely shares the Lot number. This is exactly the
+    // failure mode the header comment documents, not a bug in the test.
+    expect(links.transfers).toHaveLength(1);
+    expect(links.transfers[0]).toMatchObject({ sn: 13, lotNo: "17", binNo: "BIN-03C", ficheAgrees: false });
+
+    // No drying job in the real data carries Lot 17 at all.
+    expect(links.dryingJobs).toHaveLength(0);
   });
 
-  it("a receipt with no FICHE recorded returns nulls/empties, not an error", async () => {
-    // Any receipt lacking a verify-stage fiche behaves the same; find one directly rather than
-    // hardcode an id that could be reassigned by a future import.
-    const noFiche = await prisma.receipt.findFirst({
-      where: { OR: [{ verify: null }, { verify: { fiche: null } }, { verify: { fiche: "" } }] },
+  it("a receipt with no Lot Number recorded returns nulls/empties, not an error", async () => {
+    // Any receipt lacking a unit-warehouse discharge lot behaves the same; find one directly rather
+    // than hardcode an id that could be reassigned by a future import.
+    const noLot = await prisma.receipt.findFirst({
+      where: { OR: [{ lot: null }, { lot: { lotNumber: null } }, { lot: { lotNumber: "" } }] },
       select: { id: true },
     });
-    expect(noFiche, "expected at least one receipt with no fiche in the real data").toBeTruthy();
-    const links = await getReceiptLinks(noFiche!.id);
-    // btmIntakes added alongside the production cross-reference (services/receiptLinks.ts) — still
-    // empty here for exactly the same reason dryingJobs/transfers are: no fiche, nothing to join.
-    // lotNo/lotWarehouse can be non-null even with no fiche (a receipt can hold a lot on its own),
-    // but this receipt was chosen only for having no fiche, so assert the no-fiche shape loosely.
-    expect(links).toMatchObject({ fiche: null, dryingJobs: [], transfers: [], btmIntakes: [] });
+    expect(noLot, "expected at least one receipt with no lot in the real data").toBeTruthy();
+    const links = await getReceiptLinks(noLot!.id);
+    // btmIntakes stays empty for exactly the same reason dryingJobs/transfers are: no lot, nothing
+    // to join. fiche can be non-null even with no lot (a receipt can hold a fiche on its own), but
+    // this receipt was chosen only for having no lot, so assert the no-lot shape loosely.
+    expect(links).toMatchObject({ lotNo: null, dryingJobs: [], transfers: [], btmIntakes: [] });
   });
 
-  it("coverage across all receipts matches what was measured before building this", async () => {
+  it("coverage across all receipts matches what was measured before switching the join to Lot", async () => {
     const receipts = await prisma.receipt.findMany({ select: { id: true } });
     let withTransfer = 0, withDrying = 0, withEither = 0;
     for (const r of receipts) {
@@ -68,7 +55,26 @@ describe("receipt links (FICHE cross-reference)", () => {
       if (hasT || hasD) withEither++;
     }
     expect({ withTransfer, withDrying, withEither }).toEqual({
-      withTransfer: 339, withDrying: 47, withEither: 374,
+      withTransfer: 363, withDrying: 38, withEither: 363,
+    });
+  });
+
+  it("across all Lot-matched rows, almost none are FICHE-confirmed — the tradeoff this join accepts", async () => {
+    // Row-level (not receipt-level) counts: a Lot number can match many transfer/drying rows across
+    // different receipts, since it isn't unique. Measured directly against the real data; if
+    // ficheAgrees's true-count ever climbs close to the total, the underlying data quality (not
+    // this test) has changed in a way worth knowing about.
+    const receipts = await prisma.receipt.findMany({ select: { id: true } });
+    let totalTransferRows = 0, confirmedTransferRows = 0, totalDryingRows = 0, confirmedDryingRows = 0;
+    for (const r of receipts) {
+      const links = await getReceiptLinks(r.id);
+      totalTransferRows += links.transfers.length;
+      confirmedTransferRows += links.transfers.filter((t) => t.ficheAgrees).length;
+      totalDryingRows += links.dryingJobs.length;
+      confirmedDryingRows += links.dryingJobs.filter((d) => d.ficheAgrees).length;
+    }
+    expect({ totalTransferRows, confirmedTransferRows, totalDryingRows, confirmedDryingRows }).toEqual({
+      totalTransferRows: 365, confirmedTransferRows: 5, totalDryingRows: 40, confirmedDryingRows: 0,
     });
   });
 
@@ -80,21 +86,19 @@ describe("receipt links (FICHE cross-reference)", () => {
   });
 
   it("a linked transfer's idTransfer resolves to a real BtmIntake, once one exists", async () => {
-    // No production data is seeded yet (the extractor is a later pass — see the plan's "Deferred"
-    // section), so this proves the JOIN rather than asserting a measured real count: find any real
-    // transfer with a non-blank idTransfer, insert a disposable BtmIntake for that exact number,
-    // and confirm getReceiptLinks resolves it. Found dynamically, not hardcoded — same convention
-    // the no-fiche test above already uses.
+    // Find any real transfer with a non-blank idTransfer AND a lotNo, insert a disposable BtmIntake
+    // for that exact number, and confirm getReceiptLinks resolves it for a receipt sharing that
+    // same Lot Number — proves the JOIN mechanics, not a measured real count.
     const transfer = await prisma.juteWarehouseTransferReceipt.findFirst({
-      where: { idTransfer: { not: null } },
-      select: { idTransfer: true, noFiche: true },
+      where: { idTransfer: { not: null }, lotNo: { not: null } },
+      select: { idTransfer: true, lotNo: true },
     });
-    expect(transfer?.idTransfer, "expected at least one real transfer with an idTransfer").toBeTruthy();
-    const receipt = await prisma.stageVerifyDocs.findFirst({
-      where: { fiche: transfer!.noFiche ?? undefined },
+    expect(transfer?.idTransfer, "expected at least one real transfer with an idTransfer and a lotNo").toBeTruthy();
+    const receipt = await prisma.stageLotAssignment.findFirst({
+      where: { lotNumber: transfer!.lotNo ?? undefined },
       select: { receiptId: true },
     });
-    expect(receipt, "expected a receipt whose fiche matches this transfer's noFiche").toBeTruthy();
+    expect(receipt, "expected a receipt whose own lot matches this transfer's lotNo").toBeTruthy();
 
     const btmNo = transfer!.idTransfer!.trim();
     const binNo = "TEST-RECEIPTLINKS-BIN";

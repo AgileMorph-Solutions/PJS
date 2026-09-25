@@ -5,7 +5,7 @@
  * time of writing — they double as expectations for tests/dataQuality.test.ts.
  */
 import type { Check } from "./types.js";
-import { balanceDriftRows, negativeBalanceRows, transferFlagRows } from "../juteBalance.js";
+import { negativeBalanceRows, transferFlagRows } from "../juteBalance.js";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 
 export const CHECKS: Check[] = [
@@ -117,19 +117,16 @@ export const CHECKS: Check[] = [
   },
   {
     id: "jute_balance_drift",
+    // DELIBERATELY RETIRED, not deleted — see domain/juteBalance.ts's balanceDriftRows() for the
+    // full reasoning. The new-sheets "Jute Bags movement" export has no BALANCE column at all, so
+    // every row it produces has reportedBalance = null; this check's query only ever matched rows
+    // where reportedBalance WAS reported (comparing it against the computed running total), so it
+    // now has nothing left to compare. Returning null unconditionally is the honest state — the
+    // alternative (leaving the old query in place) would silently pass for a different reason than
+    // it used to (nothing to check, not "checked and clean"), which is exactly the kind of quiet
+    // drift this app's own data-quality discipline exists to catch, not commit.
     async run() {
-      const rows = await balanceDriftRows();
-      if (!rows.length) return null;
-      return {
-        id: "jute_balance_drift", severity: "critical",
-        title: "Reported jute balance disagrees with its own arithmetic",
-        entity: "JuteWarehouseMovement", affectedCount: rows.length,
-        sampleIds: rows.slice(0, 5).map((r) => `seq ${r.seq}`),
-        evidence:
-          "The workbook's BALANCE column vs the running sum of (received − issued) computed by the " +
-          "jute_warehouse_movement_balance view. This is 0 on the imported data, so a non-zero count " +
-          "here means a row was entered whose balance does not follow — a standing regression guard.",
-      };
+      return null;
     },
   },
   {
@@ -282,8 +279,10 @@ export const CHECKS: Check[] = [
           `sheet, which is where a Lot is assigned) and again downstream, ${disagreements.length} ` +
           "disagree — e.g. fiche 72566 is Lot 17 at Bouaké and Lot 20 at Yakro. Each site appears to " +
           "run its own 1..N sequence, so a lot number is only meaningful together with its warehouse. " +
-          "That is why lot uniqueness is enforced per warehouse and why the receipt-to-drying/transfer " +
-          "links are still matched on fiche, not lot. Reported rather than reconciled: which site's " +
+          "That is why lot uniqueness is enforced per warehouse. The receipt-to-drying/transfer links " +
+          "(services/receiptLinks.ts) were switched to match on lot on explicit request despite this " +
+          "finding — most matched rows are a coincidental lot collision, not the same batch; that " +
+          "tradeoff is flagged inline via `ficheAgrees` rather than fixed here, since which site's " +
           "number is authoritative is a question only the client can answer.",
       };
     },

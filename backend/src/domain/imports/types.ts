@@ -9,16 +9,17 @@
 import type { Finding } from "../dataQuality/types.js";
 
 export type ImporterId =
-  | "receipts"
-  | "dryingJobs"
-  | "juteWarehouseStock"
+  | "truckReception"
+  | "juteBagsMovement"
   | "juteWarehouseTransfer"
   | "warehouseDischarges"
   | "warehouseDispatches"
   | "dryingBatch"
+  | "dryingSorting"
   | "issuedToProduction"
   | "warehouseReceiving"
-  | "warehouseActivityLedger";
+  | "warehouseActivityLedger"
+  | "suppliersMaster";
 
 /** The outcome of checking an uploaded workbook against one importer's expected shape. */
 export type HeaderCheckResult =

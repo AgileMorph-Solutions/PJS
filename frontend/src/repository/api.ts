@@ -94,7 +94,8 @@ export const api = {
 
   masters: () => request<Masters>("/masters"),
   addSupplier: (s: Supplier) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
-  addWarehouse: (name: string) => request<unknown>("/masters/warehouses", { method: "POST", body: JSON.stringify({ name }) }),
+  addWarehouse: (name: string, classification?: { kind?: string; site?: string }) =>
+    request<unknown>("/masters/warehouses", { method: "POST", body: JSON.stringify({ name, ...classification }) }),
   addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
@@ -114,6 +115,13 @@ export const api = {
    * read-only, powers pages/unit/DispatchPage.tsx. */
   listWarehouseDispatches: (warehouse?: string) =>
     request<WarehouseDispatchLine[]>(withWarehouse("/warehouse-dispatches", warehouse)),
+
+  /** Drying Batch (consolidated, both sites) — read-only, the Drying page's primary source. */
+  listDryingBatches: (warehouse?: string) =>
+    request<DryingBatch[]>(withWarehouse("/drying-batches", warehouse)),
+  /** Drying & Sorting Report (Bouaké detail) — read-only, the Drying page's secondary source. */
+  listDryingSortingReports: (warehouse?: string) =>
+    request<DryingSortingReport[]>(withWarehouse("/drying-sorting-reports", warehouse)),
   dashboard: (from?: string, to?: string) => {
     const q = new URLSearchParams();
     if (from) q.set("from", from);
@@ -285,10 +293,10 @@ export interface CommitImportResponse {
   skippedInvalid: number;
 }
 
-/** A batch's real FICHE (paper docket) linking it to other records about the same batch — see
- * backend/src/services/receiptLinks.ts's header for why FICHE, not the receipt's own Lot: each
- * warehouse runs its own 1..N lot sequence, so the same batch is a different Lot at each site
- * (measured: 334/339 transfers and 12/12 drying rows disagree with the receipt's own lot). */
+/** Cross-referenced by the receipt's own Lot Number — see backend/src/services/receiptLinks.ts's
+ * header for the accuracy tradeoff this accepts: each warehouse runs its own 1..N lot sequence, so
+ * most Lot matches are a coincidental collision, not the same physical batch (measured: only 5 of
+ * 365 lot-matched transfers and 0 of 40 lot-matched drying rows also share the receipt's FICHE). */
 export interface LinkedDryingJob {
   id: string;
   date: string;
@@ -297,8 +305,9 @@ export interface LinkedDryingJob {
   lotNo: string;
   status: string;
   dryType: string;
-  /** Whether this row's lot matches the receipt's own (ReceiptLinks.lotNo). False is the norm. */
-  lotAgrees: boolean;
+  /** Whether this row's FICHE also matches the receipt's own (ReceiptLinks.fiche) — true means a
+   * genuinely-confirmed match; false (the norm) means the Lot match is likely coincidental. */
+  ficheAgrees: boolean;
   destination: string;
 }
 
@@ -310,7 +319,7 @@ export interface LinkedTransfer {
   truckRegistration: string | null;
   bagsReceived: number | null;
   sourceWarehouse: string;
-  lotAgrees: boolean;
+  ficheAgrees: boolean;
 }
 
 export interface LinkedBtmIntake {
@@ -319,10 +328,12 @@ export interface LinkedBtmIntake {
 }
 
 export interface ReceiptLinks {
-  fiche: string | null;
-  /** The receipt's OWN Lot, assigned at its unit warehouse. Null until a discharge sheet covers it. */
+  /** The receipt's OWN Lot, assigned at its unit warehouse — now the join key. Null until a
+   * discharge sheet covers it. */
   lotNo: string | null;
   lotWarehouse: string | null;
+  /** This receipt's own FICHE, shown only so each row's `ficheAgrees` is checkable. */
+  fiche: string | null;
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
   btmIntakes: LinkedBtmIntake[];
@@ -357,4 +368,48 @@ export interface WarehouseDispatchLine {
   netWeight: string | null;
   status: string | null;
   unloadingStatus: string | null;
+}
+
+/** Drying Batch (backend/prisma/schema.prisma's DryingBatch) — both sites, consolidated. `lotNo`
+ * is populated only when `lotNoRaw` is unambiguous (see the model's own comment) — a comma-joined
+ * or numerically-concatenated value is never split, so `lotNo` stays null and `lotNoRaw` carries
+ * the real cell text verbatim. Only the fields the Drying page actually renders are declared below
+ * (the model itself has ~50 columns) — every value still arrives as a string on the wire. */
+export interface DryingBatch {
+  id: string;
+  sn: number;
+  dryingDate: string | null;
+  dryingDateRaw: string | null;
+  warehouseSite: string | null;
+  warehouse: string | null;
+  lotNo: string | null;
+  lotNoRaw: string | null;
+  ficheNoRaw: string | null;
+  status: string | null;
+  dryType: string | null;
+  destinationRaw: string | null;
+  inputMoisturePct: string | null;
+  outputMoisturePct: string | null;
+}
+
+/** Drying & Sorting Report (backend/prisma/schema.prisma's DryingSortingReport) — Bouaké-side
+ * detail, 57 real rows. Same lotNo/lotNoRaw discipline as DryingBatch. */
+export interface DryingSortingReport {
+  id: string;
+  sn: number | null;
+  dryingDate: string | null;
+  dryingDateRaw: string | null;
+  warehouseSite: string | null;
+  warehouse: string | null;
+  unloadingBin: string | null;
+  afterDryingBin: string | null;
+  lotNo: string | null;
+  lotNoRaw: string | null;
+  supplierName: string | null;
+  issuedNetWeightGrn: string | null;
+  receivedNetWeightAfterDrying: string | null;
+  inputMoisture: string | null;
+  outputMoisture: string | null;
+  dryingPicking: string | null;
+  remarks: string | null;
 }

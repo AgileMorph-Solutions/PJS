@@ -67,17 +67,18 @@ describe("/api/receipts/:id/links stays unscoped by design", () => {
     // This is the regression guard the plan asks for: a future copy-paste that threads `site`
     // through every service function must not silently reach this one. If this arity check ever
     // fails, whoever changed the signature needs to re-read receiptLinks.ts's header comment on
-    // why fiche 72566 resolving to Lot 17 at Bouaké AND Lot 20 at Yakro is the entire point of
-    // this endpoint, not a bug to scope away.
+    // why a receipt's Lot Number resolving to rows at other sites (whether genuinely the same
+    // batch or, per that header, usually not) is the entire point of this endpoint, not a bug to
+    // scope away.
     expect(getReceiptLinks.length).toBe(1);
   });
 
   it("still returns cross-site links for a receipt with drying/transfer records at a different site", async () => {
     const receipt = await prisma.receipt.findFirst({
-      where: { verify: { fiche: { not: null } } },
+      where: { lot: { lotNumber: { not: null } } },
       select: { id: true },
     });
-    if (!receipt) return; // nothing to prove if no receipt has a fiche
+    if (!receipt) return; // nothing to prove if no receipt has a lot
     const links = await getReceiptLinks(receipt.id);
     expect(links).toBeTruthy();
   });

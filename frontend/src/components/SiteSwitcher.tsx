@@ -1,4 +1,4 @@
-import { SITE_LIST, type SiteSlug } from "../config/sites";
+import { SITE_LIST, isSiteSlug, type SiteSlug } from "../config/sites";
 
 interface Props {
   value: SiteSlug | "";
@@ -15,27 +15,22 @@ interface Props {
 /**
  * The one site-switching control, used two ways (see this component's callers): on a page under
  * `/:site/*`, `onChange` navigates to the other site's URL; on a jute ledger page, it just sets a
- * local filter. This component only renders the two/three options and reports which was picked —
- * it has no opinion on what picking one *does*, which is what keeps both call sites simple.
+ * local filter. This component only renders the dropdown and reports which was picked — it has no
+ * opinion on what picking one *does*, which is what keeps both call sites simple.
  */
 export function SiteSwitcher({ value, onChange, allowAll }: Props) {
-  const pill = (active: boolean) =>
-    `px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors ${
-      active ? "bg-warmstone-800 text-white shadow-sm" : "text-warmstone-500 hover:text-warmstone-800"
-    }`;
-
   return (
-    <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-warmstone-100 border border-warmstone-200">
-      {allowAll && (
-        <button type="button" onClick={() => onChange("")} className={pill(value === "")}>
-          All
-        </button>
-      )}
+    <select
+      value={value}
+      onChange={(e) => onChange(isSiteSlug(e.target.value) ? e.target.value : "")}
+      className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] font-semibold text-warmstone-800 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
+    >
+      {allowAll && <option value="">All warehouses</option>}
       {SITE_LIST.map((s) => (
-        <button key={s.slug} type="button" onClick={() => onChange(s.slug)} className={pill(value === s.slug)}>
-          {s.sublabel}
-        </button>
+        <option key={s.slug} value={s.slug}>
+          {s.label}
+        </option>
       ))}
-    </div>
+    </select>
   );
 }

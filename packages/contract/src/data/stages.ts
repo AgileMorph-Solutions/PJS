@@ -15,7 +15,10 @@ export const stages: Stage[] = [
     fields: [
       { n: "S N", v: "1" , col: "sn"},
       { n: "DATE OF ARRIVAL", v: "2026-02-16" , col: "dateOfArrival"},
-      { n: "RM/FG", v: "RM" , col: "rmFg"},
+      // v: "" — the new-sheets "Truck Reception" export (which replaces this sheet) has no
+      // equivalent column at all. Genuinely dropped, not renamed; never fabricated back in. See
+      // backend/src/domain/imports/truckReception.ts's header comment.
+      { n: "RM/FG", v: "" , col: "rmFg"},
       { n: "CREDIT/CASH", v: "CREDIT" , col: "creditCash"},
       { n: "WH LOCATION", v: "BOUAKE" , col: "whLocation"},
       { n: "WH NO.", v: "BKE-002" , col: "whNo"},
@@ -36,7 +39,8 @@ export const stages: Stage[] = [
       { n: "SUPPLIERS NAME", v: "RCN SCOOP IMANE" , col: "suppliersName"},
       { n: "LBA CODE", v: "LBA-006-IMA" , col: "lbaCode"},
       { n: "FICHE CODE", v: "0401-0007" , col: "ficheCode"},
-      { n: "REF.", v: "801" , col: "ref"},
+      // v: "" — same reasoning as n-gate's RM/FG above: no equivalent column in "Truck Reception".
+      { n: "REF.", v: "" , col: "ref"},
       { n: "FICHE", v: "72515" , col: "fiche"},
       { n: "ORIGIN", v: "DIANRA" , col: "origin"},
     ],

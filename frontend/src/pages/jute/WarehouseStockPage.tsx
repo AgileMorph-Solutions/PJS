@@ -30,7 +30,7 @@ export function WarehouseStockPage() {
         actions={<SiteSwitcher value={site} onChange={setSite} allowAll />}
       />
       <CollapsibleCard title="Import from workbook">
-        <ImportPanel importerId="juteWarehouseStock" onCommitted={() => void refresh()} />
+        <ImportPanel importerId="juteBagsMovement" onCommitted={() => void refresh()} />
       </CollapsibleCard>
       <LedgerSection ledger={ledger} rows={site ? filtered.rows : undefined} onEntryAdded={() => site && filtered.refetch()} />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">

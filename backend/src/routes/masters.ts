@@ -2,6 +2,7 @@
 // endpoint on the frontend today either (the master list is read-only there) — kept the same
 // here, on purpose, not an oversight.
 import type { FastifyInstance } from "fastify";
+import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import { listMasters, addSupplier, addWarehouse, addBin } from "../services/masters.js";
 
 export async function masterRoutes(app: FastifyInstance) {
@@ -14,9 +15,11 @@ export async function masterRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/masters/warehouses", async (req, reply) => {
-    const { name } = (req.body ?? {}) as { name?: string };
+    const { name, kind, site } = (req.body ?? {}) as { name?: string; kind?: WarehouseKind; site?: string };
     if (!name) return reply.code(400).send({ error: "name is required" });
-    return reply.code(201).send(await addWarehouse(name));
+    // ValidationError (kind+site both set, or an unknown kind) is mapped to 422 by app.ts's
+    // global error handler — no try/catch needed here, same as every other route in this file.
+    return reply.code(201).send(await addWarehouse(name, { kind, site }));
   });
 
   app.post("/api/masters/bins", async (req, reply) => {

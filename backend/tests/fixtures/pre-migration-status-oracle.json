@@ -1,0 +1,5918 @@
+[
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "8287GH03",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "5500FL02",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "pending_qa"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "rejected"
+  },
+  {
+    "vehicleNo": "653KX01",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "pending_unload"
+  },
+  {
+    "vehicleNo": "AA459KL03",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "pending_qa"
+  },
+  {
+    "vehicleNo": "6253KV04",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "pending_qa"
+  },
+  {
+    "vehicleNo": "2023 HF 01",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "4139GV01",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOPADA SCOOPS",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "1652JE01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "pending_unload"
+  },
+  {
+    "vehicleNo": "AA114NQ02",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SOVA SCOOPS",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "7558EJ03",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "pending_qa"
+  },
+  {
+    "vehicleNo": "7692GB04",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "pending_unload"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "AA944AR02",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "rejected"
+  },
+  {
+    "vehicleNo": "120GL01",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "3998HF01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "9817KN04",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "913HB04",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "9149EL04",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4137LG04",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "transferred_out"
+  },
+  {
+    "vehicleNo": "197KC01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "3591LR01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS PAPN",
+    "status": "rejected"
+  },
+  {
+    "vehicleNo": "4972KB01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "6166FT04",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS AC SOURCING",
+    "status": "rejected"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "3937KT01",
+    "arrivalDate": "2026-03-28",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "transferred_out"
+  },
+  {
+    "vehicleNo": "7692GB04",
+    "arrivalDate": "2026-03-29",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "3620KT01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA379AD01/268WWCI01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "transferred_out"
+  },
+  {
+    "vehicleNo": "6939EQ01",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA562YL04",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2138HC01",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4434EZ01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SIMAYAT COOP CA",
+    "status": "rejected"
+  },
+  {
+    "vehicleNo": "138GL01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "2706GN01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS JPPAGG",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "pending_qa"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "9406HV01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "4238HY04/8502BG04",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "pending_unload"
+  },
+  {
+    "vehicleNo": "4214JH03",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS SCNB",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9462GX04",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA717FV03",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7191CL03/3433HC01",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "in_drying"
+  },
+  {
+    "vehicleNo": "AA187AQ01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS PAP",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "7650GS07",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "3620KT01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA547FT01/4022LU03",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS PSP",
+    "status": "transferred_out"
+  },
+  {
+    "vehicleNo": "AA533NN",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5947KJ04",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "rejected"
+  },
+  {
+    "vehicleNo": "2387JE01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7063JA01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "transferred_out"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA122GP01",
+    "arrivalDate": "2026-06-18",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "in_stock"
+  },
+  {
+    "vehicleNo": "827KT01",
+    "arrivalDate": "2026-02-16",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "793LT03",
+    "arrivalDate": "2026-02-16",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7716FP01",
+    "arrivalDate": "2026-02-16",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "524LS01",
+    "arrivalDate": "2026-02-16",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4731CR04",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3633LZ04",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "753HA01",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3509KJ01",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7695EF01",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-02-17",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA864JL01",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "852KH03",
+    "arrivalDate": "2026-02-18",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1367LH02",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1447JT01",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9149EL04",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7065GB01",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA",
+    "arrivalDate": "2026-02-19",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1367LH01",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA918RX03",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2033FJ03",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2415CV03",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6034JE03",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "627GZ04",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6089HA01",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "524LS01",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9719FC01",
+    "arrivalDate": "2026-02-20",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2945GX01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2637FH01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA459KL03",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5038JG06",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9488FC01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "838LX01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "175GY01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LH04",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4814KF01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-02-21",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1367LH01",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA944AR",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6103GZ03",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6103GZ03",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-02-22",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3633LZ04",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7650HB07",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4974FC01",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4830GN01",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2423KC03",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1649LE01",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "793LT03",
+    "arrivalDate": "2026-02-23",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2960JH01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2952CE01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1298HU01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA918RX03",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "852KH03",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3633LZ04",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9149EL04",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "175GY01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA518FY01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA430LC",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2844JS04",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA465KK01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4974FC01",
+    "arrivalDate": "2026-02-24",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA 953 AD",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3619 EJ 03",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4179 KF 04",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6555 CS 03",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3978 LC 01",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8631 EF 01",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4669CP03",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7558EJ03",
+    "arrivalDate": "2026-02-25",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6010GB03",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA518FY01",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1148CV03",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4379LL02",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1367LH01",
+    "arrivalDate": "2026-02-26",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA335NH01",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR01",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "CH3646",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2496HJ04",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9828JC03",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2616GX04",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA918RX03",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6089HAO1",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "979HZO",
+    "arrivalDate": "2026-02-27",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253KV04",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA087XL03",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "838LX01",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6939EQ01",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4974FC01",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1569KR01",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7195 HU 03",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV2744KK0R",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV3916LLO2",
+    "arrivalDate": "2026-02-28",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7695HJ01",
+    "arrivalDate": "2026-03-01",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5500FL02",
+    "arrivalDate": "2026-03-01",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9545FN04",
+    "arrivalDate": "2026-03-01",
+    "supplierName": "RCN SCOOPS DIENE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6008FE04",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4794HN01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4974FC01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3633LZ04",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9149EL04",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3337KC01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7367GV01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA084AG01",
+    "arrivalDate": "2026-03-02",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7784GV04",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3376FL03",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4972KB01",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2788HZ04",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA727PZ07",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA918RX03",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4313AS03",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7013HX04",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2798JR04",
+    "arrivalDate": "2026-03-03",
+    "supplierName": "RCN YAO OUMIAN LAMBERT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3633LZ04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5453GN01",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA092NE",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9149EL04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7569GH01",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "197KL01",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9538FK04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPADA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7013 HX 04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023 HF 01",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA 465 KK 01",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253 KV 04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3916LLO2",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "334HT04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA562YL04",
+    "arrivalDate": "2026-03-04",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "932GY01",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "838LX01",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "735KV01",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9816HYO12",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2496HJ04",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6010GB03",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1760GZ03",
+    "arrivalDate": "2026-03-05",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6690GB01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9545FN04",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6557FK01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPADA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7727GR01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SOCOSAM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766 HC 01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305 EP 01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6008 FE 04",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9149EL04",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7796HY01",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN GOLDY AGRI MARKET",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA248LC01",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1060JO4AR",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV9816HYO2",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7210HG01",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-03-07",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4974FC01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5545JE01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4639CT01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "809BA04",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253KV04",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176FR03",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA944AR",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2060HR01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7695HJ01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA653PE03",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1652JE01",
+    "arrivalDate": "2026-03-09",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9868JA01",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3998HF01",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "59642WWC101",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "629KS01",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8867GY03",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1367LH01",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6358JU04",
+    "arrivalDate": "2026-03-10",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR01",
+    "arrivalDate": "2026-03-06",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5739GH01",
+    "arrivalDate": "2026-03-08",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6690GB01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "793LT03",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2337HV01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "59642WWC101",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3139GR03",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "616KY03",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "130HA04",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2664GZ",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SOVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA379AD",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6867HH03",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV2506HKO1AR",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN DCARRE DAVID D JOUMAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA604BY01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN  ESPI SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4379LL02",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2494HJ04",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA402GH01",
+    "arrivalDate": "2026-03-11",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8573GA01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "653KX01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4668LE02",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "255GZ04",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2038LL06",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3591LR01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS IB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2505KE01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6339HA01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5012HJ01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9418LG03",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS MASSATIGUI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1218JF01",
+    "arrivalDate": "2026-03-12",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4895FV01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3452HA01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOPS IB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5533KT01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5739GN01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8751EZ01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6621KS03",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7342GS04",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253KU01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA784AQOI",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOPS IB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2019GN01",
+    "arrivalDate": "2026-03-13",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA869FY01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2698JR03",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3272JE01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1760GZ03",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2384JV01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4539CT01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2505KE01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5545JE01",
+    "arrivalDate": "2026-03-14",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3272JE01",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5544FU01",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV6034JEO3",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV2319LR01",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3337KC01",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4137LG04",
+    "arrivalDate": "2026-03-15",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5453GN01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA301XS",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8751EZ01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AV2744KK02",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "120GZ01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2276KL04",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6336GP03",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "33HK01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1028FN03",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA680YJ03",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN DECARRE DAVID &DJOUMAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32LA01",
+    "arrivalDate": "2026-03-16",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3272JE01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6978EQ01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA944AR",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "334HT04",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA286TBO1/1046HYO1",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA937LNAR7363ELO1",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA402GH01",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "627GZ04",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA039CS003",
+    "arrivalDate": "2026-03-17",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8751EZ01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7695HJ01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2019GN01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "338KX01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2106BA04",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1649CE01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1480LY01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCOOPS AGRO NEGOCE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LK02",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5533KT01",
+    "arrivalDate": "2026-03-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3591LR01",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCOOPS IB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253KV04",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3272JE01",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7115GU01",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SOCOSAM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA944AR",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8466GY03",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4457KE01",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "616KY03",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1060KT04",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1714LE01",
+    "arrivalDate": "2026-03-19",
+    "supplierName": "RCN SCOOPS KOB S",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4539CT01",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5JH01",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5740EH03",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4496KV03",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7203CL04",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4327LG04",
+    "arrivalDate": "2026-03-21",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4379LL07",
+    "arrivalDate": "2026-03-23",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6557FK01",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCOOPADA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "334HT04",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5533KT01",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8246HA03",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4834HT03",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6089HA01",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR01",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-03-24",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1421KC01/6090BA01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS OUANIAGNACHION",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8348EC03/603HU03",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3452HA01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS COOPRES",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3725JE01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4539CT01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2941FE03",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9003KV03",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA162RF01",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-03-25",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA398TS04",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "32AL01",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5012HJ01",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3272JE01",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7936LF03",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA",
+    "arrivalDate": "2026-03-26",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-03-27",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4794HN01",
+    "arrivalDate": "2026-03-27",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6690GB01",
+    "arrivalDate": "2026-03-27",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR02",
+    "arrivalDate": "2026-03-27",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8697HZ01",
+    "arrivalDate": "2026-03-27",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-03-28",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4346FN03",
+    "arrivalDate": "2026-03-29",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-03-29",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "953LU01",
+    "arrivalDate": "2026-03-29",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5964WWCI01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5500FL02/8832CP02",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5545JE01/2743EJ03",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "6253KU04/9488FC01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "2801FS01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA01",
+    "arrivalDate": "2026-03-30",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6008FE04/6895AZ03",
+    "arrivalDate": "2026-03-31",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "8287GH03/6555CS03",
+    "arrivalDate": "2026-03-31",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-03-31",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4240HA04",
+    "arrivalDate": "2026-03-31",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7287JT01",
+    "arrivalDate": "2026-03-31",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "293HV03",
+    "arrivalDate": "2026-03-31",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4539CT01",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR01",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1847KS01",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7212FU01/6940EQ01",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9090KV03/9003KV03",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA562YC04",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-04-01",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "138GL01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9640GEE04",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "334HT04",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01/4544CR01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOPS SKS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7344CL03/2208GF01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9090KV03/9003KV03",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2818CY01/AA822NG01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOPS MANANA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9462GX04",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6690GB01",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "X7212FU01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1714LE01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOPS KOB S",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7558EJ03/9932EK03",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04/7378CB01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3605HT01/7104CS03",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4539CT01",
+    "arrivalDate": "2026-04-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4794HN01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6464LU03",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "K5545JE04",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "A044CA",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6139KV01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4089HK01/2223HF01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01/572KA01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3921CN03/3922CN03",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03/6555CS03",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01/3717CN01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5739GH01",
+    "arrivalDate": "2026-04-04",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2496HJ04",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6010GB03/5201GB03",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4539CT01/2857AU01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "151HY03/7733FS01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2318JK01/2843CG01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "A9082GC01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA343VP04",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305BP01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4972KB01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "524LS01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA0044CA",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1569KR01",
+    "arrivalDate": "2026-04-06",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2801FS01/9890HJ04",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3577JK04/AA301XS01",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6034JE03",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "X7212FU01",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2852A01",
+    "arrivalDate": "2026-04-07",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA141VT01",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7210HG01",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8751EZ01",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA562YL04/354LH01",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9090KV03/9003KV03",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03/6633HR03",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-08",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4139GV01",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOOPADA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01/3717CN01",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6978EQ01",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2552GY03/4018ER03",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1760GZ03",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA0044CA",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5524JN4",
+    "arrivalDate": "2026-04-09",
+    "supplierName": "RCN CADEPO COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "307JE01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA562YL04",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4919KV01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8751EZ01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8454CF04",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3452HA01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SIMAYAT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2050FZ01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1622FS01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN ALFCOUL GROUP",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "953LU01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2610GX04",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2552GY03",
+    "arrivalDate": "2026-04-10",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "621FK01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4238HY04/8502BG04",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS FRA PRO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7695EF01/3890AS01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7065GB01/6974AX01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS PAP",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6690GB01/7531EQ01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "794JL01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1303KJ01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "307JE01",
+    "arrivalDate": "2026-04-11",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5545JE01/2743EJ03",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082CG01/4544CR01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8539GS01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3272JE01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3620KT01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA335NH01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "938HT03",
+    "arrivalDate": "2026-04-12",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA207CS04",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7692GB04",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5365GX01",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "814KT02/770KT02",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN CADEPO COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6008FE04/6895AZ03",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA783NC03",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "270LC03",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8773JC03",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4919KN01",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2114LP01",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5261JV01",
+    "arrivalDate": "2026-04-13",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305RP01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "464LJ04/1451LC04",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOPA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4972KB01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5545JE01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4794HN01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1464KJ01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1361KL01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2542LG01",
+    "arrivalDate": "2026-04-14",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9090KV03",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3651CY03",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "X2801FS01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8304JG03/8925CS03",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1114KZ01/1700KZ01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7212FU01/6940EQ01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6238JL01/4363HU01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3143LH03/954FS01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3253LE01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN ADAM IVOIRE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA359EJ01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS AGRO NEGOCE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA141VT01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1847KS01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1635LR01",
+    "arrivalDate": "2026-04-15",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2387JE01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5821GH01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4669CP03",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "696FV02",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AB026AH",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPS KOB S",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253KU04/9488FC01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1528LP01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7695EF01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA456BZZ",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCMB COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5911KT04",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7650GJ04",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8567FF03",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2028GY01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA822NQ01",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6139KV01",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA187AQ01/6368EF01",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN SCOOPS PAP",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8287GH03/6555CS03",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA343VP04",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8545FJ01/786GH01",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN ADAM IVOIRE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7981EQ03/6907AZ03",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "460CH05",
+    "arrivalDate": "2026-04-16",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8584KG04",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4669CP03",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA044CA",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9450GX01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2318JK01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS AJCB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1114KZ01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8113GA01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4919KN01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA095EV01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR02",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4972KB01/9901KD01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6939EQ01/8653EG01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7212PU01/6940EQ01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA929ZT01/AA679JQ01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA324PK03",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA439NX06",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1361KL01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3143LH03",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9086GX03",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA161JA03",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5261JV01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA141VT01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "138GL01",
+    "arrivalDate": "2026-04-18",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "319KV01",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4238HY04/8502BG04",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8773JC01/3277CX04",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2123LH01/1007HH04",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA343VP04",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8925CS03",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA057ER03",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6085HR03",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6253KJ04",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4731CR04",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5116HF01",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2743CU03",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3143LH03",
+    "arrivalDate": "2026-04-19",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4078KS03",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6742FG04",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA115LF01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "285LA01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5740EH03",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "938HF03",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2596FZ03",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4520KR01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA929ZT01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4434EZ01/",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2552GY03/4018ER03",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7882GH01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1569KR01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1450HH04",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN ADAM IVOIRE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4972KB01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8156EF03",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5500FL02",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "374LK01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4794HN01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "65GP01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA944AR01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2028GY01",
+    "arrivalDate": "2026-04-20",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1861KY01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9584GX03/4742BB04",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "627GZ04/3887JA04",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7569GH01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2801FS01/9890HJ04",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8229FV02/9908BG01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4852HV03",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOP-CA/COBAN",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7796HY01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9333WCI01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2552GY03",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5741GY04",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA245YN03",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6872HB01",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "460CH05",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5740EH03/5742EH03",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS AJCB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2289FS04/2294FP04",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6161JZ03/6103JZ03",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6866JG04/5245GL04",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA226CP/AA316CE01",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS PSP",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4669CP03",
+    "arrivalDate": "2026-04-17",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1361KL01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA798AV01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA161JA03",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1889KH01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR02",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "621KF01",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8774KS04",
+    "arrivalDate": "2026-04-21",
+    "supplierName": "RCN COOPCA TOE SEYDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA231VP04",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN CASP-S SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7006HV01",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5821GH01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "T9584GX03",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "792LS04/875HB04",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN ADAM IVOIRE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4434EZ01/",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9082GC01/4544CR01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7650GJ04",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5176LG04",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA439NX06",
+    "arrivalDate": "2026-04-22",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2563GY01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOPPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "211HA01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7569GH01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPASS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6007GP03",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "360LU01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS AKF",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3284KP01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS AKF",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5151CK03",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2767HC01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5500FL02",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "138GL01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "929ZT01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3143LH03",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA14PB01/5533GH01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS ESPOIR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7468GJ04",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS DEMBOL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2318JK01/2843CG01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS MASSATIGUI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9149LE021/6786EF05",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7936LF03/7938LF03",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4919KN01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6526HZ04",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4794HN01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5446KV07",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA560LJ01",
+    "arrivalDate": "2026-04-23",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA738PN01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS DIENE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4098BB04",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4972KB01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7242JS01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN DAGNOGO KARIM",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2289FS04",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8773JC01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA141VT01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA547FT01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3257KE01",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9970HE07",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8868EK03",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2396KY01/6870GV01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN KONE KOLOGO",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "750EH01/3742GR01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS YIRIWA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "8113GA04",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS FOUNDARA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "3039KT01/7442CL02",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "1437FK03/821BG03",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5563GX03/5195CF03",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9064HV01/3245RY01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS PAP",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "792LS04/875HB04",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN ADAM IVOIRE",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA215CV03/AA228CV03",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCAAB",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "2022LL03/AA497CF",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN BENI BUSINESS CENTER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "412EJ02/1930K01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "621KF01/8421GH01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9133JK01/2099LY01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7153KB04/4807HE03",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "307JE01/8922JC04",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "7444FK03",
+    "arrivalDate": "2026-04-24",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "838LX01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS MASSATIGUI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6872HB01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8874FS04",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3709LF01/3048SE02",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCOOPS KOB S",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3452HA01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SIMAYAT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4747JL03",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8014CL01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5012HJ01/3822CF01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "1114KZ01/1700KZ01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "1070GG01",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCOOPS-SOCOSIDJI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4434EZ01",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1760GZ03",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2319LR02",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9791HS03",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9333WWCI01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1861KY01",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA518FY01",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2605LP03",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1361KL01",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "560GS01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SOCOOP ADD COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2396KY01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7936LF03",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3015CN03",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8981FU01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6557HY07/2886JH07",
+    "arrivalDate": "2026-04-25",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3543KB01/2768EE02",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5261JV01/5136JV02",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3679LF07/8304FH07",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4817JE04/8370JR04",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6589GN01/3779CN01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA465KK01/AA013KL01",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9032JL07",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN AGRICAS IVOIRE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1010HL04/1884CJ01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "1437FK03/821BG03",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "8981FU01/3748CK04",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5563GX03/5195CF03",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "953LU01/1113CV01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "1562JS01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "7063JA01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5088ER03",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "997JY01/3599KV01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5328KZ03/3332LB03",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "7576HC01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6150FL04",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1562GS01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6161GZ03",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7257CL03",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA539FT01",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3294KV01",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3916LL02",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "SJ459687",
+    "arrivalDate": "2026-04-26",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA141VT01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4139EP01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SCOOPS CORISPORT",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1010HL04",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "838LY01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5012HJ01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2641CV03",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8087JB01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN BROUMA SARL",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-04-27",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7636HZ05",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2060HC01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "933KC01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SOCOOP ADD COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9551HL01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1504LB01",
+    "arrivalDate": "2026-04-28",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3725JE01",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2114LP01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4434EZ01/",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA674XF03/6358CL01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "6421JC01/2467GN01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA044CA/4068BG04",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9900KU03",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS HERE B",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5328KZ03",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2458HT04",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AB714BE04",
+    "arrivalDate": "2026-04-29",
+    "supplierName": "RCN SOLANDA-CI",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA335NH",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9173JA01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2123LH0",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS BAOBAB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4557KE01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2429CV03",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2387JE01/6617FY01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "7576HC01/5818FX01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9253CX03",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "838LX01",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA187AQ01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "28JZ01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5151CK03",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9126KK04",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2596FZ03",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN COP JAVA SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1361KL01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3725JE01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS SCNB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "953LU01/1113CV01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9903AX01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "10FK03/6498BC04",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5012HJ01/3822CF01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9335EF01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA127YR03/9272FG01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "6142HZ01/3812KK04",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "4848HR01/6100HU01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9640GEE04",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2318JK01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOPS KPESSO",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1026FL01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5151CK03",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2023HF01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS BAY SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2766HC01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9333WWCI01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9783JH04",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA783NC03",
+    "arrivalDate": "2026-04-30",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3039KT01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "54GH04",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS SCNB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA343ET01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2977KT03/AA38YB03",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA235SC04/524CT04",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "4669CP03/7164AX03",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "5382GG01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "838LY01/6297BH01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "A044CA",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "953LU01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS AH AL NOUR",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9611CV03",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS-OUMI/KONE SIDY",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5012HJ01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOP IMANE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA539FT01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA141VT01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCOOPS DPVICA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8751EZ01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4981JR04",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS WEBE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4050LE07",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1386KX04/1028KT04",
+    "arrivalDate": "2026-05-05",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9126KK04/2743EJ03",
+    "arrivalDate": "2026-05-05",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "1760JZ03/33HK01",
+    "arrivalDate": "2026-05-05",
+    "supplierName": "RCN SCOOP ASER",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "9640GE04/4196CF03",
+    "arrivalDate": "2026-05-05",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "3487FZ02/5507JA01",
+    "arrivalDate": "2026-05-05",
+    "supplierName": "RCN SCOOPS COOPRAKA",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "6305EP01",
+    "arrivalDate": "2026-05-06",
+    "supplierName": "RCN CAPCD-SCOOPS",
+    "status": "unloaded"
+  },
+  {
+    "vehicleNo": "AA721PZ01",
+    "arrivalDate": "2026-05-03",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2744KK02",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "6139KV01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3725JE01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS SCNB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA184AV",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1861KY01",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "4668LR04",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "7987JL03",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN COOPCA TOE SEYDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA359EJ01",
+    "arrivalDate": "2026-05-06",
+    "supplierName": "RCN SCOOPS AGRO NEGOCE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3008FT01",
+    "arrivalDate": "2026-05-02",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8188KU03",
+    "arrivalDate": "2026-05-04",
+    "supplierName": "RCN SANOGO SINDOU",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5116HF01",
+    "arrivalDate": "2026-05-07",
+    "supplierName": "RCN SCAAMT COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "3680FK04",
+    "arrivalDate": "2026-05-08",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9155HP04",
+    "arrivalDate": "2026-05-15",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "694KA03",
+    "arrivalDate": "2026-05-20",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "8549CE03",
+    "arrivalDate": "2026-05-20",
+    "supplierName": "RCN SCOOPS MOAYE BKE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "2310JC03",
+    "arrivalDate": "2026-05-21",
+    "supplierName": "RCN SOCOOP ADD COOP CA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-05-26",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA576QV02",
+    "arrivalDate": "2026-05-30",
+    "supplierName": "RCN CPAS SCOOPS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5261JV01",
+    "arrivalDate": "2026-06-12",
+    "supplierName": "RCN SCOOP SAHS",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5966CK07",
+    "arrivalDate": "2026-06-12",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1070KA01",
+    "arrivalDate": "2026-06-26",
+    "supplierName": "RCN ANAGROCI UT-CCA",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "5966CK07",
+    "arrivalDate": "2026-06-26",
+    "supplierName": "RCN ICFB",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "1294JS02",
+    "arrivalDate": "2026-07-12",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "9153JR01",
+    "arrivalDate": "2026-07-12",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "AA626NT",
+    "arrivalDate": "2026-07-13",
+    "supplierName": "RCN OCEAN NEGOSE",
+    "status": "grn_completed"
+  },
+  {
+    "vehicleNo": "",
+    "arrivalDate": "2026-09-23",
+    "supplierName": "",
+    "status": "planned"
+  }
+]

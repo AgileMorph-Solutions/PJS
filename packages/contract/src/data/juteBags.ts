@@ -26,7 +26,11 @@ export const juteLedgers: JuteLedger[] = [
       { label: "W/R No.", real: true , col: "wrNo"},
       { label: "Bags issued", real: true , col: "bagsIssued"},
       { label: "Bags received", real: true , col: "bagsReceived"},
-      { label: "Balance", real: true , col: "reportedBalance"},
+      // real: false — the new-sheets "Jute Bags movement" export (which replaces JUTE BAGS ISSUED)
+      // has no BALANCE column at all. reportedBalance stays null for every row imported from it;
+      // negativeBalanceRows() (domain/juteBalance.ts) reads computed_balance instead, not this
+      // column, so the real negative-balance finding survives unaffected.
+      { label: "Balance", real: false , col: "reportedBalance"},
       { label: "Good bags available", real: false , col: "goodBagsAvailable"},
       { label: "Completely damaged/discarded", real: false , col: "completelyDamaged"},
       { label: "Damaged/repairable", real: false , col: "damagedRepairable"},

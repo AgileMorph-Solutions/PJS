@@ -18,6 +18,15 @@ export interface SiteConfig {
   sublabel: string;
   /** The real `Warehouse.name` this section scopes every API read by by (`?warehouse=`). */
   warehouseName: string;
+  /**
+   * Known alternate names for this site (WarehouseAlias rows, e.g. "YAMOUSSOUKRO" for Yakro
+   * Factory — see backend's warehouse_site_name_variants finding). `/api/masters` doesn't expose
+   * aliases today, so this is hardcoded here for the one place the frontend needs to recognize
+   * them: grouping a store under the right site on the Masters > Warehouses page even when a real
+   * upload has left that store's own `site` column pointing at the alias rather than the canonical
+   * name (a genuine, known data quirk — see WarehousesPage.tsx's own comment).
+   */
+  aliases: string[];
 }
 
 export const SITES: Record<SiteSlug, SiteConfig> = {
@@ -26,12 +35,14 @@ export const SITES: Record<SiteSlug, SiteConfig> = {
     label: "Unit / Regional Warehouse",
     sublabel: "Bouaké",
     warehouseName: "BOUAKE",
+    aliases: [],
   },
   central: {
     slug: "central",
     label: "Central Warehouse",
     sublabel: "Yakro Factory",
     warehouseName: "YAKRO FACTORY",
+    aliases: ["YAMOUSSOUKRO"],
   },
 };
 
@@ -42,7 +53,16 @@ export function isSiteSlug(value: string | undefined): value is SiteSlug {
 }
 
 /** The reverse of `SITES[slug].warehouseName` — for the one spot that starts from a warehouse name
- * instead of a slug (WarehouseTransfersPage reads an incoming `?warehouse=` deep link). */
+ * instead of a slug (WarehouseTransfersPage reads an incoming `?warehouse=` deep link). Canonical
+ * name only, deliberately — a `?warehouse=` deep link is always written by this app itself, using
+ * the canonical name, never an alias. */
 export function siteSlugForWarehouse(name: string): SiteSlug | undefined {
   return SITE_LIST.find((s) => s.warehouseName === name)?.slug;
+}
+
+/** Like `siteSlugForWarehouse`, but also matches a site's known aliases — for grouping a STORE
+ * (whose own `site` column may hold either the canonical name or an alias, depending on which of
+ * two upserts last touched it) under the right site bucket. See `SiteConfig.aliases`'s comment. */
+export function siteSlugForSiteName(name: string): SiteSlug | undefined {
+  return SITE_LIST.find((s) => s.warehouseName === name || s.aliases.includes(name))?.slug;
 }

@@ -14,9 +14,10 @@ import { Prisma } from "@prisma/client";
 import type { Finding } from "../domain/dataQuality/types.js";
 import type { ImporterId, ParsedRow, DuplicateFlag } from "../domain/imports/types.js";
 import { IMPORTERS, getImporter, checkImporter, detectImporter } from "../domain/imports/registry.js";
-import type { OffloadingRow } from "../domain/imports/offloadings.js";
-import type { DryingJobRow } from "../domain/imports/drying.js";
-import type { JuteWarehouseStockRow } from "../domain/imports/juteWarehouseStock.js";
+import type { OffloadingRow } from "../domain/imports/truckReception.js";
+import type { JuteWarehouseStockRow } from "../domain/imports/juteBagsMovement.js";
+import type { DryingSortingRow } from "../domain/imports/dryingSorting.js";
+import type { SupplierMasterRow } from "../domain/imports/suppliersMaster.js";
 import type { JuteWarehouseTransferRow } from "../domain/imports/juteWarehouseTransfer.js";
 import type { WarehouseDischargeRow } from "../domain/imports/warehouseDischarges.js";
 import type { WarehouseDispatchLineRow } from "../domain/imports/warehouseDispatches.js";
@@ -183,9 +184,9 @@ async function computeFindings(
   const findings: Finding[] = [];
   let duplicates: DuplicateFlag[] = [];
 
-  if (importerId === "receipts") {
+  if (importerId === "truckReception") {
     duplicates = await findReceiptDuplicates(rows as ParsedRow<OffloadingRow>[]);
-  } else if (importerId === "juteWarehouseStock") {
+  } else if (importerId === "juteBagsMovement") {
     duplicates = await findLedger1Duplicates(rows as ParsedRow<JuteWarehouseStockRow>[]);
   }
   // dryingJobs / juteWarehouseTransfer: natural DB-unique keys, no content-key heuristic needed —
@@ -324,14 +325,17 @@ export async function commitImport(token: string, opts: { skipFlagged: boolean }
       lotWriteBack = result.lotWriteBack;
       break;
     }
-    case "receipts":
+    case "truckReception":
       created = await commitReceipts(toWrite as ParsedRow<OffloadingRow>[], entry.filename);
       break;
-    case "dryingJobs":
-      created = await commitDryingJobs(toWrite as ParsedRow<DryingJobRow>[], entry.filename);
-      break;
-    case "juteWarehouseStock":
+    case "juteBagsMovement":
       created = await commitJuteWarehouseStock(toWrite as ParsedRow<JuteWarehouseStockRow>[], entry.filename);
+      break;
+    case "dryingSorting":
+      created = await commitDryingSorting(toWrite as ParsedRow<DryingSortingRow>[], entry.filename);
+      break;
+    case "suppliersMaster":
+      created = await commitSuppliersMaster(toWrite as ParsedRow<SupplierMasterRow>[]);
       break;
     case "juteWarehouseTransfer":
       created = await commitJuteWarehouseTransfer(toWrite as ParsedRow<JuteWarehouseTransferRow>[], entry.filename);
@@ -442,17 +446,6 @@ async function commitReceipts(rows: ParsedRow<OffloadingRow>[], filename: string
   return created;
 }
 
-async function commitDryingJobs(rows: ParsedRow<DryingJobRow>[], filename: string): Promise<number> {
-  if (rows.length === 0) return 0;
-  // DryingJob.warehouse is now a hard FK (see the drying_job_warehouse_fk migration — added only
-  // once every existing row was verified to resolve). Upsert first, same as every other importer,
-  // so an upload naming a genuinely new warehouse fails as a clear finding, not a raw P2003.
-  const warehouses = new Set(rows.map((r) => r.data.warehouse?.trim()).filter((v): v is string => !!v));
-  await upsertObservedMasters(warehouses, new Set(), filename);
-  const result = await prisma.dryingJob.createMany({ data: rows.map((r) => r.data), skipDuplicates: true });
-  return result.count;
-}
-
 async function commitJuteWarehouseStock(rows: ParsedRow<JuteWarehouseStockRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
   const warehouses = new Set(rows.map((r) => r.data.whLocation.trim()).filter(Boolean));
@@ -484,6 +477,57 @@ async function commitJuteWarehouseStock(rows: ParsedRow<JuteWarehouseStockRow>[]
       bagsIssued: r.data.bagsIssued, bagsReceived: r.data.bagsReceived,
       reportedBalance: r.data.reportedBalance,
     })),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
+/** The Suppliers sheet IS the canonical master (unlike every other importer's "observed union"
+ * upsert) — an existing code's name is updated, not just filled in when missing. 58 rows, cheap
+ * enough for a plain per-row upsert loop (same reasoning as upsertObservedStores). */
+async function commitSuppliersMaster(rows: ParsedRow<SupplierMasterRow>[]): Promise<number> {
+  if (rows.length === 0) return 0;
+  let created = 0;
+  for (const r of rows) {
+    const code = r.data.code.trim();
+    const existing = await prisma.supplier.findUnique({ where: { code } });
+    await prisma.supplier.upsert({
+      where: { code },
+      update: { name: r.data.name },
+      create: { code, name: r.data.name, source: "upload: ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Suppliers)" },
+    });
+    if (!existing) created += 1;
+  }
+  return created;
+}
+
+async function commitDryingSorting(rows: ParsedRow<DryingSortingRow>[], filename: string): Promise<number> {
+  if (rows.length === 0) return 0;
+  const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
+  await upsertObservedMasters(warehouses, new Set(), filename);
+
+  const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
+  const result = await prisma.dryingSortingReport.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
+        dryingDate: d.dryingDate ? new Date(d.dryingDate) : null, dryingDateRaw: d.dryingDateRaw,
+        warehouseSite: d.warehouseSite, warehouse: d.warehouse,
+        unloadingBin: d.unloadingBin, afterDryingBin: d.afterDryingBin,
+        lotNo: d.lotNo, lotNoRaw: d.lotNoRaw, whReceiptNoRaw: d.whReceiptNoRaw,
+        origin: d.origin, supplierName: d.supplierName,
+        supplierCodeAnagroci: d.supplierCodeAnagroci, supplierCodeCcak: d.supplierCodeCcak,
+        issuedNetWeightGrn: dec(d.issuedNetWeightGrn), receivedNetWeightAfterDrying: dec(d.receivedNetWeightAfterDrying),
+        inputMoisture: dec(d.inputMoisture), inputNutCount: dec(d.inputNutCount), inputKor: dec(d.inputKor),
+        outputMoisture: dec(d.outputMoisture), outputNutCount: dec(d.outputNutCount), outputKor: dec(d.outputKor),
+        drainageLossKg: dec(d.drainageLossKg), lossPct: dec(d.lossPct),
+        drainageLossKg2: dec(d.drainageLossKg2), drainageLossPct: dec(d.drainageLossPct),
+        goodOrDriedSacs: d.goodOrDriedSacs, damagedNutsKgTriage: dec(d.damagedNutsKgTriage),
+        totalSacReceived: d.totalSacReceived, inputBagsForDrying: d.inputBagsForDrying,
+        outputBagsAfterDrying: d.outputBagsAfterDrying, dryingPicking: d.dryingPicking, remarks: d.remarks,
+      };
+    }),
     skipDuplicates: true,
   });
   return result.count;

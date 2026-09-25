@@ -344,10 +344,12 @@ export function ReceiptDetailPage() {
 
 /**
  * Cross-references this receipt to drying jobs / transfer receipts about the same physical batch,
- * joined server-side on FICHE (see backend/src/services/receiptLinks.ts's header for why FICHE and
- * not Lot/Bin). Three honest states beyond "found something": still checking, no FICHE recorded at
- * all, and a FICHE recorded but nothing matches it yet (the batch likely hasn't moved past this
- * stage) — none of them look like a broken card.
+ * joined server-side on Lot Number (see backend/src/services/receiptLinks.ts's header for the
+ * accuracy tradeoff this accepts: each warehouse assigns its own independent 1..N Lot sequence, so
+ * most Lot matches below are a coincidental collision with an unrelated batch, not a confirmed
+ * link — measured at only 5 of 365 lot-matched transfers and 0 of 40 lot-matched drying rows also
+ * sharing this receipt's FICHE). Every row's `ficheAgrees` flags the rare genuinely-confirmed case;
+ * everything else is shown with a standing warning rather than presented as verified.
  */
 function LinkedRecordsCard({
   links,
@@ -361,77 +363,74 @@ function LinkedRecordsCard({
   return (
     <CollapsibleCard
       title="Linked records"
-      meta={loading ? "checking…" : links?.fiche ? `FICHE ${links.fiche}` : "no FICHE"}
-      defaultOpen={!loading && Boolean(links?.fiche)}
+      meta={loading ? "checking…" : links?.lotNo ? `Lot ${links.lotNo}` : "no Lot"}
+      defaultOpen={!loading && Boolean(links?.lotNo)}
     >
       {loading || !links ? (
         <p className="text-[12.5px] text-warmstone-400 animate-pulse">Checking linked records…</p>
-      ) : !links.fiche ? (
+      ) : !links.lotNo ? (
         <p className="text-[12.5px] text-warmstone-500">
-          No FICHE (paper docket) number recorded on this receipt yet — that's the one identifier that
-          actually carries across the drying report and the transfer ledger, so there's nothing to
-          cross-reference until it's captured.
+          No Lot Number recorded on this receipt yet (assigned at the unit-warehouse discharge stage)
+          — nothing to cross-reference until it's captured.
         </p>
       ) : links.dryingJobs.length === 0 && links.transfers.length === 0 ? (
         <p className="text-[12.5px] text-warmstone-500">
-          FICHE {links.fiche} is recorded, but no drying job or warehouse transfer matches it yet —
-          this batch likely hasn't moved past this stage.
+          Lot {links.lotNo} is recorded, but no drying job or warehouse transfer shares that Lot
+          Number yet — this batch likely hasn't moved past this stage.
         </p>
       ) : (
         <div className="space-y-3.5">
-          {links.lotNo && (
+          <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-ambernut-50 border border-ambernut-200">
+            <span className="material-symbols-outlined text-[16px] text-ambernut-700 mt-0.5">warning</span>
+            <p className="text-[11.5px] text-ambernut-800 leading-relaxed">
+              Lot numbers restart at every warehouse, so most matches below are a different truck
+              that happens to share this number — not the same batch. Only rows tagged{" "}
+              <span className="font-bold">"confirmed — same FICHE"</span> are verified.
+            </p>
+          </div>
+          {links.fiche && (
             <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-brand-50 border border-brand-200">
-              <span className="material-symbols-outlined text-[15px] text-brand-700">inventory_2</span>
+              <span className="material-symbols-outlined text-[15px] text-brand-700">description</span>
               <span className="text-[12.5px] font-semibold text-brand-800">
-                This receipt's own Lot: {links.lotNo} · {links.lotWarehouse || "—"}
+                This receipt's own FICHE: {links.fiche}
               </span>
             </div>
           )}
           <div className="space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
-              Lot &amp; Bin observed elsewhere
+              Bin observed elsewhere, matched on Lot {links.lotNo}
             </p>
-            {/* Per-source, deliberately never merged into one "the lot" or "the bin" — each
-                warehouse runs its own Lot sequence (see the agreement tag below) and the same
-                batch is genuinely in a different bin at each stage (received vs. drying). */}
+            {/* Per-source, deliberately never merged into one "the bin" — the same batch is
+                genuinely in a different bin at each stage (received vs. drying), and here most
+                rows aren't even confirmed to be the same batch at all (see the warning above). */}
             <ul className="space-y-1">
               {links.transfers.map((t) => (
                 <li key={`t-${t.sn}`} className="text-[12.5px] text-warmstone-700">
-                  Lot {t.lotNo || "—"} · Bin {t.binNo || "—"}{" "}
+                  Bin {t.binNo || "—"}{" "}
                   <span className="text-warmstone-400">— transfer SN {t.sn}</span>
-                  {links.lotNo && (
-                    <span
-                      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        t.lotAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                      }`}
-                    >
-                      {t.lotAgrees ? "same Lot" : "different Lot numbering"}
-                    </span>
-                  )}
+                  <span
+                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      t.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                    }`}
+                  >
+                    {t.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed — different FICHE"}
+                  </span>
                 </li>
               ))}
               {links.dryingJobs.map((d) => (
                 <li key={`d-${d.id}`} className="text-[12.5px] text-warmstone-700">
-                  Lot {d.lotNo || "—"} · Bin {d.bin || "—"}{" "}
+                  Bin {d.bin || "—"}{" "}
                   <span className="text-warmstone-400">— drying {d.id}</span>
-                  {links.lotNo && (
-                    <span
-                      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                        d.lotAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                      }`}
-                    >
-                      {d.lotAgrees ? "same Lot" : "different Lot numbering"}
-                    </span>
-                  )}
+                  <span
+                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      d.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                    }`}
+                  >
+                    {d.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed — different FICHE"}
+                  </span>
                 </li>
               ))}
             </ul>
-            {links.lotNo && (links.transfers.some((t) => !t.lotAgrees) || links.dryingJobs.some((d) => !d.lotAgrees)) && (
-              <p className="text-[11.5px] text-warmstone-400 leading-relaxed pt-0.5">
-                Each warehouse assigns its own Lot sequence — a different number downstream is
-                expected, not an error. See the "same batch, different Lot per site" finding.
-              </p>
-            )}
           </div>
 
           {links.transfers.length > 0 && (

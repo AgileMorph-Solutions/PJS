@@ -259,7 +259,7 @@ export const LEDGER_COLUMN_MAP: Record<string, { ledgerId: string; model: string
       { label: "W/R No.", col: "wrNo", real: true },
       { label: "Bags issued", col: "bagsIssued", real: true },
       { label: "Bags received", col: "bagsReceived", real: true },
-      { label: "Balance", col: "reportedBalance", real: true },
+      { label: "Balance", col: "reportedBalance", real: false },
       { label: "Good bags available", col: "goodBagsAvailable", real: false },
       { label: "Completely damaged/discarded", col: "completelyDamaged", real: false },
       { label: "Damaged/repairable", col: "damagedRepairable", real: false },

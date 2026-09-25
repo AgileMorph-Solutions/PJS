@@ -8,36 +8,29 @@ import { Pagination } from "../../components/ui/Pagination";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
-import { useTracking, useDryingJobs } from "../../state/TrackingContext";
+import { useTracking, useDryingBatches, useDryingSortingReports } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
-import type { DryingJob } from "../../repository/dryingRepo";
+import type { DryingBatch, DryingSortingReport } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
 
 /**
- * Same DryingJob shape at both sites (id/date/warehouse/bin/lotNo/ficheNo/dryType/destination/
- * status — no field differs per warehouse type), so no columns.ts split here either. The real
- * per-site difference is the data itself: today the DryingJob table only holds the 81 rows
- * measured at the central warehouse (see backend note in this repo's step-8 log — the 57 unit rows
- * live only in the newer, not-yet-wired-in `DryingBatch` table) — so /unit/drying honestly renders
- * empty right now rather than fabricating unit rows.
+ * Sourced from the two new-sheets drying tables — DryingJob (whose only source,
+ * "FINAL DRY RCN-YAKRO-2026", is retired) is no longer read here. Drying Batch is the primary,
+ * both-site source; Drying & Sorting Report is a Bouaké-only supplementary detail table (it has no
+ * Fiche column at all, so its rows aren't linked to a receipt the way Drying Batch's are).
  */
 export function DryingJobsPage() {
   const { receipts } = useTracking();
   const site = useSite();
   const switchSite = useSwitchSite();
-  // Drying jobs come from the API, deliberately via their own hook rather than TrackingApi —
-  // that keeps the TrackingApi interface unchanged by this migration. Scoped server-side via
-  // resolveSite(), same as every other site-scoped read.
-  const { jobs, refetch } = useDryingJobs(site.warehouseName);
+  const { batches, refetch: refetchBatches } = useDryingBatches(site.warehouseName);
+  const { reports, refetch: refetchReports } = useDryingSortingReports(site.warehouseName);
   const inDrying = useMemo(
     () => receipts.filter((r) => r.warehouse === site.warehouseName && deriveStatus(r) === "in_drying"),
     [receipts, site.warehouseName]
   );
   const inDryingPage = usePagination(inDrying);
 
-  // Historical drying jobs can predate today's receipts (imported from the source workbook), so
-  // not every job has a matching receipt to link to — rows without a match stay non-clickable.
-  //
   // Keyed on FICHE, never on Lot. Lot looks like the obvious key and is wrong: each warehouse runs
   // its own 1..N lot sequence, so the same batch is Lot 17 at the unit warehouse and Lot 20 in this
   // drying report — measured, 345 batches disagree, and the `lot_namespace_disagreement` finding
@@ -52,16 +45,26 @@ export function DryingJobsPage() {
     return m;
   }, [receipts]);
 
-  const jobColumns: Column<DryingJob>[] = [
-    { label: "Job ID", render: (j) => <span className="font-mono text-[12.5px]">{j.id}</span> },
-    { label: "Date", render: (j) => j.date || "—" },
-    { label: "Warehouse", render: (j) => j.warehouse || "—" },
-    { label: "Bin", render: (j) => j.bin || "—" },
-    { label: "Lot No", render: (j) => j.lotNo || "—" },
-    { label: "Fiche No", render: (j) => j.ficheNo || "—" },
-    { label: "Dry type", render: (j) => j.dryType || "—" },
-    { label: "Destination", render: (j) => j.destination || "—" },
-    { label: "Status", render: (j) => j.status || "—" },
+  const batchColumns: Column<DryingBatch>[] = [
+    { label: "Batch ID", render: (b) => <span className="font-mono text-[12.5px]">{b.sn}</span> },
+    { label: "Date", render: (b) => b.dryingDate || b.dryingDateRaw || "—" },
+    { label: "Warehouse", render: (b) => b.warehouse || b.warehouseSite || "—" },
+    { label: "Lot No", render: (b) => b.lotNo || b.lotNoRaw || "—" },
+    { label: "Fiche No", render: (b) => b.ficheNoRaw || "—" },
+    { label: "Dry type", render: (b) => b.dryType || "—" },
+    { label: "Destination", render: (b) => b.destinationRaw || "—" },
+    { label: "Status", render: (b) => b.status || "—" },
+  ];
+
+  const reportColumns: Column<DryingSortingReport>[] = [
+    { label: "S.No.", render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "—"}</span> },
+    { label: "Date", render: (r) => r.dryingDate || r.dryingDateRaw || "—" },
+    { label: "Lot No", render: (r) => r.lotNo || r.lotNoRaw || "—" },
+    { label: "Supplier", render: (r) => r.supplierName || "—" },
+    { label: "Issued net wt (GRN)", render: (r) => r.issuedNetWeightGrn ?? "—" },
+    { label: "Received net wt", render: (r) => r.receivedNetWeightAfterDrying ?? "—" },
+    { label: "Input moisture", render: (r) => r.inputMoisture ?? "—" },
+    { label: "Output moisture", render: (r) => r.outputMoisture ?? "—" },
   ];
 
   return (
@@ -72,10 +75,6 @@ export function DryingJobsPage() {
         lede="Drying is tracked per Lot, never per Bin."
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
-
-      <CollapsibleCard title="Import from workbook">
-        <ImportPanel importerId="dryingJobs" onCommitted={() => void refetch()} />
-      </CollapsibleCard>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[17px] font-bold text-warmstone-900 mb-2">Lots currently in drying</h3>
@@ -96,21 +95,47 @@ export function DryingJobsPage() {
       </div>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
-        <h3 className="text-[17px] font-bold text-warmstone-900 mb-2.5">Drying job history</h3>
+        <h3 className="text-[17px] font-bold text-warmstone-900 mb-2.5">Drying Batch</h3>
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warmstone-100 text-warmstone-600 text-[11px] font-medium mb-3.5">
           <span className="material-symbols-outlined text-[13px]">description</span>
-          Drying_Report_Factory_warehouse.xlsx · FINAL DRY RCN-YAKRO-2026
+          ANAGROCI DATA PROCUREMENT 2026.xlsx · Drying Batch
         </span>
-        <DataTable
-          columns={jobColumns}
-          rows={jobs}
-          keyFn={(j) => j.id}
-          rowHref={(j) => {
-            const receiptId = j.ficheNo ? receiptIdByFiche.get(j.ficheNo.trim()) : undefined;
-            return receiptId ? `/${site.slug}/receipts/${receiptId}` : undefined;
-          }}
-          emptyTitle="No drying jobs recorded"
-        />
+        <CollapsibleCard title="Import from workbook">
+          <ImportPanel importerId="dryingBatch" onCommitted={() => void refetchBatches()} />
+        </CollapsibleCard>
+        <div className="mt-3.5">
+          <DataTable
+            columns={batchColumns}
+            rows={batches}
+            keyFn={(b) => b.id}
+            rowHref={(b) => {
+              const receiptId = b.ficheNoRaw ? receiptIdByFiche.get(b.ficheNoRaw.trim()) : undefined;
+              return receiptId ? `/${site.slug}/receipts/${receiptId}` : undefined;
+            }}
+            emptyTitle="No drying batches recorded"
+            emptyHint="Import a Drying Batch workbook above to populate this table."
+          />
+        </div>
+      </div>
+
+      <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
+        <h3 className="text-[17px] font-bold text-warmstone-900 mb-2.5">Drying & Sorting Report</h3>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warmstone-100 text-warmstone-600 text-[11px] font-medium mb-3.5">
+          <span className="material-symbols-outlined text-[13px]">description</span>
+          Bouake RCN Drying Report.xlsx · Drying &amp; Sorting Report
+        </span>
+        <CollapsibleCard title="Import from workbook">
+          <ImportPanel importerId="dryingSorting" onCommitted={() => void refetchReports()} />
+        </CollapsibleCard>
+        <div className="mt-3.5">
+          <DataTable
+            columns={reportColumns}
+            rows={reports}
+            keyFn={(r) => r.id}
+            emptyTitle="No drying/sorting detail recorded"
+            emptyHint="Import a Drying & Sorting Report workbook above to populate this table. Unit (Bouaké) only — this sheet has no central-side rows."
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,20 +1,72 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { usePagination } from "../../components/ui/usePagination";
-import { Pagination } from "../../components/ui/Pagination";
 import { useTracking } from "../../state/TrackingContext";
+import { SITE_LIST, siteSlugForWarehouse, siteSlugForSiteName, type SiteSlug } from "../../config/sites";
+import { WAREHOUSE_KINDS, type WarehouseKind } from "../../data/warehouseKinds";
+import type { WarehouseMaster } from "../../types/receipt";
+
+/**
+ * Grouped by site rather than one flat list — a row is a SITE itself (has a `kind`) or a STORE
+ * under one (has a `site`). A store's `site` can legitimately hold either the canonical site name
+ * or one of its known aliases (see config/sites.ts's own comment on a real, live data quirk: which
+ * one it currently is depends on execution order between a seed backfill and a real workbook
+ * upload) — `siteSlugForSiteName` checks both, so a store still lands in the right section either
+ * way. Anything that resolves to neither (no kind, no site, or a site value this app doesn't
+ * recognize) goes in "Unclassified" rather than silently vanishing from the page.
+ */
+function bucketFor(w: WarehouseMaster): SiteSlug | "unclassified" {
+  if (w.kind) return siteSlugForWarehouse(w.name) ?? "unclassified";
+  if (w.site) return siteSlugForSiteName(w.site) ?? "unclassified";
+  return "unclassified";
+}
+
+/** Every value the "Type" select can produce, each mapping to exactly one of `{kind}` / `{site}` —
+ * never both, matching Warehouse's Site -> Store hierarchy (see backend/services/masters.ts). */
+type TypeChoice =
+  | { group: "site"; kind: WarehouseKind }
+  | { group: "store"; site: string };
+
+function encodeChoice(c: TypeChoice): string {
+  return c.group === "site" ? `site:${c.kind}` : `store:${c.site}`;
+}
+
+function decodeChoice(value: string): TypeChoice | null {
+  const [group, rest] = value.split(":");
+  if (group === "site" && rest) return { group: "site", kind: rest as WarehouseKind };
+  if (group === "store" && rest) return { group: "store", site: rest };
+  return null;
+}
 
 export function WarehousesPage() {
   const { masters, addWarehouse, receipts } = useTracking();
   const [name, setName] = useState("");
-  const page = usePagination(masters.warehouses);
+  const [type, setType] = useState("");
+
+  const groups = useMemo(() => {
+    const byBucket = new Map<SiteSlug | "unclassified", WarehouseMaster[]>();
+    for (const w of masters.warehouses) {
+      const bucket = bucketFor(w);
+      if (!byBucket.has(bucket)) byBucket.set(bucket, []);
+      byBucket.get(bucket)!.push(w);
+    }
+    return byBucket;
+  }, [masters.warehouses]);
+
+  /** The site's own row (BOUAKE, YAKRO FACTORY) is deliberately excluded from the list below its
+   * section — that row already IS the section, so listing it again as one of "its own warehouses"
+   * is exactly the confusing duplication this was built to avoid. Only real stores are listed. */
+  function storesFor(slug: SiteSlug): WarehouseMaster[] {
+    return (groups.get(slug) ?? []).filter((w) => !w.kind);
+  }
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    addWarehouse(name.trim().toUpperCase());
+    const choice = decodeChoice(type);
+    if (!name.trim() || !choice) return;
+    addWarehouse(name.trim().toUpperCase(), choice.group === "site" ? { kind: choice.kind } : { site: choice.site });
     setName("");
+    setType("");
   }
 
   return (
@@ -25,8 +77,8 @@ export function WarehousesPage() {
         lede="Village, Regional Central, and Factory warehouses."
       />
       <CollapsibleCard title="Add warehouse">
-        <form onSubmit={handleSubmit} className="flex gap-4 items-end">
-          <div className="flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
+          <div className="flex-1 min-w-45">
             <label htmlFor="warehouse-name" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
               Warehouse name
             </label>
@@ -38,6 +90,36 @@ export function WarehousesPage() {
               className="w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
             />
           </div>
+          <div className="flex-1 min-w-55">
+            <label htmlFor="warehouse-type" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
+              Type
+            </label>
+            <select
+              id="warehouse-type"
+              required
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
+            >
+              <option value="" disabled>
+                Select a type…
+              </option>
+              <optgroup label="Store under an existing site">
+                {SITE_LIST.map((s) => (
+                  <option key={s.slug} value={encodeChoice({ group: "store", site: s.warehouseName })}>
+                    {s.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="New site">
+                {WAREHOUSE_KINDS.map((k) => (
+                  <option key={k.value} value={encodeChoice({ group: "site", kind: k.value })}>
+                    {k.label}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
           <button
             type="submit"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
@@ -47,19 +129,50 @@ export function WarehousesPage() {
           </button>
         </form>
       </CollapsibleCard>
-      <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
-        {page.pageRows.map((w) => (
-          <div key={w.name} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
-            <span className="font-semibold text-warmstone-800 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[17px] text-brand-700">domain</span>
-              {w.name}
-              {w.site && <span className="text-warmstone-400 font-normal">({w.site})</span>}
-            </span>
-            <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
+
+      {SITE_LIST.map((site) => (
+        <div key={site.slug}>
+          <h3 className="px-1 mb-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
+            {site.label} <span className="normal-case font-medium text-warmstone-300">· {site.sublabel}</span>
+          </h3>
+          <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
+            {storesFor(site.slug).map((w) => (
+              <div key={w.name} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
+                <span className="font-semibold text-warmstone-800 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[17px] text-brand-700">warehouse</span>
+                  {w.name}
+                </span>
+                <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
+              </div>
+            ))}
+            {!storesFor(site.slug).length && (
+              <div className="px-5 py-3 text-[13px] text-warmstone-400">No warehouses recorded here yet.</div>
+            )}
           </div>
-        ))}
-        <Pagination state={page} />
-      </div>
+        </div>
+      ))}
+
+      {(groups.get("unclassified") ?? []).length > 0 && (
+        <div>
+          <h3 className="px-1 mb-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
+            Unclassified
+          </h3>
+          <p className="px-1 mb-2 text-[12px] text-warmstone-400">
+            Not yet assigned to a site or store — see Warehouses master data.
+          </p>
+          <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
+            {(groups.get("unclassified") ?? []).map((w) => (
+              <div key={w.name} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
+                <span className="font-semibold text-warmstone-800 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[17px] text-warmstone-400">help</span>
+                  {w.name}
+                </span>
+                <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,7 +10,10 @@ import path from "node:path";
 import ExcelJS from "exceljs";
 import { PrismaClient } from "@prisma/client";
 import { checkImporter } from "../src/domain/imports/registry.js";
-import { offloadingsImporter } from "../src/domain/imports/offloadings.js";
+import { truckReceptionImporter } from "../src/domain/imports/truckReception.js";
+import { juteBagsMovementImporter } from "../src/domain/imports/juteBagsMovement.js";
+import { dryingSortingImporter } from "../src/domain/imports/dryingSorting.js";
+import { suppliersMasterImporter } from "../src/domain/imports/suppliersMaster.js";
 import { warehouseDischargesImporter } from "../src/domain/imports/warehouseDischarges.js";
 import { warehouseDispatchesImporter } from "../src/domain/imports/warehouseDispatches.js";
 import { dryingBatchImporter, resolveCleanLotNo } from "../src/domain/imports/dryingBatch.js";
@@ -31,70 +34,148 @@ async function loadWorkbook(filePath: string): Promise<ExcelJS.Workbook> {
 }
 
 describe("header-fingerprint check — the real corruption case", () => {
-  it("rejects the real 33-column 'BOUAKE RCN RECEIVING.xlsx' as ledger 4 (header mismatch, not a silent accept)", async () => {
-    const wb = await loadWorkbook(path.join(DOCS, "drive-download-20260903T100404Z-1-001/BOUAKE RCN RECEIVING.xlsx"));
+  // Synthesized in memory, replacing a real corrupt file that used to live under
+  // docs/Procurement/drive-download-.../BOUAKE RCN RECEIVING.xlsx (deleted along with every other
+  // old workbook — see docs/UPLOAD_GUIDE.md). The corruption itself was real, measured against
+  // that file before it was removed: two columns ("DRY/UNDRY", "Transfer -Bouake") are missing
+  // entirely, so every column from position 15 onward silently shifts left by one or two — not a
+  // parse error, a fully-populated-looking row with every field quietly wrong. This fixture
+  // reproduces that exact shift (never blanks fields in place, which would fail for the wrong
+  // reason), the same synthesized-workbook convention tests/lotWriteBack.test.ts already uses.
+  const FULL_HEADER = [
+    "SN", "Date", "Month", "DRY/UNDRY", "ID transfer", "Truck registration", "LOT NO", "Lot Dry",
+    "NO-FICHE", "CCA transferred fiche Number", "BIN NO.", "Damaged Bag", "New Jute Bag Used",
+    "Recondition", "Transfer -Bouake", "Origin", "Bags Dispatched From Bouake", "Received Bags",
+    "Diffrence in Bag at Receiving", "FINAL BAGS AFTER REBAGGING W/H", "DIFF",
+    "Laisse-Passer Entree (Yakro)", "FULLY LOADED TRUCK WEIGHT - BEFORE UNLOADING OF RCN",
+    "EMPTRY TRUCK TARE WEIGHT - AFTER UNLOADING OF THE RCN", "Gross Weight (Yakro) Recived",
+    "Weight at arrival (kg) Net", "Net Wt Dispatched (From Bouake)", "Weight Difference at Yakro",
+    "KOR Received (At Yakro)", "KOR Dispatched From BOUAKE", "Moisture Received at YAKRO WH",
+    "Dispatched Moisture", "NC arrival", "Comment",
+  ];
+  // The real corruption: "DRY/UNDRY" (index 3) and "Transfer -Bouake" (index 14) are simply gone,
+  // and every label after them closes up left — not blanked in place. 32 labels, not 34.
+  const SHIFTED_HEADER = FULL_HEADER.filter((h) => h !== "DRY/UNDRY" && h !== "Transfer -Bouake");
+
+  function buildLedger4Workbook(header: string[], dataRow: (string | number)[]): ExcelJS.Workbook {
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet("Bouake Stock Reciving");
+    for (let r = 1; r <= 5; r++) sheet.addRow([]); // rows 1-5 blank, header is row 6
+    sheet.addRow(header);
+    sheet.addRow(dataRow);
+    return wb;
+  }
+
+  it("rejects a synthesized 32-column ledger-4 lookalike missing 'DRY/UNDRY' and 'Transfer -Bouake' (header mismatch, not a silent accept)", () => {
+    const wb = buildLedger4Workbook(SHIFTED_HEADER, SHIFTED_HEADER.map((_, i) => `field-${i + 1}`));
     const result = checkImporter(wb, "juteWarehouseTransfer");
     expect(result.ok).toBe(false);
     if (!result.ok && result.reason === "header-mismatch") {
-      // The known real difference: this file is missing "DRY/UNDRY" and "Transfer -Bouake".
       expect(result.expected).not.toEqual(result.found);
+      expect(result.found).not.toContain("DRY/UNDRY");
+      expect(result.found).not.toContain("Transfer -Bouake");
     } else {
       expect.fail(`expected a header-mismatch rejection, got: ${JSON.stringify(result)}`);
     }
   });
 
+  it("the same importer accepts the FULL 34-column header — proving the rejection above is really about the two missing columns, not a broken fixture", () => {
+    const wb = buildLedger4Workbook(FULL_HEADER, FULL_HEADER.map((_, i) => `field-${i + 1}`));
+    expect(checkImporter(wb, "juteWarehouseTransfer")).toEqual({ ok: true });
+  });
+
+  it("no registered importer accepts the shifted 32-column lookalike — it's not secretly some OTHER shape either", () => {
+    const wb = buildLedger4Workbook(SHIFTED_HEADER, SHIFTED_HEADER.map((_, i) => `field-${i + 1}`));
+    for (const id of ["truckReception", "juteBagsMovement", "dryingSorting", "suppliersMaster", "warehouseDischarges", "warehouseDispatches", "dryingBatch", "issuedToProduction", "warehouseReceiving", "warehouseActivityLedger"] as const) {
+      expect(checkImporter(wb, id).ok, `expected ${id} to reject the shifted lookalike`).toBe(false);
+    }
+  });
+
+  it("proves the harm the header check prevents: parsing the shifted shape anyway silently reads every field past the shift from the wrong column", async () => {
+    // Bypass checkImporter entirely (this is what would happen if the guard didn't exist) and
+    // parse the shifted workbook with the REAL importer. "KOR Received (At Yakro)" is real column
+    // 29 in the correct header; in the shifted 32-column layout the value actually sitting at
+    // position 29 belongs to a field two columns earlier ("Weight Difference at Yakro"'s
+    // neighbourhood) — so a naive parse reports a KOR reading that is really someone else's weight
+    // figure, with no error, no warning, nothing to notice.
+    const shiftedRow: (string | number)[] = SHIFTED_HEADER.map((_, i) => `field-${i + 1}`);
+    shiftedRow[0] = 1; // SN, so the row isn't skipped
+    const wb = buildLedger4Workbook(SHIFTED_HEADER, shiftedRow);
+    const { juteWarehouseTransferImporter } = await import("../src/domain/imports/juteWarehouseTransfer.js");
+    const rows = juteWarehouseTransferImporter.parse(wb);
+    expect(rows).toHaveLength(1);
+    // Column 29 in the SHIFTED sheet is field-29 — but the importer, built for the correct 34-col
+    // shape, reads column 29 expecting "KOR Received (At Yakro)". It gets field-29's raw text
+    // instead (not a number, so korReceived is null and the raw twin carries the wrong field's
+    // text) — exactly the silent, fully-populated-looking corruption this check exists to prevent.
+    expect(rows[0]!.data.korReceivedRaw).toBe("field-29");
+  });
+
   it("accepts the real, correctly-shaped ledger 4 file", async () => {
-    const wb = await loadWorkbook(path.join(DOCS, "BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx"));
+    const wb = await loadWorkbook(path.join(DOCS, "new sheets/Bouake RCN Receiving at Factory Report.xlsx"));
     expect(checkImporter(wb, "juteWarehouseTransfer")).toEqual({ ok: true });
   });
 
   it("rejects the ledger-4 shape when checked against a different importer's expected sheet", async () => {
-    const wb = await loadWorkbook(path.join(DOCS, "BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx"));
-    const result = checkImporter(wb, "juteWarehouseStock");
+    const wb = await loadWorkbook(path.join(DOCS, "new sheets/Bouake RCN Receiving at Factory Report.xlsx"));
+    const result = checkImporter(wb, "juteBagsMovement");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toBe("missing-sheet");
   });
 });
 
-describe("receipts importer — per-stage presence from real row data, never fabricated", () => {
+describe("truckReception importer — per-stage presence from real row data, never fabricated", () => {
+  // Verbatim from the real "Truck Reception" sheet inside ANAGROCI DATA PROCUREMENT 2026.xlsx —
+  // replaces the old OFFLOADINGS-sourced HEADER. "RM/FG" and "REF." have no equivalent column
+  // here at all (see truckReception.ts's header comment); "week" is new and not read by anything.
   const HEADER = [
-    "S N", "DATE OF ARRIVAL", "DATE OF OFFLOADING", "RM/FG", "CREDIT/CASH", "WH LOCATION", "WH NO.",
-    "SUPPLIERS NAME", "LBA CODE", "VEHICLE NO.", "FICHE CODE", "REF.", "FICHE", "SACS",
-    "GROSS WT KGS", "NET WT KGS", "BON SACS", "HUMID SACS", "Sacs déchirés", "Refraction", "PAID WT",
-    "PRICE", "AMOUNT", "MOIS.", "NUT COUNT", "KOR", "FINAL KOR", "ORIGIN", "REMARKS",
+    "No", "arrival date", "offloading date", "payment type", "warehouse location", "warehouse code",
+    "supplier name", "supplier code", "truck no", "fiche code", "fiche offloading no", "bags count",
+    "gross weight kg", "net weight kg", "good bags", "humid bags", "torn bags", "refraction kg",
+    "paid weight kg", "price cfa per kg", "amount cfa", "moisture pct", "nut count", "kor",
+    "final kor", "origin", "remarks", "week",
   ];
 
-  function buildOffloadingsWorkbook(rows: (string | number)[][]): ExcelJS.Workbook {
+  function buildTruckReceptionWorkbook(rows: (string | number)[][]): ExcelJS.Workbook {
     const wb = new ExcelJS.Workbook();
-    const sheet = wb.addWorksheet("OFFLOADINGS");
-    sheet.addRow([]); // row 1: title/blank, matching the real sheet's header-at-row-2 shape
-    sheet.addRow(HEADER); // row 2
+    const sheet = wb.addWorksheet("Truck Reception");
+    sheet.addRow(HEADER); // row 1 — this sheet's header IS row 1, no separate title row above it
     for (const r of rows) sheet.addRow(r);
     return wb;
   }
 
-  it("does not create n-gross when GROSS WT KGS is blank, but does create it when present", () => {
-    const full = new Array(29).fill("");
-    full[0] = "1"; full[1] = "2026-01-05"; full[5] = "YAKRO"; full[6] = "WH-1";
-    full[7] = "ACME SUPPLIER"; full[8] = "LBA-1"; full[9] = "TRK-1"; full[14] = "12000";
+  it("real file: fiche offloading no (col 11) is the FICHE join key, never fiche code (col 10) — the adjacent-column trap", async () => {
+    const wb = await loadWorkbook(path.join(DOCS, "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx"));
+    const rows = truckReceptionImporter.parse(wb);
+    expect(rows.length).toBe(986);
+    // The first real row (stages.ts's own documented sample truck): fiche offloading no "72515",
+    // fiche code "0401-0007" — if these were ever swapped, this assertion fails immediately.
+    expect(rows[0]!.data.stageData["n-verify"]!["FICHE"]).toBe("72515");
+    expect(rows[0]!.data.stageData["n-verify"]!["FICHE CODE"]).toBe("0401-0007");
+  });
+
+  it("does not create n-gross when gross weight kg is blank, but does create it when present", () => {
+    const full = new Array(28).fill("");
+    full[0] = "1"; full[1] = "2026-01-05"; full[4] = "YAKRO"; full[5] = "WH-1";
+    full[6] = "ACME SUPPLIER"; full[7] = "LBA-1"; full[8] = "TRK-1"; full[12] = "12000";
 
     const noGross = [...full];
-    noGross[0] = "2"; noGross[14] = ""; // blank GROSS WT KGS
+    noGross[0] = "2"; noGross[12] = ""; // blank gross weight kg
 
-    const wb = buildOffloadingsWorkbook([full, noGross]);
-    const rows = offloadingsImporter.parse(wb);
+    const wb = buildTruckReceptionWorkbook([full, noGross]);
+    const rows = truckReceptionImporter.parse(wb);
     expect(rows).toHaveLength(2);
     expect(rows[0]!.data.stageData["n-gross"]).toBeTruthy();
     expect(rows[1]!.data.stageData["n-gross"]).toBeUndefined();
   });
 
   it("creates n-qfs when a quality field is present, but never sets a pass/fail branch on it", () => {
-    const row = new Array(29).fill("");
-    row[0] = "1"; row[1] = "2026-01-05"; row[5] = "YAKRO"; row[6] = "WH-1";
-    row[23] = "8.5"; // MOIS.
+    const row = new Array(28).fill("");
+    row[0] = "1"; row[1] = "2026-01-05"; row[4] = "YAKRO"; row[5] = "WH-1";
+    row[21] = "8.5"; // moisture pct
 
-    const wb = buildOffloadingsWorkbook([row]);
-    const rows = offloadingsImporter.parse(wb);
+    const wb = buildTruckReceptionWorkbook([row]);
+    const rows = truckReceptionImporter.parse(wb);
     const qfs = rows[0]!.data.stageData["n-qfs"];
     expect(qfs).toBeTruthy();
     // The parsed stage payload is a flat label->value string map — there is no "branch" concept in
@@ -104,12 +185,12 @@ describe("receipts importer — per-stage presence from real row data, never fab
     expect(Object.keys(qfs!)).not.toContain("branch");
   });
 
-  it("always creates n-gate and present-but-empty n-tare, and never n-lot/n-bin/n-drying (no real signal in OFFLOADINGS)", () => {
-    const row = new Array(29).fill("");
-    row[0] = "1"; row[1] = "2026-01-05"; row[5] = "YAKRO"; row[6] = "WH-1";
+  it("always creates n-gate and present-but-empty n-tare, and never n-lot/n-bin/n-drying (no real signal in Truck Reception)", () => {
+    const row = new Array(28).fill("");
+    row[0] = "1"; row[1] = "2026-01-05"; row[4] = "YAKRO"; row[5] = "WH-1";
 
-    const wb = buildOffloadingsWorkbook([row]);
-    const stageData = offloadingsImporter.parse(wb)[0]!.data.stageData;
+    const wb = buildTruckReceptionWorkbook([row]);
+    const stageData = truckReceptionImporter.parse(wb)[0]!.data.stageData;
     expect(stageData["n-gate"]).toBeTruthy();
     expect(stageData["n-tare"]).toEqual({ "Tare / empty truck weight (kg)": "" });
     for (const neverCreated of ["n-lot", "n-bin", "n-stock", "n-drying", "n-otheract", "n-ledger", "n-xferdec", "n-reject"]) {
@@ -117,12 +198,21 @@ describe("receipts importer — per-stage presence from real row data, never fab
     }
   });
 
-  it("skips a row whose S N column is blank or literally 'S N' (a repeated header/title row)", () => {
-    const blank = new Array(29).fill("");
-    const titleRow = new Array(29).fill("");
-    titleRow[0] = "S N";
-    const wb = buildOffloadingsWorkbook([blank, titleRow]);
-    expect(offloadingsImporter.parse(wb)).toHaveLength(0);
+  it("never writes RM/FG or REF. — this sheet has no column for either", () => {
+    const row = new Array(28).fill("");
+    row[0] = "1"; row[1] = "2026-01-05"; row[4] = "YAKRO"; row[5] = "WH-1";
+    row[6] = "ACME SUPPLIER"; row[7] = "LBA-1";
+
+    const wb = buildTruckReceptionWorkbook([row]);
+    const stageData = truckReceptionImporter.parse(wb)[0]!.data.stageData;
+    expect(stageData["n-gate"]).not.toHaveProperty("RM/FG");
+    expect(stageData["n-verify"]).not.toHaveProperty("REF.");
+  });
+
+  it("skips a row whose No column is blank", () => {
+    const blank = new Array(28).fill("");
+    const wb = buildTruckReceptionWorkbook([blank]);
+    expect(truckReceptionImporter.parse(wb)).toHaveLength(0);
   });
 });
 
@@ -147,31 +237,34 @@ describe("ledger-1 content-key dedup — the artificial-seq shape with no source
   });
   afterAll(() => prisma.juteWarehouseMovement.deleteMany({ where: { seq: SEQ } }));
 
+  // "Jute Bags movement" — replaces "JUTE BAGS ISSUED". Same 9 leading columns as before, only
+  // renamed and header row 2 -> 1; "BALANCE" (the old 10th column) has no equivalent here at all,
+  // which is why contentKey() in services/imports.ts never included it in the dedup key to begin
+  // with — dropping it changes nothing about this test.
   function buildLedger1Workbook(rows: (string | number)[][]): ExcelJS.Workbook {
     const wb = new ExcelJS.Workbook();
-    const sheet = wb.addWorksheet("JUTE BAGS ISSUED");
-    sheet.addRow([]);
-    sheet.addRow(["S N", "DATE", "ACTIVITIES TYPE", "SUPPLIER CODE", "WH LOCATION", "TRUCK NUMBER", "W/R NO.", "BAGS ISSUED", "BAGS RECEIVED", "BALANCE"]);
+    const sheet = wb.addWorksheet("Jute Bags movement");
+    sheet.addRow(["No", "movement date", "activity type", "supplier code", "warehouse location", "truck no", "warehouse receipt no", "bags issued", "bags received"]);
     for (const r of rows) sheet.addRow(r);
     return wb;
   }
 
   it("flags a row matching an existing row's content as a likely duplicate", async () => {
     const wb = buildLedger1Workbook([
-      [1, "2026-02-15", "ISSUE", "", warehouseName, "TEST-TRUCK-1", "WR-TEST-1", 10, "", 500],
+      [1, "2026-02-15", "ISSUE", "", warehouseName, "TEST-TRUCK-1", "WR-TEST-1", 10, ""],
     ]);
     const buffer = (await wb.xlsx.writeBuffer()) as unknown as Buffer;
-    const preview = await previewImport(buffer, "test-ledger1.xlsx", "juteWarehouseStock");
+    const preview = await previewImport(buffer, "test-ledger1.xlsx", "juteBagsMovement");
     expect(preview.duplicateCount).toBe(1);
     expect(preview.findings.some((f) => f.id === "likely_duplicate_rows")).toBe(true);
   });
 
   it("does not flag a row with different content as a duplicate", async () => {
     const wb = buildLedger1Workbook([
-      [2, "2026-02-16", "ISSUE", "", warehouseName, "DIFFERENT-TRUCK", "WR-TEST-2", 7, "", 493],
+      [2, "2026-02-16", "ISSUE", "", warehouseName, "DIFFERENT-TRUCK", "WR-TEST-2", 7, ""],
     ]);
     const buffer = (await wb.xlsx.writeBuffer()) as unknown as Buffer;
-    const preview = await previewImport(buffer, "test-ledger1.xlsx", "juteWarehouseStock");
+    const preview = await previewImport(buffer, "test-ledger1.xlsx", "juteBagsMovement");
     expect(preview.duplicateCount).toBe(0);
   });
 });
@@ -186,7 +279,7 @@ describe("warehouseDischarges — the duplicated-quality-panel shape", () => {
 
   it("rejects it when checked as any other known shape", async () => {
     const wb = await loadWorkbook(path.join(NEW_SHEETS, "Suppliers Offloading_Bouake Warehouse Report.xlsx"));
-    for (const id of ["receipts", "dryingJobs", "juteWarehouseStock", "juteWarehouseTransfer"] as const) {
+    for (const id of ["truckReception", "juteBagsMovement", "dryingSorting", "suppliersMaster", "juteWarehouseTransfer"] as const) {
       const result = checkImporter(wb, id);
       expect(result.ok, `expected ${id} to reject DISCHARGEMENT`).toBe(false);
     }
@@ -248,7 +341,7 @@ describe("warehouseDispatches (CHARGEMENT) — parent/line shape, continuation l
   it("accepts the real CHARGEMENT file, and rejects every other known shape for it", async () => {
     const wb = await loadWorkbook(path.join(NEW_SHEETS, "Dispatch RCN from Bouake Warehouse Report.xlsx"));
     expect(checkImporter(wb, "warehouseDispatches")).toEqual({ ok: true });
-    for (const id of ["receipts", "dryingJobs", "juteWarehouseStock", "juteWarehouseTransfer", "warehouseDischarges"] as const) {
+    for (const id of ["truckReception", "juteBagsMovement", "dryingSorting", "suppliersMaster", "juteWarehouseTransfer", "warehouseDischarges"] as const) {
       expect(checkImporter(wb, id).ok, `expected ${id} to reject CHARGEMENT`).toBe(false);
     }
   });
@@ -277,7 +370,7 @@ describe("warehouseDispatches (CHARGEMENT) — parent/line shape, continuation l
 });
 
 describe("dryingBatch (Drying Batch, consolidated) — verbatim *_raw twins, never split a multi-value lot", () => {
-  const CONSOLIDATED = path.join(DOCS, "ANAGROCI DATA PROCUREMENT 2026.xlsx");
+  const CONSOLIDATED = path.join(DOCS, "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx");
 
   it("accepts the real consolidated workbook, and rejects the differently-shaped Bouaké-only 'Drying & Sorting Report' file", async () => {
     const wb = await loadWorkbook(CONSOLIDATED);
@@ -340,7 +433,7 @@ describe("issuedToProduction (Issued to Production Section) — Fiche No contami
 });
 
 describe("warehouseReceiving — a second, richer verbatim source for the SAME WarehouseDischarge table", () => {
-  const CONSOLIDATED = path.join(DOCS, "ANAGROCI DATA PROCUREMENT 2026.xlsx");
+  const CONSOLIDATED = path.join(DOCS, "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx");
 
   it("accepts the real consolidated workbook, and rejects the file this importer was first assumed to read (it's really a newer ledger-4 snapshot)", async () => {
     const wb = await loadWorkbook(CONSOLIDATED);
@@ -360,7 +453,7 @@ describe("warehouseReceiving — a second, richer verbatim source for the SAME W
 });
 
 describe("warehouseActivityLedger — no S.No at all, gated purely on any-column-non-blank", () => {
-  const CONSOLIDATED = path.join(DOCS, "ANAGROCI DATA PROCUREMENT 2026.xlsx");
+  const CONSOLIDATED = path.join(DOCS, "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx");
 
   it("accepts the real consolidated workbook", async () => {
     const wb = await loadWorkbook(CONSOLIDATED);
@@ -372,5 +465,73 @@ describe("warehouseActivityLedger — no S.No at all, gated purely on any-column
     const rows = warehouseActivityLedgerImporter.parse(wb);
     expect(rows.length).toBe(787);
     expect(rows.filter((r) => r.skipReason).length).toBe(0);
+  });
+});
+
+describe("juteBagsMovement (Jute Bags movement) — replaces JUTE BAGS ISSUED, BALANCE column gone", () => {
+  const CONSOLIDATED = path.join(DOCS, "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx");
+
+  it("accepts the real consolidated workbook", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    expect(checkImporter(wb, "juteBagsMovement")).toEqual({ ok: true });
+  });
+
+  it("parses 298 rows, every one with reportedBalance null (no column for it in this sheet)", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    const rows = juteBagsMovementImporter.parse(wb);
+    expect(rows.length).toBe(298);
+    expect(rows.every((r) => r.data.reportedBalance === null)).toBe(true);
+  });
+});
+
+describe("suppliersMaster (Suppliers) — the canonical code/name master, 58 rows", () => {
+  const CONSOLIDATED = path.join(DOCS, "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx");
+
+  it("accepts the real consolidated workbook", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    expect(checkImporter(wb, "suppliersMaster")).toEqual({ ok: true });
+  });
+
+  it("parses all 58 rows, none skipped (every row has a supplier code)", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    const rows = suppliersMasterImporter.parse(wb);
+    expect(rows.length).toBe(58);
+    expect(rows.filter((r) => r.skipReason).length).toBe(0);
+  });
+});
+
+describe("dryingSorting (Drying & Sorting Report) — column-index parsing, duplicate-label trap", () => {
+  const FILE = path.join(DOCS, "new sheets/Bouake RCN Drying Report.xlsx");
+
+  it("accepts the real file, and rejects it under every other known shape", async () => {
+    const wb = await loadWorkbook(FILE);
+    expect(checkImporter(wb, "dryingSorting")).toEqual({ ok: true });
+    for (const id of ["truckReception", "juteBagsMovement", "suppliersMaster", "juteWarehouseTransfer", "warehouseDischarges", "dryingBatch"] as const) {
+      expect(checkImporter(wb, id).ok, `expected ${id} to reject Drying & Sorting Report`).toBe(false);
+    }
+  });
+
+  it("parses 57 real rows (the sheet's formatted extent runs to 631, but everything past row 57 is blank)", async () => {
+    const wb = await loadWorkbook(FILE);
+    const rows = dryingSortingImporter.parse(wb);
+    expect(rows.length).toBe(57);
+  });
+
+  it("column 23 ('Draige Loss Kg's', the second occurrence) is read as its own field, never conflated with column 21", async () => {
+    const wb = await loadWorkbook(FILE);
+    const rows = dryingSortingImporter.parse(wb);
+    // Real data: both columns are populated on every real row, and are not required to be equal —
+    // reading the wrong one (or double-reading one into both fields) would be invisible unless
+    // checked explicitly like this.
+    expect(rows.every((r) => r.data.drainageLossKg !== null)).toBe(true);
+    expect(rows.every((r) => r.data.drainageLossKg2 !== null)).toBe(true);
+  });
+
+  it("leaves lotNo null for exactly the 22 comma-joined/numerically-concatenated rows, always keeping lotNoRaw", async () => {
+    const wb = await loadWorkbook(FILE);
+    const rows = dryingSortingImporter.parse(wb);
+    const ambiguous = rows.filter((r) => r.data.lotNo === null && r.data.lotNoRaw !== null);
+    expect(ambiguous.length).toBe(22);
+    expect(ambiguous.every((r) => r.data.lotNoRaw)).toBe(true);
   });
 });

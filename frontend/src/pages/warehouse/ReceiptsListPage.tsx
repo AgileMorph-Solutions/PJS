@@ -6,11 +6,15 @@ import { DataTable } from "../../components/ui/DataTable";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
+import { KpiTile } from "../../components/ui/KpiTile";
 import { useTracking } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
-import { deriveStatus, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
+import { siteSlugForSiteName } from "../../config/sites";
+import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { stages } from "../../data/stages";
 import { RECEIPT_COLUMNS, fiche, storeCode } from "./columns";
+
+const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
 
 /** Site-scoped Receipts list — one component for both /unit/receipts and /central/receipts (see
  * SiteContext's useSite()). The section itself IS the warehouse filter now, so the old "All
@@ -30,14 +34,19 @@ export function ReceiptsListPage() {
   const store = params.get("store") ?? "";
 
   const stores = useMemo(
-    () => masters.warehouses.filter((w) => w.site === site.warehouseName),
-    [masters.warehouses, site.warehouseName]
+    // siteSlugForSiteName, not a raw === — a store's `site` column can legitimately hold either
+    // the canonical site name or one of its known aliases (see config/sites.ts), so a raw compare
+    // would silently drop a real store the moment that column happens to hold the alias value.
+    () => masters.warehouses.filter((w) => siteSlugForSiteName(w.site ?? "") === site.slug),
+    [masters.warehouses, site.slug]
   );
 
   const siteReceipts = useMemo(
     () => receipts.filter((r) => r.warehouse === site.warehouseName),
     [receipts, site.warehouseName]
   );
+
+  const counts = useMemo(() => computeDashboardCounts(siteReceipts), [siteReceipts]);
 
   const rows = useMemo(() => {
     return siteReceipts
@@ -85,9 +94,18 @@ export function ReceiptsListPage() {
         }
       />
 
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
+        <KpiTile icon={icon("local_shipping")} label="Total received" value={counts.totalReceived} to={`/${site.slug}/receipts`} />
+        <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={`/${site.slug}/receipts?status=unloaded`} />
+        <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={`/${site.slug}/receipts?status=grn_completed`} />
+        <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={`/${site.slug}/receipts?status=pending_qa`} />
+        <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to={`/${site.slug}/receipts?status=pending_unload`} />
+        <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={`/${site.slug}/receipts?status=rejected`} tone="gap" />
+      </div>
+
       <div className="mb-5">
         <CollapsibleCard title="Import from workbook">
-          <ImportPanel importerId="receipts" onCommitted={() => void refresh()} />
+          <ImportPanel importerId="truckReception" onCommitted={() => void refresh()} />
         </CollapsibleCard>
       </div>
 

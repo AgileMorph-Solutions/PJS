@@ -1,21 +1,26 @@
 /**
- * Traces a receipt to other records about the same physical batch, joined on FICHE — the paper
- * docket number that actually travels with a batch across OFFLOADINGS, the drying report, and the
- * transfer ledger. Bin can't do this job at all: it's two disjoint per-warehouse namespaces
- * (Bouaké BKE-* vs Yakro BIN-*). Lot looks like it should — it's the client's own tracking key —
- * but measurably can't either: each warehouse runs its own 1..N lot sequence, so the same batch is
- * Lot 17 at Bouaké and Lot 20 downstream (334 of 339 fiche-matched transfers and 12 of 12 drying
- * rows disagree). Verified against the real data: fiche 72566 -> drying job DRY-4 (Lot 20, bin
- * BIN-09A) AND transfer SN 27 (Lot 20, bin BIN-03C) — two independently-maintained sheets agreeing
- * with EACH OTHER on Lot 20 for the same fiche, while the receipt's own Lot (from the unit-warehouse
- * discharge import) is 17 — is the confirmation both that fiche is the real link and that lot
- * genuinely renumbers per site. Note the bins differ too (received in one, moved to another for
- * drying) — never merge either one into a single "the lot"/"the bin".
+ * Traces a receipt to other records about the same physical batch, joined on Lot Number — the
+ * receipt's own tracking key, assigned at its unit warehouse (`StageLotAssignment.lotNumber`).
  *
- * Switching this join to lot would replace a verified-correct linkage with one that's wrong ~98%
- * of the time while looking more principled. The disagreement is reported in aggregate by the
- * `lot_namespace_disagreement` check and per row below as `lotAgrees`, so it stays a visible,
- * client-answerable question instead of a join no one notices is silently wrong.
+ * WARNING, verified against the live data (2026-09-25): Lot Number is measurably NOT a reliable
+ * cross-warehouse key. Each warehouse assigns its own independent 1..N Lot sequence, so the same
+ * physical batch is "Lot 17" at Bouaké and "Lot 20" downstream — and a small integer like "17"
+ * inevitably recurs across many unrelated batches too. Matching purely on Lot Number found 365
+ * transfer rows and 40 drying rows across the real data, of which only 5 transfers and 0 drying
+ * rows also share the receipt's own FICHE (the paper docket number that actually does travel with
+ * a batch — see `lot_namespace_disagreement` for the aggregate finding). Concrete example: receipt
+ * REC-2026-0025 (FICHE 72566, Lot 17 at BOUAKE) — FICHE-joining resolves it to drying job DRY-4 and
+ * transfer SN 27 (both independently Lot 20); Lot-joining instead resolves it to transfer SN 13,
+ * whose FICHE is 72563 — a different truck that merely happens to share the number "17".
+ *
+ * This join was switched from FICHE to Lot Number on explicit request (the client's own tracking
+ * key, wanted as the primary lookup), with this tradeoff accepted: most rows below are very likely
+ * a different physical batch that happens to share a Lot number at its own site, not a confirmed
+ * match. Every row carries `ficheAgrees` — true only when that row's own FICHE also matches this
+ * receipt's FICHE — so a genuinely-confirmed match stays distinguishable from a coincidental Lot
+ * collision, and the frontend renders a prominent warning rather than presenting these as verified
+ * links. Bin can't do this job at all: it's two disjoint per-warehouse namespaces (Bouaké BKE-* vs
+ * Yakro BIN-*).
  */
 import { prisma } from "../db.js";
 
@@ -32,8 +37,9 @@ export interface LinkedDryingJob {
   lotNo: string;
   status: string;
   dryType: string;
-  /** Whether this row's lot matches the receipt's own. False is the norm, not a bug — see header. */
-  lotAgrees: boolean;
+  /** True only when this row's own FICHE also matches the receipt's FICHE — a genuinely-confirmed
+   * match, not just a coincidental Lot-number collision (the norm — see header). */
+  ficheAgrees: boolean;
   destination: string;
 }
 
@@ -45,7 +51,7 @@ export interface LinkedTransfer {
   truckRegistration: string | null;
   bagsReceived: number | null;
   sourceWarehouse: string;
-  lotAgrees: boolean;
+  ficheAgrees: boolean;
 }
 
 export interface LinkedBtmIntake {
@@ -54,11 +60,13 @@ export interface LinkedBtmIntake {
 }
 
 export interface ReceiptLinks {
-  fiche: string | null;
-  /** The receipt's OWN Lot, as assigned at its unit warehouse. Null for the receipts no discharge
-   * sheet covers yet. Shown next to each linked row's lot so a mismatch is visible, not hidden. */
+  /** The receipt's OWN Lot, as assigned at its unit warehouse — now the join key. Null for the
+   * receipts no discharge sheet covers yet. */
   lotNo: string | null;
   lotWarehouse: string | null;
+  /** This receipt's own FICHE, shown only so each matched row's `ficheAgrees` is checkable — see
+   * header on why FICHE, not Lot, is the reliable identifier. */
+  fiche: string | null;
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
   btmIntakes: LinkedBtmIntake[];
@@ -82,19 +90,19 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
   const fiche = verify?.fiche?.trim() || null;
   const lotNo = own?.lotNumber?.trim() || null;
   const lotWarehouse = own?.warehouseName?.trim() || null;
-  if (!fiche) return { fiche: null, lotNo, lotWarehouse, dryingJobs: [], transfers: [], btmIntakes: [] };
+  if (!lotNo) return { lotNo: null, lotWarehouse, fiche, dryingJobs: [], transfers: [], btmIntakes: [] };
 
   const [dryingRows, transferRows] = await Promise.all([
     prisma.dryingJob.findMany({
-      where: { ficheNo: fiche },
-      select: { id: true, date: true, warehouse: true, bin: true, lotNo: true, status: true, dryType: true, destination: true },
+      where: { lotNo },
+      select: { id: true, date: true, warehouse: true, bin: true, lotNo: true, status: true, dryType: true, destination: true, ficheNo: true },
       orderBy: { date: "asc" },
     }),
     prisma.juteWarehouseTransferReceipt.findMany({
-      where: { noFiche: fiche },
+      where: { lotNo },
       select: {
         sn: true, receivedDate: true, rawDate: true, lotNo: true, binNo: true,
-        truckRegistration: true, bagsReceived: true, sourceWarehouse: true, idTransfer: true,
+        truckRegistration: true, bagsReceived: true, sourceWarehouse: true, idTransfer: true, noFiche: true,
       },
       orderBy: { sn: "asc" },
     }),
@@ -107,15 +115,19 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
     ? await prisma.btmIntake.findMany({ where: { btmNo: { in: btmNos } }, select: { btmNo: true, binNo: true }, orderBy: { btmNo: "asc" } })
     : [];
 
-  // Only claim agreement when BOTH sides actually have a lot — an absent lot is unknown, not equal.
-  const agrees = (theirs: string | null) =>
-    !!lotNo && !!theirs?.trim() && theirs.trim() === lotNo;
+  // Only claim agreement when BOTH sides actually have a fiche — an absent fiche is unknown, not equal.
+  const ficheAgrees = (theirs: string | null) =>
+    !!fiche && !!theirs?.trim() && theirs.trim() === fiche;
 
   return {
-    fiche,
     lotNo,
     lotWarehouse,
-    dryingJobs: dryingRows.map((d) => ({ ...d, lotAgrees: agrees(d.lotNo) })),
+    fiche,
+    dryingJobs: dryingRows.map((d) => ({
+      id: d.id, date: d.date, warehouse: d.warehouse, bin: d.bin, lotNo: d.lotNo,
+      status: d.status, dryType: d.dryType, destination: d.destination,
+      ficheAgrees: ficheAgrees(d.ficheNo),
+    })),
     transfers: transferRows.map((r) => ({
       sn: r.sn,
       receivedDate: formatReceivedDate(r.receivedDate, r.rawDate),
@@ -124,7 +136,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       truckRegistration: r.truckRegistration,
       bagsReceived: r.bagsReceived,
       sourceWarehouse: r.sourceWarehouse,
-      lotAgrees: agrees(r.lotNo),
+      ficheAgrees: ficheAgrees(r.noFiche),
     })),
     btmIntakes,
   };
