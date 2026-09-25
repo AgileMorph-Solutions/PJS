@@ -12,10 +12,17 @@ import ExcelJS from "exceljs";
  * every one of its 35 genuinely-negative rows is a shared-formula cell, and checking only
  * `"formula" in v` silently returned null for all of them instead of the real negative balance.
  * `cell.type === Formula` is what actually catches both shapes; always unwrap through this so a
- * formula's computed result is what gets read, never `[object Object]` or a dropped value. */
+ * formula's computed result is what gets read, never `[object Object]` or a dropped value.
+ *
+ * A formula cell can also carry NO cached result at all (`{sharedFormula: "AD5"}` and nothing
+ * else) when the workbook was saved without recalculating — five cells in DISCHARGEMENT's `Diff`
+ * column are exactly this. Unwrapping has to happen for EVERY formula cell, not just the ones with
+ * a `result` key, or the raw object falls through and `text()` renders the literal string
+ * "[object Object]". No cached result means the value genuinely isn't in the file: answer null. */
 function rawValue(cell: ExcelJS.Cell): ExcelJS.CellValue {
   const v = cell.value;
-  if (cell.type === ExcelJS.ValueType.Formula && v && typeof v === "object" && "result" in v) {
+  if (cell.type === ExcelJS.ValueType.Formula) {
+    if (!v || typeof v !== "object") return v ?? null;
     return (v as ExcelJS.CellFormulaValue | ExcelJS.CellSharedFormulaValue).result ?? null;
   }
   return v;

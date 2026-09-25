@@ -180,13 +180,15 @@ export const CHECKS: Check[] = [
       if (!added.length) return null;
       return {
         id: "origin_not_in_master", severity: "info",
-        title: "Transfer origins missing from the origins master",
+        title: "Origins observed in an upload but absent from the curated master",
         entity: "Origin", affectedCount: added.length,
         sampleIds: added.slice(0, 5).map((o) => o.name),
         evidence:
-          "Origin here is the RCN's upstream supply town, not a warehouse. These values appear in the " +
-          "transfer sheet but not in the origins master — including at least one literal " +
-          "'Not Mentiond '. Kept as a soft reference so no real row is dropped.",
+          "Origin here is the RCN's upstream supply town, not a warehouse. These values appear in an " +
+          "uploaded sheet but not in the curated origins master — 7 from the warehouse-transfer sheet " +
+          "(including a literal 'Not Mentiond ') and 11 from the unit-warehouse discharge sheet. Two of " +
+          "the latter are the same town spelled two ways (SAKASSOU / SAKKASSOU), which is why these are " +
+          "reported rather than auto-merged. Kept as soft references so no real row is dropped.",
       };
     },
   },
@@ -234,27 +236,55 @@ export const CHECKS: Check[] = [
     },
   },
   {
-    id: "lot_namespace_conflict",
+    id: "lot_namespace_disagreement",
     async run({ prisma }) {
-      const [lots, dry] = await Promise.all([
-        prisma.stageLotAssignment.findMany({ where: { lotNumber: { not: null } }, select: { lotNumber: true } }),
-        prisma.dryingJob.findMany({ select: { lotNo: true } }),
+      // Replaces the old `lot_namespace_conflict`, which asked whether the two lot SETS overlapped
+      // at all and self-suppressed the moment they did. Both namespaces are small integers, so once
+      // receipts gained real lots the sets overlapped immediately and that check went quiet — a
+      // false all-clear. What actually matters is whether the SAME physical batch carries the SAME
+      // lot in both places, so this compares them per-batch, joined on the fiche that identifies it.
+      const withLot = await prisma.stageLotAssignment.findMany({
+        where: { lotNumber: { not: null } },
+        select: { lotNumber: true, receipt: { select: { verify: { select: { fiche: true } } } } },
+      });
+      const lotByFiche = new Map<string, string>();
+      for (const r of withLot) {
+        const f = r.receipt.verify?.fiche?.trim();
+        const l = (r.lotNumber ?? "").trim();
+        if (f && l) lotByFiche.set(f, l);
+      }
+      if (!lotByFiche.size) return null;
+
+      const [dry, xfer] = await Promise.all([
+        prisma.dryingJob.findMany({ select: { ficheNo: true, lotNo: true } }),
+        prisma.juteWarehouseTransferReceipt.findMany({ select: { noFiche: true, lotNo: true } }),
       ]);
-      const a = new Set(lots.map((l) => l.lotNumber!).filter(Boolean));
-      const b = new Set(dry.map((d) => d.lotNo).filter(Boolean));
-      if (!a.size || !b.size) return null;
-      const overlap = [...b].filter((x) => a.has(x));
-      if (overlap.length) return null;
+
+      let compared = 0;
+      const disagreements: string[] = [];
+      const note = (label: string, fiche: string, theirs: string) => {
+        const ours = lotByFiche.get(fiche);
+        if (!ours || !theirs) return;
+        compared += 1;
+        if (ours !== theirs) disagreements.push(`${label} fiche ${fiche}: unit-warehouse Lot ${ours} vs ${theirs}`);
+      };
+      for (const d of dry) note("drying", (d.ficheNo ?? "").trim(), (d.lotNo ?? "").trim());
+      for (const t of xfer) note("transfer", (t.noFiche ?? "").trim(), (t.lotNo ?? "").trim());
+
+      if (!disagreements.length) return null;
       return {
-        id: "lot_namespace_conflict", severity: "critical",
-        title: "Receipt lots and drying-job lots share no keys",
-        entity: "StageLotAssignment", affectedCount: b.size, sampleIds: [...b].slice(0, 5),
+        id: "lot_namespace_disagreement", severity: "critical",
+        title: "The same batch carries a different Lot Number at each warehouse",
+        entity: "StageLotAssignment", affectedCount: disagreements.length,
+        sampleIds: disagreements.slice(0, 5),
         evidence:
-          "Zero of the drying jobs' lot numbers match any receipt's Lot Number — they are different " +
-          "identifier spaces (the drying lots match ledger 4's integer LOT NO instead). Until the " +
-          "client confirms the real lot namespace, no Lot entity is created and lot stays a soft " +
-          "reference. Note ledger 4's LOT NO itself contains duplicates, which would contradict " +
-          "'one truck = one Lot, always'.",
+          `Of ${compared} batches where a lot is recorded both at the unit warehouse (the discharge ` +
+          `sheet, which is where a Lot is assigned) and again downstream, ${disagreements.length} ` +
+          "disagree — e.g. fiche 72566 is Lot 17 at Bouaké and Lot 20 at Yakro. Each site appears to " +
+          "run its own 1..N sequence, so a lot number is only meaningful together with its warehouse. " +
+          "That is why lot uniqueness is enforced per warehouse and why the receipt-to-drying/transfer " +
+          "links are still matched on fiche, not lot. Reported rather than reconciled: which site's " +
+          "number is authoritative is a question only the client can answer.",
       };
     },
   },

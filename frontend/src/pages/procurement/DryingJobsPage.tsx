@@ -21,9 +21,18 @@ export function DryingJobsPage() {
 
   // Historical drying jobs can predate today's receipts (imported from the source workbook), so
   // not every job has a matching receipt to link to — rows without a match stay non-clickable.
-  const receiptIdByLot = useMemo(() => {
+  //
+  // Keyed on FICHE, never on Lot. Lot looks like the obvious key and is wrong: each warehouse runs
+  // its own 1..N lot sequence, so the same batch is Lot 17 at the unit warehouse and Lot 20 in this
+  // drying report — measured, 345 batches disagree, and the `lot_namespace_disagreement` finding
+  // reports it. Matching on lot here would link almost every row to an unrelated receipt that
+  // merely shares a small integer. Fiche is the identifier that genuinely survives across sheets.
+  const receiptIdByFiche = useMemo(() => {
     const m = new Map<string, string>();
-    for (const r of receipts) if (r.lotNo) m.set(r.lotNo, r.id);
+    for (const r of receipts) {
+      const fiche = r.stageData["n-verify"]?.["FICHE"]?.trim();
+      if (fiche) m.set(fiche, r.id);
+    }
     return m;
   }, [receipts]);
 
@@ -80,7 +89,7 @@ export function DryingJobsPage() {
           rows={jobs}
           keyFn={(j) => j.id}
           rowHref={(j) => {
-            const receiptId = j.lotNo ? receiptIdByLot.get(j.lotNo) : undefined;
+            const receiptId = j.ficheNo ? receiptIdByFiche.get(j.ficheNo.trim()) : undefined;
             return receiptId ? `/procurement/receipts/${receiptId}` : undefined;
           }}
           emptyTitle="No drying jobs recorded"

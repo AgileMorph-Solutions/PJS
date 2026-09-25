@@ -363,26 +363,59 @@ function LinkedRecordsCard({
         </p>
       ) : (
         <div className="space-y-3.5">
+          {links.lotNo && (
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-brand-50 border border-brand-200">
+              <span className="material-symbols-outlined text-[15px] text-brand-700">inventory_2</span>
+              <span className="text-[12.5px] font-semibold text-brand-800">
+                This receipt's own Lot: {links.lotNo} · {links.lotWarehouse || "—"}
+              </span>
+            </div>
+          )}
           <div className="space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
               Lot &amp; Bin observed elsewhere
             </p>
-            {/* Per-source, deliberately never merged into one "the bin" — the same batch is
-                genuinely in a different bin at each stage (received vs. moved for drying). */}
+            {/* Per-source, deliberately never merged into one "the lot" or "the bin" — each
+                warehouse runs its own Lot sequence (see the agreement tag below) and the same
+                batch is genuinely in a different bin at each stage (received vs. drying). */}
             <ul className="space-y-1">
               {links.transfers.map((t) => (
                 <li key={`t-${t.sn}`} className="text-[12.5px] text-warmstone-700">
                   Lot {t.lotNo || "—"} · Bin {t.binNo || "—"}{" "}
                   <span className="text-warmstone-400">— transfer SN {t.sn}</span>
+                  {links.lotNo && (
+                    <span
+                      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        t.lotAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                      }`}
+                    >
+                      {t.lotAgrees ? "same Lot" : "different Lot numbering"}
+                    </span>
+                  )}
                 </li>
               ))}
               {links.dryingJobs.map((d) => (
                 <li key={`d-${d.id}`} className="text-[12.5px] text-warmstone-700">
                   Lot {d.lotNo || "—"} · Bin {d.bin || "—"}{" "}
                   <span className="text-warmstone-400">— drying {d.id}</span>
+                  {links.lotNo && (
+                    <span
+                      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        d.lotAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                      }`}
+                    >
+                      {d.lotAgrees ? "same Lot" : "different Lot numbering"}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
+            {links.lotNo && (links.transfers.some((t) => !t.lotAgrees) || links.dryingJobs.some((d) => !d.lotAgrees)) && (
+              <p className="text-[11.5px] text-warmstone-400 leading-relaxed pt-0.5">
+                Each warehouse assigns its own Lot sequence — a different number downstream is
+                expected, not an error. See the "same batch, different Lot per site" finding.
+              </p>
+            )}
           </div>
 
           {links.transfers.length > 0 && (

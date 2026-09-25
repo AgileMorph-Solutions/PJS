@@ -11,6 +11,7 @@ import ExcelJS from "exceljs";
 import { PrismaClient } from "@prisma/client";
 import { checkImporter } from "../src/domain/imports/registry.js";
 import { offloadingsImporter } from "../src/domain/imports/offloadings.js";
+import { warehouseDischargesImporter } from "../src/domain/imports/warehouseDischarges.js";
 import { previewImport } from "../src/services/imports.js";
 
 const prisma = new PrismaClient();
@@ -167,5 +168,71 @@ describe("ledger-1 content-key dedup — the artificial-seq shape with no source
     const buffer = (await wb.xlsx.writeBuffer()) as unknown as Buffer;
     const preview = await previewImport(buffer, "test-ledger1.xlsx", "juteWarehouseStock");
     expect(preview.duplicateCount).toBe(0);
+  });
+});
+
+describe("warehouseDischarges — the duplicated-quality-panel shape", () => {
+  const NEW_SHEETS = path.join(DOCS, "new sheets");
+
+  it("accepts the real DISCHARGEMENT file", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Suppliers Offloading_Bouake Warehouse Report.xlsx"));
+    expect(checkImporter(wb, "warehouseDischarges")).toEqual({ ok: true });
+  });
+
+  it("rejects it when checked as any other known shape", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Suppliers Offloading_Bouake Warehouse Report.xlsx"));
+    for (const id of ["receipts", "dryingJobs", "juteWarehouseStock", "juteWarehouseTransfer"] as const) {
+      const result = checkImporter(wb, id);
+      expect(result.ok, `expected ${id} to reject DISCHARGEMENT`).toBe(false);
+    }
+  });
+
+  it("rejects a workbook whose two quality panels have been swapped, even though the header row still matches perfectly", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Suppliers Offloading_Bouake Warehouse Report.xlsx"));
+    const sheet = wb.getWorksheet("DISCHARGEMENT")!;
+    // Swap only the row-3 banners — the header row (row 4) is untouched and still fingerprints as
+    // a perfect match. Only the anchor check can catch this.
+    const a = sheet.getRow(3).getCell(33).value;
+    const b = sheet.getRow(3).getCell(49).value;
+    sheet.getRow(3).getCell(33).value = b as ExcelJS.CellValue;
+    sheet.getRow(3).getCell(49).value = a as ExcelJS.CellValue;
+
+    const result = checkImporter(wb, "warehouseDischarges");
+    expect(result.ok).toBe(false);
+    if (!result.ok && result.reason === "anchor-mismatch") {
+      expect(result.anchors.length).toBeGreaterThan(0);
+    } else {
+      expect.fail(`expected an anchor-mismatch rejection, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  it("parses both quality panels from the correct columns, and unwraps resultless shared-formula cells to null", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Suppliers Offloading_Bouake Warehouse Report.xlsx"));
+    const rows = warehouseDischargesImporter.parse(wb);
+    expect(rows.length).toBe(454);
+    expect(rows.filter((r) => r.skipReason).length).toBe(0);
+
+    // Row 5 (first data row): the two panels genuinely differ — proof they're read from columns
+    // 33-48 and 49-64 respectively, not both from the same block.
+    const first = rows[0]!.data;
+    expect(first.lotNo).toBe("1");
+    expect(first.ficheCca).toBe("72533");
+    expect(first.sampling.kor).not.toBeNull();
+    expect(first.finalOffload.kor).not.toBeNull();
+    expect(first.sampling.kor).not.toBe(first.finalOffload.kor);
+
+    // Diff (col 30) has 5 real rows that are shared-formula cells with no cached result at all —
+    // must be null, never the literal string "[object Object]".
+    const diffs = rows.map((r) => r.data.diff);
+    expect(diffs.filter((d) => d === null).length).toBe(5);
+    expect(diffs.some((d) => typeof d === "string")).toBe(false);
+  });
+
+  it("every Lot No is distinct, and 454 rows also carry both a Lot and a Fiche", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Suppliers Offloading_Bouake Warehouse Report.xlsx"));
+    const rows = warehouseDischargesImporter.parse(wb);
+    const lots = new Set(rows.map((r) => r.data.lotNo));
+    expect(lots.size).toBe(454);
+    expect(rows.every((r) => r.data.lotNo && r.data.ficheCca)).toBe(true);
   });
 });

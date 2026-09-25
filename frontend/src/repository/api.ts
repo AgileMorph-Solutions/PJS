@@ -263,7 +263,9 @@ export interface CommitImportResponse {
 }
 
 /** A batch's real FICHE (paper docket) linking it to other records about the same batch — see
- * backend/src/services/receiptLinks.ts's header for why FICHE and not Lot/Bin. */
+ * backend/src/services/receiptLinks.ts's header for why FICHE, not the receipt's own Lot: each
+ * warehouse runs its own 1..N lot sequence, so the same batch is a different Lot at each site
+ * (measured: 334/339 transfers and 12/12 drying rows disagree with the receipt's own lot). */
 export interface LinkedDryingJob {
   id: string;
   date: string;
@@ -272,6 +274,8 @@ export interface LinkedDryingJob {
   lotNo: string;
   status: string;
   dryType: string;
+  /** Whether this row's lot matches the receipt's own (ReceiptLinks.lotNo). False is the norm. */
+  lotAgrees: boolean;
   destination: string;
 }
 
@@ -283,10 +287,20 @@ export interface LinkedTransfer {
   truckRegistration: string | null;
   bagsReceived: number | null;
   sourceWarehouse: string;
+  lotAgrees: boolean;
+}
+
+export interface LinkedBtmIntake {
+  btmNo: string;
+  binNo: string;
 }
 
 export interface ReceiptLinks {
   fiche: string | null;
+  /** The receipt's OWN Lot, assigned at its unit warehouse. Null until a discharge sheet covers it. */
+  lotNo: string | null;
+  lotWarehouse: string | null;
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
+  btmIntakes: LinkedBtmIntake[];
 }

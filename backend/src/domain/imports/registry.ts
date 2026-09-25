@@ -1,5 +1,5 @@
 /**
- * The single place all 4 known upload shapes are registered. Detection is never sheet-name-alone
+ * The single place all 5 known upload shapes are registered. Detection is never sheet-name-alone
  * — see headerCheck.ts's header comment for the real corruption case that requires this.
  */
 import type ExcelJS from "exceljs";
@@ -9,12 +9,14 @@ import { offloadingsImporter } from "./offloadings.js";
 import { dryingImporter } from "./drying.js";
 import { juteWarehouseStockImporter } from "./juteWarehouseStock.js";
 import { juteWarehouseTransferImporter } from "./juteWarehouseTransfer.js";
+import { warehouseDischargesImporter } from "./warehouseDischarges.js";
 
 export const IMPORTERS: ImporterDef[] = [
   offloadingsImporter,
   dryingImporter,
   juteWarehouseStockImporter,
   juteWarehouseTransferImporter,
+  warehouseDischargesImporter,
 ];
 
 export function getImporter(id: ImporterId): ImporterDef {
@@ -25,7 +27,9 @@ export function getImporter(id: ImporterId): ImporterDef {
 
 export function checkImporter(workbook: ExcelJS.Workbook, id: ImporterId): HeaderCheckResult {
   const def = getImporter(id);
-  return verifyHeader(workbook, def.expectedSheet, def.headerRow, def.expectedHeader, def.checkHeaderPrefix);
+  return verifyHeader(
+    workbook, def.expectedSheet, def.headerRow, def.expectedHeader, def.checkHeaderPrefix, def.expectedAnchors
+  );
 }
 
 /**

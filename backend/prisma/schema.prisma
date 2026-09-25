@@ -280,6 +280,17 @@ model StageLotAssignment {
   assignedBy     String? /// Assigned by (Warehouse Team)
   assignedAt     String? /// Date/time assigned
   receipt        Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  /// NOT a stage field — no label in stages.ts maps to it, and STAGE_FIELD_MAP must never gain one.
+  /// It exists only so lot uniqueness can be enforced PER WAREHOUSE by a real database constraint.
+  /// Measured on the client's own sheets: the same truck is Lot 17 at Bouaké and Lot 20 at Yakro
+  /// (334 of 339 fiche-matched rows disagree), so each warehouse runs its own 1..N lot sequence and
+  /// a global unique index would reject the second site's Lot 1 outright. A constraint can't span
+  /// the join to Receipt.warehouse, hence this controlled copy, written from Receipt.warehouse at
+  /// the same moment as lotNumber and asserted equal to it by a data-quality check.
+  warehouseName String?
+
+  @@index([warehouseName, lotNumber])
 }
 
 /// Stage n-bin (gap) — Allocate Bin (physical storage location)
@@ -613,6 +624,121 @@ model JuteWarehouseTransferReceipt {
   @@index([binNo])
   @@index([noFiche])
 }
+
+/// Unit-warehouse OFFLOADING — sheet "DISCHARGEMENT" of Suppliers Offloading_Bouake Warehouse
+/// Report.xlsx. This is where a Lot Number is actually ASSIGNED (confirmed on the Sept 2026 client
+/// call: Lot, not Fiche, is what the client tracks a batch by), which makes it the one sheet that
+/// carries BOTH identifiers — measured 454 rows, 454 distinct lots, zero duplicates, and every row
+/// also carrying the arrival fiche. That 1:1 bridge is what lets real Lot numbers reach a Receipt
+/// at all; OFFLOADINGS has no Lot column, so before this every imported receipt had none.
+///
+/// Stored verbatim, all 64 columns, same as JuteWarehouseTransferReceipt — the 16-stage model has
+/// no home for most of them and dropping them would be fabrication by omission (ground rule §4).
+/// Two quality panels, not one: columns 33-48 and 49-64 repeat the SAME 16 labels, distinguished
+/// only by the row-3 banners "(Sampling Report)" and "(Final Offloading Report)" — which is why
+/// the importer keys off column index and pins those banners as header anchors.
+model WarehouseDischarge {
+  /// The sheet's own S. No. Not the key — `lotNo` is (a real, unique source value).
+  sn Int
+
+  warehouseSite  String?
+  warehouse      String?
+  /// Bouaké writes a finer granularity here (BKE-003-BIN-003) than the receipts master holds
+  /// (BKE-003), and 101 rows carry a third namespace entirely (DIRECT-00x). Kept verbatim and NOT
+  /// written onto the receipt's n-bin stage — reconciling the three bin namespaces is its own job.
+  unloadingBin   String?
+  /// Filled on only 47 rows, and deliberately NOT written to the n-drying stage: n-drying presence
+  /// is what deriveStatus() reads to report "in drying", so writing it would silently advance 47
+  /// receipts on the strength of a bin label.
+  afterDryingBin String?
+
+  /// The real source key — 454/454 distinct. Dedup on re-upload is a plain skipDuplicates.
+  lotNo String @id
+
+  scaleLocation String?
+  whReceiptNo   String?
+  /// The bridge back to a Receipt (StageVerifyDocs.fiche). Usually one number, but 2 real rows
+  /// carry two slash-joined fiches ("69883/69881") — stored exactly as written, because the
+  /// receipts sheet carries the same joined value and they resolve.
+  ficheCca      String
+  truckNo       String?
+
+  arrivalDate   DateTime?
+  dischargeDate DateTime?
+  /// Raw twins, same reason as JuteWarehouseTransferReceipt.rawDate: all 454 rows in today's file
+  /// hold real dates, but a hand-typed one would otherwise vanish rather than be preserved and
+  /// reported. Populated only when the cell wasn't a real date.
+  arrivalDateRaw   String?
+  dischargeDateRaw String?
+
+  origin       String?
+  supplierName String?
+  supplierCode String?
+
+  bonSacs      Int?
+  humidSacs    Int?
+  tornSacs     Int?
+  reconSacs    Int?
+  totalSacsLot Int?
+  sacsExports  Int?
+  sacsBio      Int?
+  sacsBrousses Int?
+  totalRecd    Int?
+
+  grossWtRecd     Decimal?
+  totalRefraction Decimal?
+  grnQty          Decimal?
+  weightPaid      Decimal?
+  netWeight       Decimal?
+  diff            Decimal?
+  grnFreshQty     Decimal?
+  grnDriedQty     Decimal?
+
+  /// Quality panel 1 of 2 — row-3 banner "(Sampling Report)", columns 33-48.
+  samplingBrowns             Decimal?
+  samplingVoids              Decimal?
+  samplingOil                Decimal?
+  samplingTotDefect          Decimal?
+  samplingGoodKernel         Decimal?
+  samplingImmature           Decimal?
+  samplingSpotted            Decimal?
+  samplingTotKernels         Decimal?
+  samplingKor                Decimal?
+  samplingShot               Decimal?
+  samplingFot                Decimal?
+  samplingUsefulKernelsYield Decimal?
+  samplingTotalYield         Decimal?
+  samplingMoisture           Decimal?
+  samplingNc                 Decimal?
+  samplingShell              Decimal?
+
+  /// Quality panel 2 of 2 — row-3 banner "(Final Offloading Report)", columns 49-64.
+  finalOffloadBrowns             Decimal?
+  finalOffloadVoids              Decimal?
+  finalOffloadOil                Decimal?
+  finalOffloadTotDefect          Decimal?
+  finalOffloadGoodKernel         Decimal?
+  finalOffloadImmature           Decimal?
+  finalOffloadSpotted            Decimal?
+  finalOffloadTotKernels         Decimal?
+  finalOffloadKor                Decimal?
+  finalOffloadShot               Decimal?
+  finalOffloadFot                Decimal?
+  finalOffloadUsefulKernelsYield Decimal?
+  finalOffloadTotalYield         Decimal?
+  finalOffloadMoisture           Decimal?
+  finalOffloadNc                 Decimal?
+  finalOffloadShell              Decimal?
+
+  /// The physical row this came from, for traceability back to the source.
+  sheetRow  Int?
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@index([ficheCca])
+  @@index([warehouse])
+}
+
 
 /// The undated hand-tallied figures that are the ONLY source for ledgers 2 and 3 today. Stored as
 /// labelled snapshots rather than invented ledger rows — capturedAt is null because the source

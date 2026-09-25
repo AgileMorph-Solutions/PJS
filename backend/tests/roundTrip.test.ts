@@ -4,6 +4,13 @@
  * `stageDataShadow` holds each receipt's pre-normalization JSON, exactly as it was in
  * seed/receipts.json. If assembling stageData from the 16 stage tables reproduces that byte for
  * byte, the migration lost nothing. That oracle is why the shadow column exists.
+ *
+ * ONE narrow exception now exists, and it is deliberately narrow. The DISCHARGEMENT importer
+ * (unit-warehouse offloading) writes the client's REAL Lot Numbers onto receipts — that sheet is
+ * where a Lot is actually assigned, and OFFLOADINGS never had a Lot column, so the demo seed left
+ * the field blank on every receipt. Filling a blank the seed never had is legitimately new data,
+ * not a normalization defect. Everything else still has to survive byte for byte: a value changing
+ * from one non-blank to another, a field vanishing, or a stage disappearing all still fail loudly.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -13,6 +20,16 @@ import { setStageFields } from "../src/services/receipts.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
+
+/** Stage -> the only field labels real imported data is allowed to fill in after the fact. Adding
+ * to this is a deliberate act: it widens the one hole in the round-trip oracle. */
+const ENRICHABLE: Record<string, string[]> = { "n-lot": ["Lot Number"] };
+
+/** An allowed enrichment is blank -> non-blank, on an allowlisted field, and nothing else. */
+function isEnrichment(stageId: string, label: string, before?: string, after?: string): boolean {
+  if (!ENRICHABLE[stageId]?.includes(label)) return false;
+  return (before ?? "").trim() === "" && (after ?? "").trim() !== "";
+}
 
 describe("golden seed round-trip", () => {
   let rows: any[];
@@ -37,19 +54,56 @@ describe("golden seed round-trip", () => {
       // Compare stage-by-stage so a failure names the exact stage and field.
       const stages = new Set([...Object.keys(original), ...Object.keys(assembled)]);
       for (const s of stages) {
-        if (JSON.stringify(original[s]) !== JSON.stringify(assembled[s])) {
-          mismatches.push(`${row.id}/${s}: ${JSON.stringify(original[s])} != ${JSON.stringify(assembled[s])}`);
+        const before = original[s];
+        const after = assembled[s];
+        if (JSON.stringify(before) === JSON.stringify(after)) continue;
+        // A stage the shadow never had may only appear if it is enrichable (see ENRICHABLE).
+        if (before === undefined) {
+          if (!(s in ENRICHABLE)) mismatches.push(`${row.id}/${s}: stage appeared, not enrichable`);
+          continue;
+        }
+        if (after === undefined) { mismatches.push(`${row.id}/${s}: stage disappeared`); continue; }
+        for (const label of new Set([...Object.keys(before), ...Object.keys(after)])) {
+          if (before[label] === after[label]) continue;
+          if (isEnrichment(s, label, before[label], after[label])) continue;
+          mismatches.push(`${row.id}/${s}/${label}: ${JSON.stringify(before[label])} != ${JSON.stringify(after[label])}`);
         }
       }
     }
     expect(mismatches).toEqual([]);
   });
 
-  it("preserves stage PRESENCE exactly, including stages whose fields are all blank", () => {
+  it("preserves stage PRESENCE — a stage may be gained only by enrichment, never lost", () => {
     for (const row of rows) {
       const original = JSON.parse(row.stageDataShadow!) as Record<string, unknown>;
-      expect(Object.keys(assembleStageData(row)).sort()).toEqual(Object.keys(original).sort());
+      const assembled = Object.keys(assembleStageData(row));
+      for (const s of Object.keys(original)) expect(assembled, `${row.id} lost ${s}`).toContain(s);
+      for (const s of assembled) {
+        if (s in original) continue;
+        expect(Object.keys(ENRICHABLE), `${row.id} gained non-enrichable ${s}`).toContain(s);
+      }
     }
+  });
+
+  /**
+   * The enrichment channel is pinned, not just permitted: exactly these receipts, on exactly this
+   * field. Without this a regression that filled Lot Numbers everywhere — or filled the wrong
+   * field — would slip through the two relaxed assertions above silently.
+   *
+   * 29 is measured, not chosen: of the 452 lots the DISCHARGEMENT import writes, 29 land on seeded
+   * receipts (17 that already had a blank n-lot row, 12 that gain the stage).
+   */
+  it("enrichment is confined to the measured set: 29 seeded receipts, Lot Number only", () => {
+    const enriched: string[] = [];
+    for (const row of rows) {
+      const original = JSON.parse(row.stageDataShadow!) as Record<string, Record<string, string>>;
+      const assembled = assembleStageData(row);
+      const lot = assembled["n-lot"]?.["Lot Number"] ?? "";
+      if (lot.trim() === "") continue;
+      expect(original["n-lot"]?.["Lot Number"] ?? "", `${row.id} overwrote a real lot`).toBe("");
+      enriched.push(row.id);
+    }
+    expect(enriched.length).toBe(29);
   });
 });
 

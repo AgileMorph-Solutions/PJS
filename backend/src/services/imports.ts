@@ -18,6 +18,7 @@ import type { OffloadingRow } from "../domain/imports/offloadings.js";
 import type { DryingJobRow } from "../domain/imports/drying.js";
 import type { JuteWarehouseStockRow } from "../domain/imports/juteWarehouseStock.js";
 import type { JuteWarehouseTransferRow } from "../domain/imports/juteWarehouseTransfer.js";
+import type { WarehouseDischargeRow } from "../domain/imports/warehouseDischarges.js";
 import { prisma } from "../db.js";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 
@@ -130,7 +131,7 @@ export async function previewImport(
     const detected = detectImporter(workbook);
     if (!detected.matched) {
       throw new ImportRejectedError(
-        "Couldn't auto-detect which of the 4 known shapes this file is — pick one manually.",
+        "Couldn't auto-detect which of the 5 known shapes this file is — pick one manually.",
         { attempts: detected.attempts }
       );
     }
@@ -184,6 +185,10 @@ async function computeFindings(
   }
   // dryingJobs / juteWarehouseTransfer: natural DB-unique keys, no content-key heuristic needed —
   // their dedup is a plain skipDuplicates at commit time (see the commit functions below).
+
+  if (importerId === "warehouseDischarges") {
+    findings.push(...(await dischargeLotFindings(rows as ParsedRow<WarehouseDischargeRow>[], filename)));
+  }
 
   if (duplicates.length > 0) {
     findings.push({
@@ -277,6 +282,23 @@ export interface CommitResponse {
   created: number;
   skippedDuplicates: number;
   skippedInvalid: number;
+  /** Only the warehouseDischarges importer writes back onto existing receipts, so these are
+   * absent for every other shape rather than reported as a misleading zero. */
+  lotWriteBack?: LotWriteBackResult;
+}
+
+/** What the Lot write-back did. Every skip is counted and named rather than silently applied —
+ * the same "surface it, never fix it quietly" rule the data-quality checks follow. */
+export interface LotWriteBackResult {
+  written: number;
+  /** The sheet's fiche matched no receipt — expected the first time a newer workbook arrives. */
+  skippedUnmatched: number;
+  /** Two rows in the sheet claim the same fiche, so which lot belongs to the receipt is unknowable
+   * (fiche 82130 is exactly this on today's file: two different trucks). Never "first row wins". */
+  skippedAmbiguous: number;
+  /** That lot is already held by a DIFFERENT receipt in the same warehouse. Reassigning would
+   * silently move a lot between trucks, so it is refused and reported. */
+  skippedConflict: number;
 }
 
 export async function commitImport(token: string, opts: { skipFlagged: boolean }): Promise<CommitResponse> {
@@ -287,7 +309,16 @@ export async function commitImport(token: string, opts: { skipFlagged: boolean }
   const toWrite = usable.filter((r) => !duplicateRows.has(r.sheetRow));
 
   let created = 0;
+  let lotWriteBack: LotWriteBackResult | undefined;
   switch (entry.importerId) {
+    case "warehouseDischarges": {
+      const result = await commitWarehouseDischarges(
+        toWrite as ParsedRow<WarehouseDischargeRow>[], entry.filename
+      );
+      created = result.created;
+      lotWriteBack = result.lotWriteBack;
+      break;
+    }
     case "receipts":
       created = await commitReceipts(toWrite as ParsedRow<OffloadingRow>[], entry.filename);
       break;
@@ -302,7 +333,10 @@ export async function commitImport(token: string, opts: { skipFlagged: boolean }
       break;
   }
 
-  return { importerId: entry.importerId, created, skippedDuplicates: duplicateRows.size, skippedInvalid };
+  return {
+    importerId: entry.importerId, created, skippedDuplicates: duplicateRows.size, skippedInvalid,
+    ...(lotWriteBack ? { lotWriteBack } : {}),
+  };
 }
 
 /** Upserts one master row per observed value not already known — the same "observed union with
@@ -467,4 +501,239 @@ async function commitJuteWarehouseTransfer(rows: ParsedRow<JuteWarehouseTransfer
     skipDuplicates: true,
   });
   return result.count;
+}
+
+/** Bin codes observed in an upload. `Bin.code` is a plain id with no FK, so this is purely the
+ * "observed union with provenance" pattern again — note DISCHARGEMENT introduces a THIRD bin
+ * namespace (DIRECT-00x, 101 rows) alongside Bouaké's BKE-* and Yakro's BIN-*, which is why
+ * reconciling bins is deliberately left out of this importer's write-back. */
+async function upsertObservedBins(codes: Set<string>, filename: string) {
+  if (!codes.size) return;
+  await prisma.bin.createMany({
+    data: [...codes].map((code) => ({ code, source: `upload: ${filename}` })),
+    skipDuplicates: true,
+  });
+}
+
+/**
+ * Unit-warehouse offloading. Two distinct jobs, in order: store the sheet verbatim, then write the
+ * Lot it assigns back onto the matching Receipt — the only path by which a receipt ever gets a real
+ * Lot Number, since OFFLOADINGS has no Lot column.
+ */
+async function commitWarehouseDischarges(
+  rows: ParsedRow<WarehouseDischargeRow>[],
+  filename: string
+): Promise<{ created: number; lotWriteBack: LotWriteBackResult }> {
+  const empty: LotWriteBackResult = { written: 0, skippedUnmatched: 0, skippedAmbiguous: 0, skippedConflict: 0 };
+  if (rows.length === 0) return { created: 0, lotWriteBack: empty };
+
+  // ── Step A: masters, then the sheet stored verbatim ──
+  const warehouses = new Set(rows.map((r) => r.data.warehouse?.trim()).filter((v): v is string => !!v));
+  const origins = new Set(rows.map((r) => r.data.origin?.trim()).filter((v): v is string => !!v));
+  const bins = new Set(rows.map((r) => r.data.unloadingBin?.trim()).filter((v): v is string => !!v));
+  const suppliers = new Map<string, string>();
+  for (const r of rows) {
+    const code = r.data.supplierCode?.trim();
+    if (code) suppliers.set(code, r.data.supplierName?.trim() || code);
+  }
+  await upsertObservedMasters(warehouses, origins, filename);
+  await upsertObservedSuppliers(suppliers, filename);
+  await upsertObservedBins(bins, filename);
+
+  const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
+  const created = await prisma.warehouseDischarge.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        lotNo: d.lotNo, sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
+        warehouseSite: d.warehouseSite, warehouse: d.warehouse,
+        unloadingBin: d.unloadingBin, afterDryingBin: d.afterDryingBin,
+        scaleLocation: d.scaleLocation, whReceiptNo: d.whReceiptNo, ficheCca: d.ficheCca,
+        truckNo: d.truckNo,
+        arrivalDate: d.arrivalDate ? new Date(d.arrivalDate) : null, arrivalDateRaw: d.arrivalDateRaw,
+        dischargeDate: d.dischargeDate ? new Date(d.dischargeDate) : null, dischargeDateRaw: d.dischargeDateRaw,
+        origin: d.origin, supplierName: d.supplierName, supplierCode: d.supplierCode,
+        bonSacs: d.bonSacs, humidSacs: d.humidSacs, tornSacs: d.tornSacs, reconSacs: d.reconSacs,
+        totalSacsLot: d.totalSacsLot, sacsExports: d.sacsExports, sacsBio: d.sacsBio,
+        sacsBrousses: d.sacsBrousses, totalRecd: d.totalRecd,
+        grossWtRecd: dec(d.grossWtRecd), totalRefraction: dec(d.totalRefraction), grnQty: dec(d.grnQty),
+        weightPaid: dec(d.weightPaid), netWeight: dec(d.netWeight), diff: dec(d.diff),
+        grnFreshQty: dec(d.grnFreshQty), grnDriedQty: dec(d.grnDriedQty),
+        samplingBrowns: dec(d.sampling.browns), samplingVoids: dec(d.sampling.voids),
+        samplingOil: dec(d.sampling.oil), samplingTotDefect: dec(d.sampling.totDefect),
+        samplingGoodKernel: dec(d.sampling.goodKernel), samplingImmature: dec(d.sampling.immature),
+        samplingSpotted: dec(d.sampling.spotted), samplingTotKernels: dec(d.sampling.totKernels),
+        samplingKor: dec(d.sampling.kor), samplingShot: dec(d.sampling.shot), samplingFot: dec(d.sampling.fot),
+        samplingUsefulKernelsYield: dec(d.sampling.usefulKernelsYield),
+        samplingTotalYield: dec(d.sampling.totalYield), samplingMoisture: dec(d.sampling.moisture),
+        samplingNc: dec(d.sampling.nc), samplingShell: dec(d.sampling.shell),
+        finalOffloadBrowns: dec(d.finalOffload.browns), finalOffloadVoids: dec(d.finalOffload.voids),
+        finalOffloadOil: dec(d.finalOffload.oil), finalOffloadTotDefect: dec(d.finalOffload.totDefect),
+        finalOffloadGoodKernel: dec(d.finalOffload.goodKernel), finalOffloadImmature: dec(d.finalOffload.immature),
+        finalOffloadSpotted: dec(d.finalOffload.spotted), finalOffloadTotKernels: dec(d.finalOffload.totKernels),
+        finalOffloadKor: dec(d.finalOffload.kor), finalOffloadShot: dec(d.finalOffload.shot),
+        finalOffloadFot: dec(d.finalOffload.fot),
+        finalOffloadUsefulKernelsYield: dec(d.finalOffload.usefulKernelsYield),
+        finalOffloadTotalYield: dec(d.finalOffload.totalYield), finalOffloadMoisture: dec(d.finalOffload.moisture),
+        finalOffloadNc: dec(d.finalOffload.nc), finalOffloadShell: dec(d.finalOffload.shell),
+      };
+    }),
+    skipDuplicates: true,
+  });
+
+  return { created: created.count, lotWriteBack: await writeLotsOntoReceipts(rows) };
+}
+
+/**
+ * Writes each discharge row's Lot onto the Receipt its fiche identifies.
+ *
+ * Bulk, not `setStageFields`: that helper reloads the whole 16-relation receipt per call, so 452 of
+ * them would be ~1,800 statements for work that is ~20 here — exactly the waste this file's header
+ * says the bulk path exists to avoid. The partial unique index stays the real guarantee; the
+ * pre-checks below exist so a conflict is REPORTED rather than surfacing as a failed transaction.
+ */
+async function writeLotsOntoReceipts(rows: ParsedRow<WarehouseDischargeRow>[]): Promise<LotWriteBackResult> {
+  const out: LotWriteBackResult = { written: 0, skippedUnmatched: 0, skippedAmbiguous: 0, skippedConflict: 0 };
+
+  // A fiche claimed by two rows can't say which lot belongs to the receipt — never "first row wins".
+  const rowsByFiche = new Map<string, ParsedRow<WarehouseDischargeRow>[]>();
+  for (const r of rows) {
+    const f = r.data.ficheCca.trim();
+    if (!f) continue;
+    if (!rowsByFiche.has(f)) rowsByFiche.set(f, []);
+    rowsByFiche.get(f)!.push(r);
+  }
+
+  const verify = await prisma.stageVerifyDocs.findMany({
+    where: { fiche: { in: [...rowsByFiche.keys()] } },
+    select: { receiptId: true, fiche: true, receipt: { select: { warehouse: true } } },
+  });
+  const receiptByFiche = new Map(verify.map((v) => [v.fiche!.trim(), v]));
+
+  interface Target { receiptId: string; warehouse: string; lotNo: string }
+  const targets: Target[] = [];
+  for (const [fiche, group] of rowsByFiche) {
+    const hit = receiptByFiche.get(fiche);
+    if (!hit) { out.skippedUnmatched += group.length; continue; }
+    if (group.length > 1) { out.skippedAmbiguous += group.length; continue; }
+    targets.push({ receiptId: hit.receiptId, warehouse: hit.receipt.warehouse, lotNo: group[0]!.data.lotNo });
+  }
+  if (targets.length === 0) return out;
+
+  // Existing lot rows: which receipts already have one, and who already owns each (warehouse, lot).
+  const [existingForTargets, owners] = await Promise.all([
+    prisma.stageLotAssignment.findMany({
+      where: { receiptId: { in: targets.map((t) => t.receiptId) } },
+      select: { receiptId: true, lotNumber: true },
+    }),
+    prisma.stageLotAssignment.findMany({
+      where: {
+        warehouseName: { in: [...new Set(targets.map((t) => t.warehouse))] },
+        lotNumber: { in: [...new Set(targets.map((t) => t.lotNo))] },
+      },
+      select: { receiptId: true, warehouseName: true, lotNumber: true },
+    }),
+  ]);
+  const hasRow = new Set(existingForTargets.map((e) => e.receiptId));
+  const ownerOf = new Map(owners.map((o) => [`${o.warehouseName}\u0000${o.lotNumber}`, o.receiptId]));
+
+  const toCreate: Target[] = [];
+  const toUpdate: Target[] = [];
+  for (const t of targets) {
+    const owner = ownerOf.get(`${t.warehouse}\u0000${t.lotNo}`);
+    // Already ours → genuine no-op, and what makes re-uploading the same file idempotent.
+    if (owner === t.receiptId) continue;
+    // Someone else's → refuse. Reassigning would silently move a lot between trucks.
+    if (owner) { out.skippedConflict += 1; continue; }
+    (hasRow.has(t.receiptId) ? toUpdate : toCreate).push(t);
+  }
+
+  // `warehouseName` is not a stage field, so it is set alongside the payload rather than through
+  // toColumnPayload() — which stays the only thing naming real stage columns.
+  await prisma.$transaction(async (tx) => {
+    if (toCreate.length || toUpdate.length) {
+      await tx.stageEntry.createMany({
+        data: [...toCreate, ...toUpdate].map((t) => ({ receiptId: t.receiptId, stageId: "n-lot" })),
+        skipDuplicates: true,
+      });
+    }
+    if (toCreate.length) {
+      await tx.stageLotAssignment.createMany({
+        data: toCreate.map((t) => ({
+          receiptId: t.receiptId,
+          warehouseName: t.warehouse,
+          ...toColumnPayload("n-lot", { "Lot Number": t.lotNo }),
+        })),
+        skipDuplicates: true,
+      });
+    }
+    // Partial update: these rows already carry a real truck reference / assigned-by from the seed,
+    // and this sheet has nothing better to say about either.
+    for (const t of toUpdate) {
+      await tx.stageLotAssignment.update({
+        where: { receiptId: t.receiptId },
+        data: { warehouseName: t.warehouse, ...toColumnPayload("n-lot", { "Lot Number": t.lotNo }) },
+      });
+    }
+  });
+
+  out.written = toCreate.length + toUpdate.length;
+  return out;
+}
+
+/**
+ * What the Lot write-back will and won't be able to do, reported BEFORE anything is written — so
+ * the operator sees it on the preview rather than discovering it in the commit counts afterwards.
+ * Aggregate, like every other finding.
+ */
+async function dischargeLotFindings(
+  rows: ParsedRow<WarehouseDischargeRow>[],
+  filename: string
+): Promise<Finding[]> {
+  const findings: Finding[] = [];
+  const usable = rows.filter((r) => !r.skipReason);
+
+  const rowsByFiche = new Map<string, ParsedRow<WarehouseDischargeRow>[]>();
+  for (const r of usable) {
+    const f = r.data.ficheCca.trim();
+    if (!f) continue;
+    if (!rowsByFiche.has(f)) rowsByFiche.set(f, []);
+    rowsByFiche.get(f)!.push(r);
+  }
+
+  const ambiguous = [...rowsByFiche.entries()].filter(([, g]) => g.length > 1);
+  if (ambiguous.length) {
+    findings.push({
+      id: "fiche_duplicated_in_sheet", severity: "warning",
+      title: "Two rows claim the same Fiche, so their Lot can't be assigned",
+      entity: filename,
+      affectedCount: ambiguous.reduce((n, [, g]) => n + g.length, 0),
+      sampleIds: ambiguous.slice(0, 5).map(([f, g]) => `fiche ${f}: rows ${g.map((r) => r.sheetRow).join(", ")}`),
+      evidence:
+        "One Fiche identifies one truck, so two rows carrying it can't say which Lot belongs to that " +
+        "receipt. These rows are still stored in full; only the Lot write-back is skipped for them, " +
+        "because guessing (first row wins) would silently attach a real Lot to the wrong truck.",
+    });
+  }
+
+  const known = await prisma.stageVerifyDocs.findMany({
+    where: { fiche: { in: [...rowsByFiche.keys()] } }, select: { fiche: true },
+  });
+  const knownFiches = new Set(known.map((k) => k.fiche!.trim()));
+  const unmatched = [...rowsByFiche.entries()].filter(([f]) => !knownFiches.has(f));
+  if (unmatched.length) {
+    findings.push({
+      id: "fiche_not_matched", severity: "info",
+      title: "Rows whose Fiche matches no receipt in the app",
+      entity: filename,
+      affectedCount: unmatched.reduce((n, [, g]) => n + g.length, 0),
+      sampleIds: unmatched.slice(0, 5).map(([f, g]) => `row ${g[0]!.sheetRow}: fiche ${f}`),
+      evidence:
+        "Expected whenever this sheet runs ahead of the receipts sheet — the offloading was recorded " +
+        "before that truck's arrival was imported. The rows are stored in full; their Lot simply has " +
+        "no receipt to attach to yet, and re-uploading after importing the receipts will attach it.",
+    });
+  }
+
+  return findings;
 }

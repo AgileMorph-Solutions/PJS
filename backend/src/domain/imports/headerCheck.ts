@@ -8,15 +8,16 @@
  * refuses it instead. See docs/UPLOAD_GUIDE.md for the full story.
  */
 import type ExcelJS from "exceljs";
-import type { HeaderCheckResult } from "./types.js";
-import { readHeaderRow } from "./xlsxHelpers.js";
+import type { HeaderCheckResult, HeaderAnchor } from "./types.js";
+import { readHeaderRow, text } from "./xlsxHelpers.js";
 
 export function verifyHeader(
   workbook: ExcelJS.Workbook,
   expectedSheet: string,
   headerRow: number,
   expectedHeader: string[],
-  checkPrefix: number
+  checkPrefix: number,
+  expectedAnchors?: HeaderAnchor[]
 ): HeaderCheckResult {
   const sheet = workbook.getWorksheet(expectedSheet);
   if (!sheet) {
@@ -34,6 +35,18 @@ export function verifyHeader(
 
   if (!matches) {
     return { ok: false, reason: "header-mismatch", expectedSheet, headerRow, expected, found };
+  }
+
+  // Anchors run only after the header row itself matched — a shape whose header is already wrong
+  // gets the more specific header-mismatch report, not a confusing anchor one.
+  if (expectedAnchors?.length) {
+    const bad = expectedAnchors
+      .map((a) => ({ a, foundText: text(sheet.getRow(a.row).getCell(a.col)) ?? "" }))
+      .filter(({ a, foundText }) => !foundText.toLowerCase().includes(a.contains.toLowerCase()))
+      .map(({ a, foundText }) => ({ row: a.row, col: a.col, expected: a.contains, found: foundText }));
+    if (bad.length) {
+      return { ok: false, reason: "anchor-mismatch", expectedSheet, anchors: bad };
+    }
   }
   return { ok: true };
 }

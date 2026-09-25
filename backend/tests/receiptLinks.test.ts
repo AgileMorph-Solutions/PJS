@@ -29,6 +29,18 @@ describe("receipt links (FICHE cross-reference)", () => {
     expect(links.dryingJobs[0]!.bin).not.toBe(links.transfers[0]!.binNo);
   });
 
+  it("REC-2026-0025's OWN lot (assigned at its unit warehouse) disagrees with both downstream records — measured, not a bug", async () => {
+    const links = await getReceiptLinks("REC-2026-0025");
+    // The unit-warehouse discharge sheet (the Lot-first import) says this truck is Lot 17 at
+    // BOUAKE, while drying and the transfer ledger both independently say Lot 20 downstream — the
+    // exact per-site renumbering `lot_namespace_disagreement` reports in aggregate. lotAgrees must
+    // be false on both, and must say so rather than silently picking one number as "the" lot.
+    expect(links.lotNo).toBe("17");
+    expect(links.lotWarehouse).toBe("BOUAKE");
+    expect(links.dryingJobs[0]!.lotAgrees).toBe(false);
+    expect(links.transfers[0]!.lotAgrees).toBe(false);
+  });
+
   it("a receipt with no FICHE recorded returns nulls/empties, not an error", async () => {
     // Any receipt lacking a verify-stage fiche behaves the same; find one directly rather than
     // hardcode an id that could be reassigned by a future import.
@@ -40,7 +52,9 @@ describe("receipt links (FICHE cross-reference)", () => {
     const links = await getReceiptLinks(noFiche!.id);
     // btmIntakes added alongside the production cross-reference (services/receiptLinks.ts) — still
     // empty here for exactly the same reason dryingJobs/transfers are: no fiche, nothing to join.
-    expect(links).toEqual({ fiche: null, dryingJobs: [], transfers: [], btmIntakes: [] });
+    // lotNo/lotWarehouse can be non-null even with no fiche (a receipt can hold a lot on its own),
+    // but this receipt was chosen only for having no fiche, so assert the no-fiche shape loosely.
+    expect(links).toMatchObject({ fiche: null, dryingJobs: [], transfers: [], btmIntakes: [] });
   });
 
   it("coverage across all receipts matches what was measured before building this", async () => {

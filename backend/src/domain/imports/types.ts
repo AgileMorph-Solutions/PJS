@@ -8,13 +8,32 @@
  */
 import type { Finding } from "../dataQuality/types.js";
 
-export type ImporterId = "receipts" | "dryingJobs" | "juteWarehouseStock" | "juteWarehouseTransfer";
+export type ImporterId =
+  | "receipts"
+  | "dryingJobs"
+  | "juteWarehouseStock"
+  | "juteWarehouseTransfer"
+  | "warehouseDischarges";
 
 /** The outcome of checking an uploaded workbook against one importer's expected shape. */
 export type HeaderCheckResult =
   | { ok: true }
   | { ok: false; reason: "missing-sheet"; expectedSheet: string; foundSheets: string[] }
-  | { ok: false; reason: "header-mismatch"; expectedSheet: string; headerRow: number; expected: string[]; found: string[] };
+  | { ok: false; reason: "header-mismatch"; expectedSheet: string; headerRow: number; expected: string[]; found: string[] }
+  | { ok: false; reason: "anchor-mismatch"; expectedSheet: string; anchors: { row: number; col: number; expected: string; found: string }[] };
+
+/** A cell outside the header row whose text disambiguates an otherwise-identical header.
+ * DISCHARGEMENT needs this: its columns 33-48 and 49-64 carry the SAME 16 quality labels, so the
+ * header row alone cannot tell the two panels apart — only the row-3 banners ("Sampling Report" vs
+ * "Final Offloading Report") can. Without it, two swapped panels would fingerprint as a perfect
+ * match and every quality reading would be filed under the wrong sampling pass. */
+export interface HeaderAnchor {
+  row: number;
+  col: number;
+  /** Matched as a case-insensitive substring — these banners are long and cosmetically noisy
+   * (trailing dashes, spacing), so pinning the distinguishing phrase beats pinning the whole cell. */
+  contains: string;
+}
 
 /** One row this importer parsed, plus whatever it decided about it before any DB check. */
 export interface ParsedRow<T> {
@@ -59,6 +78,10 @@ export interface ImporterDef<T = unknown> {
    * real trailing blank-formatted columns) — this is how many of `expectedHeader`'s entries must
    * match, left-to-right, from column A. */
   checkHeaderPrefix: number;
+  /** Optional extra cells that must match for this shape to be accepted, for sheets whose header
+   * row is ambiguous on its own. Omitted by every importer that doesn't need it — behaviour is
+   * identical when absent. */
+  expectedAnchors?: HeaderAnchor[];
   /** Parses every data row into typed records. Never throws on a single bad row — records a
    * `skipReason` on that row instead, so one malformed row doesn't fail an entire upload. Only
    * called after the registry's shared `verifyHeader()` (headerCheck.ts) has already confirmed

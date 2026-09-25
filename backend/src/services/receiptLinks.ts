@@ -1,13 +1,21 @@
 /**
  * Traces a receipt to other records about the same physical batch, joined on FICHE — the paper
  * docket number that actually travels with a batch across OFFLOADINGS, the drying report, and the
- * transfer ledger. Lot and Bin can't do this job: `lot_namespace_conflict`
- * (domain/dataQuality/checks.ts) already documents that receipt lots and drying lots share zero
- * keys, and Bin is two disjoint per-warehouse namespaces (Bouaké BKE-* vs Yakro BIN-*). Verified
- * against the real data before building this: e.g. fiche 72566 -> drying job DRY-4 (Lot 20, bin
+ * transfer ledger. Bin can't do this job at all: it's two disjoint per-warehouse namespaces
+ * (Bouaké BKE-* vs Yakro BIN-*). Lot looks like it should — it's the client's own tracking key —
+ * but measurably can't either: each warehouse runs its own 1..N lot sequence, so the same batch is
+ * Lot 17 at Bouaké and Lot 20 downstream (334 of 339 fiche-matched transfers and 12 of 12 drying
+ * rows disagree). Verified against the real data: fiche 72566 -> drying job DRY-4 (Lot 20, bin
  * BIN-09A) AND transfer SN 27 (Lot 20, bin BIN-03C) — two independently-maintained sheets agreeing
- * on the same Lot for the same fiche is the confirmation this link is real, not coincidence. Note
- * the bins differ (received in one, moved to another for drying) — never merge them into "the bin".
+ * with EACH OTHER on Lot 20 for the same fiche, while the receipt's own Lot (from the unit-warehouse
+ * discharge import) is 17 — is the confirmation both that fiche is the real link and that lot
+ * genuinely renumbers per site. Note the bins differ too (received in one, moved to another for
+ * drying) — never merge either one into a single "the lot"/"the bin".
+ *
+ * Switching this join to lot would replace a verified-correct linkage with one that's wrong ~98%
+ * of the time while looking more principled. The disagreement is reported in aggregate by the
+ * `lot_namespace_disagreement` check and per row below as `lotAgrees`, so it stays a visible,
+ * client-answerable question instead of a join no one notices is silently wrong.
  */
 import { prisma } from "../db.js";
 
@@ -24,6 +32,8 @@ export interface LinkedDryingJob {
   lotNo: string;
   status: string;
   dryType: string;
+  /** Whether this row's lot matches the receipt's own. False is the norm, not a bug — see header. */
+  lotAgrees: boolean;
   destination: string;
 }
 
@@ -35,6 +45,7 @@ export interface LinkedTransfer {
   truckRegistration: string | null;
   bagsReceived: number | null;
   sourceWarehouse: string;
+  lotAgrees: boolean;
 }
 
 export interface LinkedBtmIntake {
@@ -44,6 +55,10 @@ export interface LinkedBtmIntake {
 
 export interface ReceiptLinks {
   fiche: string | null;
+  /** The receipt's OWN Lot, as assigned at its unit warehouse. Null for the receipts no discharge
+   * sheet covers yet. Shown next to each linked row's lot so a mismatch is visible, not hidden. */
+  lotNo: string | null;
+  lotWarehouse: string | null;
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
   btmIntakes: LinkedBtmIntake[];
@@ -58,12 +73,16 @@ function formatReceivedDate(receivedDate: Date | null, rawDate: string | null): 
 }
 
 export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
-  const verify = await prisma.stageVerifyDocs.findUnique({
-    where: { receiptId: id },
-    select: { fiche: true },
-  });
+  const [verify, own] = await Promise.all([
+    prisma.stageVerifyDocs.findUnique({ where: { receiptId: id }, select: { fiche: true } }),
+    prisma.stageLotAssignment.findUnique({
+      where: { receiptId: id }, select: { lotNumber: true, warehouseName: true },
+    }),
+  ]);
   const fiche = verify?.fiche?.trim() || null;
-  if (!fiche) return { fiche: null, dryingJobs: [], transfers: [], btmIntakes: [] };
+  const lotNo = own?.lotNumber?.trim() || null;
+  const lotWarehouse = own?.warehouseName?.trim() || null;
+  if (!fiche) return { fiche: null, lotNo, lotWarehouse, dryingJobs: [], transfers: [], btmIntakes: [] };
 
   const [dryingRows, transferRows] = await Promise.all([
     prisma.dryingJob.findMany({
@@ -88,9 +107,15 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
     ? await prisma.btmIntake.findMany({ where: { btmNo: { in: btmNos } }, select: { btmNo: true, binNo: true }, orderBy: { btmNo: "asc" } })
     : [];
 
+  // Only claim agreement when BOTH sides actually have a lot — an absent lot is unknown, not equal.
+  const agrees = (theirs: string | null) =>
+    !!lotNo && !!theirs?.trim() && theirs.trim() === lotNo;
+
   return {
     fiche,
-    dryingJobs: dryingRows,
+    lotNo,
+    lotWarehouse,
+    dryingJobs: dryingRows.map((d) => ({ ...d, lotAgrees: agrees(d.lotNo) })),
     transfers: transferRows.map((r) => ({
       sn: r.sn,
       receivedDate: formatReceivedDate(r.receivedDate, r.rawDate),
@@ -99,6 +124,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       truckRegistration: r.truckRegistration,
       bagsReceived: r.bagsReceived,
       sourceWarehouse: r.sourceWarehouse,
+      lotAgrees: agrees(r.lotNo),
     })),
     btmIntakes,
   };
