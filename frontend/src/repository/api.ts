@@ -55,11 +55,19 @@ const unwrap = <T>(r: Written<T> | T): Written<T> =>
     ? (r as Written<T>)
     : { data: r as T, warnings: [] };
 
+const withWarehouse = (path: string, warehouse?: string) =>
+  warehouse ? `${path}${path.includes("?") ? "&" : "?"}warehouse=${encodeURIComponent(warehouse)}` : path;
+
 export const api = {
   listReceipts: () => request<ReceiptRecord[]>("/receipts"),
   getReceipt: (id: string) => request<ReceiptRecord>(`/receipts/${encodeURIComponent(id)}`),
 
-  createReceipt: () => request<ReceiptRecord>("/receipts", { method: "POST", body: "{}" }),
+  /** `warehouse` scopes the new receipt to a site (e.g. "BOUAKE") — see createReceipt in
+   * services/receipts.ts, which already accepted this and picked an arbitrary warehouse when it
+   * was omitted. The site-scoped "New RCN receipt" buttons under /unit and /central now pass their
+   * own section's warehouseName so a truck created from either section lands at the right site. */
+  createReceipt: (warehouse?: string) =>
+    request<ReceiptRecord>("/receipts", { method: "POST", body: JSON.stringify(warehouse ? { warehouse } : {}) }),
 
   patchReceipt: async (id: string, patch: Partial<ReceiptRecord>) =>
     unwrap(await request<Written<ReceiptRecord>>(`/receipts/${encodeURIComponent(id)}`, {
@@ -89,8 +97,23 @@ export const api = {
   addWarehouse: (name: string) => request<unknown>("/masters/warehouses", { method: "POST", body: JSON.stringify({ name }) }),
   addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
 
-  dryingJobs: () => request<DryingJob[]>("/drying-jobs"),
+  /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
+   * stores + aliases) — see backend/src/domain/site.ts. Omitted = every site, unfiltered. */
+  dryingJobs: (warehouse?: string) => request<DryingJob[]>(withWarehouse("/drying-jobs", warehouse)),
   receiptLinks: (id: string) => request<ReceiptLinks>(`/receipts/${encodeURIComponent(id)}/links`),
+
+  /** Site-scoped read of one ledger's rows — used when a jute page's own site filter is active
+   * (see WarehouseStockPage/WarehouseTransfersPage); the unfiltered TrackingApi.ledgerEntries stays
+   * the default, zero-latency view. Ledger 4 rows can match on EITHER side of a transfer (source or
+   * destination warehouse), which only the backend can resolve — not reproducible client-side from
+   * the flat LedgerRow shape alone. */
+  listLedgerEntries: (ledgerId: string, warehouse?: string) =>
+    request<LedgerRow[]>(withWarehouse(`/jute-ledgers/${encodeURIComponent(ledgerId)}/entries`, warehouse)),
+
+  /** CHARGEMENT-derived unit dispatch lines (see backend/src/services/warehouseDispatches.ts) —
+   * read-only, powers pages/unit/DispatchPage.tsx. */
+  listWarehouseDispatches: (warehouse?: string) =>
+    request<WarehouseDispatchLine[]>(withWarehouse("/warehouse-dispatches", warehouse)),
   dashboard: (from?: string, to?: string) => {
     const q = new URLSearchParams();
     if (from) q.set("from", from);
@@ -303,4 +326,35 @@ export interface ReceiptLinks {
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
   btmIntakes: LinkedBtmIntake[];
+}
+
+/** One CHARGEMENT line (backend/prisma/schema.prisma's WarehouseDispatchLine) — one row per sheet
+ * LINE, not per dispatch; group by vyogeNumber for a document-level view (see
+ * pages/unit/DispatchPage.tsx). Numeric/date fields come back as strings on the wire like every
+ * other stage field — never coerced client-side, per this repo's "never silently fix" rule. */
+export interface WarehouseDispatchLine {
+  id: string;
+  sn: number | null;
+  chargeDate: string | null;
+  chargeDateRaw: string | null;
+  warehouseSite: string | null;
+  vyogeNumber: string | null;
+  remark: string | null;
+  scaleLocation: string | null;
+  warehouse: string | null;
+  whOrDirect: string | null;
+  bin: string | null;
+  origin: string | null;
+  truckNo: string | null;
+  transporter: string | null;
+  driver: string | null;
+  phone: string | null;
+  whReceiptNo: string | null;
+  ficheCca: string | null;
+  binwiseLoadedBags: number | null;
+  totalBags: number | null;
+  grossWt: string | null;
+  netWeight: string | null;
+  status: string | null;
+  unloadingStatus: string | null;
 }

@@ -31,13 +31,25 @@ function blankRow(columns: JuteLedgerColumn[]): Row {
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
 
-export function LedgerSection({ ledger }: { ledger: JuteLedger }) {
+interface Props {
+  ledger: JuteLedger;
+  /** Overrides ledgerEntries[ledger.id] from context — set by a host page's own site filter (see
+   * WarehouseStockPage/WarehouseTransfersPage), since a site-scoped read comes from a different
+   * endpoint than the globally-loaded unfiltered one and needs its own row set, not a client-side
+   * slice of it (see useJuteLedgerEntries's header comment for why). */
+  rows?: Row[];
+  /** Called right after a new entry is submitted, in addition to the always-unscoped write itself
+   * — lets a filtered host page refetch its own filtered set. */
+  onEntryAdded?: () => void;
+}
+
+export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Props) {
   const { ledgerEntries, addLedgerEntry } = useTracking();
   const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label));
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
 
   // Every row comes from the server, sample rows included.
-  const allRows = ledgerEntries[ledger.id] ?? [];
+  const allRows = rowsOverride ?? (ledgerEntries[ledger.id] ?? []);
   const page = usePagination(allRows);
 
   function handleSubmit(e: FormEvent) {
@@ -47,6 +59,7 @@ export function LedgerSection({ ledger }: { ledger: JuteLedger }) {
     // drift. The row that comes back is what gets displayed.
     addLedgerEntry(ledger.id, { ...draft });
     setDraft(blankRow(ledger.columns));
+    onEntryAdded?.();
   }
 
   return (

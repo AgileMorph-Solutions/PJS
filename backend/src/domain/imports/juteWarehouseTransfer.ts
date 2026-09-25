@@ -98,26 +98,35 @@ function parse(workbook: ExcelJS.Workbook): ParsedRow<JuteWarehouseTransferRow>[
     const [moistureReceived, moistureReceivedRaw] = decWithRaw(row.getCell(31));
     const [moistureDispatched, moistureDispatchedRaw] = decWithRaw(row.getCell(32));
 
-    out.push({
-      sheetRow: r,
-      data: {
-        sn, receivedDate, rawDate,
-        month: text(row.getCell(3)), dryUndry: text(row.getCell(4)), idTransfer: text(row.getCell(5)),
-        truckRegistration: text(row.getCell(6)), lotNo: text(row.getCell(7)), lotDry: text(row.getCell(8)),
-        noFiche: text(row.getCell(9)), ccaFicheNumber: text(row.getCell(10)), binNo: text(row.getCell(11)),
-        damagedBags: num(row.getCell(12)), newBagsUsed: num(row.getCell(13)), recondition: num(row.getCell(14)),
-        sourceWarehouse: text(row.getCell(15)), origin: text(row.getCell(16)),
-        bagsDispatched: num(row.getCell(17)), bagsReceived: num(row.getCell(18)),
-        reportedDifference: num(row.getCell(19)), finalBagsAfterRebagging: num(row.getCell(20)),
-        reportedDiff: num(row.getCell(21)), laissePasserEntree: text(row.getCell(22)),
-        fullyLoadedTruckWeight: num(row.getCell(23)), emptyTruckTareWeight: num(row.getCell(24)),
-        grossWeightReceived: num(row.getCell(25)), netWeightAtArrival: num(row.getCell(26)),
-        netWeightDispatched: num(row.getCell(27)), weightDifference: num(row.getCell(28)),
-        korReceived, korReceivedRaw, korDispatched, korDispatchedRaw,
-        moistureReceived, moistureReceivedRaw, moistureDispatched, moistureDispatchedRaw,
-        ncArrival: text(row.getCell(33)), comment: text(row.getCell(34)),
-      },
-    });
+    const sourceWarehouse = text(row.getCell(15));
+
+    const data: JuteWarehouseTransferRow = {
+      sn, receivedDate, rawDate,
+      month: text(row.getCell(3)), dryUndry: text(row.getCell(4)), idTransfer: text(row.getCell(5)),
+      truckRegistration: text(row.getCell(6)), lotNo: text(row.getCell(7)), lotDry: text(row.getCell(8)),
+      noFiche: text(row.getCell(9)), ccaFicheNumber: text(row.getCell(10)), binNo: text(row.getCell(11)),
+      damagedBags: num(row.getCell(12)), newBagsUsed: num(row.getCell(13)), recondition: num(row.getCell(14)),
+      sourceWarehouse, origin: text(row.getCell(16)),
+      bagsDispatched: num(row.getCell(17)), bagsReceived: num(row.getCell(18)),
+      reportedDifference: num(row.getCell(19)), finalBagsAfterRebagging: num(row.getCell(20)),
+      reportedDiff: num(row.getCell(21)), laissePasserEntree: text(row.getCell(22)),
+      fullyLoadedTruckWeight: num(row.getCell(23)), emptyTruckTareWeight: num(row.getCell(24)),
+      grossWeightReceived: num(row.getCell(25)), netWeightAtArrival: num(row.getCell(26)),
+      netWeightDispatched: num(row.getCell(27)), weightDifference: num(row.getCell(28)),
+      korReceived, korReceivedRaw, korDispatched, korDispatchedRaw,
+      moistureReceived, moistureReceivedRaw, moistureDispatched, moistureDispatchedRaw,
+      ncArrival: text(row.getCell(33)), comment: text(row.getCell(34)),
+    };
+
+    // Real data always states this (col 15, "Transfer -Bouake") — 0/367 rows hit this guard. Kept
+    // as an explicit skip rather than a silent "?? BOUAKE" default at commit time: a transfer's
+    // source is exactly the kind of fact ground rule §4 forbids guessing, and a genuinely blank
+    // cell here is surfaced as a skipped row (commitImport's skippedInvalid) instead.
+    out.push(
+      sourceWarehouse?.trim()
+        ? { sheetRow: r, data }
+        : { sheetRow: r, data, skipReason: "no source warehouse — this row's own key, never guessed" }
+    );
   }
   return out;
 }

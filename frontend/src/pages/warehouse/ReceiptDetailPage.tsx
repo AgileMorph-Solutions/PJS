@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useTracking, useReceiptLinks } from "../../state/TrackingContext";
+import { useSite } from "../../state/SiteContext";
 import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
 import { DECISION_BRANCHES } from "../../domain/decisions";
 import { stages, rejectStage } from "../../data/stages";
@@ -20,8 +21,16 @@ function realStat(values: Record<string, string> | undefined, label: string): st
   return v && v.trim() ? v : undefined;
 }
 
+/**
+ * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
+ * this page deliberately shows cross-site linked records by design (see useReceiptLinks /
+ * receiptLinks's own header on why /api/receipts/:id/links never accepts ?warehouse=). Only the
+ * breadcrumb/back-link below is site-aware — everything else is exactly what the pre-split
+ * ReceiptDetailPage was.
+ */
 export function ReceiptDetailPage() {
   const { id = "" } = useParams();
+  const site = useSite();
   const { receipts, getReceipt, setStageField, setBranch, flushStage } = useTracking();
   const receipt = getReceipt(id);
   const [copied, setCopied] = useState(false);
@@ -33,7 +42,7 @@ export function ReceiptDetailPage() {
   const timelinePage = usePagination(receipt ? [...receipt.timeline].reverse() : []);
   const { links, loading: linksLoading } = useReceiptLinks(receipt?.id);
 
-  if (!receipt) return <Navigate to="/procurement/receipts" replace />;
+  if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
 
   const status = deriveStatus(receipt);
   const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
@@ -54,11 +63,16 @@ export function ReceiptDetailPage() {
   // an unmade decision waiting right here" — no separate lookahead needed.
   const pendingDecision = activeStage?.kind === "decision" ? activeStage : undefined;
 
+  // The receipt's own site (r.warehouse) may not match the section it's being viewed from — a
+  // linked/cross-site view is by design (see this page's own header comment), so the breadcrumb
+  // names whichever section this URL actually belongs to, not a guess from the record itself.
+  const backHref = `/${site.slug}/receipts`;
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2 text-[13px] text-warmstone-500">
-        <Link to="/procurement/receipts" className="hover:text-warmstone-900 font-medium transition-colors">
-          RCN Receipts
+        <Link to={backHref} className="hover:text-warmstone-900 font-medium transition-colors">
+          Truck Reception · {site.sublabel}
         </Link>
         <span className="material-symbols-outlined text-[14px] text-warmstone-300">chevron_right</span>
         <span className="font-bold text-warmstone-900 bg-warmstone-100 px-2.5 py-0.5 rounded-md border border-warmstone-200">
@@ -276,7 +290,7 @@ export function ReceiptDetailPage() {
           )}
 
           {(linksLoading || links) && (
-            <LinkedRecordsCard links={links} loading={linksLoading} />
+            <LinkedRecordsCard links={links} loading={linksLoading} siteSlug={site.slug} />
           )}
 
           {receipt.binNo && (
@@ -296,7 +310,7 @@ export function ReceiptDetailPage() {
                   {otherInSameBin.slice(0, 6).map((r) => (
                     <li key={r.id}>
                       <Link
-                        to={`/procurement/receipts/${r.id}`}
+                        to={`/${site.slug}/receipts/${r.id}`}
                         className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 hover:bg-warmstone-100 text-xs font-medium text-warmstone-700 transition-colors"
                       >
                         <span>{r.lotNo ? `Lot ${r.lotNo}` : r.id}</span>
@@ -338,9 +352,11 @@ export function ReceiptDetailPage() {
 function LinkedRecordsCard({
   links,
   loading,
+  siteSlug,
 }: {
   links: import("../../repository/api").ReceiptLinks | null;
   loading: boolean;
+  siteSlug: import("../../config/sites").SiteSlug;
 }) {
   return (
     <CollapsibleCard
@@ -444,7 +460,7 @@ function LinkedRecordsCard({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">Drying jobs</p>
-                <Link to="/procurement/drying" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+                <Link to={`/${siteSlug}/drying`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
                   View all
                 </Link>
               </div>

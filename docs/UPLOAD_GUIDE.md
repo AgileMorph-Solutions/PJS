@@ -1,6 +1,6 @@
 # Uploading real workbooks — what goes where, and why
 
-This app can import 5 real workbook shapes directly through the UI (**Import Data** in the sidebar,
+This app can import 10 real workbook shapes directly through the UI (**Import Data** in the sidebar,
 or `POST /api/imports/preview` → `POST /api/imports/:token/commit` if you're calling the API
 directly). This document is the map: which file feeds which part of the app, what's deliberately
 *not* supported, and the rules the importer enforces so an upload can't silently corrupt real data.
@@ -18,6 +18,11 @@ is written until you explicitly commit that preview.
 | `BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx` | `JUTE BAGS ISSUED`, row 2 | `JuteWarehouseMovement` (Warehouse Stock) | none in the source — a content-key heuristic (date + activity + bag counts + truck/W-R no.), flagged for review |
 | `BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx` | `Bouake Stock Reciving`, row 6 | `JuteWarehouseTransferReceipt` (Warehouse Transfers) | the sheet's own SN, a real source key |
 | `Suppliers Offloading_Bouake Warehouse Report.xlsx` | `DISCHARGEMENT`, row 4 | `WarehouseDischarge` (new, verbatim) **+ writes the real Lot Number onto the matching Receipt** | the sheet's own Lot No, a real source key — see "The Lot write-back" below |
+| `Dispatch RCN from Bouake Warehouse Report.xlsx` | `CHARGEMENT`, row 4 | `WarehouseDispatchLine` (Dispatch to Central) — one row per LINE, not per document; 544 real lines, only 424 carry a clean S.No | `(source, sheetRow)` — a surrogate key. Neither the sheet's own S.No. (10 duplicates) nor its voyage number (40 lines lack one) is unique enough on its own |
+| `ANAGROCI DATA PROCUREMENT 2026.xlsx` | `Drying Batch`, row 1 | `DryingBatch` (both sites, 138 rows = 57 Bouaké + 81 central) — a genuine second drying record, kept alongside `DryingJob` rather than replacing it (see below) | `(warehouse, sn)` — not `(warehouseSite, sn)`: every central row's `warehouseSite` cell is blank, and Postgres never treats two NULLs as a duplicate |
+| `ANAGROCI DATA PROCUREMENT 2026.xlsx` | `Warehouse Receiving`, row 1 | `WarehouseDischarge` (verbatim only — never writes a Lot back onto a receipt, unlike the `DISCHARGEMENT` importer above) — 710 rows = the same 454 Bouaké rows `DISCHARGEMENT` already has, plus 256 genuinely new Yamoussoukro-side rows | the sheet's own (site, Lot No) — the same composite key `DISCHARGEMENT` uses, which is exactly what makes committing both safe |
+| `ANAGROCI DATA PROCUREMENT 2026.xlsx` | `Warehouse activity Ledger`, row 1 | `WarehouseActivityLedgerEntry` (its own table, not a receipt stage — this sheet has no site column at all, verified, so it can't be scoped to a warehouse) — 787 rows | `(source, sheetRow)` — a surrogate key; no natural one exists |
+| `Factory Warehouse RCN Transfer to Production Report.xlsx` | `Issued to Production Section`, row 5 | `IssuedToProduction`, a BTM-spine production table (125 real rows / 112 distinct BTMs; `btmNo` is a **soft** reference — 9 of those 112 have no matching `BtmIntake`, reported not fabricated) | `(source, sheetRow)` — a surrogate key |
 
 A file's actual name doesn't have to match the examples above exactly — detection reads the sheet
 name and header row, not the filename. What has to match is the **shape**: the right sheet name
@@ -35,11 +40,6 @@ case" below for why that check exists and isn't just a sheet-name match.
   `Suppliers Offloading_Bouake Warehouse Report.xlsx`'s `DISCHARGEMENT` sheet is the same real data
   properly dated and structured, and is importable (see the mapping table above). If the client
   keeps sending the old undated shape alongside the new one, only the new one should be uploaded.
-- **`Dispatch RCN from Bouake Warehouse Report.xlsx`** (`CHARGEMENT`) — the unit-warehouse's own
-  outbound/dispatch log. Real, dated, and well-formed, but **not yet wired to an importer**: it has
-  no Lot column at all (only Bin + W/H Receipt No.), so it can't feed the Lot-first model the same
-  way `DISCHARGEMENT` does. Left for a later pass — see the plan history for what was measured
-  against it.
 - **`Bouake RCN Receiving at Factory Report.xlsx`** — a newer export of the *same shape* the
   `Warehouse Transfers` row above already imports (`Bouake Stock Reciving`, 39 columns, header row
   6, byte-identical to `juteWarehouseTransferImporter`'s expected header). Upload it as
@@ -59,12 +59,20 @@ named `Bouake Stock Reciving` — but with **33 columns instead of 39**, missing
 warehouse-transfer upload, and every field read from column 15 onward would silently come from the
 *wrong* column — not a parse error, a fully-populated-looking row with every field quietly wrong.
 
-Because of this, **no importer here ever matches on sheet name alone.** Every one of the 5 shapes
+Because of this, **no importer here ever matches on sheet name alone.** Every one of the 10 shapes
 also verifies the exact header-row label list — trimmed, in order — at the sheet's expected header
 row, on both auto-detection and a manual shape override. A mismatch is a hard rejection, shown as
 expected-vs-actual header text, never a best-effort guess. Uploading that exact corrupted file as
 "Warehouse Transfers" is rejected this way — see `backend/src/domain/imports/headerCheck.ts` and
 `backend/tests/imports.test.ts` for the enforcement and the regression test.
+
+**One consolidated workbook, `ANAGROCI DATA PROCUREMENT 2026.xlsx`, legitimately matches three
+different importers** (`Drying Batch`, `Warehouse Receiving`, `Warehouse activity Ledger` all live
+in it as separate sheets) — `detectImporter`'s auto-detection tries every known shape and reports
+however many genuinely match; a file matching more than one importer is not a bug to fix, it's what
+a single client export containing several real sheets looks like. See
+`backend/tests/importerRegistry.test.ts`, which asserts this multi-match count directly rather than
+assuming every file resolves to exactly one importer.
 
 **A second, narrower variant of the same problem showed up in `DISCHARGEMENT`.** That sheet has two
 quality-reading panels side by side — the same 16 column labels, twice (`"BROWNS/Rejection (gm)"`,
@@ -122,6 +130,13 @@ arrival FICHE, so importing it does two things, in order:
    - **The receipt already holds that exact Lot** → a genuine no-op — this is what makes
      re-uploading the same file safe to do repeatedly.
 
+**`Warehouse Receiving` (also `WarehouseDischarge`, above) deliberately does NOT do this write-back.**
+It shares a table with `DISCHARGEMENT` — safe only because both key on the same
+`(warehouseSite, Lot No)` composite — but it's a separate importer with its own commit function that
+never calls the write-back step. Its 256 genuinely-new Yamoussoukro-side rows have no matching
+receipt to write a Lot onto in this pass anyway; adding a second importer that could move a Lot
+already assigned by `DISCHARGEMENT` was judged not worth the risk for this round.
+
 **Lot uniqueness is enforced per warehouse, not globally.** Measured directly: the same physical
 batch is a *different* Lot Number at each site — e.g. fiche `72566` is Lot 17 at the unit warehouse
 and Lot 20 at the central warehouse (334 of 339 fiche-matched transfers, and 12 of 12 drying rows,
@@ -145,20 +160,34 @@ by side rather than picking one.
   data-quality concern surfaces rather than blocks. At commit time, "skip rows that look like
   duplicates" is on by default; turning it off writes them anyway, since a flagged row might
   legitimately not be a duplicate.
+- **Warehouse Receiving** keys on `(warehouseSite, Lot No)`, same as `DISCHARGEMENT` — the two
+  importers share a table safely because they share that composite key (see step 3's schema
+  migration history for why `Lot No` alone was never safe: Bouaké and Yamoussoukro's Lot numbers
+  collide 100%).
+- **Dispatch to Central, Drying Batch, Warehouse activity Ledger, and Issued to Production** have no
+  real source-provided key that's unique on its own (a voyage number, a Lot cell, or an S.No. each
+  have real gaps or duplicates in these sheets — see the mapping table above for the specifics per
+  sheet), so each gets a surrogate key scoped to `(source, sheetRow)` (Drying Batch instead uses
+  `(warehouse, sn)` — see its table's own comment for why `sheetRow` alone isn't enough there).
+  Re-uploading the identical file is still a safe no-op; a genuinely reshaped file gets new rows.
 
 ## If the client sends an updated or reshaped version of one of these files
 
 Update the corresponding `expectedHeader` list in `backend/src/domain/imports/registry.ts` (in the
 specific importer file — `offloadings.ts`, `drying.ts`, `juteWarehouseStock.ts`,
-`juteWarehouseTransfer.ts`, or `warehouseDischarges.ts`) and this document together, so they can't
-drift apart. This is the same "keep in sync by hand" discipline `packages/contract/src/data/stages.ts`
-already asks for with the client's original HTML process maps — there is no automatic way to detect
-that a real-world sheet changed shape, so the header-fingerprint check (see "The corruption case"
-above) is what catches a mismatch at upload time rather than a schema diff at review time.
+`juteWarehouseTransfer.ts`, `warehouseDischarges.ts`, `warehouseDispatches.ts`, `dryingBatch.ts`,
+`warehouseReceiving.ts`, `warehouseActivityLedger.ts`, or `issuedToProduction.ts`) and this document
+together, so they can't drift apart. This is the same "keep in sync by hand" discipline
+`packages/contract/src/data/stages.ts` already asks for with the client's original HTML process
+maps — there is no automatic way to detect that a real-world sheet changed shape, so the
+header-fingerprint check (see "The corruption case" above) is what catches a mismatch at upload
+time rather than a schema diff at review time.
 
 **Reproducing the current numbers.** Everything measured in this document and in the tests that
 assert it comes from one fixed sequence: `npm -w backend run seed`, then import the 4 original
-shapes (receipts, drying, warehouse-stock, warehouse-transfer) in any order, then import
-`DISCHARGEMENT` last (it writes onto receipts the earlier imports must already exist). Importing it
-before the receipts it should match onto would just report more `fiche_not_matched` rows — safe,
-but re-uploading afterward is what actually attaches the Lots.
+shapes (receipts, drying, warehouse-stock, warehouse-transfer) in any order, then `DISCHARGEMENT`
+(it writes onto receipts the earlier imports must already exist — importing it before the receipts
+it should match onto would just report more `fiche_not_matched` rows, safe but incomplete until
+re-uploaded), then the 5 Step-8 shapes (dispatch, drying batch, warehouse receiving, activity
+ledger, issued-to-production) in any order — none of these five write onto a receipt stage, so
+their order relative to each other and to `DISCHARGEMENT` doesn't matter.

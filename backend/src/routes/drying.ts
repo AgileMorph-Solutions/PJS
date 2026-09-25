@@ -6,9 +6,13 @@
 import type { FastifyInstance } from "fastify";
 import { listDryingJobs, createDryingJob, type NewDryingJob } from "../services/drying.js";
 import { ValidationError } from "../domain/validation.js";
+import { resolveSite } from "../domain/site.js";
 
 export async function dryingRoutes(app: FastifyInstance) {
-  app.get("/api/drying-jobs", async () => listDryingJobs());
+  app.get("/api/drying-jobs", async (req) => {
+    const { warehouse } = req.query as { warehouse?: string };
+    return listDryingJobs(warehouse ? await resolveSite(warehouse) : undefined);
+  });
 
   app.post("/api/drying-jobs", async (req, reply) => {
     try {

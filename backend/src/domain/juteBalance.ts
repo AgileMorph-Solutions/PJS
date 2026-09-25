@@ -15,11 +15,14 @@ export interface BalanceRow {
   balance_delta: string | number | null;
 }
 
-/** Ledger 1 with the running balance computed by window function, never stored. */
-export async function warehouseBalanceRows(): Promise<BalanceRow[]> {
-  return prisma.$queryRawUnsafe<BalanceRow[]>(
+/** Ledger 1 with the running balance computed by window function, never stored. `site`, when
+ * given, is a resolved list of names (domain/site.ts's resolveSite) — filtered in JS rather than
+ * SQL since this reads through $queryRawUnsafe with no parameter binding. */
+export async function warehouseBalanceRows(site?: string[]): Promise<BalanceRow[]> {
+  const rows = await prisma.$queryRawUnsafe<BalanceRow[]>(
     `SELECT * FROM "jute_warehouse_movement_balance" ORDER BY "whLocation", "seq"`
   );
+  return site ? rows.filter((r) => site.includes(r.whLocation)) : rows;
 }
 
 /**
@@ -53,10 +56,11 @@ export interface ReconciliationRow {
  * and period, across all four ledgers. Not expressible over ledger 1 alone: ledger 1 has no
  * damaged/discarded column at all.
  */
-export async function reconciliation(): Promise<ReconciliationRow[]> {
-  return prisma.$queryRawUnsafe<ReconciliationRow[]>(
+export async function reconciliation(site?: string[]): Promise<ReconciliationRow[]> {
+  const rows = await prisma.$queryRawUnsafe<ReconciliationRow[]>(
     `SELECT * FROM "jute_reconciliation" ORDER BY warehouse_name, period`
   );
+  return site ? rows.filter((r) => site.includes(r.warehouse_name)) : rows;
 }
 
 export interface TransferFlagRow {

@@ -47,7 +47,10 @@ function buildDischargeWorkbook(rows: { sn: number; lot: string; fiche: string; 
   sheet.addRow(HEADER); // row 4
   for (const r of rows) {
     const row = new Array(64).fill("");
-    row[0] = r.sn; row[2] = r.warehouse; row[5] = r.lot; row[8] = r.fiche;
+    // Column B ("Warehouse / Site", idx 1) is what the parser's skip-guard requires — a blank here
+    // means the row is dropped before write-back ever runs. Column C (the store, idx 2) is left
+    // blank: it's untested here and irrelevant to the four conflict rules under test.
+    row[0] = r.sn; row[1] = r.warehouse; row[5] = r.lot; row[8] = r.fiche;
     sheet.addRow(row);
   }
   return wb;
@@ -156,10 +159,10 @@ describe("Lot write-back — the four conflict rules", () => {
     await prisma.stageVerifyDocs.create({ data: { receiptId: "REC-LOTWRITEBACK-TEST-C", fiche: "LWB-FICHE-C" } });
     try {
       // Deliberately the SAME lot value ("LWB-100") receipt A already holds — that's the point.
-      // WarehouseDischarge.lotNo is a separate, globally-unique storage key (unrelated to this
-      // test), so its own createMany({skipDuplicates}) harmlessly skips re-storing this row; the
-      // Lot WRITE-BACK is computed from the parsed rows regardless, so it still runs and is what's
-      // actually under test here.
+      // WarehouseDischarge's own storage key is (warehouseSite, lotNo), scoped to THIS fixture's
+      // "LWB-write.xlsx"-style site value (unrelated to receipt.warehouse, which is what the Lot
+      // WRITE-BACK below actually scopes by) — so its own createMany({skipDuplicates}) harmlessly
+      // stores or skips this row independent of what's under test here.
       const result = await commitDischarges(
         [{ sn: 6, lot: "LWB-100", fiche: "LWB-FICHE-C", warehouse: other.name }],
         "lwb-other-warehouse.xlsx"

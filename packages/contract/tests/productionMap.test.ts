@@ -15,9 +15,9 @@ import {
 } from "../src/domain/productionStatus.js";
 
 describe("production flow map", () => {
-  it("covers all 80 flow nodes across the phases + utilities lane", () => {
-    expect(productionStages.length).toBe(80);
-    expect(Object.keys(productionStageById).length).toBe(80);
+  it("covers all 81 flow nodes across the phases + utilities lane", () => {
+    expect(productionStages.length).toBe(81);
+    expect(Object.keys(productionStageById).length).toBe(81);
   });
 
   it("every node has a non-empty id, title, phase and kind", () => {
@@ -43,9 +43,9 @@ describe("production flow map", () => {
 });
 
 describe("production storage tables", () => {
-  it("collapses 80 flow nodes into 24 distinct storage tables", () => {
-    expect(productionTables.length).toBe(24);
-    expect(Object.keys(PRODUCTION_FIELD_MAP).length).toBe(24);
+  it("collapses 81 flow nodes into 25 distinct storage tables", () => {
+    expect(productionTables.length).toBe(25);
+    expect(Object.keys(PRODUCTION_FIELD_MAP).length).toBe(25);
   });
 
   it("gives every field a column name Postgres can hold, unique per table", () => {
@@ -75,9 +75,9 @@ describe("production storage tables", () => {
     expect(productionColFor("btm-receipt", "BTM No")).toBe("btmNo");
   });
 
-  it("assigns every table to exactly one spine, and the spine partition covers all 24", () => {
+  it("assigns every table to exactly one spine, and the spine partition covers all 25", () => {
     const total = BTM_SPINE_TABLES.length + LOT_SPINE_TABLES.length + BIN_SPINE_TABLES.length + STANDALONE_TABLES.length;
-    expect(total).toBe(24);
+    expect(total).toBe(25);
     for (const id of BTM_SPINE_TABLES) expect(productionTableById[id].spine).toBe("btm");
     for (const id of LOT_SPINE_TABLES) expect(productionTableById[id].spine).toBe("lot");
     for (const id of BIN_SPINE_TABLES) expect(productionTableById[id].spine).toBe("bin");

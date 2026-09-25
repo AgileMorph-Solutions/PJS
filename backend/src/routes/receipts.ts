@@ -16,6 +16,7 @@ import {
 } from "../services/receipts.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
+import { resolveSite } from "../domain/site.js";
 
 /** Hard rules reject (422); unknown stage/field is a client bug (400). */
 export function sendError(reply: any, e: unknown) {
@@ -38,7 +39,10 @@ async function requireReceipt(id: string, reply: FastifyReply): Promise<ReceiptR
 }
 
 export async function receiptRoutes(app: FastifyInstance) {
-  app.get("/api/receipts", async () => listReceipts());
+  app.get("/api/receipts", async (req) => {
+    const { warehouse } = req.query as { warehouse?: string };
+    return listReceipts(warehouse ? await resolveSite(warehouse) : undefined);
+  });
 
   app.get("/api/receipts/:id", async (req, reply) => {
     const { id } = req.params as { id: string };

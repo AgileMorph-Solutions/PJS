@@ -46,8 +46,14 @@ export async function getReceiptActivities(id: string): Promise<ReceiptActivitie
   return { otherActivities, activityLedger };
 }
 
-export async function listReceipts() {
-  const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE, orderBy: { createdAt: "asc" } });
+/** `site` is a resolved list of names (see domain/site.ts's resolveSite) — the caller expands the
+ * site before calling in, so this stays a plain Prisma filter with no site-lookup of its own. */
+export async function listReceipts(site?: string[]) {
+  const rows = await prisma.receipt.findMany({
+    where: site ? { warehouse: { in: site } } : {},
+    include: RECEIPT_INCLUDE,
+    orderBy: { createdAt: "asc" },
+  });
   return rows.map(toReceiptRecord);
 }
 
@@ -129,7 +135,7 @@ export async function setStageFields(
   const spec = STAGE_FIELD_MAP[stageId];
   if (!spec) throw new ValidationError(`Unknown stage "${stageId}"`);
 
-  const data = toColumnPayload(stageId, fields);
+  const data: Record<string, unknown> = toColumnPayload(stageId, fields);
   const delegate = STAGE_MODEL_DELEGATE[stageId];
 
   await prisma.$transaction(async (tx) => {
@@ -138,17 +144,31 @@ export async function setStageFields(
       assertLotBeforeBin(existing?.lotNumber, fields["Bin Number"]);
     }
 
-    // The partial unique index is the real guarantee (it can't be raced); this check exists only
-    // so the caller gets the rule explained rather than a bare constraint violation.
-    if (!opts.bypassValidation && stageId === "n-lot" && (fields["Lot Number"] ?? "").trim()) {
-      const lotNumber = fields["Lot Number"].trim();
-      const clash = await tx.stageLotAssignment.findFirst({
-        where: { lotNumber, receiptId: { not: id } }, select: { receiptId: true },
-      });
-      if (clash) {
-        throw new ValidationError(
-          `Lot ${lotNumber} is already assigned to receipt ${clash.receiptId} — one truck = one Lot, always.`
-        );
+    if (stageId === "n-lot") {
+      // warehouseName is not a stage field (see the model's own comment) — it's a controlled copy
+      // of Receipt.warehouse, kept in sync here on every n-lot write rather than only by the
+      // discharge importer's write-back, so a manually-entered Lot is scoped by warehouse exactly
+      // like an imported one. Without this, a hand-typed Lot stores warehouseName = NULL, and
+      // Postgres's partial unique index never treats two NULLs as equal — it would silently bypass
+      // per-warehouse uniqueness rather than enforce it.
+      const receipt = await tx.receipt.findUnique({ where: { id }, select: { warehouse: true } });
+      data.warehouseName = receipt!.warehouse;
+
+      // The partial unique index is the real guarantee (it can't be raced); this check exists only
+      // so the caller gets the rule explained rather than a bare constraint violation. Scoped to
+      // THIS receipt's warehouse, matching writeLotsOntoReceipts (services/imports.ts) and the DB
+      // index itself — a global check would reject Yakro's Lot 1 as a clash with Bouaké's Lot 1.
+      if (!opts.bypassValidation && (fields["Lot Number"] ?? "").trim()) {
+        const lotNumber = fields["Lot Number"].trim();
+        const clash = await tx.stageLotAssignment.findFirst({
+          where: { lotNumber, warehouseName: receipt!.warehouse, receiptId: { not: id } },
+          select: { receiptId: true },
+        });
+        if (clash) {
+          throw new ValidationError(
+            `Lot ${lotNumber} is already assigned to receipt ${clash.receiptId} at ${receipt!.warehouse} — one truck = one Lot, always.`
+          );
+        }
       }
     }
 

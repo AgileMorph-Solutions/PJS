@@ -12,6 +12,11 @@ import { PrismaClient } from "@prisma/client";
 import { checkImporter } from "../src/domain/imports/registry.js";
 import { offloadingsImporter } from "../src/domain/imports/offloadings.js";
 import { warehouseDischargesImporter } from "../src/domain/imports/warehouseDischarges.js";
+import { warehouseDispatchesImporter } from "../src/domain/imports/warehouseDispatches.js";
+import { dryingBatchImporter, resolveCleanLotNo } from "../src/domain/imports/dryingBatch.js";
+import { issuedToProductionImporter } from "../src/domain/imports/issuedToProduction.js";
+import { warehouseReceivingImporter } from "../src/domain/imports/warehouseReceiving.js";
+import { warehouseActivityLedgerImporter } from "../src/domain/imports/warehouseActivityLedger.js";
 import { previewImport } from "../src/services/imports.js";
 
 const prisma = new PrismaClient();
@@ -234,5 +239,138 @@ describe("warehouseDischarges — the duplicated-quality-panel shape", () => {
     const lots = new Set(rows.map((r) => r.data.lotNo));
     expect(lots.size).toBe(454);
     expect(rows.every((r) => r.data.lotNo && r.data.ficheCca)).toBe(true);
+  });
+});
+
+describe("warehouseDispatches (CHARGEMENT) — parent/line shape, continuation lines never dropped", () => {
+  const NEW_SHEETS = path.join(DOCS, "new sheets");
+
+  it("accepts the real CHARGEMENT file, and rejects every other known shape for it", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Dispatch RCN from Bouake Warehouse Report.xlsx"));
+    expect(checkImporter(wb, "warehouseDispatches")).toEqual({ ok: true });
+    for (const id of ["receipts", "dryingJobs", "juteWarehouseStock", "juteWarehouseTransfer", "warehouseDischarges"] as const) {
+      expect(checkImporter(wb, id).ok, `expected ${id} to reject CHARGEMENT`).toBe(false);
+    }
+  });
+
+  it("parses 544 lines gated on any-of-columns-1-41, not on S.No — 120 of them are continuation lines with no S.No at all", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Dispatch RCN from Bouake Warehouse Report.xlsx"));
+    const rows = warehouseDispatchesImporter.parse(wb);
+    expect(rows.length).toBe(544);
+    expect(rows.filter((r) => r.skipReason).length).toBe(0); // no skip guards at all — see the module header
+    const withSn = rows.filter((r) => r.data.sn !== null);
+    expect(withSn.length).toBe(424);
+    expect(rows.length - withSn.length).toBe(120);
+  });
+
+  it("has 413 distinct voyage numbers across the 504 lines that carry one, and 10 duplicate S.No values", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Dispatch RCN from Bouake Warehouse Report.xlsx"));
+    const rows = warehouseDispatchesImporter.parse(wb);
+    const withVyoge = rows.filter((r) => r.data.vyogeNumber !== null);
+    expect(withVyoge.length).toBe(504);
+    expect(new Set(withVyoge.map((r) => r.data.vyogeNumber)).size).toBe(413);
+    const sns = rows.map((r) => r.data.sn).filter((s): s is number => s !== null);
+    const counts = new Map<number, number>();
+    for (const sn of sns) counts.set(sn, (counts.get(sn) ?? 0) + 1);
+    expect([...counts.values()].filter((c) => c > 1).length).toBe(10);
+  });
+});
+
+describe("dryingBatch (Drying Batch, consolidated) — verbatim *_raw twins, never split a multi-value lot", () => {
+  const CONSOLIDATED = path.join(DOCS, "ANAGROCI DATA PROCUREMENT 2026.xlsx");
+
+  it("accepts the real consolidated workbook, and rejects the differently-shaped Bouaké-only 'Drying & Sorting Report' file", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    expect(checkImporter(wb, "dryingBatch")).toEqual({ ok: true });
+    const bouakeOnly = await loadWorkbook(path.join(DOCS, "new sheets/Bouake RCN Drying Report.xlsx"));
+    expect(checkImporter(bouakeOnly, "dryingBatch").ok).toBe(false);
+  });
+
+  it("parses 138 rows = 57 unit (BOUAKE) + 81 central (ANAGROCI-01)", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    const rows = dryingBatchImporter.parse(wb);
+    expect(rows.length).toBe(138);
+    expect(rows.filter((r) => r.data.warehouseSite === "BOUAKE").length).toBe(57);
+    expect(rows.filter((r) => r.data.warehouse === "ANAGROCI-01").length).toBe(81);
+  });
+
+  it("resolveCleanLotNo never splits a comma-joined or numerically-concatenated value, and rejects bin-code contamination", () => {
+    expect(resolveCleanLotNo("387, 401")).toBeNull();
+    expect(resolveCleanLotNo("12,5")).toBeNull();
+    expect(resolveCleanLotNo(246253)).toBeNull(); // 6-digit concatenation, ambiguously 246+253 or 24+6253
+    expect(resolveCleanLotNo("BIN-03B")).toBeNull(); // contamination, not a lot at all
+    expect(resolveCleanLotNo(23)).toBe("23"); // unambiguous — every real single lot is well under 1000
+    expect(resolveCleanLotNo(null)).toBeNull();
+  });
+
+  it("leaves lotNo null for exactly the 22 multi-value rows and the 41 bin-code-contaminated rows, always keeping lotNoRaw", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    const rows = dryingBatchImporter.parse(wb);
+    const nullLotNo = rows.filter((r) => r.data.lotNo === null && r.data.lotNoRaw !== null);
+    expect(nullLotNo.length).toBe(22 + 41);
+    expect(nullLotNo.every((r) => r.data.lotNoRaw)).toBe(true);
+  });
+});
+
+describe("issuedToProduction (Issued to Production Section) — Fiche No contaminated, never a join key", () => {
+  const NEW_SHEETS = path.join(DOCS, "new sheets");
+
+  it("accepts the real file", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Factory Warehouse RCN Transfer to Production Report.xlsx"));
+    expect(checkImporter(wb, "issuedToProduction")).toEqual({ ok: true });
+  });
+
+  it("parses 125 real lines (3 stray whitespace/pivot-tail rows skipped for lacking a clean SI NO) across 112 distinct BTMs", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Factory Warehouse RCN Transfer to Production Report.xlsx"));
+    const rows = issuedToProductionImporter.parse(wb);
+    const usable = rows.filter((r) => !r.skipReason);
+    expect(usable.length).toBe(125);
+    expect(rows.length - usable.length).toBe(3);
+    expect(new Set(usable.map((r) => r.data.btmNo)).size).toBe(112);
+  });
+
+  it("Fiche No is mostly bin-code strings, not real fiche numbers — stored, never relied on", async () => {
+    const wb = await loadWorkbook(path.join(NEW_SHEETS, "Factory Warehouse RCN Transfer to Production Report.xlsx"));
+    const rows = issuedToProductionImporter.parse(wb).filter((r) => !r.skipReason);
+    const ficheValues = rows.map((r) => r.data.ficheNo).filter((v): v is string => !!v);
+    const binCodeShaped = ficheValues.filter((v) => /^(BIN|ANA)[-\s]?\d/i.test(v));
+    expect(ficheValues.length).toBe(125);
+    expect(binCodeShaped.length).toBe(109);
+  });
+});
+
+describe("warehouseReceiving — a second, richer verbatim source for the SAME WarehouseDischarge table", () => {
+  const CONSOLIDATED = path.join(DOCS, "ANAGROCI DATA PROCUREMENT 2026.xlsx");
+
+  it("accepts the real consolidated workbook, and rejects the file this importer was first assumed to read (it's really a newer ledger-4 snapshot)", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    expect(checkImporter(wb, "warehouseReceiving")).toEqual({ ok: true });
+    const assumedFile = await loadWorkbook(path.join(DOCS, "new sheets/Bouake RCN Receiving at Factory Report.xlsx"));
+    expect(checkImporter(assumedFile, "warehouseReceiving").ok).toBe(false);
+  });
+
+  it("parses 710 rows = 454 BOUAKE + 256 YAMOUSSOUKRO, every one carrying a Lot and a Fiche", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    const rows = warehouseReceivingImporter.parse(wb);
+    expect(rows.length).toBe(710);
+    expect(rows.filter((r) => r.data.warehouseSite === "BOUAKE").length).toBe(454);
+    expect(rows.filter((r) => r.data.warehouseSite === "YAMOUSSOUKRO").length).toBe(256);
+    expect(rows.every((r) => r.data.lotNo && r.data.ficheCca)).toBe(true);
+  });
+});
+
+describe("warehouseActivityLedger — no S.No at all, gated purely on any-column-non-blank", () => {
+  const CONSOLIDATED = path.join(DOCS, "ANAGROCI DATA PROCUREMENT 2026.xlsx");
+
+  it("accepts the real consolidated workbook", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    expect(checkImporter(wb, "warehouseActivityLedger")).toEqual({ ok: true });
+  });
+
+  it("parses 787 rows, none skipped", async () => {
+    const wb = await loadWorkbook(CONSOLIDATED);
+    const rows = warehouseActivityLedgerImporter.parse(wb);
+    expect(rows.length).toBe(787);
+    expect(rows.filter((r) => r.skipReason).length).toBe(0);
   });
 });

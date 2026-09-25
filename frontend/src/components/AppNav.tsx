@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { NAV, type NavLeaf } from "../config/nav";
+import { useActiveSite } from "../state/SiteContext";
+import type { SiteSlug } from "../config/sites";
 
 interface Props {
   /** Mobile/tablet only — below `lg` the nav is an off-canvas drawer, closed by default. At `lg`
@@ -9,23 +11,34 @@ interface Props {
   onClose: () => void;
 }
 
-/** Mirrors react-router's default (non-`end`) NavLink matching, so "which section is the current
- * route in" agrees with which nav item actually lights up. */
-function isItemActive(pathname: string, item: NavLeaf): boolean {
-  if (item.end) return pathname === item.to;
-  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+/** A `sitePath` leaf ("Truck Reception", ...) resolves against whichever site is currently active
+ * (see state/SiteContext.tsx's useActiveSite) — one leaf, two possible hrefs, switched from a
+ * control on the page itself rather than by picking a different sidebar section. */
+function resolveHref(item: NavLeaf, activeSite: SiteSlug): string {
+  return item.to ?? `/${activeSite}/${item.sitePath}`;
 }
 
-function sectionForPath(pathname: string): string | undefined {
-  return NAV.find((section) => section.items.some((item) => isItemActive(pathname, item)))?.label;
+/** Mirrors react-router's default (non-`end`) NavLink matching, so "which section is the current
+ * route in" agrees with which nav item actually lights up. Strips a query string first — "Receiving
+ * from Unit" links to `/jute/transfers?warehouse=...`, and pathname never contains one. */
+function isItemActive(pathname: string, item: NavLeaf, activeSite: SiteSlug): boolean {
+  const to = resolveHref(item, activeSite).split("?")[0];
+  if (item.end) return pathname === to;
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
+function sectionForPath(pathname: string, activeSite: SiteSlug): string | undefined {
+  return NAV.find((section) => section.items.some((item) => isItemActive(pathname, item, activeSite)))?.label;
 }
 
 export function AppNav({ open, onClose }: Props) {
   const location = useLocation();
+  const activeSite = useActiveSite();
+
   // Starts on whichever section holds the current route; a section with only one item has
   // nothing to hide, so it's never collapsible in the first place (see the render below).
   const [openSections, setOpenSections] = useState<Set<string>>(() => {
-    const active = sectionForPath(location.pathname);
+    const active = sectionForPath(location.pathname, activeSite.slug);
     return new Set(active ? [active] : []);
   });
 
@@ -33,10 +46,10 @@ export function AppNav({ open, onClose }: Props) {
   // opened by hand — this only ever adds to the set, a manual header click is the only way to
   // remove from it.
   useEffect(() => {
-    const active = sectionForPath(location.pathname);
+    const active = sectionForPath(location.pathname, activeSite.slug);
     if (!active) return;
     setOpenSections((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
-  }, [location.pathname]);
+  }, [location.pathname, activeSite.slug]);
 
   function toggleSection(label: string) {
     setOpenSections((prev) => {
@@ -89,7 +102,9 @@ export function AppNav({ open, onClose }: Props) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {NAV.map((section) => {
-          const collapsible = section.items.length > 1;
+          const items = section.items.filter((item) => !item.onlyForSite || item.onlyForSite === activeSite.slug);
+          if (!items.length) return null;
+          const collapsible = items.length > 1;
           const isOpen = !collapsible || openSections.has(section.label);
           return (
           <div className="space-y-1" key={section.label}>
@@ -97,12 +112,14 @@ export function AppNav({ open, onClose }: Props) {
               <button
                 type="button"
                 onClick={() => toggleSection(section.label)}
-                className="w-full flex items-center justify-between px-3 py-1 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider hover:text-warmstone-600 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-1 hover:text-warmstone-600 transition-colors group"
                 aria-expanded={isOpen}
               >
-                {section.label}
+                <span className="block text-left text-[11px] font-bold text-warmstone-400 uppercase tracking-wider group-hover:text-warmstone-600">
+                  {section.label}
+                </span>
                 <span
-                  className={`material-symbols-outlined text-[16px] transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
+                  className={`material-symbols-outlined text-[16px] text-warmstone-400 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
                 >
                   expand_more
                 </span>
@@ -112,10 +129,10 @@ export function AppNav({ open, onClose }: Props) {
                 {section.label}
               </div>
             )}
-            {isOpen && section.items.map((item) => (
+            {isOpen && items.map((item) => (
               <NavLink
-                key={item.to}
-                to={item.to}
+                key={item.label}
+                to={resolveHref(item, activeSite.slug)}
                 end={item.end}
                 onClick={onClose}
                 className={({ isActive }) =>

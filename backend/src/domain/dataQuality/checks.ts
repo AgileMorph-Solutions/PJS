@@ -355,6 +355,10 @@ export const CHECKS: Check[] = [
   {
     id: "warehouse_alias_inferred",
     async run({ prisma }) {
+      // Generic over any alias, not just ANAGROCI-01 — that one specific alias moved to
+      // "stated-in-source" provenance once the consolidated workbook placed it in a real column
+      // next to its site (see prisma/seed.ts's backfillWarehouseTypology), so this check goes quiet
+      // for it. It stays here as the guard for the NEXT inferred alias, whatever site names it names.
       const rows = await prisma.warehouseAlias.findMany({ where: { provenance: "inferred" } });
       if (!rows.length) return null;
       return {
@@ -363,10 +367,152 @@ export const CHECKS: Check[] = [
         entity: "WarehouseAlias", affectedCount: rows.length,
         sampleIds: rows.map((r) => `${r.alias} -> ${r.warehouseName}`),
         evidence:
-          "The drying workbook names its warehouse 'ANAGROCI-01', which matches no entry in the " +
-          "warehouse master. The mapping to the Yakro factory warehouse is inferred from the file and " +
-          "sheet names only — the client has not stated it. Recorded with provenance and surfaced here " +
-          "for confirmation rather than applied silently.",
+          "A workbook names a warehouse that matches no entry in the warehouse master, and the " +
+          "mapping to a real site was inferred from a file or sheet name only — the client has not " +
+          "stated it in an actual column. Recorded with provenance and surfaced here for confirmation " +
+          "rather than applied silently.",
+      };
+    },
+  },
+  {
+    id: "warehouse_site_name_variants",
+    async run({ prisma }) {
+      // Distinct from warehouse_alias_inferred above: this isn't about a NEW warehouse needing a
+      // mapping, it's about ONE site legitimately having multiple names across the client's own
+      // sheets (master: "YAKRO FACTORY", drying: "ANAGROCI-01" as a store, receiving: site column
+      // literally says "YAMOUSSOUKRO"). Every stated-in-source alias is one more name for a site
+      // that already has a canonical one — worth a standing count so a third or fourth variant
+      // doesn't slip in unnoticed.
+      const rows = await prisma.warehouseAlias.findMany({ where: { provenance: "stated-in-source" } });
+      if (!rows.length) return null;
+      return {
+        id: "warehouse_site_name_variants", severity: "info",
+        title: "A site is known by more than one name across the source workbooks",
+        entity: "WarehouseAlias", affectedCount: rows.length,
+        sampleIds: rows.map((r) => `${r.alias} -> ${r.warehouseName}`),
+        evidence:
+          "Each row here is a real alternate name for a site, stated directly in a source column " +
+          "(not inferred) — e.g. the receiving sheet's 'warehouse site' column says YAMOUSSOUKRO on " +
+          "exactly the rows the master calls YAKRO FACTORY. Recorded as an alias rather than merged, " +
+          "so no receipt's real warehouse value is silently rewritten.",
+      };
+    },
+  },
+  {
+    id: "store_site_not_canonical",
+    async run({ prisma }) {
+      // A store's `site` should point at a CANONICAL site row (one with a real `kind` —
+      // Village/Regional/Factory) — that's the one thing `resolveSite()`'s store lookup
+      // (`where: { site: name }`) actually matches against. Found while building the two-section
+      // frontend: `upsertObservedStores` (services/imports.ts) stores whatever site value a sheet's
+      // own column says, verbatim — same discipline as warehouse_site_name_variants above — so
+      // ANAGROCI-01 ended up with `site: "YAMOUSSOUKRO"` (the Warehouse Receiving sheet's own
+      // column), not `site: "YAKRO FACTORY"` (the kind-bearing canonical row). resolveSite() still
+      // works today because the WarehouseAlias table independently maps YAMOUSSOUKRO -> YAKRO
+      // FACTORY — but anything that reads Warehouse.site directly (e.g. a per-site store filter)
+      // will miss this store. Reported, not silently repointed: doing that would be exactly the
+      // kind of "fix" ground rule #4 forbids.
+      const stores = await prisma.warehouse.findMany({
+        where: { site: { not: null } }, select: { name: true, site: true },
+      });
+      const canonicalSites = new Set(
+        (await prisma.warehouse.findMany({ where: { kind: { not: null } }, select: { name: true } }))
+          .map((w) => w.name)
+      );
+      const bad = stores.filter((s) => !canonicalSites.has(s.site!));
+      if (!bad.length) return null;
+      return {
+        id: "store_site_not_canonical", severity: "warning",
+        title: "A store's site points at an alias, not the canonical site name",
+        entity: "Warehouse", affectedCount: bad.length,
+        sampleIds: bad.map((s) => `${s.name} -> ${s.site}`),
+        evidence:
+          `${bad.map((s) => `${s.name} points at "${s.site}"`).join(", ")} — none of these are a ` +
+          "kind-bearing (canonical) site row. A source sheet's own site column named an alias " +
+          "instead of the master's canonical name; the WarehouseAlias table still resolves it " +
+          "correctly for API scoping, but anything reading Warehouse.site directly will not.",
+      };
+    },
+  },
+  {
+    id: "stage_warehouse_type_shadows_master",
+    async run({ prisma }) {
+      // Two stage columns (n-gate.warehouseType, n-stock.warehouseType) carry the label "Warehouse
+      // type (Village/Regional/Factory)" but are never written to — the kind now lives on the
+      // Warehouse master (Warehouse.kind) instead, resolved from Receipt.warehouse, so there is
+      // exactly one place a receipt's site kind can be looked up. This check is the tripwire: if
+      // either column is ever filled in, it's a second, driftable copy of a fact the master already
+      // owns — CLAUDE.md's "one source of truth per fact" rule, made concrete and testable.
+      const [gate, stock] = await Promise.all([
+        prisma.stageGateEntry.findMany({ where: { warehouseType: { not: null, notIn: [""] } }, select: { receiptId: true, warehouseType: true } }),
+        prisma.stageStockUpdate.findMany({ where: { warehouseType: { not: null, notIn: [""] } }, select: { receiptId: true, warehouseType: true } }),
+      ]);
+      const rows = [...gate, ...stock];
+      if (!rows.length) return null;
+      return {
+        id: "stage_warehouse_type_shadows_master", severity: "warning",
+        title: "A receipt's Warehouse type was hand-typed instead of read from the master",
+        entity: "StageGateEntry / StageStockUpdate", affectedCount: rows.length,
+        sampleIds: rows.slice(0, 5).map((r) => `${r.receiptId}: "${r.warehouseType}"`),
+        evidence:
+          "These columns exist in the stage model (they mirror the real workbook's own header) but " +
+          "the app deliberately never writes them — a receipt's warehouse kind is resolved from " +
+          "Warehouse.kind via Receipt.warehouse instead, so it can't drift from the master. A non-blank " +
+          "value here means something bypassed that and typed a second, unverified copy.",
+      };
+    },
+  },
+  {
+    id: "transfer_destination_inferred",
+    async run({ prisma }) {
+      // Same discipline as warehouse_alias_inferred: a real fact (every transfer in this sheet
+      // really does arrive at Yakro), asserted only by column HEADERS ("Gross Weight (Yakro)
+      // Recived", "KOR Received (At Yakro)", ...) rather than a per-row cell — so it's surfaced for
+      // confirmation rather than silently treated as equivalent to a stated value. Stays non-zero by
+      // construction until a sheet variant states the destination in an actual column.
+      const rows = await prisma.juteWarehouseTransferReceipt.findMany({
+        where: { destinationProvenance: "inferred" }, select: { sn: true, destinationWarehouse: true },
+      });
+      if (!rows.length) return null;
+      return {
+        id: "transfer_destination_inferred", severity: "warning",
+        title: "Transfer destination inferred from column headers, not stated per row",
+        entity: "JuteWarehouseTransferReceipt", affectedCount: rows.length,
+        sampleIds: rows.slice(0, 5).map((r) => `sn ${r.sn} -> ${r.destinationWarehouse}`),
+        evidence:
+          `All ${rows.length} rows in ledger 4 are read as arriving at ${rows[0]!.destinationWarehouse}, ` +
+          "but no cell in the sheet says so — the fact comes only from column headers naming Yakro " +
+          "('Gross Weight (Yakro) Recived', 'KOR Received (At Yakro)', ...). Recorded with provenance " +
+          "and reported here rather than treated as equivalent to a stated per-row value.",
+      };
+    },
+  },
+  {
+    id: "transfer_in_has_no_ledger1_counterpart",
+    async run({ prisma }) {
+      const inbound = await prisma.juteWarehouseTransferReceipt.findMany({
+        where: { destinationWarehouse: { not: null } }, select: { destinationWarehouse: true },
+      });
+      if (!inbound.length) return null;
+      const destinations = [...new Set(inbound.map((r) => r.destinationWarehouse!))];
+      const ledger1Sites = await prisma.juteWarehouseMovement.findMany({
+        where: { whLocation: { in: destinations } }, select: { whLocation: true }, distinct: ["whLocation"],
+      });
+      const covered = new Set(ledger1Sites.map((r) => r.whLocation));
+      const uncovered = destinations.filter((d) => !covered.has(d));
+      if (!uncovered.length) return null;
+      const affected = inbound.filter((r) => uncovered.includes(r.destinationWarehouse!)).length;
+      return {
+        id: "transfer_in_has_no_ledger1_counterpart", severity: "warning",
+        title: "A transfer's destination warehouse has no warehouse-stock ledger of its own",
+        entity: "JuteWarehouseTransferReceipt", affectedCount: affected, sampleIds: uncovered,
+        evidence:
+          `Ledger 1 (warehouse-stock) records only BOUAKE — ${uncovered.join(", ")} has 0 rows there, ` +
+          `so every one of the ${affected} inbound TRANSFER_IN movements now surfaced by ` +
+          "jute_reconciliation has nothing on the receiving side to reconcile against. The gap was " +
+          "invisible before destinationWarehouse existed, because TRANSFER_IN wasn't attributed to any " +
+          "warehouse at all; it's real now, not new. One of the clearest arguments for tracking the " +
+          "central warehouse as its own section rather than an extension of the unit warehouse's ledger.",
       };
     },
   },
@@ -503,6 +649,171 @@ export const CHECKS: Check[] = [
           'Adjusted Qty) in what its header calls "Batch No", not a bin code or batch identifier — ' +
           "confirmed against flow-xl-map/ANAGROCI_Data_Capture_Audit_Questions.md §2.4. Stored " +
           "verbatim under the sheet's own column name, never remapped.",
+      };
+    },
+  },
+  {
+    id: "drying_batch_multi_lot",
+    async run({ prisma }) {
+      const rows = await prisma.dryingBatch.findMany({
+        where: { lotNoRaw: { not: null }, lotNo: null },
+        select: { id: true, sn: true, lotNoRaw: true },
+      });
+      // Multi-value ambiguity only — NOT the separate bin-code contamination case (see
+      // drying_batch_lot_column_holds_bin_code), so filter to the two genuinely ambiguous shapes:
+      // comma/slash-joined text, or a plausible numeric concatenation. Mirrors
+      // dryingBatch.ts's resolveCleanLotNo() exactly, so this stays in sync with the importer's
+      // own rule rather than re-deriving a second one.
+      const ambiguous = rows.filter((r) => {
+        const raw = (r.lotNoRaw ?? "").trim();
+        if (/[,/]/.test(raw)) return true;
+        return /^\d+$/.test(raw) && Number(raw) >= 1000;
+      });
+      if (!ambiguous.length) return null;
+      return {
+        id: "drying_batch_multi_lot", severity: "warning",
+        title: "Drying Batch's Lot No column names more than one lot in a single cell",
+        entity: "DryingBatch", affectedCount: ambiguous.length,
+        sampleIds: ambiguous.slice(0, 5).map((r) => `sn ${r.sn}: "${r.lotNoRaw}"`),
+        evidence:
+          `${ambiguous.length} rows carry a lot value that cannot be split without guessing — 11 ` +
+          "comma/slash-joined (e.g. \"387, 401\") and 11 numerically concatenated 6-digit values " +
+          "(e.g. 246253, ambiguously 246+253 or 24+6253 or ...). Both are stored verbatim in " +
+          "lotNoRaw; lotNo stays null for these rows rather than picking a split. The sheet's own " +
+          "'needs lot allocation clarification' flag agrees on all but one of these — a genuine " +
+          "client-side inconsistency, also preserved rather than silently corrected.",
+      };
+    },
+  },
+  {
+    id: "drying_batch_lot_column_holds_bin_code",
+    async run({ prisma }) {
+      const rows = await prisma.dryingBatch.findMany({
+        where: { lotNoRaw: { not: null }, lotNo: null }, select: { id: true, sn: true, lotNoRaw: true },
+      });
+      const contaminated = rows.filter((r) => /^(BIN|ANA)[-\s]?\d/i.test((r.lotNoRaw ?? "").trim()));
+      if (!contaminated.length) return null;
+      return {
+        id: "drying_batch_lot_column_holds_bin_code", severity: "info",
+        title: "Drying Batch's Lot No column holds a bin code on some rows",
+        entity: "DryingBatch", affectedCount: contaminated.length,
+        sampleIds: [...new Set(contaminated.map((r) => r.lotNoRaw!))].slice(0, 5),
+        evidence:
+          `${contaminated.length} of the real "Drying Batch" rows carry a bin code ` +
+          "(BIN-03B/BIN-005/BIN-007/BIN-015/BIN-016) in the lot column, not a lot number at all — " +
+          "the same disjoint-namespace confusion production_input_quality_lot_column_mislabeled " +
+          "already documents on the production side. Stored verbatim under lotNoRaw; lotNo stays " +
+          "null rather than treating a bin code as if it were a real lot.",
+      };
+    },
+  },
+  {
+    // The reconciliation the plan asked for before deciding whether DryingBatch replaces DryingJob:
+    // both cover exactly the same 81 central (ANAGROCI-01) rows, joined on their shared FICHE. The
+    // result is NOT clean — see this finding's evidence — so DryingJob stays the live source for
+    // receiptLinks.ts and the drying page this pass; this check is the standing, re-runnable proof
+    // of that decision rather than a one-off note in a comment.
+    id: "drying_batch_vs_drying_job_drift",
+    async run({ prisma }) {
+      const [jobs, batches] = await Promise.all([
+        prisma.dryingJob.findMany({ where: { warehouse: "ANAGROCI-01" } }),
+        prisma.dryingBatch.findMany({ where: { warehouse: "ANAGROCI-01" } }),
+      ]);
+      if (!jobs.length || !batches.length) return null;
+      const byFiche = new Map(batches.map((b) => [(b.ficheNoRaw ?? "").trim(), b]));
+      const affected: string[] = [];
+      for (const j of jobs) {
+        const b = byFiche.get((j.ficheNo ?? "").trim());
+        if (!b) { affected.push(`${j.id}: no matching DryingBatch row for fiche ${j.ficheNo}`); continue; }
+        const bDate = b.dryingDate ? b.dryingDate.toISOString().slice(0, 10) : b.dryingDateRaw;
+        const reasons: string[] = [];
+        if ((j.date ?? "").trim() !== (bDate ?? "").trim()) reasons.push(`date ${j.date} vs ${bDate}`);
+        if ((j.status ?? "").trim() !== (b.status ?? "").trim()) reasons.push(`status ${j.status} vs ${b.status}`);
+        if ((j.destination ?? "").trim() !== (b.destinationRaw ?? "").trim()) reasons.push(`destination ${j.destination} vs ${b.destinationRaw}`);
+        if (reasons.length) affected.push(`${j.id}: ${reasons.join(", ")}`);
+      }
+      if (!affected.length) return null;
+      return {
+        id: "drying_batch_vs_drying_job_drift", severity: "warning",
+        title: "DryingBatch's central rows disagree with the existing DryingJob rows for the same fiche",
+        entity: "DryingJob / DryingBatch", affectedCount: affected.length,
+        sampleIds: affected.slice(0, 5),
+        evidence:
+          `${affected.length} of ${jobs.length} DryingJob rows (all ANAGROCI-01 / central) disagree ` +
+          "with their matched DryingBatch row on date, status, and/or destination when joined on the " +
+          "same FICHE both sheets carry (bin and lot agree on all 81). Measured, not assumed: this is " +
+          "why receiptLinks.ts and the drying page still read DryingJob rather than DryingBatch — the " +
+          "plan's own condition for switching ('only if reconciliation reports zero drift') is not met.",
+      };
+    },
+  },
+  {
+    id: "production_issue_fiche_column_contaminated",
+    async run({ prisma }) {
+      const rows = await prisma.issuedToProduction.findMany({
+        where: { ficheNo: { not: null } }, select: { id: true, ficheNo: true },
+      });
+      if (!rows.length) return null;
+      const looksLikeBin = rows.filter((r) => /^(BIN|ANA)[-\s]?\d/i.test((r.ficheNo ?? "").trim()));
+      if (!looksLikeBin.length) return null;
+      return {
+        id: "production_issue_fiche_column_contaminated", severity: "info",
+        title: "Issued to Production's Fiche No column mostly holds dry-bin codes, not fiches",
+        entity: "IssuedToProduction", affectedCount: looksLikeBin.length,
+        sampleIds: [...new Set(looksLikeBin.map((r) => r.ficheNo!))].slice(0, 5),
+        evidence:
+          `${looksLikeBin.length} of ${rows.length} non-blank "Fiche No" values in the real ` +
+          "\"Issued to Production Section\" sheet are dry-bin-code strings (e.g. \"BIN-03B\"), not a " +
+          "real fiche number — verified directly against the file before deciding not to join on " +
+          "this column, matching the same contamination pattern found in a similar sheet. Stored " +
+          "verbatim; never used to link a row back to a Receipt.",
+      };
+    },
+  },
+  {
+    id: "production_issue_source_dry_bin_pairs",
+    async run({ prisma }) {
+      const rows = await prisma.issuedToProduction.findMany({
+        where: { OR: [{ sourceBin: { not: null } }, { dryBin: { not: null } }] },
+        select: { sourceBin: true, dryBin: true },
+      });
+      if (!rows.length) return null;
+      const pairs = new Set(rows.map((r) => `${r.sourceBin ?? ""} -> ${r.dryBin ?? ""}`));
+      return {
+        id: "production_issue_source_dry_bin_pairs", severity: "info",
+        title: "Source Bin / DRY BIN observed pairs (procurement <-> production bin bridge)",
+        entity: "IssuedToProduction", affectedCount: pairs.size, sampleIds: [...pairs].slice(0, 5),
+        evidence:
+          `${pairs.size} distinct (Source Bin, DRY BIN) pairs observed across the real "Issued to ` +
+          "Production Section\" sheet — the first *stated* bridge between procurement's BIN-0xx bin " +
+          "namespace and production's ANA-x/…-DRY namespace. Recorded here as reporting-only " +
+          "observed data; no bin-namespace normalisation is applied anywhere in this codebase.",
+      };
+    },
+  },
+  {
+    id: "production_issue_btm_not_in_production_master",
+    async run({ prisma }) {
+      const rows = await prisma.issuedToProduction.findMany({
+        where: { btmNo: { not: null } }, select: { btmNo: true },
+      });
+      if (!rows.length) return null;
+      const distinctBtms = [...new Set(rows.map((r) => r.btmNo!.trim()))];
+      const known = await prisma.btmIntake.findMany({
+        where: { btmNo: { in: distinctBtms } }, select: { btmNo: true },
+      });
+      const knownSet = new Set(known.map((k) => k.btmNo));
+      const missing = distinctBtms.filter((b) => !knownSet.has(b));
+      if (!missing.length) return null;
+      return {
+        id: "production_issue_btm_not_in_production_master", severity: "info",
+        title: "Issued-to-production BTMs with no matching BtmIntake",
+        entity: "IssuedToProduction", affectedCount: missing.length, sampleIds: missing.slice(0, 5),
+        evidence:
+          `${missing.length} of ${distinctBtms.length} distinct BTM numbers in the real "Issued to ` +
+          "Production Section\" sheet have no matching BtmIntake — btmNo is a SOFT reference on " +
+          "this table by design, so this is expected whenever the warehouse's own issue record runs " +
+          "ahead of production's intake records. Never auto-created; reported only.",
       };
     },
   },

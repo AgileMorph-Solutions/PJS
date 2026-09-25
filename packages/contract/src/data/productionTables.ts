@@ -656,6 +656,53 @@ export const productionTables: ProductionTable[] = [
       { n: "Qty in Kg's", v: "8620", col: "qtyKgs" },
     ],
   },
+  // Third later-pass table (see n-issue-warehouse's own comment) — the unit warehouse's own record
+  // of dry RCN handed to a BTM. btmNo is a soft reference (8/112 BTMs unmatched, reported not
+  // auto-created); ficheNo is stored verbatim but never joined on (contaminated — mostly dry-bin
+  // strings, only 16/125 look like a real fiche); sourceBin/dryBin pairs are reported, not merged.
+  {
+    id: "issued-to-production",
+    model: "IssuedToProduction",
+    spine: "btm",
+    cardinality: "many",
+    sourceNodeIds: ["n-issue-warehouse"],
+    fields: [
+      { n: "SI NO", v: "1", col: "sNo" },
+      { n: "Date", v: "2026-04-22", col: "date" },
+      { n: "RCN", v: "Dry Rcn", col: "rcn" },
+      { n: "Source Bin", v: "BIN-013", col: "sourceBin" },
+      { n: "DRY BIN", v: "ANA-01", col: "dryBin" },
+      { n: "Bin Status", v: "Running", col: "binStatus" },
+      { n: "BTM", v: "1001", col: "btmNo" },
+      { n: "KOR-Issued", v: "43.12", col: "korIssued" },
+      { n: "Nut Count", v: "172", col: "nutCount" },
+      { n: "GK", v: "230", col: "gk" },
+      { n: "Moisture", v: "8.9", col: "moisture" },
+      { n: "Immature", v: "16", col: "immature" },
+      { n: "Spottd", v: "13", col: "spotted" },
+      { n: "Rejection", v: "20", col: "rejection" },
+      { n: "OIL (Gram)", v: "0", col: "oilGram" },
+      { n: "Void (Gram)", v: "25", col: "voidGram" },
+      { n: "Shell (Gram)", v: "690", col: "shellGram" },
+      { n: "Fiche No", v: "89770", col: "ficheNo" },
+      { n: "Bag inStock afetr Dry", v: "644", col: "bagInStockAfterDry" },
+      { n: "No of Bag(Issued to Production)", v: "644", col: "noOfBagIssuedToProduction" },
+      { n: "Avg Bag Wt (Empty  Bag)", v: "0.69", col: "avgBagWtEmptyBag" },
+      { n: "Bag Wt(Empty Bag)", v: "444.36", col: "bagWtEmptyBag" },
+      { n: "No of Pallet", v: "25", col: "noOfPallet" },
+      { n: "Avg Pallet Wt", v: "71.32", col: "avgPalletWt" },
+      { n: "Pallet Weight (Kg)", v: "1783", col: "palletWeightKg" },
+      { n: "Gross Wt (Before Dry)", v: "", col: "grossWtBeforeDry" },
+      { n: "Gross Wt (After Drying Wt with Jute Bag)", v: "48375", col: "grossWtAfterDryingWithJuteBag" },
+      { n: "Net Wt (Without Jute Bag)", v: "47930.64", col: "netWtWithoutJuteBag" },
+      { n: "Date of Issue to Calibration", v: "2026-04-23", col: "dateOfIssueToCalibration" },
+      { n: "Received By Production(Net Wt)", v: "97398", col: "receivedByProductionNetWt" },
+      { n: "Issued from", v: "BIN", col: "issuedFrom" },
+      { n: "Diff in Issue", v: "1583.59", col: "diffInIssue" },
+      { n: "Remarks", v: "", col: "remarks" },
+      { n: "Check", v: "", col: "checkValue" },
+    ],
+  },
 ];
 
 export const productionTableById: Record<string, ProductionTable> = Object.fromEntries(

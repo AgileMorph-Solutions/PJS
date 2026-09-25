@@ -10,8 +10,11 @@ export interface NewDryingJob {
   lotNo: string; ficheNo: string; status: string; dryType: string; destination: string;
 }
 
-export async function listDryingJobs() {
-  return prisma.dryingJob.findMany({ orderBy: { date: "asc" } });
+export async function listDryingJobs(site?: string[]) {
+  return prisma.dryingJob.findMany({
+    where: site ? { warehouse: { in: site } } : {},
+    orderBy: { date: "asc" },
+  });
 }
 
 export async function createDryingJob(job: NewDryingJob) {

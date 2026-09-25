@@ -45,7 +45,72 @@ interface JuteSeed {
   tallySnapshots: { ledgerId: string; label: string; value: number; source: string; sheet: string | null; capturedAt: string | null }[];
 }
 
+/**
+ * Site/Store typology, upserted rather than created-if-missing so re-running always converges:
+ * BOUAKE and YAKRO FACTORY are the two known SITES (kind set); ANAGROCI-01 is a STORE under
+ * YAKRO FACTORY, and YAMOUSSOUKRO is a third name the client's own sheets use for that same site.
+ *
+ * Evidence: ANAGROCI DATA PROCUREMENT 2026.xlsx, sheet "Warehouse Receiving", places
+ * `warehouse = ANAGROCI-01` peer to `warehouse = BKE-001/002/003` in the same column, with
+ * `warehouse site = YAMOUSSOUKRO` on those same rows — materially stronger than the filename-only
+ * inference this alias used to carry (`provenance: "inferred"`, matched by
+ * `/YAKRO/i.test(warehouseName)` against whatever the drying report happened to be named).
+ * `warehouse_alias_inferred` (domain/dataQuality/checks.ts) reports 0 once this has run; the alias
+ * row itself is kept, never deleted — it's the provenance trail, and its `provenance` field is what
+ * changed, not its existence.
+ */
+async function backfillWarehouseTypology() {
+  const source = "ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Warehouse Receiving)";
+
+  await prisma.warehouse.upsert({
+    where: { name: "BOUAKE" },
+    update: { kind: "REGIONAL_CENTRAL" },
+    create: { name: "BOUAKE", kind: "REGIONAL_CENTRAL", source: "seed/warehouses.json" },
+  });
+  await prisma.warehouse.upsert({
+    where: { name: "YAKRO FACTORY" },
+    update: { kind: "FACTORY" },
+    create: { name: "YAKRO FACTORY", kind: "FACTORY", source: "seed/warehouses.json" },
+  });
+  // Depends on YAKRO FACTORY existing (site is a soft FK to it) — the two upserts above must run first.
+  await prisma.warehouse.upsert({
+    where: { name: "ANAGROCI-01" },
+    update: { site: "YAKRO FACTORY" },
+    create: { name: "ANAGROCI-01", site: "YAKRO FACTORY", source },
+  });
+  await prisma.warehouseAlias.upsert({
+    where: { alias: "ANAGROCI-01" },
+    update: { warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
+    create: { alias: "ANAGROCI-01", warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
+  });
+  await prisma.warehouseAlias.upsert({
+    where: { alias: "YAMOUSSOUKRO" },
+    update: { warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
+    create: { alias: "YAMOUSSOUKRO", warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
+  });
+}
+
+/**
+ * Backfills destinationWarehouse/destinationProvenance onto the 367 JuteWarehouseTransferReceipt
+ * rows imported before the transfer_destination migration existed. Same reasoning as
+ * backfillWarehouseTypology: a real, header-asserted fact about already-imported data, not a fresh
+ * workbook observation, so it runs unconditionally rather than being gated by the seed-data bail.
+ */
+async function backfillTransferDestination() {
+  await prisma.juteWarehouseTransferReceipt.updateMany({
+    where: { destinationWarehouse: null },
+    data: { destinationWarehouse: "YAKRO FACTORY", destinationProvenance: "inferred" },
+  });
+}
+
 async function main() {
+  // Runs every time, even on an already-seeded database — this is foundational Site/Store
+  // typology (Village/Regional/Factory), not data observed from a workbook, so it doesn't belong
+  // behind the "receipts already exist" bail below. Upserts throughout, so re-running is a no-op
+  // once applied.
+  await backfillWarehouseTypology();
+  await backfillTransferDestination();
+
   if ((await prisma.receipt.count()) > 0) {
     console.log("Database already seeded — skipping.");
     return;
@@ -107,18 +172,10 @@ async function main() {
     data: [...binCodes].map(([code, source]) => ({ code, warehouseName: null, source })), skipDuplicates: true,
   });
 
-  // An inference, not a client statement — flagged for confirmation by /api/data-quality.
-  const yakro = [...whNames.keys()].find((w) => /YAKRO/i.test(w));
-  if (yakro && dryingJobs.some((d) => d.warehouse === "ANAGROCI-01")) {
-    await prisma.warehouseAlias.createMany({
-      data: [{
-        alias: "ANAGROCI-01", warehouseName: yakro,
-        source: "Drying Report_Factory warehouse.xlsx (sheet FINAL DRY RCN-YAKRO-2026)",
-        provenance: "inferred",
-      }],
-      skipDuplicates: true,
-    });
-  }
+  // The ANAGROCI-01 -> YAKRO FACTORY alias (and the YAMOUSSOUKRO one) is created by
+  // backfillWarehouseTypology() above, unconditionally and with real evidence — this used to be a
+  // filename-only inference gated on `dryingJobs.some(d => d.warehouse === "ANAGROCI-01")`, kept
+  // here only as a historical note so the old reasoning isn't lost, not as code.
 
   // ── Receipts + their stage rows ─────────────────────────────────────────
   for (const r of receipts) {
@@ -190,6 +247,10 @@ async function main() {
         noFiche: r.noFiche, ccaFicheNumber: r.ccaFicheNumber, binNo: r.binNo,
         damagedBags: r.damagedBags, newBagsUsed: r.newBagsUsed, recondition: r.recondition,
         sourceWarehouse: r.sourceWarehouse,
+        // Every row this sheet has ever produced arrives at Yakro — asserted only by column
+        // headers, never a cell (see the model's own comment) — so it's a fixed value here, same
+        // as commitJuteWarehouseTransfer sets for a fresh upload.
+        destinationWarehouse: "YAKRO FACTORY", destinationProvenance: "inferred",
         origin: r.origin,
         bagsDispatched: r.bagsDispatched, bagsReceived: r.bagsReceived,
         reportedDifference: r.reportedDifference,

@@ -9,6 +9,8 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataQualityRoutes } from "./routes/dataQuality.js";
 import { importRoutes } from "./routes/imports.js";
 import { productionRoutes } from "./routes/production.js";
+import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
+import { warehouseActivityLedgerRoutes } from "./routes/warehouseActivityLedger.js";
 import { ValidationError } from "./domain/validation.js";
 import { UnknownStageFieldError } from "./stageStore.js";
 import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
@@ -50,6 +52,8 @@ export function buildApp() {
   app.register(dataQualityRoutes);
   app.register(importRoutes);
   app.register(productionRoutes);
+  app.register(warehouseDispatchRoutes);
+  app.register(warehouseActivityLedgerRoutes);
 
   return app;
 }

@@ -19,6 +19,11 @@ import type { DryingJobRow } from "../domain/imports/drying.js";
 import type { JuteWarehouseStockRow } from "../domain/imports/juteWarehouseStock.js";
 import type { JuteWarehouseTransferRow } from "../domain/imports/juteWarehouseTransfer.js";
 import type { WarehouseDischargeRow } from "../domain/imports/warehouseDischarges.js";
+import type { WarehouseDispatchLineRow } from "../domain/imports/warehouseDispatches.js";
+import type { DryingBatchRow } from "../domain/imports/dryingBatch.js";
+import type { IssuedToProductionRow } from "../domain/imports/issuedToProduction.js";
+import type { WarehouseReceivingRow } from "../domain/imports/warehouseReceiving.js";
+import type { WarehouseActivityLedgerRow } from "../domain/imports/warehouseActivityLedger.js";
 import { prisma } from "../db.js";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 
@@ -131,7 +136,7 @@ export async function previewImport(
     const detected = detectImporter(workbook);
     if (!detected.matched) {
       throw new ImportRejectedError(
-        "Couldn't auto-detect which of the 5 known shapes this file is — pick one manually.",
+        "Couldn't auto-detect which of the 10 known shapes this file is — pick one manually.",
         { attempts: detected.attempts }
       );
     }
@@ -323,13 +328,31 @@ export async function commitImport(token: string, opts: { skipFlagged: boolean }
       created = await commitReceipts(toWrite as ParsedRow<OffloadingRow>[], entry.filename);
       break;
     case "dryingJobs":
-      created = await commitDryingJobs(toWrite as ParsedRow<DryingJobRow>[]);
+      created = await commitDryingJobs(toWrite as ParsedRow<DryingJobRow>[], entry.filename);
       break;
     case "juteWarehouseStock":
       created = await commitJuteWarehouseStock(toWrite as ParsedRow<JuteWarehouseStockRow>[], entry.filename);
       break;
     case "juteWarehouseTransfer":
       created = await commitJuteWarehouseTransfer(toWrite as ParsedRow<JuteWarehouseTransferRow>[], entry.filename);
+      break;
+    case "warehouseDispatches":
+      created = await commitWarehouseDispatches(toWrite as ParsedRow<WarehouseDispatchLineRow>[], entry.filename);
+      break;
+    case "dryingBatch":
+      created = await commitDryingBatch(toWrite as ParsedRow<DryingBatchRow>[], entry.filename);
+      break;
+    case "issuedToProduction":
+      created = await commitIssuedToProduction(toWrite as ParsedRow<IssuedToProductionRow>[], entry.filename);
+      break;
+    case "warehouseReceiving":
+      // Deliberately NOT commitWarehouseDischarges — see that function's own header comment and
+      // warehouseReceiving.ts's: this path must never call writeLotsOntoReceipts(). A genuinely
+      // separate function, not a copy that accidentally reintroduces the write-back.
+      created = await commitWarehouseReceiving(toWrite as ParsedRow<WarehouseReceivingRow>[], entry.filename);
+      break;
+    case "warehouseActivityLedger":
+      created = await commitWarehouseActivityLedger(toWrite as ParsedRow<WarehouseActivityLedgerRow>[], entry.filename);
       break;
   }
 
@@ -419,8 +442,13 @@ async function commitReceipts(rows: ParsedRow<OffloadingRow>[], filename: string
   return created;
 }
 
-async function commitDryingJobs(rows: ParsedRow<DryingJobRow>[]): Promise<number> {
+async function commitDryingJobs(rows: ParsedRow<DryingJobRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
+  // DryingJob.warehouse is now a hard FK (see the drying_job_warehouse_fk migration — added only
+  // once every existing row was verified to resolve). Upsert first, same as every other importer,
+  // so an upload naming a genuinely new warehouse fails as a clear finding, not a raw P2003.
+  const warehouses = new Set(rows.map((r) => r.data.warehouse?.trim()).filter((v): v is string => !!v));
+  await upsertObservedMasters(warehouses, new Set(), filename);
   const result = await prisma.dryingJob.createMany({ data: rows.map((r) => r.data), skipDuplicates: true });
   return result.count;
 }
@@ -471,9 +499,16 @@ function categoriseActivity(v: string): string | null {
   return "SUPPLIER_ISSUE";
 }
 
+/** The sheet this importer reads ("Bouake Stock Reciving") only ever asserts its destination in
+ * column HEADERS ("Gross Weight (Yakro) Recived", "KOR Received (At Yakro)", ...), never in a
+ * per-row cell — see JuteWarehouseTransferReceipt.destinationProvenance's comment. Constant across
+ * every row this importer has ever produced, so it's set here at commit time, not parsed. */
+const INFERRED_DESTINATION = "YAKRO FACTORY";
+
 async function commitJuteWarehouseTransfer(rows: ParsedRow<JuteWarehouseTransferRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
   const warehouses = new Set(rows.map((r) => r.data.sourceWarehouse?.trim()).filter((v): v is string => Boolean(v)));
+  warehouses.add(INFERRED_DESTINATION);
   await upsertObservedMasters(warehouses, new Set(), filename);
 
   const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
@@ -485,7 +520,10 @@ async function commitJuteWarehouseTransfer(rows: ParsedRow<JuteWarehouseTransfer
       truckRegistration: r.data.truckRegistration, lotNo: r.data.lotNo, lotDry: r.data.lotDry,
       noFiche: r.data.noFiche, ccaFicheNumber: r.data.ccaFicheNumber, binNo: r.data.binNo,
       damagedBags: r.data.damagedBags, newBagsUsed: r.data.newBagsUsed, recondition: r.data.recondition,
-      sourceWarehouse: r.data.sourceWarehouse ?? "BOUAKE", origin: r.data.origin,
+      // Non-null by construction: rows with a blank source warehouse are skipped by the parser
+      // before reaching `usable`/`toWrite` (see juteWarehouseTransfer.ts) rather than defaulted here.
+      sourceWarehouse: r.data.sourceWarehouse!, origin: r.data.origin,
+      destinationWarehouse: INFERRED_DESTINATION, destinationProvenance: "inferred",
       bagsDispatched: r.data.bagsDispatched, bagsReceived: r.data.bagsReceived,
       reportedDifference: r.data.reportedDifference, finalBagsAfterRebagging: r.data.finalBagsAfterRebagging,
       reportedDiff: r.data.reportedDiff, laissePasserEntree: r.data.laissePasserEntree,
@@ -515,6 +553,21 @@ async function upsertObservedBins(codes: Set<string>, filename: string) {
   });
 }
 
+/** A store (e.g. BKE-002) observed alongside the site it belongs to. `createMany({skipDuplicates})`
+ * can't be used here — a store code may already exist as a bare row from before the warehouse-
+ * typology migration, and skipDuplicates would leave its `site` unset forever. An explicit upsert
+ * loop is what actually backfills `site` on an existing row, not just on a newly-created one; the
+ * per-commit cardinality is at most a handful of distinct stores, so the loop is cheap. */
+async function upsertObservedStores(storeToSite: Map<string, string>, filename: string) {
+  for (const [store, site] of storeToSite) {
+    await prisma.warehouse.upsert({
+      where: { name: store },
+      update: { site },
+      create: { name: store, site, source: `upload: ${filename}` },
+    });
+  }
+}
+
 /**
  * Unit-warehouse offloading. Two distinct jobs, in order: store the sheet verbatim, then write the
  * Lot it assigns back onto the matching Receipt — the only path by which a receipt ever gets a real
@@ -528,9 +581,20 @@ async function commitWarehouseDischarges(
   if (rows.length === 0) return { created: 0, lotWriteBack: empty };
 
   // ── Step A: masters, then the sheet stored verbatim ──
-  const warehouses = new Set(rows.map((r) => r.data.warehouse?.trim()).filter((v): v is string => !!v));
+  // Real hierarchy is Site -> Store -> Bin (BOUAKE -> BKE-002 -> BKE-002-BIN-026). `warehouseSite`
+  // is the SITE ("BOUAKE") — a plain observed-master upsert, same as every other importer.
+  // `warehouse` is a STORE ("BKE-001"/"BKE-002"/"BKE-003") — a level below a site, not a warehouse
+  // itself, so it gets its own upsert (below) that also records which site it belongs to. An
+  // earlier version of this importer upserted the store code as if it were a site; the
+  // warehouse-typology migration reclassified the three rows that mistake had already created.
+  const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
   const origins = new Set(rows.map((r) => r.data.origin?.trim()).filter((v): v is string => !!v));
   const bins = new Set(rows.map((r) => r.data.unloadingBin?.trim()).filter((v): v is string => !!v));
+  const storeToSite = new Map<string, string>();
+  for (const r of rows) {
+    const store = r.data.warehouse?.trim(), site = r.data.warehouseSite?.trim();
+    if (store && site) storeToSite.set(store, site);
+  }
   const suppliers = new Map<string, string>();
   for (const r of rows) {
     const code = r.data.supplierCode?.trim();
@@ -539,6 +603,7 @@ async function commitWarehouseDischarges(
   await upsertObservedMasters(warehouses, origins, filename);
   await upsertObservedSuppliers(suppliers, filename);
   await upsertObservedBins(bins, filename);
+  await upsertObservedStores(storeToSite, filename);
 
   const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
   const created = await prisma.warehouseDischarge.createMany({
@@ -546,7 +611,9 @@ async function commitWarehouseDischarges(
       const d = r.data;
       return {
         lotNo: d.lotNo, sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
-        warehouseSite: d.warehouseSite, warehouse: d.warehouse,
+        // Non-null by construction: the parser's third skip-guard filters out every row with a
+        // blank warehouseSite before it reaches `usable`/`toWrite`, so nothing without one gets here.
+        warehouseSite: d.warehouseSite!, warehouse: d.warehouse,
         unloadingBin: d.unloadingBin, afterDryingBin: d.afterDryingBin,
         scaleLocation: d.scaleLocation, whReceiptNo: d.whReceiptNo, ficheCca: d.ficheCca,
         truckNo: d.truckNo,
@@ -736,4 +803,252 @@ async function dischargeLotFindings(
   }
 
   return findings;
+}
+
+/**
+ * Unit-warehouse dispatch out (CHARGEMENT). Flat parent/line shape — see
+ * WarehouseDispatchLine's schema.prisma comment. No write-back to any receipt stage: this sheet's
+ * Fiche column is optional and this importer does not attempt the same fiche->receipt bridge
+ * warehouseDischarges.ts does.
+ */
+async function commitWarehouseDispatches(rows: ParsedRow<WarehouseDispatchLineRow>[], filename: string): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
+  const origins = new Set(rows.map((r) => r.data.origin?.trim()).filter((v): v is string => !!v));
+  const bins = new Set(rows.map((r) => r.data.bin?.trim()).filter((v): v is string => !!v));
+  const storeToSite = new Map<string, string>();
+  for (const r of rows) {
+    const store = r.data.warehouse?.trim(), site = r.data.warehouseSite?.trim();
+    if (store && site) storeToSite.set(store, site);
+  }
+  await upsertObservedMasters(warehouses, origins, filename);
+  await upsertObservedBins(bins, filename);
+  await upsertObservedStores(storeToSite, filename);
+
+  const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
+  const result = await prisma.warehouseDispatchLine.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        sn: d.sn, chargeDate: d.chargeDate ? new Date(d.chargeDate) : null, chargeDateRaw: d.chargeDateRaw,
+        warehouseSite: d.warehouseSite, vyogeNumber: d.vyogeNumber, remark: d.remark,
+        scaleLocation: d.scaleLocation, warehouse: d.warehouse, whOrDirect: d.whOrDirect, bin: d.bin,
+        origin: d.origin, truckNo: d.truckNo, transporter: d.transporter, driver: d.driver,
+        phone: d.phone, whReceiptNo: d.whReceiptNo, ficheCca: d.ficheCca,
+        binwiseLoadedBags: d.binwiseLoadedBags, totalBags: d.totalBags,
+        grossWt: dec(d.grossWt), netWeight: dec(d.netWeight),
+        status: d.status, unloadingStatus: d.unloadingStatus,
+        browns: dec(d.panel.browns), voids: dec(d.panel.voids), oil: dec(d.panel.oil),
+        totDefect: dec(d.panel.totDefect), goodKernel: dec(d.panel.goodKernel),
+        immature: dec(d.panel.immature), spotted: dec(d.panel.spotted), totKernels: dec(d.panel.totKernels),
+        kor: dec(d.panel.kor), shot: dec(d.panel.shot), fot: dec(d.panel.fot),
+        usefulKernelsYield: dec(d.panel.usefulKernelsYield), totalYield: dec(d.panel.totalYield),
+        moisture: dec(d.panel.moisture), nc: dec(d.panel.nc), shell: dec(d.panel.shell),
+        bagsYakro: d.bagsYakro, grossYakro: dec(d.grossYakro), differenceWeight: dec(d.differenceWeight),
+        sheetRow: r.sheetRow, source: `upload: ${filename}`,
+      };
+    }),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
+/**
+ * Consolidated Drying Batch (both sites). Stores the client's own *_raw twins verbatim; the clean
+ * `lotNo` is exactly what dryingBatch.ts's resolveCleanLotNo() already decided — no further logic
+ * here. No write-back to DryingJob/receipt stages this pass (see the plan: DryingJob stays the
+ * live source until a reconciliation check reports zero drift).
+ */
+async function commitDryingBatch(rows: ParsedRow<DryingBatchRow>[], filename: string): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
+  const bins = new Set<string>();
+  for (const r of rows) {
+    if (r.data.sourceBinNo?.trim()) bins.add(r.data.sourceBinNo.trim());
+    if (r.data.destinationBinNo?.trim()) bins.add(r.data.destinationBinNo.trim());
+  }
+  const storeToSite = new Map<string, string>();
+  for (const r of rows) {
+    const store = r.data.warehouse?.trim(), site = r.data.warehouseSite?.trim();
+    if (store && site) storeToSite.set(store, site);
+  }
+  await upsertObservedMasters(warehouses, new Set(), filename);
+  await upsertObservedBins(bins, filename);
+  await upsertObservedStores(storeToSite, filename);
+
+  const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
+  const result = await prisma.dryingBatch.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        sn: d.sn, dryingDate: d.dryingDate ? new Date(d.dryingDate) : null, dryingDateRaw: d.dryingDateRaw,
+        warehouseSite: d.warehouseSite, warehouse: d.warehouse,
+        sourceBinNo: d.sourceBinNo, destinationBinNo: d.destinationBinNo,
+        lotNoRaw: d.lotNoRaw, lotNo: d.lotNo,
+        whReceiptNoRaw: d.whReceiptNoRaw, ficheNoRaw: d.ficheNoRaw, originRaw: d.originRaw,
+        supplierNameRaw: d.supplierNameRaw, supplierCodeRaw: d.supplierCodeRaw,
+        ccakSupplierCodeRaw: d.ccakSupplierCodeRaw, status: d.status, dryType: d.dryType,
+        destinationRaw: d.destinationRaw,
+        issuedGrossWithBagsPalletsKg: dec(d.issuedGrossWithBagsPalletsKg),
+        issuedPalletWeightKg: dec(d.issuedPalletWeightKg), issuedGrossWithBagsKg: dec(d.issuedGrossWithBagsKg),
+        issuedBags: d.issuedBags, issuedNetWeightKg: dec(d.issuedNetWeightKg),
+        receivedGrossWithBagsPalletsKg: dec(d.receivedGrossWithBagsPalletsKg),
+        receivedPalletWeightKg: dec(d.receivedPalletWeightKg),
+        receivedGrossWithBagsKg: dec(d.receivedGrossWithBagsKg), receivedBags: d.receivedBags,
+        receivedNetWeightKg: dec(d.receivedNetWeightKg),
+        inputMoisturePct: dec(d.inputMoisturePct), inputNutCount: dec(d.inputNutCount), inputKor: dec(d.inputKor),
+        outputMoisturePct: dec(d.outputMoisturePct), outputNutCount: dec(d.outputNutCount), outputKor: dec(d.outputKor),
+        oil: dec(d.oil), rejection: dec(d.rejection), goodKernel: dec(d.goodKernel), immature: dec(d.immature),
+        spotted: dec(d.spotted), shell: dec(d.shell), void: dec(d.voidField),
+        moistureLossPct: dec(d.moistureLossPct), dryingLossKg: dec(d.dryingLossKg), dryingLossPct: dec(d.dryingLossPct),
+        triageLossKg: dec(d.triageLossKg), triageLossPct: dec(d.triageLossPct), damagedNutsKg: dec(d.damagedNutsKg),
+        inputBagsForDrying: d.inputBagsForDrying, outputBagsAfterDrying: d.outputBagsAfterDrying,
+        dryingOrPicking: d.dryingOrPicking, remarks: d.remarks, issuedToProduction: d.issuedToProduction,
+        reDryingDate: d.reDryingDate ? new Date(d.reDryingDate) : null, reDryingDateRaw: d.reDryingDateRaw,
+        moistureFirstRedryPct: dec(d.moistureFirstRedryPct), moistureSecondDryPct: dec(d.moistureSecondDryPct),
+        issuedToProduction3: d.issuedToProduction3, remarks4: d.remarks4,
+        needsLotAllocationClarificationRaw: d.needsLotAllocationClarificationRaw,
+        sheetRow: r.sheetRow, source: `upload: ${filename}`,
+      };
+    }),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
+/**
+ * Issued to Production Section. btmNo is a soft reference by design — never upserted into
+ * BtmIntake here (ground rule §4: a sheet running ahead of production's own intake records is not
+ * evidence a BtmIntake should be invented). Source Bin / DRY BIN pairs are reported by
+ * production_issue_source_dry_bin_pairs, never normalised.
+ */
+async function commitIssuedToProduction(rows: ParsedRow<IssuedToProductionRow>[], filename: string): Promise<number> {
+  if (rows.length === 0) return 0;
+  const result = await prisma.issuedToProduction.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        btmNo: d.btmNo, sNo: d.sNo ? String(d.sNo) : null, date: d.date ?? d.dateRaw,
+        rcn: d.rcn, sourceBin: d.sourceBin, dryBin: d.dryBin, binStatus: d.binStatus,
+        korIssued: d.korIssued, nutCount: d.nutCount, gk: d.gk, moisture: d.moisture,
+        immature: d.immature, spotted: d.spotted, rejection: d.rejection, oilGram: d.oilGram,
+        voidGram: d.voidGram, shellGram: d.shellGram, ficheNo: d.ficheNo,
+        bagInStockAfterDry: d.bagInStockAfterDry, noOfBagIssuedToProduction: d.noOfBagIssuedToProduction,
+        avgBagWtEmptyBag: d.avgBagWtEmptyBag, bagWtEmptyBag: d.bagWtEmptyBag, noOfPallet: d.noOfPallet,
+        avgPalletWt: d.avgPalletWt, palletWeightKg: d.palletWeightKg, grossWtBeforeDry: d.grossWtBeforeDry,
+        grossWtAfterDryingWithJuteBag: d.grossWtAfterDryingWithJuteBag,
+        netWtWithoutJuteBag: d.netWtWithoutJuteBag, dateOfIssueToCalibration: d.dateOfIssueToCalibration,
+        receivedByProductionNetWt: d.receivedByProductionNetWt, issuedFrom: d.issuedFrom,
+        diffInIssue: d.diffInIssue, remarks: d.remarks, checkValue: d.checkValue,
+        sheetRow: r.sheetRow, source: `upload: ${filename}`,
+      };
+    }),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
+/**
+ * Warehouse Receiving — a SECOND, richer source for WarehouseDischarge (see that model's own
+ * schema.prisma comment). Deliberately a standalone function, not a call into
+ * commitWarehouseDischarges: it must NEVER call writeLotsOntoReceipts(). Re-importing after
+ * warehouseDischarges.ts has already written the 454 Bouaké rows inserts only the 256 genuinely new
+ * Yamoussoukro ones — the composite (warehouseSite, lotNo) key (step 3) is what makes that safe.
+ */
+async function commitWarehouseReceiving(rows: ParsedRow<WarehouseReceivingRow>[], filename: string): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
+  const origins = new Set(rows.map((r) => r.data.origin?.trim()).filter((v): v is string => !!v));
+  const bins = new Set<string>();
+  for (const r of rows) {
+    if (r.data.initialBinNo?.trim()) bins.add(r.data.initialBinNo.trim());
+    if (r.data.afterDryingBinNo?.trim()) bins.add(r.data.afterDryingBinNo.trim());
+  }
+  const storeToSite = new Map<string, string>();
+  for (const r of rows) {
+    const store = r.data.warehouse?.trim(), site = r.data.warehouseSite?.trim();
+    if (store && site) storeToSite.set(store, site);
+  }
+  const suppliers = new Map<string, string>();
+  for (const r of rows) {
+    const code = r.data.supplierCode?.trim();
+    if (code) suppliers.set(code, r.data.supplierName?.trim() || code);
+  }
+  await upsertObservedMasters(warehouses, origins, filename);
+  await upsertObservedBins(bins, filename);
+  await upsertObservedStores(storeToSite, filename);
+  await upsertObservedSuppliers(suppliers, filename);
+
+  const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
+  const result = await prisma.warehouseDischarge.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        lotNo: d.lotNo, sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
+        warehouseSite: d.warehouseSite, warehouse: d.warehouse,
+        unloadingBin: d.initialBinNo, afterDryingBin: d.afterDryingBinNo,
+        lotDry: d.lotDry, deliveryNoteNo: d.deliveryNoteNo,
+        scaleLocation: d.scaleLocation, whReceiptNo: d.whReceiptNo, ficheDateRaw: d.ficheDateRaw,
+        activity: d.activity, ccakValidated: d.ccakValidated, storageArea: d.storageArea,
+        ficheCca: d.ficheCca, truckNo: d.truckNo,
+        arrivalDate: d.arrivalDate ? new Date(d.arrivalDate) : null, arrivalDateRaw: d.arrivalDateRaw,
+        dischargeDate: d.dischargeDate ? new Date(d.dischargeDate) : null, dischargeDateRaw: d.dischargeDateRaw,
+        origin: d.origin, supplierName: d.supplierName, ccaNo: d.ccaNo, supplierCode: d.supplierCode,
+        goodBagsOffloaded: d.goodBagsOffloaded, damagedBagsOffloaded: d.damagedBagsOffloaded,
+        totalBagsDischarged: d.totalBagsDischarged, reconditionBags: d.reconditionBags,
+        totalBagsStock: d.totalBagsStock, newBagsUsedRecondition: d.newBagsUsedRecondition,
+        bonSacs: d.bonSacs, humidSacs: d.humidSacs, tornSacs: d.tornSacs,
+        reconditionFlag: d.reconditionFlag, reconditionedBags: d.reconditionedBags,
+        totalSacsLot: d.totalSacsLot, sacsExports: d.sacsExports, sacsBio: d.sacsBio,
+        sacsBrousses: d.sacsBrousses, totalRecd: d.totalRecd,
+        grossWtRecd: dec(d.grossWtRecd), totalRefraction: dec(d.totalRefraction), grnQty: dec(d.grnQty),
+        weightPaid: dec(d.weightPaid), netWeight: dec(d.netWeight),
+        weightDifferenceKg: dec(d.weightDifferenceKg), netWeightBookKg: dec(d.netWeightBookKg),
+        grnFreshQty: dec(d.grnFreshQty), grnDriedQty: dec(d.grnDriedQty),
+        q1RejectionG: dec(d.q1.rejectionG), q1VoidG: dec(d.q1.voidG), q1OilG: dec(d.q1.oilG),
+        q1TotalDefectG: dec(d.q1.totalDefectG), q1GoodKernelG: dec(d.q1.goodKernelG),
+        q1ImmatureG: dec(d.q1.immatureG), q1SpottedG: dec(d.q1.spottedG),
+        q1TotalKernelsG: dec(d.q1.totalKernelsG), q1Kor: dec(d.q1.kor), q1Murli: dec(d.q1.murli),
+        q1Shot: dec(d.q1.shot), q1Fot: dec(d.q1.fot),
+        q1UsefulKernelYieldPct: dec(d.q1.usefulKernelYieldPct), q1TotalYieldPct: dec(d.q1.totalYieldPct),
+        q1MoisturePct: dec(d.q1.moisturePct), q1NutCount: dec(d.q1.nutCount), q1ShellG: dec(d.q1.shellG),
+        q2RejectionG: dec(d.q2.rejectionG), q2MurliTotalPct: dec(d.q2.murliTotalPct), q2VoidG: dec(d.q2.voidG),
+        q2OilG: dec(d.q2.oilG), q2TotalDefectG: dec(d.q2.totalDefectG), q2GoodKernelG: dec(d.q2.goodKernelG),
+        q2ImmatureG: dec(d.q2.immatureG), q2SpottedG: dec(d.q2.spottedG), q2TotalKernelsG: dec(d.q2.totalKernelsG),
+        q2Kor: dec(d.q2.kor), q2Murli: dec(d.q2.murli), q2AfterDryKor: dec(d.q2.afterDryKor),
+        q2Shot: dec(d.q2.shot), q2Fot: dec(d.q2.fot),
+        q2UsefulKernelYieldPct: dec(d.q2.usefulKernelYieldPct), q2TotalYieldPct: dec(d.q2.totalYieldPct),
+        q2MoisturePct: dec(d.q2.moisturePct), q2NutCount: dec(d.q2.nutCount), q2ShellG: dec(d.q2.shellG),
+      };
+    }),
+    skipDuplicates: true,
+  });
+  return result.count;
+}
+
+/** Warehouse activity ledger — its own site-agnostic table (the source sheet carries no site
+ * column at all — see WarehouseActivityLedgerEntry's schema.prisma comment). No master upserts:
+ * every field is plain verbatim text with no FK. */
+async function commitWarehouseActivityLedger(rows: ParsedRow<WarehouseActivityLedgerRow>[], filename: string): Promise<number> {
+  if (rows.length === 0) return 0;
+  const result = await prisma.warehouseActivityLedgerEntry.createMany({
+    data: rows.map((r) => {
+      const d = r.data;
+      return {
+        activityDate: d.activityDate ? new Date(d.activityDate) : null, activityDateRaw: d.activityDateRaw,
+        activityType: d.activityType, particulars: d.particulars, offloaded: d.offloaded, bags: d.bags,
+        quantityMt: d.quantityMt, ficheNo: d.ficheNo, lotNo: d.lotNo, vendor: d.vendor, rate: d.rate,
+        total: d.total, referenceNo: d.referenceNo, remarks: d.remarks,
+        grossWeightWithPalletKg: d.grossWeightWithPalletKg, palletCount: d.palletCount,
+        grossWeightKg: d.grossWeightKg, grossWeightWithoutPalletKg: d.grossWeightWithoutPalletKg,
+        netWeightKg: d.netWeightKg,
+        sheetRow: r.sheetRow, source: `upload: ${filename}`,
+      };
+    }),
+    skipDuplicates: true,
+  });
+  return result.count;
 }

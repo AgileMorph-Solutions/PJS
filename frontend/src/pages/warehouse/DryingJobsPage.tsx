@@ -7,16 +7,32 @@ import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { ImportPanel } from "../../components/ImportPanel";
+import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { useTracking, useDryingJobs } from "../../state/TrackingContext";
+import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { DryingJob } from "../../repository/dryingRepo";
 import { deriveStatus } from "../../domain/receiptStatus";
 
+/**
+ * Same DryingJob shape at both sites (id/date/warehouse/bin/lotNo/ficheNo/dryType/destination/
+ * status — no field differs per warehouse type), so no columns.ts split here either. The real
+ * per-site difference is the data itself: today the DryingJob table only holds the 81 rows
+ * measured at the central warehouse (see backend note in this repo's step-8 log — the 57 unit rows
+ * live only in the newer, not-yet-wired-in `DryingBatch` table) — so /unit/drying honestly renders
+ * empty right now rather than fabricating unit rows.
+ */
 export function DryingJobsPage() {
   const { receipts } = useTracking();
+  const site = useSite();
+  const switchSite = useSwitchSite();
   // Drying jobs come from the API, deliberately via their own hook rather than TrackingApi —
-  // that keeps the TrackingApi interface unchanged by this migration.
-  const { jobs, refetch } = useDryingJobs();
-  const inDrying = receipts.filter((r) => deriveStatus(r) === "in_drying");
+  // that keeps the TrackingApi interface unchanged by this migration. Scoped server-side via
+  // resolveSite(), same as every other site-scoped read.
+  const { jobs, refetch } = useDryingJobs(site.warehouseName);
+  const inDrying = useMemo(
+    () => receipts.filter((r) => r.warehouse === site.warehouseName && deriveStatus(r) === "in_drying"),
+    [receipts, site.warehouseName]
+  );
   const inDryingPage = usePagination(inDrying);
 
   // Historical drying jobs can predate today's receipts (imported from the source workbook), so
@@ -51,9 +67,10 @@ export function DryingJobsPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker="Procurement"
-        title="Drying Jobs"
+        kicker={`${site.label} · ${site.sublabel}`}
+        title="Drying"
         lede="Drying is tracked per Lot, never per Bin."
+        actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
 
       <CollapsibleCard title="Import from workbook">
@@ -66,7 +83,7 @@ export function DryingJobsPage() {
         {inDryingPage.pageRows.map((r) => (
           <Link
             key={r.id}
-            to={`/procurement/receipts/${r.id}`}
+            to={`/${site.slug}/receipts/${r.id}`}
             className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px] hover:bg-warmstone-50 -mx-1 px-1 rounded-lg transition-colors"
           >
             <span className="text-warmstone-600">
@@ -90,7 +107,7 @@ export function DryingJobsPage() {
           keyFn={(j) => j.id}
           rowHref={(j) => {
             const receiptId = j.ficheNo ? receiptIdByFiche.get(j.ficheNo.trim()) : undefined;
-            return receiptId ? `/procurement/receipts/${receiptId}` : undefined;
+            return receiptId ? `/${site.slug}/receipts/${receiptId}` : undefined;
           }}
           emptyTitle="No drying jobs recorded"
         />

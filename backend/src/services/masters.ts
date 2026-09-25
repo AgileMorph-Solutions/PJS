@@ -14,7 +14,10 @@ export async function listMasters() {
   ]);
   return {
     suppliers,
-    warehouses: warehouses.map((w) => w.name),
+    // {name, kind, site} rather than a bare string[]: `kind` (Village/Regional/Factory, set only
+    // on site rows) and `site` (null = this row IS a site) are what the two-section UI resolves a
+    // row's section from — see packages/contract/src/data/warehouseKinds.ts.
+    warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, site: w.site })),
     bins: bins.map((b) => b.code),
     origins: origins.map((o) => o.name),
   };

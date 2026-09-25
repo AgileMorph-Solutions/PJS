@@ -13,7 +13,12 @@ export type ImporterId =
   | "dryingJobs"
   | "juteWarehouseStock"
   | "juteWarehouseTransfer"
-  | "warehouseDischarges";
+  | "warehouseDischarges"
+  | "warehouseDispatches"
+  | "dryingBatch"
+  | "issuedToProduction"
+  | "warehouseReceiving"
+  | "warehouseActivityLedger";
 
 /** The outcome of checking an uploaded workbook against one importer's expected shape. */
 export type HeaderCheckResult =

@@ -12,6 +12,7 @@ import { LEDGER_COLUMN_MAP, LEDGER_IDS } from "@anagroci/contract/generated/stag
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
 import { listLedgerRows, addLedgerRow } from "../services/ledgers.js";
 import { reconciliation, jsonSafe } from "../domain/juteBalance.js";
+import { resolveSite } from "../domain/site.js";
 
 function requireLedger(ledgerId: string, reply: FastifyReply): boolean {
   if (LEDGER_COLUMN_MAP[ledgerId]) return true;
@@ -21,16 +22,19 @@ function requireLedger(ledgerId: string, reply: FastifyReply): boolean {
 
 export async function ledgerRoutes(app: FastifyInstance) {
   /** All four ledgers at once — matches the frontend's LedgerEntries shape. */
-  app.get("/api/jute-ledgers", async () => {
+  app.get("/api/jute-ledgers", async (req) => {
+    const { warehouse } = req.query as { warehouse?: string };
+    const site = warehouse ? await resolveSite(warehouse) : undefined;
     const out: Record<string, LedgerRow[]> = {};
-    for (const id of LEDGER_IDS) out[id] = await listLedgerRows(id);
+    for (const id of LEDGER_IDS) out[id] = await listLedgerRows(id, site);
     return out;
   });
 
   app.get("/api/jute-ledgers/:ledgerId/entries", async (req, reply) => {
     const { ledgerId } = req.params as { ledgerId: string };
+    const { warehouse } = req.query as { warehouse?: string };
     if (!requireLedger(ledgerId, reply)) return;
-    return listLedgerRows(ledgerId);
+    return listLedgerRows(ledgerId, warehouse ? await resolveSite(warehouse) : undefined);
   });
 
   app.post("/api/jute-ledgers/:ledgerId/entries", async (req, reply) => {
@@ -46,5 +50,8 @@ export async function ledgerRoutes(app: FastifyInstance) {
    * opening + receipts + transfers in − issues − damaged/discarded − transfers out = closing,
    * per warehouse and period, computed across all four ledgers.
    */
-  app.get("/api/jute-ledgers/reconciliation", async () => jsonSafe(await reconciliation()));
+  app.get("/api/jute-ledgers/reconciliation", async (req) => {
+    const { warehouse } = req.query as { warehouse?: string };
+    return jsonSafe(await reconciliation(warehouse ? await resolveSite(warehouse) : undefined));
+  });
 }

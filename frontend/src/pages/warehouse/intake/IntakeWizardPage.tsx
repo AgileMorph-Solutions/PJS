@@ -4,6 +4,7 @@ import { StageForm } from "../../../components/StageForm";
 import { DecisionBranch } from "../../../components/DecisionBranch";
 import { DECISION_BRANCHES } from "../../../domain/decisions";
 import { useTracking } from "../../../state/TrackingContext";
+import { useSite } from "../../../state/SiteContext";
 
 const btnPrimary =
   "inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none";
@@ -14,14 +15,19 @@ const btnDanger =
 
 /** Guided "new RCN receipt" intake — one stage at a time, in order, scoped to a single receipt id.
  * The receipt detail page is the canonical record view; this is just a friendlier on-ramp for a
- * gate operator entering a brand-new truck arrival end to end. */
+ * gate operator entering a brand-new truck arrival end to end. Lives under /:site/* so every
+ * navigate() stays inside the section the receipt was created from (see
+ * ReceiptsListPage.handleNewReceipt, which passes the site's own warehouseName to createReceipt). */
 export function IntakeWizardPage() {
   const { id = "", stageId = "" } = useParams();
+  const site = useSite();
   const navigate = useNavigate();
   const { getReceipt, setStageField, setBranch, flushStage } = useTracking();
   const receipt = getReceipt(id);
 
-  if (!receipt) return <Navigate to="/procurement/receipts" replace />;
+  const base = `/${site.slug}/receipts`;
+
+  if (!receipt) return <Navigate to={base} replace />;
 
   if (stageId === "n-reject") {
     const values = receipt.stageData["n-reject"] ?? {};
@@ -42,11 +48,11 @@ export function IntakeWizardPage() {
           />
         </div>
         <div className="flex items-center justify-between">
-          <button className={btnSecondary} onClick={() => navigate(`/procurement/receipts/new/${id}/n-qfs`)}>
+          <button className={btnSecondary} onClick={() => navigate(`${base}/new/${id}/n-qfs`)}>
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             Back to Quality analysis
           </button>
-          <button className={btnDanger} onClick={() => navigate(`/procurement/receipts/${id}`)}>
+          <button className={btnDanger} onClick={() => navigate(`${base}/${id}`)}>
             Confirm rejection
             <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
           </button>
@@ -56,7 +62,7 @@ export function IntakeWizardPage() {
   }
 
   const stage = stageById[stageId];
-  if (!stage) return <Navigate to={`/procurement/receipts/new/${id}/${stages[0].id}`} replace />;
+  if (!stage) return <Navigate to={`${base}/new/${id}/${stages[0].id}`} replace />;
 
   const idx = stages.findIndex((s) => s.id === stageId);
   const prev = idx > 0 ? stages[idx - 1] : null;
@@ -67,14 +73,14 @@ export function IntakeWizardPage() {
 
   function handleNext() {
     if (stageId === "n-qfs" && chosen === "fail") {
-      navigate(`/procurement/receipts/new/${id}/n-reject`);
+      navigate(`${base}/new/${id}/n-reject`);
       return;
     }
     if (stageId === "n-xferdec") {
-      navigate(`/procurement/receipts/${id}`);
+      navigate(`${base}/${id}`);
       return;
     }
-    if (next) navigate(`/procurement/receipts/new/${id}/${next.id}`);
+    if (next) navigate(`${base}/new/${id}/${next.id}`);
   }
 
   const nextDisabled = Boolean(branchOptions) && !chosen;
@@ -104,7 +110,7 @@ export function IntakeWizardPage() {
 
       <div className="flex items-center justify-between">
         {prev ? (
-          <button className={btnSecondary} onClick={() => navigate(`/procurement/receipts/new/${id}/${prev.id}`)}>
+          <button className={btnSecondary} onClick={() => navigate(`${base}/new/${id}/${prev.id}`)}>
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             Back
           </button>
@@ -118,7 +124,7 @@ export function IntakeWizardPage() {
       </div>
 
       <p className="text-xs text-warmstone-400">
-        <Link to={`/procurement/receipts/${id}`} className="text-brand-700 hover:text-brand-800 font-medium">
+        <Link to={`${base}/${id}`} className="text-brand-700 hover:text-brand-800 font-medium">
           Open full record
         </Link>
       </p>

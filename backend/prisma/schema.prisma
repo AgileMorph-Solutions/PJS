@@ -52,14 +52,36 @@ model Supplier {
   juteMovements JuteWarehouseMovement[]
 }
 
+/// Site -> Store -> Bin is the real hierarchy (BOUAKE -> BKE-002 -> BKE-002-BIN-026), confirmed by
+/// the client's own sheets placing a "Warehouse/Site" column next to a "Warehouse" column that
+/// actually holds a store code. This one table holds both levels via a self-relation rather than a
+/// second table, because 4 hard FKs already point at Warehouse.name and they point at DIFFERENT
+/// levels (Receipt.warehouse holds a site; WarehouseDischarge.warehouse holds a store) — a new
+/// table would force repointing an FK under it. COALESCE(site, name) is the site-scoping expression
+/// everywhere a query needs "which site does this row ultimately belong to".
 model Warehouse {
   name   String  @id
   source String?
 
+  /// The client's own typology ("Village/Regional/Factory" — see warehouseKinds.ts), set ONLY on
+  /// SITE rows (site IS NULL). Nullable + reported, never defaulted: a guessed classification is
+  /// indistinguishable from a real one, same discipline as WarehouseAlias.provenance below.
+  kind String?
+
+  /// NULL means this row IS a site. Non-null means this row is a STORE belonging to that site.
+  site    String?
+  siteRef Warehouse?  @relation("WarehouseSite", fields: [site], references: [name])
+  stores  Warehouse[] @relation("WarehouseSite")
+
   receipts      Receipt[]
+  dryingJobs    DryingJob[]
   juteMovements JuteWarehouseMovement[]
-  transfersOut  JuteWarehouseTransferReceipt[]
+  transfersOut  JuteWarehouseTransferReceipt[] @relation("TransferSource")
+  transfersIn   JuteWarehouseTransferReceipt[] @relation("TransferDestination")
   aliases       WarehouseAlias[]
+
+  @@index([kind])
+  @@index([site])
 }
 
 /// Bin.warehouseName stays NULL where the source data doesn't say — the real workbooks never map
@@ -85,7 +107,11 @@ model WarehouseAlias {
   warehouseName String
   warehouse     Warehouse @relation(fields: [warehouseName], references: [name])
   source        String
-  /// "stated" | "inferred" — inferred aliases are reported for client confirmation.
+  /// "stated" | "inferred" | "stated-in-source" — "inferred" aliases (guessed from a filename/sheet
+  /// name) are reported for client confirmation by warehouse_alias_inferred. "stated-in-source" is
+  /// a real upgrade path: a later workbook can place the same alias next to its target warehouse in
+  /// an actual column, at which point the alias is re-recorded with this provenance and the finding
+  /// naturally closes — this is not the same as deleting the question, the alias row stays.
   provenance    String
 }
 
@@ -186,15 +212,16 @@ model TimelineEntry {
 /// lotNo is a soft reference: real drying history references Lots from before this system existed,
 /// and the drying-job lot namespace shares zero keys with the receipts' (see header note 5).
 model DryingJob {
-  id          String @id
-  date        String
-  warehouse   String
-  bin         String
-  lotNo       String
-  ficheNo     String
-  status      String
-  dryType     String
-  destination String
+  id           String    @id
+  date         String
+  warehouse    String
+  warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
+  bin          String
+  lotNo        String
+  ficheNo      String
+  status       String
+  dryType      String
+  destination  String
 
   /// The confirmed drying sequence: moisture before -> issue Lot/qty -> dry -> moisture after ->
   /// return to warehouse -> store in a new Bin marked as dried stock, Lot traceability retained.
@@ -209,6 +236,7 @@ model DryingJob {
   @@index([lotNo])
   @@index([bin])
   @@index([ficheNo])
+  @@index([warehouse])
 }
 
 // ── Per-stage tables ──────────────────────────────────────────────────────
@@ -578,10 +606,20 @@ model JuteWarehouseTransferReceipt {
 
   /// Constant "BOUAKE" across all 367 rows — every transfer in the data is Bouaké -> Yamoussoukro.
   sourceWarehouse    String
-  sourceWarehouseRef Warehouse @relation(fields: [sourceWarehouse], references: [name])
+  sourceWarehouseRef Warehouse @relation("TransferSource", fields: [sourceWarehouse], references: [name])
   /// The RCN's upstream supply town (MANKONO, NIAKARA, ...), NOT a warehouse. Soft reference: 7 of
   /// these are absent from the origins master, including a literal 'Not Mentiond '.
   origin             String?
+
+  /// Where the transfer arrives. Unlike sourceWarehouse, this is never a cell value anywhere in the
+  /// sheet — it's asserted only by column HEADERS ("Gross Weight (Yakro) Recived", "KOR Received
+  /// (At Yakro)", "Moisture Received at YAKRO WH", ...). Nullable + never @default'd, same
+  /// discipline as WarehouseAlias.provenance: a header-inferred fact is real, but it is reported as
+  /// inferred (transfer_destination_inferred), not silently promoted to a stated one.
+  destinationWarehouse    String?
+  destinationWarehouseRef Warehouse? @relation("TransferDestination", fields: [destinationWarehouse], references: [name])
+  /// "inferred" on every row today — there is no sheet variant yet where a per-row cell states it.
+  destinationProvenance   String?
 
   bagsDispatched          Int?
   bagsReceived            Int?
@@ -620,6 +658,7 @@ model JuteWarehouseTransferReceipt {
   createdAt DateTime @default(now())
 
   @@index([sourceWarehouse, sn])
+  @@index([destinationWarehouse])
   @@index([lotNo])
   @@index([binNo])
   @@index([noFiche])
@@ -638,10 +677,19 @@ model JuteWarehouseTransferReceipt {
 /// only by the row-3 banners "(Sampling Report)" and "(Final Offloading Report)" — which is why
 /// the importer keys off column index and pins those banners as header anchors.
 model WarehouseDischarge {
-  /// The sheet's own S. No. Not the key — `lotNo` is (a real, unique source value).
+  /// Surrogate PK. `lotNo` alone used to be the PK — that broke the moment the central warehouse's
+  /// own discharge-equivalent data arrived: Bouaké runs lots 1..454, Yamoussoukro runs 1..256, and
+  /// EVERY ONE of the 256 central values already exists as a Bouaké lot (measured against
+  /// ANAGROCI DATA PROCUREMENT 2026.xlsx's "Warehouse Receiving" sheet before writing this). A lot
+  /// number is only unique together with its site — same fact StageLotAssignment's per-warehouse
+  /// index already encodes — so the real key is (warehouseSite, lotNo), enforced below.
+  id String @id @default(uuid())
+
+  /// The sheet's own S. No. Not unique across sites, so not a key either.
   sn Int
 
-  warehouseSite  String?
+  /// Required — this table's uniqueness genuinely depends on it, unlike `warehouse` below.
+  warehouseSite  String
   warehouse      String?
   /// Bouaké writes a finer granularity here (BKE-003-BIN-003) than the receipts master holds
   /// (BKE-003), and 101 rows carry a third namespace entirely (DIRECT-00x). Kept verbatim and NOT
@@ -652,8 +700,9 @@ model WarehouseDischarge {
   /// receipts on the strength of a bin label.
   afterDryingBin String?
 
-  /// The real source key — 454/454 distinct. Dedup on re-upload is a plain skipDuplicates.
-  lotNo String @id
+  /// The sheet's own real key WITHIN one site (454/454 distinct at Bouaké) — but not globally, see
+  /// the `id` comment above. Dedup on re-upload is `@@unique([warehouseSite, lotNo])`, below.
+  lotNo String
 
   scaleLocation String?
   whReceiptNo   String?
@@ -663,8 +712,8 @@ model WarehouseDischarge {
   ficheCca      String
   truckNo       String?
 
-  arrivalDate   DateTime?
-  dischargeDate DateTime?
+  arrivalDate      DateTime?
+  dischargeDate    DateTime?
   /// Raw twins, same reason as JuteWarehouseTransferReceipt.rawDate: all 454 rows in today's file
   /// hold real dates, but a hand-typed one would otherwise vanish rather than be preserved and
   /// reported. Populated only when the cell wasn't a real date.
@@ -735,10 +784,339 @@ model WarehouseDischarge {
   source    String?
   createdAt DateTime @default(now())
 
+  /// ── Verbatim-only fields from a SECOND, richer source: "Warehouse Receiving" (header row 1, 83
+  /// columns) in ANAGROCI DATA PROCUREMENT 2026.xlsx — measured 710 rows = 454 BOUAKE + 256
+  /// YAMOUSSOUKRO, confirming this model's own comment above about the two sites' lot namespaces
+  /// colliding 100%. That sheet's Bouaké rows carry the SAME (warehouseSite, lotNo) pairs already
+  /// written by the DISCHARGEMENT import above, so committing it is where the composite key (see
+  /// this model's header comment) earns its keep: re-importing skips the 454 Bouaké dupes via
+  /// skipDuplicates and inserts only the 256 genuinely new Yamoussoukro rows. A field below is
+  /// reused from the DISCHARGEMENT-derived columns above ONLY where the two sheets' own header
+  /// text names the identical concept (Lot No, Fiche CCA, bag counts that are always-populated on
+  /// both sheets, ...); every genuinely new column gets its own field here rather than an invented
+  /// mapping onto a similarly-named-but-not-provably-identical DISCHARGEMENT column — e.g. this
+  /// sheet's "good bags offloaded"/"total bags stock" are Yamoussoukro-only (256/710 non-blank) and
+  /// have no DISCHARGEMENT counterpart at all, so they get new columns rather than being folded
+  /// into bonSacs/totalSacsLot.
+  lotDry                 String? /// "lot dry" — 28/710 non-blank
+  deliveryNoteNo         String? /// "delivery note no" — distinct from whReceiptNo, 247/710 non-blank
+  ficheDateRaw           String? /// "fiche date" — a hand-typed DD/MM/YYYY string, never a real Date cell; kept verbatim like every other *Raw twin here
+  activity               String? /// "activity" — 13/710 non-blank
+  ccakValidated          String? /// "ccak validated" — e.g. "OK", 235/710 non-blank
+  storageArea            String? /// "storage area" — e.g. "B3", 96/710 non-blank
+  ccaNo                  String? /// "cca no" — distinct from supplierCode, 65/710 non-blank
+  goodBagsOffloaded      Int? /// "good bags offloaded" — Yamoussoukro-only, 256/710 non-blank
+  damagedBagsOffloaded   Int? /// "damaged bags offloaded" — 152/710 non-blank
+  totalBagsDischarged    Int? /// "total bags discharged" — Yamoussoukro-only, 256/710 non-blank
+  reconditionBags        Int? /// "recondition bags" — 74/710 non-blank
+  totalBagsStock         Int? /// "total bags stock" — Yamoussoukro-only, 256/710 non-blank
+  newBagsUsedRecondition Int? /// "new bags used recondition" — 248/710 non-blank
+  /// "recondition flag" — despite the name this holds a bag COUNT in the real sheet (matches
+  /// reconditionBags/newBagsUsedRecondition in magnitude, not 0/1), stored verbatim under its own
+  /// header rather than reinterpreted as a boolean.
+  reconditionFlag        Int?
+  /// "reconditioned bags" — a template column nobody fills: 0/710 non-blank, same situation as
+  /// JuteWarehouseTransferReceipt.finalBagsAfterRebagging. Kept so its emptiness is reportable.
+  reconditionedBags      Int?
+  weightDifferenceKg     Decimal? /// "weight difference kg" — always populated, 710/710
+  netWeightBookKg        Decimal? /// "net weight book kg" — Yamoussoukro-only, 256/710 non-blank
+
+  /// Quality panel "q1" — richer than samplingXxx above (adds Murli) and column-ordered
+  /// differently, so kept as its own set rather than folded into the sampling* fields.
+  q1RejectionG           Decimal?
+  q1VoidG                Decimal?
+  q1OilG                 Decimal?
+  q1TotalDefectG         Decimal?
+  q1GoodKernelG          Decimal?
+  q1ImmatureG            Decimal?
+  q1SpottedG             Decimal?
+  q1TotalKernelsG        Decimal?
+  q1Kor                  Decimal?
+  q1Murli                Decimal?
+  q1Shot                 Decimal?
+  q1Fot                  Decimal?
+  q1UsefulKernelYieldPct Decimal?
+  q1TotalYieldPct        Decimal?
+  q1MoisturePct          Decimal?
+  q1NutCount             Decimal?
+  q1ShellG               Decimal?
+
+  /// Quality panel "q2" — the finalOffloadXxx-equivalent second pass; adds "murli total pct" and
+  /// "after dry kor" (5/710 non-blank) that finalOffload* has no equivalent for.
+  q2RejectionG           Decimal?
+  q2MurliTotalPct        Decimal?
+  q2VoidG                Decimal?
+  q2OilG                 Decimal?
+  q2TotalDefectG         Decimal?
+  q2GoodKernelG          Decimal?
+  q2ImmatureG            Decimal?
+  q2SpottedG             Decimal?
+  q2TotalKernelsG        Decimal?
+  q2Kor                  Decimal?
+  q2Murli                Decimal?
+  q2AfterDryKor          Decimal?
+  q2Shot                 Decimal?
+  q2Fot                  Decimal?
+  q2UsefulKernelYieldPct Decimal?
+  q2TotalYieldPct        Decimal?
+  q2MoisturePct          Decimal?
+  q2NutCount             Decimal?
+  q2ShellG               Decimal?
+
+  @@unique([warehouseSite, lotNo])
   @@index([ficheCca])
   @@index([warehouse])
+  @@index([warehouseSite])
 }
 
+/// Unit-warehouse dispatch OUT — sheet "CHARGEMENT" of "Dispatch RCN from Bouake Warehouse
+/// Report.xlsx", header row 4, data from row 5. Measured on the real file: 544 data LINES (gated on
+/// "any of columns 1-41 non-blank" — never on S.No alone, since 120 of the 544 lines are
+/// CONTINUATION lines with no S.No at all, only a repeat of the voyage's own VYOGE NUMBER plus one
+/// more source bin's own bag count/weight). One dispatch ("voyage") can draw from several bins, so
+/// this is a PARENT/LINE shape: one flat table, one row per line, grouped by vyogeNumber — 413
+/// distinct values across 504 lines that carry one (40 lines have none at all).
+///
+/// Surrogate `id`, deliberately NOT `sn` (10 duplicate S.No values in the real data — e.g. 366, 368,
+/// 369 each appear twice) and NOT `vyogeNumber` (40 lines lack one, and even where present it's
+/// shared by every line of one voyage, not a per-line key). Idempotent re-commit instead keys off
+/// `(source, sheetRow)` — the physical row a re-upload of the SAME file always reproduces, which a
+/// synthetic uuid never would.
+model WarehouseDispatchLine {
+  id String @id @default(uuid())
+
+  /// The sheet's own S.No — present on 424/544 lines, duplicated on 10 of those, ABSENT on the 120
+  /// continuation lines. Not a key; see the model comment above.
+  sn Int?
+
+  chargeDate    DateTime?
+  chargeDateRaw String?
+  warehouseSite String?
+  /// The voyage/trip number this line belongs to — see the model comment. Nullable: 40/544 lines
+  /// carry none, and a blank one is still a real line (never skipped).
+  vyogeNumber   String?
+  remark        String?
+  scaleLocation String?
+  /// The STORE (BKE-001/002/003), same level as WarehouseDischarge.warehouse — not upserted as a
+  /// site by this importer (see upsertObservedStores in services/imports.ts).
+  warehouse     String?
+  whOrDirect    String?
+  bin           String?
+  origin        String?
+  truckNo       String?
+  transporter   String?
+  driver        String?
+  /// Kept as text (not Int) — a phone number is an identifier, not a quantity, and this column
+  /// never appears anywhere else in this schema as anything else.
+  phone         String?
+  whReceiptNo   String?
+  /// Bridges back to a Receipt the same way WarehouseDischarge.ficheCca does, but NOT required
+  /// here (unlike that model) — 0/544 lines are skipped for lacking one; this importer does no
+  /// receipt-stage write-back at all, so there is nothing that needs the bridge to be non-null.
+  ficheCca      String?
+
+  /// This LINE's own contribution — on a continuation line these three describe just that line's
+  /// bin, not the whole voyage's total (the sheet never labels which row, if any, is "the total").
+  binwiseLoadedBags Int?
+  totalBags         Int?
+  grossWt           Decimal?
+  netWeight         Decimal?
+
+  status          String?
+  unloadingStatus String?
+
+  /// One quality panel (unlike WarehouseDischarge's two) — same 16 labels as
+  /// WarehouseDischarge.sampling/finalOffload, flat here since CHARGEMENT only has the one.
+  browns             Decimal?
+  voids              Decimal?
+  oil                Decimal?
+  totDefect          Decimal?
+  goodKernel         Decimal?
+  immature           Decimal?
+  spotted            Decimal?
+  totKernels         Decimal?
+  kor                Decimal?
+  shot               Decimal?
+  fot                Decimal?
+  usefulKernelsYield Decimal?
+  totalYield         Decimal?
+  moisture           Decimal?
+  nc                 Decimal?
+  shell              Decimal?
+
+  bagsYakro        Int?
+  grossYakro       Decimal?
+  differenceWeight Decimal?
+
+  sheetRow  Int?
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@unique([source, sheetRow])
+  @@index([vyogeNumber])
+  @@index([ficheCca])
+  @@index([warehouseSite])
+}
+
+/// Consolidated Drying Batch — BOTH sites, one shape. Sheet "Drying Batch" (header row 1, 56
+/// columns) in ANAGROCI DATA PROCUREMENT 2026.xlsx (NOT "Bouake RCN Drying Report.xlsx" — that
+/// file's own "Drying & Sorting Report" sheet is a different, Bouaké-only, more granular shape with
+/// a pivot-table tail; it does not match "consolidated, both sites" and was verified, not assumed,
+/// before being ruled out). Measured 138 rows = 57 unit (BOUAKE, split BKE-001/002) + 81 central
+/// (ANAGROCI-01, no "warehouse site" cell at all on those rows — site is read from `warehouse` via
+/// the alias table instead).
+///
+/// The client's OWN column names already say "raw" (lotNoRaw, whReceiptNoRaw, ficheNoRaw, ...) —
+/// this sheet anticipates exactly the ambiguity CLAUDE.md warns about. `lotNoRaw` is kept verbatim,
+/// always; `lotNo` is populated ONLY when unambiguous — see drying_batch_multi_lot's finding text in
+/// domain/dataQuality/checks.ts for the exact rule and the 22 rows it excludes (11 comma/slash-
+/// joined like "387, 401", 11 numerically concatenated 6-digit values like 246253, both genuinely
+/// unsplittable). A THIRD, separate contamination is also real here and reported separately
+/// (drying_batch_lot_column_holds_bin_code): 41 of the 138 rows hold a bin code
+/// ("BIN-03B"/"BIN-005"/"BIN-007"/"BIN-015"/"BIN-016") in lotNoRaw, not a lot number at all — lotNo
+/// stays null for these too, same as the ambiguous ones, but for a different reason.
+model DryingBatch {
+  id String @id @default(uuid())
+
+  sn               Int
+  dryingDate       DateTime?
+  dryingDateRaw    String?
+  warehouseSite    String?
+  warehouse        String?
+  sourceBinNo      String?
+  destinationBinNo String?
+
+  /// Verbatim twin, always populated when the source cell is. See the model comment for the two
+  /// distinct reasons `lotNo` can stay null: genuine multi-value ambiguity, or bin-code contamination.
+  lotNoRaw String?
+  /// Populated ONLY when lotNoRaw is an unambiguous single integer under 1000 (every real single Lot
+  /// number in this dataset is 1-454 at Bouaké / 1-256 at Yamoussoukro; the 11 ambiguous concatenated
+  /// values are all >= 246253, nowhere near that range — a wide, deliberately conservative cutoff,
+  /// not a guessed split point).
+  lotNo    String?
+
+  whReceiptNoRaw      String?
+  ficheNoRaw          String?
+  originRaw           String?
+  supplierNameRaw     String?
+  supplierCodeRaw     String?
+  ccakSupplierCodeRaw String?
+  status              String?
+  dryType             String?
+  destinationRaw      String?
+
+  issuedGrossWithBagsPalletsKg   Decimal?
+  issuedPalletWeightKg           Decimal?
+  issuedGrossWithBagsKg          Decimal?
+  issuedBags                     Int?
+  issuedNetWeightKg              Decimal?
+  receivedGrossWithBagsPalletsKg Decimal?
+  receivedPalletWeightKg         Decimal?
+  receivedGrossWithBagsKg        Decimal?
+  receivedBags                   Int?
+  receivedNetWeightKg            Decimal?
+
+  inputMoisturePct  Decimal?
+  inputNutCount     Decimal?
+  inputKor          Decimal?
+  outputMoisturePct Decimal?
+  outputNutCount    Decimal?
+  outputKor         Decimal?
+
+  oil        Decimal?
+  rejection  Decimal?
+  goodKernel Decimal?
+  immature   Decimal?
+  spotted    Decimal?
+  shell      Decimal?
+  void       Decimal?
+
+  moistureLossPct Decimal?
+  dryingLossKg    Decimal?
+  dryingLossPct   Decimal?
+  triageLossKg    Decimal?
+  triageLossPct   Decimal?
+  damagedNutsKg   Decimal?
+
+  inputBagsForDrying                 Int?
+  outputBagsAfterDrying              Int?
+  dryingOrPicking                    String?
+  remarks                            String?
+  issuedToProduction                 String?
+  reDryingDate                       DateTime?
+  reDryingDateRaw                    String?
+  moistureFirstRedryPct              Decimal?
+  moistureSecondDryPct               Decimal?
+  issuedToProduction3                String?
+  remarks4                           String?
+  /// The sheet's OWN flag column, kept verbatim for comparison — it does not perfectly agree with
+  /// this importer's own lotNoRaw-based ambiguity detection (e.g. one BIN-code contamination row is
+  /// flagged "YES" here, and one 6-digit concatenated row is NOT), which is itself worth keeping
+  /// visible rather than silently reconciling the two into one answer.
+  needsLotAllocationClarificationRaw String?
+
+  sheetRow  Int?
+  source    String?
+  createdAt DateTime @default(now())
+
+  /// (warehouse, sn) not (warehouseSite, sn): every one of the 81 central rows has warehouseSite =
+  /// NULL (no "warehouse site" cell at all on those rows — only `warehouse` = "ANAGROCI-01" is
+  /// ever populated there), and Postgres treats every NULL as distinct in a unique index — a
+  /// warehouseSite-keyed constraint would never catch a re-uploaded central row as a duplicate.
+  /// `warehouse` (the store/site value the sheet actually always fills) does the same
+  /// per-site-sequence job `sn` alone can't (sn restarts at 1 for BOUAKE after ANAGROCI-01 hits 81).
+  @@unique([warehouse, sn])
+  @@index([lotNo])
+  @@index([ficheNoRaw])
+  @@index([warehouseSite])
+}
+
+/// Warehouse activity ledger — sheet "Warehouse activity Ledger" (header row 1, 18 columns) in
+/// ANAGROCI DATA PROCUREMENT 2026.xlsx. Measured 787 data rows. Its own site-scoped table, NOT
+/// written onto the n-otheract/n-ledger receipt stages — see root CLAUDE.md's decision log: writing
+/// there would trip roundTrip.test.ts's enrichment allowlist for no benefit, since this sheet has no
+/// per-row receipt link at all (no Fiche/S.No column ties a row to one truck).
+///
+/// EVERY field below is String?, not Int/Decimal — a deliberate departure from
+/// WarehouseDischarge/JuteWarehouseTransferReceipt's typed-plus-raw-twin convention. Half this
+/// sheet's columns are genuinely mixed-type cell-by-cell (`bags`, `offloaded`, `ficheNo`, `lotNo`,
+/// `referenceNo` each mix real numbers with category strings like "Pallet"/"BIN-012"/"NA" — measured
+/// directly, not assumed), so a typed column would silently turn a real string into null on every
+/// row that isn't numeric. Same discipline schema note 2 already applies to every stage table: a
+/// String column can never silently drop what's actually in the cell.
+model WarehouseActivityLedgerEntry {
+  id String @id @default(uuid())
+
+  activityDate               DateTime?
+  activityDateRaw            String?
+  activityType               String?
+  particulars                String?
+  offloaded                  String?
+  bags                       String?
+  quantityMt                 String?
+  /// Overloaded like ledger 1's activitiesType — a real fiche number on some rows, a category
+  /// ("Pallet") or a bin code on others. Stored verbatim; never joined on.
+  ficheNo                    String?
+  lotNo                      String?
+  vendor                     String?
+  rate                       String?
+  total                      String?
+  referenceNo                String?
+  remarks                    String?
+  grossWeightWithPalletKg    String?
+  palletCount                String?
+  grossWeightKg              String?
+  grossWeightWithoutPalletKg String?
+  netWeightKg                String?
+
+  sheetRow  Int?
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@unique([source, sheetRow])
+  @@index([ficheNo])
+  @@index([lotNo])
+}
 
 /// The undated hand-tallied figures that are the ONLY source for ledgers 2 and 3 today. Stored as
 /// labelled snapshots rather than invented ledger rows — capturedAt is null because the source
@@ -1475,4 +1853,56 @@ model WipStockRow {
   to     String? /// To
   binNo  String? /// BIN No
   qtyKgs String? /// Qty in Kg's
+}
+
+/// Table issued-to-production (btm, many) — from Issued to Production Section — dry RCN handed
+/// from the warehouse to a BTM
+/// Source: Factory Warehouse RCN Transfer to Production Report.xlsx · Issued to Production Section
+/// · 34 columns · 125 data rows
+model IssuedToProduction {
+  id                            String  @id @default(uuid())
+  btmNo                         String? /// this row's own BTM column, doubling as the BTM link
+  sNo                           String? /// SI NO
+  date                          String? /// Date
+  rcn                           String? /// RCN
+  sourceBin                     String? /// Source Bin
+  dryBin                        String? /// DRY BIN
+  binStatus                     String? /// Bin Status
+  korIssued                     String? /// KOR-Issued
+  nutCount                      String? /// Nut Count
+  gk                            String? /// GK
+  moisture                      String? /// Moisture
+  immature                      String? /// Immature
+  spotted                       String? /// Spottd
+  rejection                     String? /// Rejection
+  oilGram                       String? /// OIL (Gram)
+  voidGram                      String? /// Void (Gram)
+  shellGram                     String? /// Shell (Gram)
+  /// Contaminated: only 16/125 non-blank values look like a real fiche number, the other 109 are
+  /// dry-bin-code strings (e.g. "BIN-03B") — stored verbatim, NEVER used as a join key. See
+  /// production_issue_fiche_column_contaminated.
+  ficheNo                       String? /// Fiche No
+  bagInStockAfterDry            String? /// Bag inStock afetr Dry
+  noOfBagIssuedToProduction     String? /// No of Bag(Issued to Production)
+  avgBagWtEmptyBag              String? /// Avg Bag Wt (Empty  Bag)
+  bagWtEmptyBag                 String? /// Bag Wt(Empty Bag)
+  noOfPallet                    String? /// No of Pallet
+  avgPalletWt                   String? /// Avg Pallet Wt
+  palletWeightKg                String? /// Pallet Weight (Kg)
+  grossWtBeforeDry              String? /// Gross Wt (Before Dry)
+  grossWtAfterDryingWithJuteBag String? /// Gross Wt (After Drying Wt with Jute Bag)
+  netWtWithoutJuteBag           String? /// Net Wt (Without Jute Bag)
+  dateOfIssueToCalibration      String? /// Date of Issue to Calibration
+  receivedByProductionNetWt     String? /// Received By Production(Net Wt)
+  issuedFrom                    String? /// Issued from
+  diffInIssue                   String? /// Diff in Issue
+  remarks                       String? /// Remarks
+  checkValue                    String? /// Check
+
+  sheetRow  Int?
+  source    String?
+  createdAt DateTime @default(now())
+
+  @@unique([source, sheetRow])
+  @@index([btmNo])
 }

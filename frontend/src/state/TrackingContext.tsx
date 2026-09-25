@@ -27,7 +27,10 @@ import type { Masters, Supplier } from "../repository/mastersRepo";
 interface TrackingApi {
   receipts: ReceiptRecord[];
   getReceipt: (id: string) => ReceiptRecord | undefined;
-  createReceipt: () => Promise<string>;
+  /** `warehouse` scopes the new receipt to a site (e.g. "BOUAKE") — still genuinely about receipts,
+   * so this stays on TrackingApi rather than becoming a separate hook (see frontend/CLAUDE.md's
+   * "extend, don't reshape" rule: only receipts/ledgers/masters capabilities belong here). */
+  createReceipt: (warehouse?: string) => Promise<string>;
   updateReceiptField: (id: string, patch: Partial<ReceiptRecord>) => void;
   setStageField: (id: string, stageId: string, fieldName: string, value: string) => void;
   setBranch: (id: string, stageId: string, branchId: string, reason?: string) => void;
@@ -142,8 +145,8 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       receipts,
       getReceipt: (id) => receipts.find((r) => r.id === id),
 
-      createReceipt: async () => {
-        const created = await api.createReceipt();
+      createReceipt: async (warehouse) => {
+        const created = await api.createReceipt(warehouse);
         mergeReceipt(created);
         return created.id;
       },
@@ -205,7 +208,10 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         api.addSupplier(s).catch((e) => { fail(e); void refresh(); });
       },
       addWarehouse: (name) => {
-        setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, name] }));
+        // kind/site stay null on the optimistic row, matching the backend: addWarehouse() only
+        // ever upserts a bare name — classifying it into a site/store is a separate, deliberate
+        // step (see warehouse_alias_inferred), never guessed from how it was added.
+        setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind: null, site: null }] }));
         api.addWarehouse(name).catch((e) => { fail(e); void refresh(); });
       },
       addBin: (name) => {
@@ -235,20 +241,61 @@ export function useTracking(): TrackingApi {
 /**
  * Drying jobs come from the API but aren't part of TrackingApi — DryingJobsPage used to read the
  * seed JSON directly, and keeping it out of the context keeps that interface unchanged.
+ *
+ * `warehouse` (a real site name, e.g. "BOUAKE") scopes the read server-side via resolveSite() —
+ * passed by the site-scoped Drying page (pages/warehouse/DryingJobsPage.tsx) so each section only
+ * ever fetches its own site's jobs, not both plus a client-side filter.
  */
-export function useDryingJobs() {
+export function useDryingJobs(warehouse?: string) {
   const [jobs, setJobs] = useState<import("@anagroci/contract/types/receipt").DryingJob[]>([]);
   const [loading, setLoading] = useState(true);
   const refetch = useCallback(() => {
-    return api.dryingJobs()
+    return api.dryingJobs(warehouse)
       .then(setJobs)
       .catch(() => { /* page renders empty; the provider surfaces connection errors */ });
-  }, []);
+  }, [warehouse]);
   useEffect(() => {
     setLoading(true);
     void refetch().finally(() => setLoading(false));
   }, [refetch]);
   return { jobs, loading, refetch };
+}
+
+/**
+ * CHARGEMENT-derived unit dispatch lines — its own hook for the same reason as useDryingJobs: a
+ * brand-new table, never part of TrackingApi. See pages/unit/DispatchPage.tsx.
+ */
+export function useWarehouseDispatches(warehouse?: string) {
+  const [lines, setLines] = useState<import("../repository/api").WarehouseDispatchLine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.listWarehouseDispatches(warehouse).then(setLines).catch(() => {});
+  }, [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { lines, loading, refetch };
+}
+
+/**
+ * One ledger's rows, scoped to a site — deliberately NOT a replacement for TrackingApi's
+ * `ledgerEntries` (the unfiltered, globally-loaded set stays the zero-latency "All sites" default);
+ * this is only reached when a jute page's own site filter is active. Ledger 4 rows can match on
+ * EITHER side of a transfer, which resolveSite() on the backend is what actually knows how to do —
+ * see api.ts's listLedgerEntries comment for why this can't just filter the already-loaded rows.
+ */
+export function useJuteLedgerEntries(ledgerId: string, warehouse: string | undefined) {
+  const [rows, setRows] = useState<LedgerRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.listLedgerEntries(ledgerId, warehouse).then(setRows).catch(() => {});
+  }, [ledgerId, warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { rows, loading, refetch };
 }
 
 /**

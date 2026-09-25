@@ -7,14 +7,14 @@ import { computeDashboardCounts } from "@anagroci/contract/domain/receiptStatus"
 import { prisma } from "../db.js";
 import { assembleStageData, assembleBranches } from "../stageStore.js";
 
-export interface DashboardPeriod { from?: string; to?: string }
+export interface DashboardPeriod { from?: string; to?: string; site?: string[] }
 
-export async function dashboardCounts({ from, to }: DashboardPeriod) {
+export async function dashboardCounts({ from, to, site }: DashboardPeriod) {
   // arrivalDate is a YYYY-MM-DD string, so lexicographic comparison is chronological.
-  const where =
-    from || to
-      ? { arrivalDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
-      : {};
+  const where = {
+    ...(from || to ? { arrivalDate: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+    ...(site ? { warehouse: { in: site } } : {}),
+  };
 
   const rows = await prisma.receipt.findMany({
     where,

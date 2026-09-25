@@ -4,10 +4,11 @@
  */
 import type { FastifyInstance } from "fastify";
 import { dashboardCounts } from "../services/dashboard.js";
+import { resolveSite } from "../domain/site.js";
 
 export async function dashboardRoutes(app: FastifyInstance) {
   app.get("/api/dashboard", async (req) => {
-    const { from, to } = req.query as { from?: string; to?: string };
-    return dashboardCounts({ from, to });
+    const { from, to, warehouse } = req.query as { from?: string; to?: string; warehouse?: string };
+    return dashboardCounts({ from, to, site: warehouse ? await resolveSite(warehouse) : undefined });
   });
 }

@@ -116,6 +116,7 @@ export const PRODUCTION_TABLE_LABELS: Record<string, string> = {
   "boiler-consumption": "Boiler consumption",
   "offloading-bin-report": "Offloading BIN report",
   "wip-stock-report": "WIP stock report",
+  "issued-to-production": "Issued to production",
 };
 
 /** The phase label a table's first flow node was transcribed under — same "one node's worth of

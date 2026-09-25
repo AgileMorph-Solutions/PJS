@@ -14,6 +14,14 @@ src/repository/*Repo.ts     Thin re-exports of @anagroci/contract types, plus on
                              — TrackingContext is.
 src/state/TrackingContext.tsx  The single state container. See "State shape" below before touching
                              this file — it has real concurrency handling in it, not just useState.
+src/config/sites.ts          The two real sites (Bouaké/Yakro Factory) as URL slugs + the real
+                             `Warehouse.name` each one scopes API reads by. Adding a third site is
+                             meant to be one more entry here — see its own header comment.
+src/state/SiteContext.tsx   `useSite()` — reads the `/:site/*` route's own param, resolves it via
+                             `config/sites.ts`, 404s on an unrecognized slug. Every page under
+                             `pages/warehouse/`, `pages/unit/`, `pages/central/` calls this for
+                             which warehouse to scope its own API calls by — never a hardcoded site
+                             name in a page component.
 src/domain/*.ts             Re-exports of @anagroci/contract/domain — deriveStatus, decisions, jute
                              math. Don't reimplement any of this locally; if it's missing something,
                              it belongs in the contract package, not a local copy.
@@ -29,7 +37,14 @@ src/components/ui/          Generic UI primitives (DataTable, KpiTile, Pill, ...
 src/pages/                  Route-level composition. Pull data from useTracking()/useDryingJobs(),
                              pass it to components. Business logic here should be "which components,
                              with which props" — not validation or derivation (that's the contract
-                             package or the backend).
+                             package or the backend). `pages/warehouse/` is site-scoped (rendered
+                             under `/:site/*`, reads useSite()); `pages/unit/` and `pages/central/`
+                             hold the one page each site has that the other doesn't (Dispatch,
+                             Issue to Production). Where a page's columns genuinely differ per site
+                             (check by comparing real stage fields in stages.ts — most pages don't),
+                             it gets a sibling `columns.tsx` exporting `Record<SiteSlug, Column[]>`
+                             — see `pages/warehouse/columns.tsx` — never an inline
+                             `site === "unit" ? ... : ...` in JSX.
 src/components/dashboard/   Domain-aware components scoped to one page (Dashboard — DateRangeFilter,
                              the two chart components). Same reasoning as the components/ vs
                              components/ui/ split, one level more specific: a component that knows

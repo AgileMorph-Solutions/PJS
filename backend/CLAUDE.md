@@ -21,8 +21,9 @@ src/stageStore.ts       The bridge between the 16 normalized stage tables and th
                         stageData object. This is where round-trip fidelity lives or dies — read
                         its header comment before changing it.
 src/serialize.ts        toReceiptRecord(): row -> wire shape, with status attached (never stored).
-prisma/schema.prisma    31 models. The 16 stage tables are GENERATED (see packages/contract's
-                        gen-prisma-models.ts) — don't hand-edit their columns; regenerate.
+prisma/schema.prisma    63 models. The 16 stage tables and 25 production tables are GENERATED (see
+                        packages/contract's gen-prisma-models.ts / gen-production-map.ts) — don't
+                        hand-edit their columns; regenerate.
 prisma/seed.ts          Loads real data via the service layer with bypassValidation: true. See
                         "Why bypassValidation exists" below before assuming it's a shortcut to copy.
 ```

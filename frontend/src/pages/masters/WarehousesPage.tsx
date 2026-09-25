@@ -49,12 +49,13 @@ export function WarehousesPage() {
       </CollapsibleCard>
       <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
         {page.pageRows.map((w) => (
-          <div key={w} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
+          <div key={w.name} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
             <span className="font-semibold text-warmstone-800 flex items-center gap-2">
               <span className="material-symbols-outlined text-[17px] text-brand-700">domain</span>
-              {w}
+              {w.name}
+              {w.site && <span className="text-warmstone-400 font-normal">({w.site})</span>}
             </span>
-            <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w).length} receipts</span>
+            <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
           </div>
         ))}
         <Pagination state={page} />

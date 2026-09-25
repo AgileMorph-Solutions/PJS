@@ -10,6 +10,7 @@ import { LEDGER_COLUMN_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
 import { prisma } from "../db.js";
 import { warehouseBalanceRows } from "../domain/juteBalance.js";
+import { ValidationError } from "../domain/validation.js";
 
 const DELEGATE: Record<string, string> = {
   "warehouse-stock": "juteWarehouseMovement",
@@ -47,14 +48,17 @@ function toLedgerRow(ledgerId: string, row: Record<string, unknown>): LedgerRow 
   return out;
 }
 
-export async function listLedgerRows(ledgerId: string): Promise<LedgerRow[]> {
+/** `site` is a resolved list of names (domain/site.ts's resolveSite). Ledger 4 rows span two
+ * warehouses (source and destination), so a transfer matches if EITHER side is in scope — it's
+ * genuinely relevant to both sections, unlike the single-warehouse ledgers. */
+export async function listLedgerRows(ledgerId: string, site?: string[]): Promise<LedgerRow[]> {
   const spec = LEDGER_COLUMN_MAP[ledgerId];
   if (!spec) throw new Error(`Unknown ledger "${ledgerId}"`);
 
   if (ledgerId === "warehouse-stock") {
     // Serve the computed running balance, not any stored one. `reportedBalance` (the workbook's
     // own figure) stays available via /api/data-quality, where a divergence is a finding.
-    const rows = await warehouseBalanceRows();
+    const rows = await warehouseBalanceRows(site);
     return rows.map((r) => {
       const wire = toLedgerRow(ledgerId, r as unknown as Record<string, unknown>);
       wire["Balance"] = fmt((r as any).computed_balance);
@@ -64,7 +68,12 @@ export async function listLedgerRows(ledgerId: string): Promise<LedgerRow[]> {
 
   const model = (prisma as any)[DELEGATE[ledgerId]];
   const orderBy = ledgerId === "warehouse-to-warehouse-movement" ? { sn: "asc" } : { createdAt: "asc" };
-  const rows = await model.findMany({ orderBy });
+  const where = !site
+    ? {}
+    : ledgerId === "warehouse-to-warehouse-movement"
+      ? { OR: [{ sourceWarehouse: { in: site } }, { destinationWarehouse: { in: site } }] }
+      : { whLocation: { in: site } };
+  const rows = await model.findMany({ where, orderBy });
   return rows.map((r: Record<string, unknown>) => toLedgerRow(ledgerId, r));
 }
 
@@ -117,7 +126,12 @@ export async function addLedgerRow(ledgerId: string, row: LedgerRow): Promise<Le
   if (ledgerId === "warehouse-to-warehouse-movement") {
     const last = await prisma.juteWarehouseTransferReceipt.findFirst({ orderBy: { sn: "desc" }, select: { sn: true } });
     data.sn = (last?.sn ?? 0) + 1;
-    data.sourceWarehouse = (row["Transfer -Bouake "] ?? row["WH location"] ?? "BOUAKE").trim();
+    // No fallback to "BOUAKE": that was only ever correct while every import truly was
+    // Bouaké -> Yakro. Now that a second site exists, guessing the source here is exactly the
+    // wrong kind of silent default (ground rule §4) — require the caller to say which warehouse.
+    const sourceWarehouse = (row["Transfer -Bouake "] ?? row["WH location"] ?? "").trim();
+    if (!sourceWarehouse) throw new ValidationError("Source warehouse is required for a warehouse-to-warehouse transfer row.");
+    data.sourceWarehouse = sourceWarehouse;
     const d = (row["Date"] ?? "").trim();
     const parsed = d ? new Date(d) : null;
     if (parsed && !Number.isNaN(parsed.getTime())) data.receivedDate = parsed;

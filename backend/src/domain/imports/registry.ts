@@ -1,6 +1,11 @@
 /**
- * The single place all 5 known upload shapes are registered. Detection is never sheet-name-alone
+ * The single place all 10 known upload shapes are registered. Detection is never sheet-name-alone
  * — see headerCheck.ts's header comment for the real corruption case that requires this.
+ *
+ * Registration order matters once there are this many shapes — detectImporter() is first-match-
+ * wins. The 5 newest are ordered most-specific-sheet-name-first; none of their expected sheet names
+ * collide with an existing importer's, so ordering among them is not itself load-bearing today, but
+ * see tests/importerRegistry.test.ts for the guard that every real file matches exactly one.
  */
 import type ExcelJS from "exceljs";
 import type { ImporterDef, ImporterId, HeaderCheckResult } from "./types.js";
@@ -10,6 +15,11 @@ import { dryingImporter } from "./drying.js";
 import { juteWarehouseStockImporter } from "./juteWarehouseStock.js";
 import { juteWarehouseTransferImporter } from "./juteWarehouseTransfer.js";
 import { warehouseDischargesImporter } from "./warehouseDischarges.js";
+import { warehouseDispatchesImporter } from "./warehouseDispatches.js";
+import { dryingBatchImporter } from "./dryingBatch.js";
+import { issuedToProductionImporter } from "./issuedToProduction.js";
+import { warehouseReceivingImporter } from "./warehouseReceiving.js";
+import { warehouseActivityLedgerImporter } from "./warehouseActivityLedger.js";
 
 export const IMPORTERS: ImporterDef[] = [
   offloadingsImporter,
@@ -17,6 +27,11 @@ export const IMPORTERS: ImporterDef[] = [
   juteWarehouseStockImporter,
   juteWarehouseTransferImporter,
   warehouseDischargesImporter,
+  warehouseDispatchesImporter,
+  dryingBatchImporter,
+  issuedToProductionImporter,
+  warehouseReceivingImporter,
+  warehouseActivityLedgerImporter,
 ];
 
 export function getImporter(id: ImporterId): ImporterDef {

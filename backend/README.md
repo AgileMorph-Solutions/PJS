@@ -109,19 +109,22 @@ Fifteen findings ship against the real data, including:
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/health` | |
-| GET | `/api/receipts`, `/api/receipts/:id` | Full `ReceiptRecord` with derived `status` |
+| GET | `/api/receipts`, `/api/receipts/:id` | Full `ReceiptRecord` with derived `status`. List accepts `?warehouse=` (a site name — see below) |
 | POST | `/api/receipts` | Server-assigned `REC-<year>-NNNN`, serializable |
 | PATCH | `/api/receipts/:id` | Top-level fields; `lotNo`/`binNo` route to their stage rows |
 | PATCH | `/api/receipts/:id/stages/:stageId` | **Batched** — the client coalesces per stage |
 | POST | `/api/receipts/:id/branch` | Recomputes status + appends a timeline entry |
 | GET | `/api/receipts/:id/activities` | Full 1:N history for `n-otheract` / `n-ledger` |
-| GET/POST | `/api/jute-ledgers[/:id/entries]` | Server assigns `S N` and the running balance |
-| GET | `/api/jute-ledgers/reconciliation` | Per warehouse and period |
-| GET | `/api/masters`, POST `/api/masters/{suppliers,warehouses,bins}` | |
-| GET/POST | `/api/drying-jobs` | Rejects a job with no Lot |
-| GET | `/api/dashboard?from=&to=` | Doc §3's six figures, for any period |
+| GET | `/api/receipts/:id/links` | Cross-site by design — deliberately does **not** accept `?warehouse=` (see below) |
+| GET/POST | `/api/jute-ledgers[/:id/entries]` | Server assigns `S N` and the running balance. GET accepts `?warehouse=` |
+| GET | `/api/jute-ledgers/reconciliation` | Per warehouse and period. Accepts `?warehouse=` |
+| GET | `/api/masters`, POST `/api/masters/{suppliers,warehouses,bins}` | `warehouses` is `{name, kind, site}[]`, not a bare string list — see "Sites, not just warehouses" below |
+| GET/POST | `/api/drying-jobs` | Rejects a job with no Lot. GET accepts `?warehouse=` |
+| GET | `/api/dashboard?from=&to=` | Doc §3's six figures, for any period. Also accepts `?warehouse=` |
+| GET | `/api/warehouse-dispatches` | Unit-warehouse dispatch out (CHARGEMENT), one row per line. Accepts `?warehouse=` |
+| GET | `/api/warehouse-activity-ledger` | Its own table — the source sheet has no site column, so this one can't be scoped |
 | GET | `/api/data-quality` | |
-| GET | `/api/imports/types` | The 4 known workbook shapes this app can import |
+| GET | `/api/imports/types` | The 10 known workbook shapes this app can import |
 | POST | `/api/imports/preview` | Multipart `.xlsx` upload → parsed rows + findings, cached under a token |
 | POST | `/api/imports/:token/commit` | Writes the previewed rows — see `docs/UPLOAD_GUIDE.md` |
 
@@ -129,6 +132,19 @@ Hard rules answer **422** (lot-before-bin, lot uniqueness, rejection-needs-reaso
 drying-needs-lot); an unknown stage or field label answers **400** rather than silently dropping
 the write. See `../docs/UPLOAD_GUIDE.md` for which real workbook feeds which endpoint above, what's
 deliberately not importable, and the dedup rules each importer applies.
+
+### Sites, not just warehouses
+
+The client's real hierarchy is **Site → Store → Bin** (`BOUAKE → BKE-002 → BKE-002-BIN-026`), and
+the two sites — `BOUAKE` (Regional Central) and `YAKRO FACTORY` (Factory) — are what the frontend's
+two top-level sections scope to. `Warehouse.kind`/`Warehouse.site` (nullable, reported not guessed
+— see `packages/contract/src/data/warehouseKinds.ts`) carry that hierarchy; `domain/site.ts`'s
+`resolveSite(name)` expands a site to itself + its stores + its aliases (e.g. `?warehouse=BOUAKE`
+also matches rows stored under the store code `BKE-002`, and `?warehouse=YAKRO FACTORY` also
+matches `ANAGROCI-01`/`YAMOUSSOUKRO`), which is what every `?warehouse=` param above actually filters
+on — never a raw string match. `/api/receipts/:id/links` is the one deliberate exception: it's the
+endpoint that proves the same physical batch is a different Lot Number at each site, so scoping it
+by site would defeat its own purpose.
 
 ## Known deviations from the source documents
 

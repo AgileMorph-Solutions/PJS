@@ -180,13 +180,17 @@ function parse(workbook: ExcelJS.Workbook): ParsedRow<WarehouseDischargeRow>[] {
       finalOffload: readPanel(row, FINAL_OFFLOAD_START),
     };
 
-    // Both are guards rather than filters — 0 rows hit either on the real file. A row without a Lot
-    // can't do this sheet's one job, and a row without a fiche has no way back to a receipt.
+    // All three are guards rather than filters — 0 rows hit any of them on the real file. A row
+    // without a Lot can't do this sheet's one job; without a fiche it has no way back to a
+    // receipt; without a site its Lot isn't even unique (WarehouseDischarge's real key is
+    // (warehouseSite, lotNo) — a lot number alone collides across sites, see that model's comment).
     const skipReason = !lotNo
       ? "no Lot Number — this sheet's own key"
       : !ficheCca
         ? "no Fiche — nothing to match a receipt on"
-        : undefined;
+        : !data.warehouseSite?.trim()
+          ? "no Warehouse/Site — this sheet's Lot Number is only unique together with its site"
+          : undefined;
 
     out.push(skipReason ? { sheetRow: r, data, skipReason } : { sheetRow: r, data });
   }

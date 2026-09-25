@@ -43,7 +43,11 @@ export type LedgerRow = Record<string, string>;
 export type LedgerEntries = Record<string, LedgerRow[]>;
 
 export interface Supplier { code: string; name: string }
-export interface Masters { suppliers: Supplier[]; warehouses: string[]; bins: string[]; origins: string[] }
+/** `kind` (Village/Regional/Factory) is set only on SITE rows; `site` is null for a site row and
+ * the parent site's name for a store row (e.g. "BKE-002" -> site "BOUAKE") — see
+ * data/warehouseKinds.ts and Warehouse's self-relation in backend/prisma/schema.prisma. */
+export interface WarehouseMaster { name: string; kind: string | null; site: string | null }
+export interface Masters { suppliers: Supplier[]; warehouses: WarehouseMaster[]; bins: string[]; origins: string[] }
 
 export interface DryingJob {
   id: string; date: string; warehouse: string; bin: string;

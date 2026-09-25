@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
+import { SiteLayout, RequireSite } from "./state/SiteContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionPage } from "./pages/ProductionPage";
@@ -12,11 +13,14 @@ import { LotsListPage } from "./pages/production/LotsListPage";
 import { LotDetailPage } from "./pages/production/LotDetailPage";
 import { StandaloneTablePage } from "./pages/production/StandaloneTablePage";
 
-import { ReceiptsListPage } from "./pages/procurement/ReceiptsListPage";
-import { ReceiptDetailPage } from "./pages/procurement/ReceiptDetailPage";
-import { StockPage } from "./pages/procurement/StockPage";
-import { DryingJobsPage } from "./pages/procurement/DryingJobsPage";
-import { IntakeWizardPage } from "./pages/procurement/intake/IntakeWizardPage";
+import { ReceiptsListPage } from "./pages/warehouse/ReceiptsListPage";
+import { ReceiptDetailPage } from "./pages/warehouse/ReceiptDetailPage";
+import { StockPage } from "./pages/warehouse/StockPage";
+import { DryingJobsPage } from "./pages/warehouse/DryingJobsPage";
+import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
+import { DispatchPage } from "./pages/unit/DispatchPage";
+import { RcnIssueToProductionPage } from "./pages/central/RcnIssueToProductionPage";
+import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
 
 import { WarehouseStockPage } from "./pages/jute/WarehouseStockPage";
 import { SupplierMovementPage } from "./pages/jute/SupplierMovementPage";
@@ -71,11 +75,47 @@ export default function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
 
-            <Route path="/procurement/receipts" element={<ReceiptsListPage />} />
-            <Route path="/procurement/receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
-            <Route path="/procurement/receipts/:id" element={<ReceiptDetailPage />} />
-            <Route path="/procurement/stock" element={<StockPage />} />
-            <Route path="/procurement/drying" element={<DryingJobsPage />} />
+            {/* One /:site/* tree for both sections (see state/SiteContext.tsx) — "/unit/receipts"
+                and "/central/receipts" render the exact same components, scoped by useSite(), not
+                two literal duplicated route trees. SiteLayout 404s on an unrecognized :site rather
+                than silently rendering garbage. */}
+            <Route path="/:site" element={<SiteLayout />}>
+              <Route path="receipts" element={<ReceiptsListPage />} />
+              <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
+              {/* NOT forked per site — one receipt record, one page; a receipt detail page can
+                  legitimately show cross-site linked records by design (see ReceiptDetailPage's own
+                  header comment and receiptLinks.ts, whose /links route deliberately never accepts
+                  ?warehouse=). Only the breadcrumb reads useSite(). */}
+              <Route path="receipts/:id" element={<ReceiptDetailPage />} />
+              <Route path="stock" element={<StockPage />} />
+              <Route path="drying" element={<DryingJobsPage />} />
+              <Route
+                path="dispatch"
+                element={
+                  <RequireSite slug="unit">
+                    <DispatchPage />
+                  </RequireSite>
+                }
+              />
+              <Route
+                path="issue-to-production"
+                element={
+                  <RequireSite slug="central">
+                    <RcnIssueToProductionPage />
+                  </RequireSite>
+                }
+              />
+            </Route>
+
+            {/* Legacy /procurement/* URLs — see pages/LegacyRedirects.tsx for exactly how each one
+                resolves a site to redirect into. No "Receiving"/"Warehouse Receiving" legacy route
+                existed pre-split (that page didn't exist yet), so there's nothing to redirect for
+                it. */}
+            <Route path="/procurement/receipts" element={<LegacyListRedirect leaf="receipts" />} />
+            <Route path="/procurement/receipts/new/:id/:stageId" element={<LegacyIntakeRedirect />} />
+            <Route path="/procurement/receipts/:id" element={<LegacyReceiptDetailRedirect />} />
+            <Route path="/procurement/stock" element={<LegacyListRedirect leaf="stock" />} />
+            <Route path="/procurement/drying" element={<LegacyListRedirect leaf="drying" />} />
 
             <Route path="/jute/warehouse-stock" element={<WarehouseStockPage />} />
             <Route path="/jute/suppliers" element={<SupplierMovementPage />} />

@@ -12,7 +12,10 @@ export function Layout({ children }: { children: ReactNode }) {
   function handleSearch(e: FormEvent) {
     e.preventDefault();
     if (!q.trim()) return;
-    navigate(`/procurement/receipts?q=${encodeURIComponent(q.trim())}`);
+    // No site to scope a header search to — lands on the unit section (the larger of the two,
+    // matching pages/LegacyRedirects.tsx's own default), same as visiting a stale /procurement/*
+    // link with no other info to resolve from.
+    navigate(`/unit/receipts?q=${encodeURIComponent(q.trim())}`);
     setNavOpen(false);
   }
 
