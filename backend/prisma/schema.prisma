@@ -244,7 +244,7 @@ model DryingJob {
 // script after changing stages.ts; tests/stageMap.schema.test.ts enforces agreement.
 
 /// Stage n-gate (entry) — Truck arrives at warehouse (Gate entry)
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageGateEntry {
   receiptId     String  @id
   sn            String? /// S N
@@ -255,11 +255,13 @@ model StageGateEntry {
   whNo          String? /// WH NO.
   vehicleNo     String? /// VEHICLE NO.
   warehouseType String? /// Warehouse type (Village/Regional/Factory)
+  remarks       String? /// REMARKS
+  week          String? /// WEEK
   receipt       Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
 /// Stage n-verify (entry) — Verify supplier documents
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageVerifyDocs {
   receiptId     String  @id
   suppliersName String? /// SUPPLIERS NAME
@@ -277,7 +279,7 @@ model StageVerifyDocs {
 }
 
 /// Stage n-qfs (decision) — Quality analysis (QFS)
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageQualityQfs {
   receiptId   String   @id
   moisture    String? /// MOIS. (moisture)
@@ -292,7 +294,7 @@ model StageQualityQfs {
 }
 
 /// Stage n-gross (entry) — Weight truck (Gross weight)
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageGrossWeight {
   receiptId     String   @id
   grossWtKgs    String? /// GROSS WT KGS
@@ -332,7 +334,7 @@ model StageBinAllocation {
 }
 
 /// Stage n-unload (entry) — Unload RCN at warehouse
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageUnload {
   receiptId           String   @id
   dateOfOffloading    String? /// DATE OF OFFLOADING
@@ -362,7 +364,7 @@ model StageTareWeight {
 }
 
 /// Stage n-netwt (system) — Calculate net weight
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageNetWeight {
   receiptId   String   @id
   netWtKgs    String? /// NET WT KGS
@@ -373,7 +375,7 @@ model StageNetWeight {
 }
 
 /// Stage n-grn (entry) — Generate RCN reception record (GRN)
-/// Source: Rcn_Offloading_Details_2026.xlsx · OFFLOADINGS · 28 columns
+/// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageGrn {
   receiptId    String   @id
   price        String? /// PRICE

@@ -13,9 +13,11 @@ import { DECISION_BRANCHES } from "../src/domain/decisions.js";
 const allStages = [...stages, rejectStage];
 
 describe("stage dictionary", () => {
-  it("covers all 16 stage records and 69 fields", () => {
+  it("covers all 16 stage records and 71 fields", () => {
     expect(allStages.length).toBe(16);
-    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(69);
+    // 69 + REMARKS/WEEK on n-gate — real "Truck Reception" columns that were fingerprinted but
+    // never actually captured until now (see truckReception.ts's parser and stages.ts's n-gate).
+    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(71);
     expect(Object.keys(STAGE_FIELD_MAP).length).toBe(16);
   });
 

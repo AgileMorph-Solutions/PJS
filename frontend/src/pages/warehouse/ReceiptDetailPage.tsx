@@ -374,7 +374,7 @@ function LinkedRecordsCard({
           and no dispatch line matches this receipt's FICHE either — nothing to cross-reference yet.
         </p>
       ) : !links.lotNo ? (
-        <DispatchesSection dispatches={links.dispatches} />
+        <DispatchesSection dispatches={links.dispatches} siteSlug={siteSlug} />
       ) : links.dryingJobs.length === 0 && links.transfers.length === 0 && links.dispatches.length === 0
           && links.warehouseReceiving.length === 0 && links.dryingBatches.length === 0
           && links.btmIntakes.length === 0 ? (
@@ -400,7 +400,7 @@ function LinkedRecordsCard({
               </span>
             </div>
           )}
-          <DispatchesSection dispatches={links.dispatches} />
+          <DispatchesSection dispatches={links.dispatches} siteSlug={siteSlug} />
           <div className="space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
               Bin observed elsewhere, matched on Lot {links.lotNo}
@@ -550,9 +550,16 @@ function LinkedRecordsCard({
 
           {links.btmIntakes.length > 0 && (
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400 mb-1.5">
-                Production (via linked transfer's BTM)
-              </p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
+                  Production (via linked transfer's BTM)
+                </p>
+                {links.issuedToProduction.length > 0 && (
+                  <Link to="/issued-to-production" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+                    View all
+                  </Link>
+                )}
+              </div>
               <ul className="space-y-1.5">
                 {links.btmIntakes.map((b) => (
                   <li
@@ -591,13 +598,24 @@ function LinkedRecordsCard({
  * required (WarehouseDispatchLine has no Lot column at all), so this can render even when
  * `links.lotNo` is null. Every row here is a confirmed match (no coincidental-collision caveat),
  * unlike the Lot-joined sections above. */
-function DispatchesSection({ dispatches }: { dispatches: import("../../repository/api").LinkedDispatch[] }) {
+function DispatchesSection({
+  dispatches,
+  siteSlug,
+}: {
+  dispatches: import("../../repository/api").LinkedDispatch[];
+  siteSlug: import("../../config/sites").SiteSlug;
+}) {
   if (dispatches.length === 0) return null;
   return (
     <div>
-      <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400 mb-1.5">
-        Dispatches (CHARGEMENT, matched on this receipt's FICHE)
-      </p>
+      <div className="flex items-center justify-between mb-1.5">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
+          Dispatches (CHARGEMENT, matched on this receipt's FICHE)
+        </p>
+        <Link to={`/${siteSlug}/dispatches`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+          View all
+        </Link>
+      </div>
       <ul className="space-y-1.5">
         {dispatches.map((d) => (
           <li

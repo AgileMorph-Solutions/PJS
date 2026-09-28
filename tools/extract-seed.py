@@ -56,9 +56,7 @@ def read_truck_reception():
             "HUMID SACS": s(vals[15]), "Sacs déchirés": s(vals[16]), "Refraction": s(vals[17]),
             "PAID WT": s(vals[18]), "PRICE": s(vals[19]), "AMOUNT": s(vals[20]), "MOIS.": s(vals[21]),
             "NUT COUNT": s(vals[22]), "KOR": s(vals[23]), "FINAL KOR": s(vals[24]), "ORIGIN": s(vals[25]),
-            # vals[26] "remarks" and vals[27] "week" are read but not stored — no stage field maps
-            # to either (same precedent as the old sheet's own unread REMARKS column; "week" is a
-            # genuinely new column with no home in stages.ts today).
+            "REMARKS": s(vals[26]), "WEEK": s(vals[27]),
         })
     return rows
 
@@ -110,7 +108,7 @@ def build_stage_data(row):
         "n-gate": {
             "S N": row["S N"], "DATE OF ARRIVAL": row["DATE OF ARRIVAL"],
             "CREDIT/CASH": row["CREDIT/CASH"], "WH LOCATION": row["WH LOCATION"], "WH NO.": row["WH NO."],
-            "VEHICLE NO.": row["VEHICLE NO."],
+            "VEHICLE NO.": row["VEHICLE NO."], "REMARKS": row["REMARKS"], "WEEK": row["WEEK"],
         },
         "n-tare": {"Tare / empty truck weight (kg)": ""},
     }

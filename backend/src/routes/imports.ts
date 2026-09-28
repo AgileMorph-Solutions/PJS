@@ -6,10 +6,20 @@
  */
 import type { FastifyInstance } from "fastify";
 import type { ImporterId } from "../domain/imports/types.js";
-import { IMPORTERS } from "../domain/imports/registry.js";
+import { IMPORTERS, getImporter } from "../domain/imports/registry.js";
 import { listImporterTypes, previewImport, commitImport, ImportRejectedError } from "../services/imports.js";
+import { buildTemplateWorkbook, buildExportWorkbook } from "../domain/imports/xlsxWriter.js";
+import { getExportRows } from "../services/importExports.js";
+import { resolveSite } from "../domain/site.js";
 
 const KNOWN_IMPORTER_IDS = new Set(IMPORTERS.map((i) => i.id));
+
+function requireKnownImporter(id: string): ImporterId {
+  if (!KNOWN_IMPORTER_IDS.has(id as ImporterId)) {
+    throw new ImportRejectedError(`Unknown importer type "${id}".`, { known: [...KNOWN_IMPORTER_IDS] });
+  }
+  return id as ImporterId;
+}
 
 export async function importRoutes(app: FastifyInstance) {
   app.get("/api/imports/types", async () => listImporterTypes());
@@ -35,5 +45,35 @@ export async function importRoutes(app: FastifyInstance) {
     const { token } = req.params as { token: string };
     const { skipFlagged } = (req.body ?? {}) as { skipFlagged?: boolean };
     return commitImport(token, { skipFlagged: skipFlagged !== false });
+  });
+
+  /** A blank workbook matching one importer's expected shape — same sheet name/header row/labels
+   * it would itself accept back, so filling it in and re-uploading always works. */
+  app.get("/api/imports/:id/template", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const importerId = requireKnownImporter(id);
+    const def = getImporter(importerId);
+    const buffer = await buildTemplateWorkbook(importerId);
+    reply
+      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      .header("Content-Disposition", `attachment; filename="${def.expectedSheet} template.xlsx"`)
+      .send(buffer);
+  });
+
+  /** Current database rows for this importer's table, as .xlsx — see importExports.ts for which
+   * `list*` function backs each shape. `?warehouse=` scopes it the same way every other
+   * site-scoped read does; omitted for shapes with no site dimension (see importExports.ts). */
+  app.get("/api/imports/:id/export", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { warehouse } = req.query as { warehouse?: string };
+    const importerId = requireKnownImporter(id);
+    const def = getImporter(importerId);
+    const rows = await getExportRows(importerId, warehouse ? await resolveSite(warehouse) : undefined);
+    const buffer = await buildExportWorkbook(importerId, rows);
+    const stamp = new Date().toISOString().slice(0, 10);
+    reply
+      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      .header("Content-Disposition", `attachment; filename="${def.expectedSheet} export ${stamp}.xlsx"`)
+      .send(buffer);
   });
 }

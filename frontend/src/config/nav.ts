@@ -53,6 +53,11 @@ export const NAV: NavSection[] = [
       { label: "Supplier Movement", to: "/jute/suppliers", icon: "swap_horiz" },
       { label: "Production Issue/Return", to: "/jute/production", icon: "sync_alt" },
       { label: "Warehouse Transfers", to: "/jute/transfers", icon: "compare_arrows" },
+      // Genuinely no site column in the source sheet (verified — see
+      // warehouseActivityLedger.ts's own header comment), so this fits the same "not site-scoped"
+      // shape every other leaf in this section already has. Had zero UI before this entry — a
+      // route existed but nothing on the frontend called it.
+      { label: "Warehouse Activity Ledger", to: "/jute/warehouse-activity-ledger", icon: "receipt_long" },
     ],
   },
   {

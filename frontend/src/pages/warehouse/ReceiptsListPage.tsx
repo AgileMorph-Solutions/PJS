@@ -127,6 +127,7 @@ export function ReceiptsListPage() {
       {uploadOpen && (
         <ImportModal
           importerIds={RECEPTION_IMPORTER_IDS}
+          siteSlug={site.slug}
           onClose={() => setUploadOpen(false)}
           onCommitted={() => {
             void refresh();

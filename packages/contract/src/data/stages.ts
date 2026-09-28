@@ -24,6 +24,12 @@ export const stages: Stage[] = [
       { n: "WH NO.", v: "BKE-002" , col: "whNo"},
       { n: "VEHICLE NO.", v: "827KT01" , col: "vehicleNo"},
       { n: "Warehouse type (Village/Regional/Factory)", v: "" , col: "warehouseType"},
+      // Real columns 27-28 of "Truck Reception" — present in the sheet, but were fingerprinted
+      // for header/blank-row detection only and never actually read into any field until now (a
+      // genuine capture bug, fixed here rather than left as another "no equivalent column" gap;
+      // see truckReception.ts's parser).
+      { n: "REMARKS", v: "" , col: "remarks"},
+      { n: "WEEK", v: "" , col: "week"},
     ],
   },
   {

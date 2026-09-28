@@ -145,6 +145,32 @@ export const juteLedgers: JuteLedger[] = [
       { label: "Damaged Bag", real: true , col: "damagedBags"},
       { label: "New Jute Bag Used", real: true , col: "newBagsUsed"},
       { label: "Recondition", real: true , col: "recondition"},
+      // The remaining 22 of the sheet's 34 real columns — stored since the importer was written
+      // (juteWarehouseTransfer.ts's own header comment: "the ledger form only shows 12 of these —
+      // ... but normalization doesn't discard the other 22"), just never exposed as ledger columns
+      // until now.
+      { label: "Month", real: true , col: "month"},
+      { label: "DRY/UNDRY", real: true , col: "dryUndry"},
+      { label: "ID transfer", real: true , col: "idTransfer"},
+      { label: "Lot Dry", real: true , col: "lotDry"},
+      { label: "NO-FICHE", real: true , col: "noFiche"},
+      { label: "CCA transferred fiche Number", real: true , col: "ccaFicheNumber"},
+      { label: "Transfer -Bouake", real: true , col: "sourceWarehouse"},
+      { label: "FINAL BAGS AFTER REBAGGING W/H", real: true , col: "finalBagsAfterRebagging"},
+      { label: "DIFF", real: true , col: "reportedDiff"},
+      { label: "Laisse-Passer Entree (Yakro)", real: true , col: "laissePasserEntree"},
+      { label: "FULLY LOADED TRUCK WEIGHT - BEFORE UNLOADING OF RCN", real: true , col: "fullyLoadedTruckWeight"},
+      { label: "EMPTRY TRUCK TARE WEIGHT - AFTER UNLOADING OF THE RCN", real: true , col: "emptyTruckTareWeight"},
+      { label: "Gross Weight (Yakro) Recived", real: true , col: "grossWeightReceived"},
+      { label: "Weight at arrival (kg) Net", real: true , col: "netWeightAtArrival"},
+      { label: "Net Wt Dispatched (From Bouake)", real: true , col: "netWeightDispatched"},
+      { label: "Weight Difference at Yakro", real: true , col: "weightDifference"},
+      { label: "KOR Received (At Yakro)", real: true , col: "korReceived"},
+      { label: "KOR Dispatched From BOUAKE", real: true , col: "korDispatched"},
+      { label: "Moisture Received at YAKRO WH", real: true , col: "moistureReceived"},
+      { label: "Dispatched Moisture", real: true , col: "moistureDispatched"},
+      { label: "NC arrival", real: true , col: "ncArrival"},
+      { label: "Comment", real: true , col: "comment"},
     ],
     sampleRows: [
       {

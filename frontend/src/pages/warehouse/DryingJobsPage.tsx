@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -8,10 +8,25 @@ import { Pagination } from "../../components/ui/Pagination";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
+import { RecordDetailModal } from "../../components/ui/RecordDetailModal";
 import { useTracking, useDryingBatches, useDryingSortingReports } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { DryingBatch, DryingSortingReport } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
+
+/** A "View all fields" cell — every DataTable row here may also be a link (rowHref), so this stops
+ * the click from bubbling into the row's own navigation. */
+function ViewAllFieldsButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className="text-[11.5px] font-semibold text-brand-700 hover:text-brand-800 whitespace-nowrap"
+    >
+      View all fields
+    </button>
+  );
+}
 
 /**
  * Sourced from the two new-sheets drying tables — DryingJob (whose only source,
@@ -25,6 +40,8 @@ export function DryingJobsPage() {
   const switchSite = useSwitchSite();
   const { batches, refetch: refetchBatches } = useDryingBatches(site.warehouseName);
   const { reports, refetch: refetchReports } = useDryingSortingReports(site.warehouseName);
+  const [detailBatch, setDetailBatch] = useState<DryingBatch | null>(null);
+  const [detailReport, setDetailReport] = useState<DryingSortingReport | null>(null);
   const inDrying = useMemo(
     () => receipts.filter((r) => r.warehouse === site.warehouseName && deriveStatus(r) === "in_drying"),
     [receipts, site.warehouseName]
@@ -54,6 +71,7 @@ export function DryingJobsPage() {
     { label: "Dry type", render: (b) => b.dryType || "—" },
     { label: "Destination", render: (b) => b.destinationRaw || "—" },
     { label: "Status", render: (b) => b.status || "—" },
+    { label: "", render: (b) => <ViewAllFieldsButton onClick={() => setDetailBatch(b)} /> },
   ];
 
   const reportColumns: Column<DryingSortingReport>[] = [
@@ -65,6 +83,7 @@ export function DryingJobsPage() {
     { label: "Received net wt", render: (r) => r.receivedNetWeightAfterDrying ?? "—" },
     { label: "Input moisture", render: (r) => r.inputMoisture ?? "—" },
     { label: "Output moisture", render: (r) => r.outputMoisture ?? "—" },
+    { label: "", render: (r) => <ViewAllFieldsButton onClick={() => setDetailReport(r)} /> },
   ];
 
   return (
@@ -137,6 +156,21 @@ export function DryingJobsPage() {
           />
         </div>
       </div>
+
+      {detailBatch && (
+        <RecordDetailModal
+          title={`Drying Batch — SN ${detailBatch.sn}`}
+          record={detailBatch}
+          onClose={() => setDetailBatch(null)}
+        />
+      )}
+      {detailReport && (
+        <RecordDetailModal
+          title={`Drying & Sorting Report — S.No. ${detailReport.sn ?? "—"}`}
+          record={detailReport}
+          onClose={() => setDetailReport(null)}
+        />
+      )}
     </div>
   );
 }

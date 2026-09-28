@@ -8,7 +8,7 @@ import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob,
 } from "@anagroci/contract/types/receipt";
 
-const BASE = import.meta.env.VITE_API_BASE ?? "/api";
+export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 export class ApiError extends Error {
   // Written out longhand rather than as a parameter property: the app's tsconfig sets
@@ -114,9 +114,9 @@ export const api = {
     request<LedgerRow[]>(withWarehouse(`/jute-ledgers/${encodeURIComponent(ledgerId)}/entries`, warehouse)),
 
   /** CHARGEMENT-derived unit dispatch lines (see backend/src/services/warehouseDispatches.ts) —
-   * read-only; currently unused by any page (dispatch status is surfaced via the Downstream
-   * column on Reception instead — see DownstreamStatusChips/receiptsDownstream.ts), kept for the
-   * same reason listDryingJobs is: a working endpoint, not dead code to strip preemptively. */
+   * read-only, powers pages/warehouse/DispatchesPage.tsx (linked from Reception's Downstream chips
+   * and a receipt's "Linked records" card, not a sidebar item — see config/nav.ts's own comment on
+   * why). */
   listWarehouseDispatches: (warehouse?: string) =>
     request<WarehouseDispatchLine[]>(withWarehouse("/warehouse-dispatches", warehouse)),
 
@@ -126,6 +126,16 @@ export const api = {
   /** Drying & Sorting Report (Bouaké detail) — read-only, the Drying page's secondary source. */
   listDryingSortingReports: (warehouse?: string) =>
     request<DryingSortingReport[]>(withWarehouse("/drying-sorting-reports", warehouse)),
+  /** Issued to Production Section — read-only, no site scoping (the table has no site column at
+   * all — see services/issuedToProduction.ts). Powers pages/warehouse/IssuedToProductionPage.tsx. */
+  listIssuedToProduction: () => request<IssuedToProductionRow[]>("/issued-to-production"),
+  /** Warehouse activity Ledger — read-only, no site scoping (same reason as above). Powers
+   * pages/jute/WarehouseActivityLedgerPage.tsx. */
+  listWarehouseActivityLedger: () => request<WarehouseActivityLedgerEntry[]>("/warehouse-activity-ledger"),
+  /** WarehouseDischarge — the raw rows behind both DISCHARGEMENT and Warehouse Receiving, shown on
+   * Lots & Bins alongside the derived Receipt.stageData view that page already had. */
+  listWarehouseDischarges: (warehouse?: string) =>
+    request<WarehouseDischargeRow[]>(withWarehouse("/warehouse-discharges", warehouse)),
   dashboard: (from?: string, to?: string) => {
     const q = new URLSearchParams();
     if (from) q.set("from", from);
@@ -434,13 +444,36 @@ export interface WarehouseDispatchLine {
   netWeight: string | null;
   status: string | null;
   unloadingStatus: string | null;
+  browns: string | null;
+  voids: string | null;
+  oil: string | null;
+  totDefect: string | null;
+  goodKernel: string | null;
+  immature: string | null;
+  spotted: string | null;
+  totKernels: string | null;
+  kor: string | null;
+  shot: string | null;
+  fot: string | null;
+  usefulKernelsYield: string | null;
+  totalYield: string | null;
+  moisture: string | null;
+  nc: string | null;
+  shell: string | null;
+  bagsYakro: number | null;
+  grossYakro: string | null;
+  differenceWeight: string | null;
+  sheetRow: number | null;
+  source: string | null;
+  createdAt: string;
 }
 
 /** Drying Batch (backend/prisma/schema.prisma's DryingBatch) — both sites, consolidated. `lotNo`
  * is populated only when `lotNoRaw` is unambiguous (see the model's own comment) — a comma-joined
  * or numerically-concatenated value is never split, so `lotNo` stays null and `lotNoRaw` carries
- * the real cell text verbatim. Only the fields the Drying page actually renders are declared below
- * (the model itself has ~50 columns) — every value still arrives as a string on the wire. */
+ * the real cell text verbatim. Every real column on the model is declared below (not just the ones
+ * DryingJobsPage's at-a-glance table renders — see RecordDetailModal's "View all fields" for the
+ * rest); every value arrives as a string on the wire except `sn`/int columns (plain numbers). */
 export interface DryingBatch {
   id: string;
   sn: number;
@@ -448,18 +481,68 @@ export interface DryingBatch {
   dryingDateRaw: string | null;
   warehouseSite: string | null;
   warehouse: string | null;
-  lotNo: string | null;
+  sourceBinNo: string | null;
+  destinationBinNo: string | null;
   lotNoRaw: string | null;
+  lotNo: string | null;
+  whReceiptNoRaw: string | null;
   ficheNoRaw: string | null;
+  originRaw: string | null;
+  supplierNameRaw: string | null;
+  supplierCodeRaw: string | null;
+  ccakSupplierCodeRaw: string | null;
   status: string | null;
   dryType: string | null;
   destinationRaw: string | null;
+  issuedGrossWithBagsPalletsKg: string | null;
+  issuedPalletWeightKg: string | null;
+  issuedGrossWithBagsKg: string | null;
+  issuedBags: number | null;
+  issuedNetWeightKg: string | null;
+  receivedGrossWithBagsPalletsKg: string | null;
+  receivedPalletWeightKg: string | null;
+  receivedGrossWithBagsKg: string | null;
+  receivedBags: number | null;
+  receivedNetWeightKg: string | null;
   inputMoisturePct: string | null;
+  inputNutCount: string | null;
+  inputKor: string | null;
   outputMoisturePct: string | null;
+  outputNutCount: string | null;
+  outputKor: string | null;
+  oil: string | null;
+  rejection: string | null;
+  goodKernel: string | null;
+  immature: string | null;
+  spotted: string | null;
+  shell: string | null;
+  void: string | null;
+  moistureLossPct: string | null;
+  dryingLossKg: string | null;
+  dryingLossPct: string | null;
+  triageLossKg: string | null;
+  triageLossPct: string | null;
+  damagedNutsKg: string | null;
+  inputBagsForDrying: number | null;
+  outputBagsAfterDrying: number | null;
+  dryingOrPicking: string | null;
+  remarks: string | null;
+  issuedToProduction: string | null;
+  reDryingDate: string | null;
+  reDryingDateRaw: string | null;
+  moistureFirstRedryPct: string | null;
+  moistureSecondDryPct: string | null;
+  issuedToProduction3: string | null;
+  remarks4: string | null;
+  needsLotAllocationClarificationRaw: string | null;
+  sheetRow: number | null;
+  source: string | null;
+  createdAt: string;
 }
 
 /** Drying & Sorting Report (backend/prisma/schema.prisma's DryingSortingReport) — Bouaké-side
- * detail, 57 real rows. Same lotNo/lotNoRaw discipline as DryingBatch. */
+ * detail, 57 real rows. Same lotNo/lotNoRaw discipline as DryingBatch, and same "every real column
+ * declared" discipline. */
 export interface DryingSortingReport {
   id: string;
   sn: number | null;
@@ -469,13 +552,131 @@ export interface DryingSortingReport {
   warehouse: string | null;
   unloadingBin: string | null;
   afterDryingBin: string | null;
-  lotNo: string | null;
   lotNoRaw: string | null;
+  lotNo: string | null;
+  whReceiptNoRaw: string | null;
+  origin: string | null;
   supplierName: string | null;
+  supplierCodeAnagroci: string | null;
+  supplierCodeCcak: string | null;
   issuedNetWeightGrn: string | null;
   receivedNetWeightAfterDrying: string | null;
   inputMoisture: string | null;
+  inputNutCount: string | null;
+  inputKor: string | null;
   outputMoisture: string | null;
+  outputNutCount: string | null;
+  outputKor: string | null;
+  drainageLossKg: string | null;
+  lossPct: string | null;
+  drainageLossKg2: string | null;
+  drainageLossPct: string | null;
+  goodOrDriedSacs: string | null;
+  damagedNutsKgTriage: string | null;
+  totalSacReceived: string | null;
+  inputBagsForDrying: number | null;
+  outputBagsAfterDrying: number | null;
   dryingPicking: string | null;
   remarks: string | null;
+  sheetRow: number | null;
+  source: string | null;
+  createdAt: string;
+}
+
+/** Issued to Production Section (backend/prisma/schema.prisma's IssuedToProduction) — every field
+ * is a plain string on both the sheet and the wire (no Decimal/Int columns on this model at all).
+ * No site column exists on this table (see services/issuedToProduction.ts's header). */
+export interface IssuedToProductionRow {
+  id: string;
+  btmNo: string | null;
+  sNo: string | null;
+  date: string | null;
+  rcn: string | null;
+  sourceBin: string | null;
+  dryBin: string | null;
+  binStatus: string | null;
+  korIssued: string | null;
+  nutCount: string | null;
+  gk: string | null;
+  moisture: string | null;
+  immature: string | null;
+  spotted: string | null;
+  rejection: string | null;
+  oilGram: string | null;
+  voidGram: string | null;
+  shellGram: string | null;
+  ficheNo: string | null;
+  bagInStockAfterDry: string | null;
+  noOfBagIssuedToProduction: string | null;
+  avgBagWtEmptyBag: string | null;
+  bagWtEmptyBag: string | null;
+  noOfPallet: string | null;
+  avgPalletWt: string | null;
+  palletWeightKg: string | null;
+  grossWtBeforeDry: string | null;
+  grossWtAfterDryingWithJuteBag: string | null;
+  netWtWithoutJuteBag: string | null;
+  dateOfIssueToCalibration: string | null;
+  receivedByProductionNetWt: string | null;
+  issuedFrom: string | null;
+  diffInIssue: string | null;
+  remarks: string | null;
+  checkValue: string | null;
+  sheetRow: number | null;
+  source: string | null;
+  createdAt: string;
+}
+
+/** Warehouse activity Ledger (backend/prisma/schema.prisma's WarehouseActivityLedgerEntry) — no
+ * site column at all (the sheet itself has none, confirmed) — every field is a plain string. */
+export interface WarehouseActivityLedgerEntry {
+  id: string;
+  activityDate: string | null;
+  activityDateRaw: string | null;
+  activityType: string | null;
+  particulars: string | null;
+  offloaded: string | null;
+  bags: string | null;
+  quantityMt: string | null;
+  ficheNo: string | null;
+  lotNo: string | null;
+  vendor: string | null;
+  rate: string | null;
+  total: string | null;
+  referenceNo: string | null;
+  remarks: string | null;
+  grossWeightWithPalletKg: string | null;
+  palletCount: string | null;
+  grossWeightKg: string | null;
+  grossWeightWithoutPalletKg: string | null;
+  netWeightKg: string | null;
+  sheetRow: number | null;
+  source: string | null;
+  createdAt: string;
+}
+
+/** WarehouseDischarge (backend/prisma/schema.prisma) — shared by the unit-side DISCHARGEMENT
+ * import and the both-sites Warehouse Receiving import, ~110 real columns (two quality panels,
+ * plus a second "q1"/"q2" pair from the richer Warehouse Receiving source). Only the columns the
+ * list page actually renders as table columns are declared explicitly; the index signature covers
+ * every other real column so RecordDetailModal's "View all fields" still shows all of them — a
+ * full hand-enumeration of ~110 fields here would be far more likely to drift from schema.prisma
+ * than to help, unlike DryingBatch/DryingSortingReport's much smaller models above. */
+export interface WarehouseDischargeRow {
+  id: string;
+  sn: number;
+  warehouseSite: string;
+  warehouse: string | null;
+  lotNo: string;
+  ficheCca: string;
+  truckNo: string | null;
+  arrivalDate: string | null;
+  arrivalDateRaw: string | null;
+  dischargeDate: string | null;
+  dischargeDateRaw: string | null;
+  origin: string | null;
+  supplierName: string | null;
+  totalRecd: number | null;
+  netWeight: string | null;
+  [key: string]: unknown;
 }

@@ -31,8 +31,15 @@ function fmt(v: unknown): string {
   return String(v);
 }
 
-/** Columns whose value may live in a *Raw twin because the source cell wasn't a real date. */
-const RAW_FALLBACK: Record<string, string> = { movementDate: "rawDate", receivedDate: "rawDate" };
+/** Columns whose value may live in a *Raw twin because the source cell wasn't a real date/number —
+ * kor/moisture are mixed-type in ledger 4's source (see JuteWarehouseTransferReceipt's own schema
+ * comment: 365 floats, 1 comma-decimal string, 1 int), so a blank parsed value can still have real
+ * text worth showing rather than an empty cell. */
+const RAW_FALLBACK: Record<string, string> = {
+  movementDate: "rawDate", receivedDate: "rawDate",
+  korReceived: "korReceivedRaw", korDispatched: "korDispatchedRaw",
+  moistureReceived: "moistureReceivedRaw", moistureDispatched: "moistureDispatchedRaw",
+};
 
 function toLedgerRow(ledgerId: string, row: Record<string, unknown>): LedgerRow {
   const spec = LEDGER_COLUMN_MAP[ledgerId];

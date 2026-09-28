@@ -112,7 +112,7 @@ describe("golden seed round-trip", () => {
   });
 });
 
-describe("every one of the 69 (stage, field) pairs round-trips", () => {
+describe("every one of the 71 (stage, field) pairs round-trips", () => {
   const RECEIPT = "REC-ROUNDTRIP-TEST";
 
   beforeAll(async () => {

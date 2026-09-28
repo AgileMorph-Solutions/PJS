@@ -87,13 +87,18 @@ function parse(workbook: ExcelJS.Workbook): ParsedRow<OffloadingRow>[] {
     const kor = col(24);
     const finalKor = col(25);
     const origin = col(26);
+    const remarks = col(27);
+    const week = col(28);
 
     const stageData: Record<string, Record<string, string>> = {
       // Same label vocabulary offloadings.ts wrote — "RM/FG" is simply never included: the new
-      // sheet has no column for it, and there is nothing to invent one from.
+      // sheet has no column for it, and there is nothing to invent one from. REMARKS/WEEK (cols
+      // 27-28) ARE real columns here — previously fingerprinted for header/blank-row detection but
+      // never actually read; fixed to capture them like every other real column.
       "n-gate": {
         "S N": no, "DATE OF ARRIVAL": arrivalDate, "CREDIT/CASH": paymentType,
         "WH LOCATION": whLocation, "WH NO.": whNo, "VEHICLE NO.": truckNo,
+        "REMARKS": remarks, "WEEK": week,
       },
       "n-tare": { "Tare / empty truck weight (kg)": "" },
     };

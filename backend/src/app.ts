@@ -13,6 +13,8 @@ import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
 import { dryingBatchRoutes } from "./routes/dryingBatches.js";
 import { dryingSortingReportRoutes } from "./routes/dryingSortingReports.js";
 import { warehouseActivityLedgerRoutes } from "./routes/warehouseActivityLedger.js";
+import { issuedToProductionRoutes } from "./routes/issuedToProduction.js";
+import { warehouseDischargeRoutes } from "./routes/warehouseDischarges.js";
 import { ValidationError } from "./domain/validation.js";
 import { UnknownStageFieldError } from "./stageStore.js";
 import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
@@ -58,6 +60,8 @@ export function buildApp() {
   app.register(warehouseActivityLedgerRoutes);
   app.register(dryingBatchRoutes);
   app.register(dryingSortingReportRoutes);
+  app.register(issuedToProductionRoutes);
+  app.register(warehouseDischargeRoutes);
 
   return app;
 }

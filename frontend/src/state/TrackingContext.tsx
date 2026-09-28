@@ -311,6 +311,39 @@ export function useDryingSortingReports(warehouse?: string) {
   return { reports, loading, refetch };
 }
 
+/** Issued to Production Section — no site scoping (see api.ts's own comment). */
+export function useIssuedToProduction() {
+  const [rows, setRows] = useState<import("../repository/api").IssuedToProductionRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listIssuedToProduction().then(setRows).catch(() => {}), []);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+/** Warehouse activity Ledger — no site scoping (see api.ts's own comment). */
+export function useWarehouseActivityLedger() {
+  const [rows, setRows] = useState<import("../repository/api").WarehouseActivityLedgerEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listWarehouseActivityLedger().then(setRows).catch(() => {}), []);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+/** WarehouseDischarge — the raw rows DISCHARGEMENT/Warehouse Receiving actually store, shown on
+ * Lots & Bins alongside the page's existing derived-from-Receipt.stageData view. */
+export function useWarehouseDischarges(warehouse?: string) {
+  const [rows, setRows] = useState<import("../repository/api").WarehouseDischargeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.listWarehouseDischarges(warehouse).then(setRows).catch(() => {});
+  }, [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { rows, loading, refetch };
+}
+
 /**
  * Per-receipt dispatched/received/dried/issued flags for Reception's status column (backend's
  * services/receiptsDownstream.ts) — replaces Dispatch to Central / Receiving from Unit / Issue to

@@ -17,6 +17,8 @@ import { ReceiptsListPage } from "./pages/warehouse/ReceiptsListPage";
 import { ReceiptDetailPage } from "./pages/warehouse/ReceiptDetailPage";
 import { StockPage } from "./pages/warehouse/StockPage";
 import { DryingJobsPage } from "./pages/warehouse/DryingJobsPage";
+import { DispatchesPage } from "./pages/warehouse/DispatchesPage";
+import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage";
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
 import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
 
@@ -24,6 +26,7 @@ import { WarehouseStockPage } from "./pages/jute/WarehouseStockPage";
 import { SupplierMovementPage } from "./pages/jute/SupplierMovementPage";
 import { ProductionIssuePage } from "./pages/jute/ProductionIssuePage";
 import { WarehouseTransfersPage } from "./pages/jute/WarehouseTransfersPage";
+import { WarehouseActivityLedgerPage } from "./pages/jute/WarehouseActivityLedgerPage";
 
 import { SuppliersPage } from "./pages/masters/SuppliersPage";
 import { WarehousesPage } from "./pages/masters/WarehousesPage";
@@ -87,7 +90,15 @@ export default function App() {
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
               <Route path="stock" element={<StockPage />} />
               <Route path="drying" element={<DryingJobsPage />} />
+              {/* Not in nav.ts (see its own comment) — reached from Reception's Downstream chips
+                  and a receipt's "Linked records" card, same as the legacy /procurement/* URLs
+                  below are reachable without a sidebar entry. */}
+              <Route path="dispatches" element={<DispatchesPage />} />
             </Route>
+
+            {/* No site dimension on this table at all (see IssuedToProductionPage's own header
+                comment) — deliberately outside the /:site/* tree, unlike dispatches above. */}
+            <Route path="/issued-to-production" element={<IssuedToProductionPage />} />
 
             {/* Legacy /procurement/* URLs — see pages/LegacyRedirects.tsx for exactly how each one
                 resolves a site to redirect into. No "Receiving"/"Warehouse Receiving" legacy route
@@ -103,6 +114,7 @@ export default function App() {
             <Route path="/jute/suppliers" element={<SupplierMovementPage />} />
             <Route path="/jute/production" element={<ProductionIssuePage />} />
             <Route path="/jute/transfers" element={<WarehouseTransfersPage />} />
+            <Route path="/jute/warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
 
             <Route path="/production/btm" element={<BtmListPage />} />
             <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />
