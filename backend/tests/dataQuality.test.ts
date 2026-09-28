@@ -16,10 +16,14 @@ describe("data-quality audit", () => {
     const { checks } = await scanAll();
     const by = Object.fromEntries(checks.map((c) => [c.id, c]));
 
-    // 6 receipts arrive already rejected with no reason in the source sheet.
-    expect(by["rejected_without_reason"]?.affectedCount).toBe(6);
-    // The DIFF column is degenerate on every one of ledger 4's rows.
-    expect(by["ledger4_diff_degenerate"]?.affectedCount).toBe(367);
+    // The new Truck Reception importer (and tools/extract-seed.py) never writes a branch decision
+    // at all — rejection is always a human decision recorded later, never inferred from a column.
+    // With 0 receipts carrying an n-qfs "fail" branch, this check has nothing to report; the old
+    // 6-receipt figure came from the previous demo seed's fabricated branch data, not this source.
+    expect(by["rejected_without_reason"]).toBeUndefined();
+    // The DIFF column is degenerate on every one of ledger 4's rows (415, not 367, since ledger 4's
+    // source became the newer, larger Bouake RCN Receiving at Factory Report.xlsx).
+    expect(by["ledger4_diff_degenerate"]?.affectedCount).toBe(415);
     // The negative running balance is real and preserved.
     expect(by["jute_balance_negative"]?.affectedCount).toBe(35);
     // Ledger 1 records 3 transfers out against ledger 4's 367 inbound.
@@ -47,24 +51,28 @@ describe("data-quality audit", () => {
     // ANAGROCI-01.site to the canonical "YAKRO FACTORY" on every container start, unconditionally;
     // committing the real Warehouse Receiving workbook (services/imports.ts's
     // upsertObservedStores(), `update: { site }` with no "already canonical?" check) overwrites it
-    // back to the sheet's own verbatim "YAMOUSSOUKRO" the moment anyone re-uploads that file. This
-    // assertion reflects state right after a fresh seed (0); re-committing Warehouse Receiving
-    // flips it to 1 again without any code change here. resolveSite() is unaffected either way
-    // (WarehouseAlias covers both names) — only Warehouse.site itself flaps.
-    expect(by["store_site_not_canonical"]).toBeUndefined();
-    // All 367 ledger-4 rows arrive at Yakro by column-header inference only ("Gross Weight (Yakro)
-    // Recived" etc.), never a per-row cell — stays 367 until a sheet variant states it per row.
-    expect(by["transfer_destination_inferred"]?.affectedCount).toBe(367);
+    // back to the sheet's own verbatim "YAMOUSSOUKRO" the moment anyone re-uploads that file —
+    // observed directly this session: 0 right after a container restart (backfill ran last), 1
+    // once Warehouse Receiving is (re-)imported afterward (import ran last). Asserting the
+    // structural fact (never more than the single ANAGROCI-01 row) rather than picking one side of
+    // a flip this suite doesn't control the ordering of.
+    expect(by["store_site_not_canonical"]?.affectedCount ?? 0).toBeLessThanOrEqual(1);
+    // All 415 ledger-4 rows arrive at Yakro by column-header inference only ("Gross Weight (Yakro)
+    // Recived" etc.), never a per-row cell — stays at the full row count until a sheet variant
+    // states it per row.
+    expect(by["transfer_destination_inferred"]?.affectedCount).toBe(415);
     // Ledger 1 (warehouse-stock) is BOUAKE-only (all 298 rows) — Yakro has no ledger of its own, so
-    // all 367 TRANSFER_IN movements the new destinationWarehouse column surfaces are unreconcilable
+    // all 415 TRANSFER_IN movements the destinationWarehouse column surfaces are unreconcilable
     // against anything. Real and expected, not a regression: TRANSFER_IN wasn't attributed to any
     // warehouse before this column existed.
-    expect(by["transfer_in_has_no_ledger1_counterpart"]?.affectedCount).toBe(367);
+    expect(by["transfer_in_has_no_ledger1_counterpart"]?.affectedCount).toBe(415);
 
-    // The same physical batch is numbered differently at each site — e.g. fiche 72566 is Lot 17 at
-    // the unit warehouse and Lot 20 downstream. Measured per batch, joined on fiche; if this ever
-    // drops to 0 the client has unified their numbering, which is a real event worth noticing.
-    expect(by["lot_namespace_disagreement"]?.affectedCount).toBe(345);
+    // The same physical batch is numbered differently at each site — e.g. one fiche is Lot 20 at
+    // the unit warehouse and a different lot downstream. Measured per batch, joined on fiche; if
+    // this ever drops to 0 the client has unified their numbering, which is a real event worth
+    // noticing. Re-measured at 362 against the regenerated 986-receipt seed plus the real
+    // DISCHARGEMENT/Warehouse Receiving imports (was 345 against the old, smaller data).
+    expect(by["lot_namespace_disagreement"]?.affectedCount).toBe(362);
 
     // The import-fidelity guard: the workbook's balance never disagrees with its own arithmetic.
     expect(by["jute_balance_drift"]).toBeUndefined();
@@ -78,19 +86,23 @@ describe("data-quality audit", () => {
     expect(by["drying_batch_multi_lot"]?.affectedCount).toBe(22);
     // A THIRD, separate contamination: 41 rows hold a bin code in the lot column, not a lot at all.
     expect(by["drying_batch_lot_column_holds_bin_code"]?.affectedCount).toBe(41);
-    // The reconciliation the plan required before considering DryingBatch a DryingJob replacement:
-    // 33 of the 81 central DryingJob rows disagree with their matched DryingBatch row on date,
-    // status, and/or destination — NOT clean, so DryingJob stays the live source (see that check's
-    // own evidence text, and this suite's final report, for the full reasoning).
-    expect(by["drying_batch_vs_drying_job_drift"]?.affectedCount).toBe(33);
+    // RETIRED, deliberately: this check compares DryingJob against DryingBatch for the same fiche,
+    // but prisma/seed.ts no longer seeds DryingJob at all (DryingBatch is the sole replacement
+    // source — see dryingBatches.ts's header) and no importer writes to DryingJob any more either.
+    // With 0 DryingJob rows to compare, the check's own `if (!jobs.length...) return null` makes it
+    // permanently inert — kept as dead code with this comment (like jute_balance_drift's own
+    // retirement) rather than deleted, so the 33-of-81 finding that used to justify keeping
+    // DryingJob as the live source stays legible even though it can no longer fire.
+    expect(by["drying_batch_vs_drying_job_drift"]).toBeUndefined();
     // Issued to Production: its own "Fiche No" column is 109/125 dry-bin-code strings, not fiches —
     // verified directly, never joined on.
     expect(by["production_issue_fiche_column_contaminated"]?.affectedCount).toBe(109);
     // 18 distinct (Source Bin, DRY BIN) pairs observed — reported only, never normalised.
     expect(by["production_issue_source_dry_bin_pairs"]?.affectedCount).toBe(18);
-    // 9 of the 112 distinct BTMs in the sheet have no matching BtmIntake in the live production
-    // master (103 rows) — btmNo stays a soft reference; never auto-created.
-    expect(by["production_issue_btm_not_in_production_master"]?.affectedCount).toBe(9);
+    // 8 of the distinct BTMs in the sheet have no matching BtmIntake in the live production master
+    // (104 rows, seeded by prisma/seedProduction.ts) — btmNo stays a soft reference; never
+    // auto-created. Re-measured at 8 (was 9) against the current production seed.
+    expect(by["production_issue_btm_not_in_production_master"]?.affectedCount).toBe(8);
   });
 
   it("findings are aggregate, never one per row", async () => {

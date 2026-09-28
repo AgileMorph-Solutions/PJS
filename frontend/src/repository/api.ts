@@ -102,6 +102,8 @@ export const api = {
    * stores + aliases) — see backend/src/domain/site.ts. Omitted = every site, unfiltered. */
   dryingJobs: (warehouse?: string) => request<DryingJob[]>(withWarehouse("/drying-jobs", warehouse)),
   receiptLinks: (id: string) => request<ReceiptLinks>(`/receipts/${encodeURIComponent(id)}/links`),
+  listDownstreamStatus: (warehouse?: string) =>
+    request<DownstreamStatus[]>(withWarehouse("/receipts/downstream", warehouse)),
 
   /** Site-scoped read of one ledger's rows — used when a jute page's own site filter is active
    * (see WarehouseStockPage/WarehouseTransfersPage); the unfiltered TrackingApi.ledgerEntries stays
@@ -112,7 +114,9 @@ export const api = {
     request<LedgerRow[]>(withWarehouse(`/jute-ledgers/${encodeURIComponent(ledgerId)}/entries`, warehouse)),
 
   /** CHARGEMENT-derived unit dispatch lines (see backend/src/services/warehouseDispatches.ts) —
-   * read-only, powers pages/unit/DispatchPage.tsx. */
+   * read-only; currently unused by any page (dispatch status is surfaced via the Downstream
+   * column on Reception instead — see DownstreamStatusChips/receiptsDownstream.ts), kept for the
+   * same reason listDryingJobs is: a working endpoint, not dead code to strip preemptively. */
   listWarehouseDispatches: (warehouse?: string) =>
     request<WarehouseDispatchLine[]>(withWarehouse("/warehouse-dispatches", warehouse)),
 
@@ -327,6 +331,53 @@ export interface LinkedBtmIntake {
   binNo: string;
 }
 
+/** CHARGEMENT dispatch line matched on this receipt's own FICHE directly — every row here is a
+ * confirmed match (no `ficheAgrees`), unlike the Lot-joined arrays above. */
+export interface LinkedDispatch {
+  id: string;
+  chargeDate: string | null;
+  warehouseSite: string | null;
+  bin: string | null;
+  truckNo: string | null;
+  totalBags: number | null;
+}
+
+/** WarehouseDischarge row sharing this receipt's Lot Number — includes both the unit-warehouse row
+ * that assigned the Lot and, when one exists, the central "Warehouse Receiving" row for the same
+ * Lot at the other site. */
+export interface LinkedWarehouseReceiving {
+  id: string;
+  sn: number;
+  warehouseSite: string;
+  lotNo: string;
+  arrivalDate: string | null;
+  totalRecd: number | null;
+  ficheAgrees: boolean;
+}
+
+/** DryingBatch row sharing this receipt's Lot Number — the replacement drying source (see
+ * repository's DryingBatch type below); kept separate from `dryingJobs` since the two are known to
+ * disagree (drying_batch_vs_drying_job_drift). */
+export interface LinkedDryingBatchRow {
+  id: string;
+  sn: number;
+  dryingDate: string | null;
+  warehouseSite: string | null;
+  status: string | null;
+  destinationRaw: string | null;
+  ficheAgrees: boolean;
+}
+
+/** IssuedToProduction row reached via the same idTransfer -> BtmIntake.btmNo hop as `btmIntakes`. */
+export interface LinkedIssuedToProduction {
+  id: string;
+  btmNo: string;
+  date: string | null;
+  sourceBin: string | null;
+  dryBin: string | null;
+  binStatus: string | null;
+}
+
 export interface ReceiptLinks {
   /** The receipt's OWN Lot, assigned at its unit warehouse — now the join key. Null until a
    * discharge sheet covers it. */
@@ -337,12 +388,27 @@ export interface ReceiptLinks {
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
   btmIntakes: LinkedBtmIntake[];
+  dispatches: LinkedDispatch[];
+  warehouseReceiving: LinkedWarehouseReceiving[];
+  dryingBatches: LinkedDryingBatchRow[];
+  issuedToProduction: LinkedIssuedToProduction[];
+}
+
+/** Per-receipt downstream flags for Reception's status column (backend's
+ * services/receiptsDownstream.ts) — replaces the separate Dispatch to Central / Receiving from
+ * Unit / Issue to Production sidebar pages with one status chip per receipt. */
+export interface DownstreamStatus {
+  receiptId: string;
+  dispatched: boolean;
+  received: boolean;
+  dried: boolean;
+  issued: boolean;
 }
 
 /** One CHARGEMENT line (backend/prisma/schema.prisma's WarehouseDispatchLine) — one row per sheet
- * LINE, not per dispatch; group by vyogeNumber for a document-level view (see
- * pages/unit/DispatchPage.tsx). Numeric/date fields come back as strings on the wire like every
- * other stage field — never coerced client-side, per this repo's "never silently fix" rule. */
+ * LINE, not per dispatch; group by vyogeNumber for a document-level view. Numeric/date fields come
+ * back as strings on the wire like every other stage field — never coerced client-side, per this
+ * repo's "never silently fix" rule. */
 export interface WarehouseDispatchLine {
   id: string;
   sn: number | null;

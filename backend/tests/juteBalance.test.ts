@@ -35,13 +35,16 @@ describe("ledger 1 — warehouse stock", () => {
 });
 
 describe("ledger 4 — warehouse-to-warehouse transfers", () => {
-  it("imported all 367 rows", async () => {
-    expect((await transferFlagRows()).length).toBe(367);
+  it("imported all 415 rows", async () => {
+    // Re-measured after switching ledger 4's source to Bouake RCN Receiving at Factory
+    // Report.xlsx -> Bouake Stock Reciving (415 real rows) — a newer, larger snapshot of the
+    // same shape the old 367-row file had.
+    expect((await transferFlagRows()).length).toBe(415);
   });
 
-  it("flags the degenerate DIFF column on all 367 rows without dropping or regenerating it", async () => {
+  it("flags the degenerate DIFF column on all 415 rows without dropping or regenerating it", async () => {
     const rows = await transferFlagRows();
-    expect(rows.filter((r) => r.diff_is_degenerate).length).toBe(367);
+    expect(rows.filter((r) => r.diff_is_degenerate).length).toBe(415);
     // The real Difference column is a different thing and stays meaningful.
     expect(rows.filter((r) => r.difference_mismatch).length).toBe(0);
   });

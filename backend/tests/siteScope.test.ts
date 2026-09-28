@@ -6,15 +6,17 @@
  * the same class of bug as the store/site master pollution that motivated this whole migration).
  *
  * Counts below are measured against the real seeded + imported data, not predicted:
- * 986 receipts = 685 Bouaké + 301 Yakro (Bouaké's own store codes BKE-001/002/003, Yakro's aliases
- * ANAGROCI-01/YAMOUSSOUKRO); 81 drying jobs, all central (the only drying source imported so far
- * is Bouake-side-absent — see docs/UPLOAD_GUIDE.md).
+ * 986 receipts = 684 Bouaké + 302 Yakro (Bouaké's own store codes BKE-001/002/003, Yakro's aliases
+ * ANAGROCI-01/YAMOUSSOUKRO). DryingBatch (the DryingJob replacement — see dryingBatches.ts) is NOT
+ * a clean partition: of its 138 rows, 57 are Bouaké and 81 carry no warehouseSite value at all (a
+ * real gap in Drying Batch's own central-side rows, not fabricated to make the numbers add up) —
+ * so unlike receipts, atBouake + atYakro deliberately does NOT equal the unscoped total here.
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { resolveSite } from "../src/domain/site.js";
 import { listReceipts } from "../src/services/receipts.js";
-import { listDryingJobs } from "../src/services/drying.js";
+import { listDryingBatches } from "../src/services/dryingBatches.js";
 import { getReceiptLinks } from "../src/services/receiptLinks.js";
 
 const prisma = new PrismaClient();
@@ -43,22 +45,26 @@ describe("site scoping partitions the unscoped result", () => {
     const [all, atBouake, atYakro] = await Promise.all([
       listReceipts(), listReceipts(bouake), listReceipts(yakro),
     ]);
-    expect(atBouake.length).toBe(685);
-    expect(atYakro.length).toBe(301);
+    expect(atBouake.length).toBe(684);
+    expect(atYakro.length).toBe(302);
     expect(atBouake.length + atYakro.length).toBe(all.length);
     const yakroIds = new Set(atYakro.map((r) => r.id));
     const overlap = atBouake.filter((r) => yakroIds.has(r.id));
     expect(overlap.length).toBe(0);
   });
 
-  it("drying jobs: today's data is central-only, scoping to BOUAKE returns none", async () => {
+  it("drying batches: Bouaké resolves 57 rows, Yakro resolves none — 81 rows carry no site at all", async () => {
+    // DryingBatch replaces DryingJob as the site-scoped drying source (see dryingBatches.ts's
+    // header). Its warehouseSite column is genuinely blank on 81 of 138 rows — a real gap in the
+    // "Drying Batch" sheet's central-side rows — so this does NOT partition cleanly the way
+    // receipts do; the two site-scoped counts intentionally do not sum to the unscoped total.
     const [bouake, yakro] = await Promise.all([resolveSite("BOUAKE"), resolveSite("YAKRO FACTORY")]);
     const [all, atBouake, atYakro] = await Promise.all([
-      listDryingJobs(), listDryingJobs(bouake), listDryingJobs(yakro),
+      listDryingBatches(), listDryingBatches(bouake), listDryingBatches(yakro),
     ]);
-    expect(atBouake.length).toBe(0);
-    expect(atYakro.length).toBe(81);
-    expect(atYakro.length).toBe(all.length);
+    expect(all.length).toBe(138);
+    expect(atBouake.length).toBe(57);
+    expect(atYakro.length).toBe(0);
   });
 });
 

@@ -1,11 +1,11 @@
 /**
  * The header-fingerprint check every importer runs before accepting a match — on auto-detect AND
- * on manual override, always. This exists because of a real, found case: a workbook in
- * docs/Procurement/drive-download-.../BOUAKE RCN RECEIVING.xlsx has a sheet also named
- * "Bouake Stock Reciving" but with 32 columns instead of 34 — missing "DRY/UNDRY" and
- * "Transfer -Bouake ", so the same fixed column-index map would silently read every field past
- * column 14 from the wrong column. Sheet-name matching alone would accept it; this check is what
- * refuses it instead. See docs/UPLOAD_GUIDE.md for the full story.
+ * on manual override, always. This exists because of a real, found case in an early client
+ * workbook (since retired): a file had a sheet also named "Bouake Stock Reciving" but with 32
+ * columns instead of 34 — missing "DRY/UNDRY" and "Transfer -Bouake ", so the same fixed
+ * column-index map would silently read every field past column 14 from the wrong column.
+ * Sheet-name matching alone would accept it; this check is what refuses it instead — see
+ * tests/imports.test.ts's corruption-regression block, which reproduces this shape synthetically.
  */
 import type ExcelJS from "exceljs";
 import type { HeaderCheckResult, HeaderAnchor } from "./types.js";

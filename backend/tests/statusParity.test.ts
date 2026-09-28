@@ -6,6 +6,8 @@
  * either of which silently reclassifies real trucks. (Auto-creating n-stock whenever n-grn exists,
  * for instance, moves four seeded receipts from grn_completed to in_stock.)
  */
+import fs from "node:fs";
+import path from "node:path";
 import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { deriveStatus, computeDashboardCounts } from "@anagroci/contract/domain/receiptStatus";
@@ -14,10 +16,11 @@ import { RECEIPT_INCLUDE, assembleStageData, assembleBranches } from "../src/sta
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
-// Scopes every query below to the original 50-receipt demo seed — stageDataShadow is set only by
-// prisma/seed.ts, never by the interactive create-receipt path or the excel-importer's
-// commitReceipts(), so this stays exactly the golden cohort no matter how much real data is
-// imported later (see backend/tests/roundTrip.test.ts's beforeAll for the same reasoning).
+// Scopes every query below to the seeded cohort — stageDataShadow is set only by prisma/seed.ts,
+// never by the interactive create-receipt path or the excel-importer's commitReceipts(), so this
+// stays exactly the golden cohort no matter how much real data is imported later (see
+// backend/tests/roundTrip.test.ts's beforeAll for the same reasoning). It now covers the full
+// 986-row Truck Reception register, not a 50-row demo sample.
 const SEED_ONLY = { stageDataShadow: { not: null } } as const;
 
 describe("status parity with the pre-normalization data", () => {
@@ -35,7 +38,7 @@ describe("status parity with the pre-normalization data", () => {
     expect(drift).toEqual([]);
   });
 
-  it("the dashboard counts are unchanged, and match what doc §3 asks for", async () => {
+  it("the dashboard counts are unchanged (self-consistency only — see below for why the six\n     hardcoded figures this used to assert were removed)", async () => {
     const rows = await prisma.receipt.findMany({ where: SEED_ONLY, include: RECEIPT_INCLUDE });
     const after = computeDashboardCounts(
       rows.map((r) => ({ stageData: assembleStageData(r), branches: assembleBranches(r) }))
@@ -44,14 +47,17 @@ describe("status parity with the pre-normalization data", () => {
       rows.map((r) => ({ stageData: JSON.parse(r.stageDataShadow!), branches: assembleBranches(r) }))
     );
     expect(after).toEqual(before);
-    // The six figures doc §3 asks the dashboard to answer for any period.
-    expect(after).toEqual({
-      totalReceived: 50, acceptedUnloaded: 35, grnCompleted: 27,
-      pendingQa: 5, pendingUnload: 4, rejected: 6,
-    });
+    // The six hardcoded figures this test used to assert (totalReceived: 50, acceptedUnloaded: 35,
+    // grnCompleted: 27, pendingQa: 5, pendingUnload: 4, rejected: 6) were never a real measurement
+    // of any workbook — the original 50-receipt demo seed's status spread came from a
+    // random.seed(42) generator (tools/extract-seed.py's old TIERS/pick_tier), not real branch
+    // decisions. Asserting them here gave a false impression of doc §3 conformance. The
+    // self-consistency check above (after === before) is the real invariant this test protects —
+    // that a receipt's derived status is unaffected by normalization — and it needs no fixed
+    // baseline to stay meaningful.
   });
 
-  it("n-stock is never auto-created — that alone would move four receipts", async () => {
+  it("n-stock is never auto-created — real data confirms zero stock postings today", async () => {
     const withGrn = await prisma.stageEntry.findMany({
       where: { stageId: "n-grn", receipt: SEED_ONLY }, select: { receiptId: true },
     });
@@ -60,8 +66,70 @@ describe("status parity with the pre-normalization data", () => {
         where: { stageId: "n-stock", receipt: SEED_ONLY }, select: { receiptId: true },
       })).map((e) => e.receiptId)
     );
-    // Four receipts have a GRN but no stock posting. They must stay grn_completed.
+    // The new Truck Reception importer (truckReception.ts / tools/extract-seed.py's
+    // build_stage_data) never produces an n-stock stage at all — Lot/Bin/Drying/Transfer stages
+    // are only ever written by their own dedicated importers (DISCHARGEMENT, Drying Batch, etc.),
+    // never inferred from a GRN. So every one of the 935 seeded receipts with a GRN stage stays
+    // capped at grn_completed; withStock is always empty until a later stage is imported for one.
+    expect(withStock.size).toBe(0);
     const grnOnly = withGrn.filter((e) => !withStock.has(e.receiptId));
-    expect(grnOnly.length).toBe(4);
+    expect(grnOnly.length).toBe(935);
+  });
+
+  it("cross-checks derived status against the real pre-migration live-DB snapshot, matched by " +
+     "content (vehicleNo/arrivalDate/supplierName), not by id", async () => {
+    // tests/fixtures/pre-migration-status-oracle.json was captured from the live dev DB's 986
+    // receipts BEFORE this seed was regenerated from the new sheets — at that point, many receipts
+    // had accumulated real interactive progress (QFS decisions, unloading, GRN entry, drying,
+    // transfers) through actual day-to-day use of the app, entered progressively as trucks moved
+    // through each physical step. The regenerated seed instead bulk-imports the client's completed
+    // Truck Reception workbook, which already has columns like PRICE/AMOUNT filled in retrospectively
+    // for nearly every real row — so a receipt that the oracle caught mid-workflow (still
+    // pending_qa, still awaiting unloading, etc.) now derives straight to grn_completed, its true
+    // final state per the finished spreadsheet. That is a real, expected consequence of moving from
+    // "a live app's in-progress state" to "a bulk import of a retrospectively-completed workbook" —
+    // not a normalization defect. What WOULD be a defect: a mismatch landing anywhere other than
+    // grn_completed (the ceiling truckReception.ts's importer can reach on its own, since it never
+    // writes Lot/Drying/Transfer stages or any branch decision).
+    const oracle = JSON.parse(
+      fs.readFileSync(path.join(import.meta.dirname, "fixtures/pre-migration-status-oracle.json"), "utf8")
+    ) as { vehicleNo: string; arrivalDate: string; supplierName: string; status: string }[];
+
+    const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
+    const key = (v: string, a: string, s: string) => `${v.trim()}|${a.trim()}|${s.trim()}`;
+
+    const dbByKey = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const k = key(r.vehicleNo ?? "", r.arrivalDate ?? "", r.supplierName ?? "");
+      (dbByKey.get(k) ?? dbByKey.set(k, []).get(k)!).push(r);
+    }
+    const oracleByKey = new Map<string, typeof oracle>();
+    for (const o of oracle) {
+      const k = key(o.vehicleNo, o.arrivalDate, o.supplierName);
+      (oracleByKey.get(k) ?? oracleByKey.set(k, []).get(k)!).push(o);
+    }
+
+    // Real truck data has occasional genuine duplicate (vehicle, date, supplier) triples — same
+    // truck, same supplier, more than one load the same day. Only compare where the key is unique
+    // on BOTH sides, so a comparison is never scrambled by picking the wrong one of several
+    // same-key candidates.
+    let compared = 0, matched = 0;
+    const unexpectedMismatches: string[] = [];
+    for (const [k, oEntries] of oracleByKey) {
+      if (oEntries.length !== 1) continue;
+      const dEntries = dbByKey.get(k);
+      if (!dEntries || dEntries.length !== 1) continue;
+      compared++;
+      const r = dEntries[0];
+      const now = deriveStatus({ stageData: assembleStageData(r), branches: assembleBranches(r) });
+      if (now === oEntries[0].status) { matched++; continue; }
+      if (now !== "grn_completed") unexpectedMismatches.push(`${k}: oracle=${oEntries[0].status} now=${now}`);
+    }
+
+    expect(compared).toBeGreaterThan(900); // the join itself must still work at scale
+    expect(unexpectedMismatches).toEqual([]);
+    // Measured directly against the live snapshot: 931 of 976 uniquely-matched receipts derive the
+    // exact same status; the other 45 all move forward to grn_completed for the reason above.
+    expect(matched).toBe(931);
   });
 });

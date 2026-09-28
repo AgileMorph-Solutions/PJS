@@ -1,5 +1,3 @@
-import type { SiteSlug } from "./sites";
-
 export interface NavLeaf {
   label: string;
   /** Literal path — used for leaves that don't depend on which site is active. Exactly one of
@@ -9,9 +7,6 @@ export interface NavLeaf {
    * `/unit/receipts` or `/central/receipts`) — see `AppNav.tsx` and `state/SiteContext.tsx`'s
    * `useActiveSite()`. Lets one nav leaf serve both sections instead of listing each one twice. */
   sitePath?: string;
-  /** Only rendered while this site is the active one (e.g. "Dispatch to Central" only makes sense
-   * at "unit") — so there's never a leaf you can click and get turned away from. */
-  onlyForSite?: SiteSlug;
   /** Material Symbols Outlined icon name (e.g. "dashboard"). */
   icon: string;
   /** Match this route exactly, not by prefix — only the root "/" needs this. */
@@ -34,18 +29,16 @@ export const NAV: NavSection[] = [
   {
     // One section for both sites — which warehouse a `sitePath` leaf actually points at is
     // resolved per-render against the currently active site (see AppNav.tsx), switched from a
-    // control on the page itself (components/SiteSwitcher.tsx), not by picking a different section
-    // here. `onlyForSite` leaves (real at exactly one site) appear only while that site is active.
+    // control on the page itself (components/SiteSwitcher.tsx). Deliberately just these three
+    // leaves — Dispatch to Central, Receiving from Unit and Issue to Production used to be
+    // separate pages here; their data is now viewable from Reception instead (a status column
+    // plus upload panels for each of those workbooks — see ReceiptsListPage.tsx) so they no
+    // longer need their own sidebar entries.
     label: "Warehouse",
     items: [
-      { label: "Truck Reception", sitePath: "receipts", icon: "receipt_long" },
+      { label: "Reception", sitePath: "receipts", icon: "receipt_long" },
       { label: "Lots & Bins", sitePath: "stock", icon: "grid_view" },
       { label: "Drying", sitePath: "drying", icon: "wb_sunny" },
-      { label: "Dispatch to Central", to: "/unit/dispatch", onlyForSite: "unit", icon: "local_shipping" },
-      // Deliberately points at ledger 4 (Warehouse Transfers, already real, already
-      // ?warehouse=-scopeable) rather than a new page — see App.tsx's routing comment.
-      { label: "Receiving from Unit", to: "/jute/transfers?warehouse=YAKRO+FACTORY", onlyForSite: "central", icon: "call_received" },
-      { label: "Issue to Production", to: "/central/issue-to-production", onlyForSite: "central", icon: "sync_alt" },
     ],
   },
   {

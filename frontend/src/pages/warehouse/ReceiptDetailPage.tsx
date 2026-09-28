@@ -72,7 +72,7 @@ export function ReceiptDetailPage() {
     <div className="space-y-5">
       <div className="flex items-center gap-2 text-[13px] text-warmstone-500">
         <Link to={backHref} className="hover:text-warmstone-900 font-medium transition-colors">
-          Truck Reception · {site.sublabel}
+          Reception · {site.sublabel}
         </Link>
         <span className="material-symbols-outlined text-[14px] text-warmstone-300">chevron_right</span>
         <span className="font-bold text-warmstone-900 bg-warmstone-100 px-2.5 py-0.5 rounded-md border border-warmstone-200">
@@ -368,15 +368,19 @@ function LinkedRecordsCard({
     >
       {loading || !links ? (
         <p className="text-[12.5px] text-warmstone-400 animate-pulse">Checking linked records…</p>
-      ) : !links.lotNo ? (
+      ) : !links.lotNo && links.dispatches.length === 0 ? (
         <p className="text-[12.5px] text-warmstone-500">
           No Lot Number recorded on this receipt yet (assigned at the unit-warehouse discharge stage)
-          — nothing to cross-reference until it's captured.
+          and no dispatch line matches this receipt's FICHE either — nothing to cross-reference yet.
         </p>
-      ) : links.dryingJobs.length === 0 && links.transfers.length === 0 ? (
+      ) : !links.lotNo ? (
+        <DispatchesSection dispatches={links.dispatches} />
+      ) : links.dryingJobs.length === 0 && links.transfers.length === 0 && links.dispatches.length === 0
+          && links.warehouseReceiving.length === 0 && links.dryingBatches.length === 0
+          && links.btmIntakes.length === 0 ? (
         <p className="text-[12.5px] text-warmstone-500">
-          Lot {links.lotNo} is recorded, but no drying job or warehouse transfer shares that Lot
-          Number yet — this batch likely hasn't moved past this stage.
+          Lot {links.lotNo} is recorded, but nothing downstream shares that Lot Number or this
+          receipt's FICHE yet — this batch likely hasn't moved past this stage.
         </p>
       ) : (
         <div className="space-y-3.5">
@@ -396,6 +400,7 @@ function LinkedRecordsCard({
               </span>
             </div>
           )}
+          <DispatchesSection dispatches={links.dispatches} />
           <div className="space-y-1">
             <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
               Bin observed elsewhere, matched on Lot {links.lotNo}
@@ -476,8 +481,134 @@ function LinkedRecordsCard({
               </ul>
             </div>
           )}
+
+          {links.warehouseReceiving.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
+                  Warehouse receiving (same Lot, either site)
+                </p>
+                <Link to={`/${siteSlug}/stock`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-1.5">
+                {links.warehouseReceiving.map((w) => (
+                  <li
+                    key={w.id}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+                  >
+                    <span>
+                      SN {w.sn} · {w.warehouseSite}
+                      <span
+                        className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          w.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                        }`}
+                      >
+                        {w.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed"}
+                      </span>
+                    </span>
+                    <span className="text-warmstone-400">{w.arrivalDate || "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {links.dryingBatches.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
+                  Drying batches (same Lot)
+                </p>
+                <Link to={`/${siteSlug}/drying`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
+                  View all
+                </Link>
+              </div>
+              <ul className="space-y-1.5">
+                {links.dryingBatches.map((b) => (
+                  <li
+                    key={b.id}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+                  >
+                    <span>
+                      SN {b.sn} · {b.status || "—"}
+                      <span
+                        className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          b.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                        }`}
+                      >
+                        {b.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed"}
+                      </span>
+                    </span>
+                    <span className="text-warmstone-400">{b.dryingDate || "—"}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {links.btmIntakes.length > 0 && (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400 mb-1.5">
+                Production (via linked transfer's BTM)
+              </p>
+              <ul className="space-y-1.5">
+                {links.btmIntakes.map((b) => (
+                  <li
+                    key={b.btmNo}
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+                  >
+                    <span>BTM {b.btmNo}</span>
+                    <Link to={`/production/btm/${encodeURIComponent(b.btmNo)}`} className="text-brand-700 font-semibold hover:text-brand-800">
+                      Bin {b.binNo || "—"}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              {links.issuedToProduction.length > 0 && (
+                <ul className="space-y-1.5 mt-1.5">
+                  {links.issuedToProduction.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+                    >
+                      <span>Issued to production · {p.sourceBin || "—"} → {p.dryBin || "—"}</span>
+                      <span className="text-warmstone-400">{p.date || "—"}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
     </CollapsibleCard>
+  );
+}
+
+/** CHARGEMENT dispatch lines matched on this receipt's own FICHE directly — no Lot Number
+ * required (WarehouseDispatchLine has no Lot column at all), so this can render even when
+ * `links.lotNo` is null. Every row here is a confirmed match (no coincidental-collision caveat),
+ * unlike the Lot-joined sections above. */
+function DispatchesSection({ dispatches }: { dispatches: import("../../repository/api").LinkedDispatch[] }) {
+  if (dispatches.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400 mb-1.5">
+        Dispatches (CHARGEMENT, matched on this receipt's FICHE)
+      </p>
+      <ul className="space-y-1.5">
+        {dispatches.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
+          >
+            <span>{d.warehouseSite || "—"} · Bin {d.bin || "—"} · truck {d.truckNo || "—"}</span>
+            <span className="text-warmstone-400">{d.chargeDate || "—"}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

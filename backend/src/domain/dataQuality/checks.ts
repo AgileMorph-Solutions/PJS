@@ -140,7 +140,8 @@ export const CHECKS: Check[] = [
         entity: "JuteWarehouseMovement", affectedCount: rows.length,
         sampleIds: rows.slice(0, 5).map((r) => `seq ${r.seq}`),
         evidence:
-          "The running balance in BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx turns negative and " +
+          "The running balance computed from Jute Bags movement (the source sheet itself carries no " +
+          "BALANCE column any more — see jute_balance_drift's own retirement note) turns negative and " +
           "reaches −11,027 by the last row. The arithmetic is internally consistent, so this is not a " +
           "formula bug — it means issues exceed recorded receipts, i.e. bag receipts are being " +
           "under-recorded. Preserved verbatim; a real question for the client.",
@@ -712,6 +713,13 @@ export const CHECKS: Check[] = [
     // result is NOT clean — see this finding's evidence — so DryingJob stays the live source for
     // receiptLinks.ts and the drying page this pass; this check is the standing, re-runnable proof
     // of that decision rather than a one-off note in a comment.
+    // DELIBERATELY RETIRED (see jute_balance_drift's own retirement note for the same pattern):
+    // prisma/seed.ts no longer seeds DryingJob at all, and no importer writes to it any more either
+    // — DryingBatch is the sole replacement source (dryingBatches.ts). The `if (!jobs.length...)
+    // return null` guard below makes this permanently inert now, not because the reconciliation
+    // passed, but because there is nothing left on the DryingJob side to compare. Kept as live code
+    // (not deleted) so the 33-of-81-rows-disagree finding that justified keeping DryingJob as the
+    // read path for as long as it was the read path stays legible.
     id: "drying_batch_vs_drying_job_drift",
     async run({ prisma }) {
       const [jobs, batches] = await Promise.all([

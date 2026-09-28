@@ -134,7 +134,7 @@ function parse(workbook: ExcelJS.Workbook): ParsedRow<JuteWarehouseTransferRow>[
 export const juteWarehouseTransferImporter: ImporterDef<JuteWarehouseTransferRow> = {
   id: "juteWarehouseTransfer",
   label: "Jute warehouse-to-warehouse transfers",
-  exampleFilename: "BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx",
+  exampleFilename: "Bouake RCN Receiving at Factory Report.xlsx",
   expectedSheet: SHEET,
   headerRow: HEADER_ROW,
   expectedHeader: HEADER,

@@ -15,6 +15,7 @@ import {
   listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities,
 } from "../services/receipts.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
+import { getDownstreamStatus } from "../services/receiptsDownstream.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
 import { resolveSite } from "../domain/site.js";
 
@@ -42,6 +43,17 @@ export async function receiptRoutes(app: FastifyInstance) {
   app.get("/api/receipts", async (req) => {
     const { warehouse } = req.query as { warehouse?: string };
     return listReceipts(warehouse ? await resolveSite(warehouse) : undefined);
+  });
+
+  /**
+   * Per-receipt dispatched/received/dried/issued flags for Reception's status column — the reason
+   * Dispatch to Central, Receiving from Unit and Issue to Production no longer need their own
+   * sidebar pages (see services/receiptsDownstream.ts's header).
+   */
+  app.get("/api/receipts/downstream", async (req) => {
+    const { warehouse } = req.query as { warehouse?: string };
+    const status = await getDownstreamStatus(warehouse ? await resolveSite(warehouse) : undefined);
+    return [...status.values()];
   });
 
   app.get("/api/receipts/:id", async (req, reply) => {

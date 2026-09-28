@@ -1,7 +1,7 @@
 [
   {
     "code": "DIS-001-SCO",
-    "name": "RCN SCOOPADA SCOOPS"
+    "name": "RCN SCOOPPADA SCOOPS"
   },
   {
     "code": "DIS-002-COR",
@@ -9,7 +9,7 @@
   },
   {
     "code": "DIS-003-DEM",
-    "name": "RCN SCOOPS DEMBOL"
+    "name": "RCN SCOOPS DDEMBOL"
   },
   {
     "code": "DIS-004-ANA",
@@ -73,7 +73,7 @@
   },
   {
     "code": "DIS-019-DEC",
-    "name": "RCN DECARRE DAVID &DJOUMAN"
+    "name": "RCN DECARRE DAVID & DJOUMAN"
   },
   {
     "code": "DIS-020-SOU",
@@ -157,7 +157,7 @@
   },
   {
     "code": "DIS-040-SOL",
-    "name": "RCN SOLANDA-CI"
+    "name": "RCN SOLANDA CI"
   },
   {
     "code": "DIS-041-BRO",
@@ -200,6 +200,18 @@
     "name": "RCN SCAAB"
   },
   {
+    "code": "LBA -001-SOC",
+    "name": "RCN SCOOP -SOCOSIDJI"
+  },
+  {
+    "code": "LBA -005-JAV",
+    "name": "RCN COPJAVA SCOOP"
+  },
+  {
+    "code": "LBA--003-HER",
+    "name": "RCN SCOOP HERE B"
+  },
+  {
     "code": "LBA-001-SOC",
     "name": "RCN SCOOPS-SOCOSIDJI"
   },
@@ -213,7 +225,7 @@
   },
   {
     "code": "LBA-004-WEB",
-    "name": "RCN SCOOPS WEBE"
+    "name": "RCN SCOOP WEBE"
   },
   {
     "code": "LBA-005-JAV",
@@ -233,15 +245,15 @@
   },
   {
     "code": "LBA-009-SCO",
-    "name": "RCN SCOPPAS SCOOPS"
+    "name": "RCN SCOPPAS  SCOOPS"
   },
   {
     "code": "LBA-010-CAP",
-    "name": "RCN CAPCD-SCOOPS"
+    "name": "RCN CAPCD- SCOOPS"
   },
   {
     "code": "LBA-011-ASR",
-    "name": "RCN SCOOP ASER"
+    "name": "RCN SCOOPS ASER"
   },
   {
     "code": "LBA-012-CPE",
@@ -261,7 +273,7 @@
   },
   {
     "code": "LBA-015-OUM",
-    "name": "RCN SCOOPS-OUMI/KONE SIDY"
+    "name": "RCN SCOOP OUMI/KONE SIDY"
   },
   {
     "code": "LBA-016-NOU",
@@ -294,5 +306,9 @@
   {
     "code": "LBA-023-AGR",
     "name": "RCN AGRICAS IVOIRE"
+  },
+  {
+    "code": "LBS-008-COB",
+    "name": "RCN SCOOPS -CA/COBAN"
   }
 ]

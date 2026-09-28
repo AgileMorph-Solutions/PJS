@@ -265,7 +265,9 @@ export function useDryingJobs(warehouse?: string) {
 
 /**
  * CHARGEMENT-derived unit dispatch lines — its own hook for the same reason as useDryingJobs: a
- * brand-new table, never part of TrackingApi. See pages/unit/DispatchPage.tsx.
+ * brand-new table, never part of TrackingApi. Currently unused by any page — dispatch status
+ * shows via Reception's Downstream column instead (see DownstreamStatusChips) — kept as a working
+ * hook rather than deleted, same precedent as useDryingJobs.
  */
 export function useWarehouseDispatches(warehouse?: string) {
   const [lines, setLines] = useState<import("../repository/api").WarehouseDispatchLine[]>([]);
@@ -307,6 +309,26 @@ export function useDryingSortingReports(warehouse?: string) {
     void refetch().finally(() => setLoading(false));
   }, [refetch]);
   return { reports, loading, refetch };
+}
+
+/**
+ * Per-receipt dispatched/received/dried/issued flags for Reception's status column (backend's
+ * services/receiptsDownstream.ts) — replaces Dispatch to Central / Receiving from Unit / Issue to
+ * Production as separate sidebar pages. Returned as a Map for O(1) lookup per row in the list.
+ */
+export function useDownstreamStatus(warehouse?: string) {
+  const [status, setStatus] = useState<Map<string, import("../repository/api").DownstreamStatus>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => {
+    return api.listDownstreamStatus(warehouse)
+      .then((rows) => setStatus(new Map(rows.map((r) => [r.receiptId, r]))))
+      .catch(() => {});
+  }, [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { status, loading, refetch };
 }
 
 /**

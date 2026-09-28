@@ -11,7 +11,7 @@ interface Props {
   onClose: () => void;
 }
 
-/** A `sitePath` leaf ("Truck Reception", ...) resolves against whichever site is currently active
+/** A `sitePath` leaf ("Reception", ...) resolves against whichever site is currently active
  * (see state/SiteContext.tsx's useActiveSite) — one leaf, two possible hrefs, switched from a
  * control on the page itself rather than by picking a different sidebar section. */
 function resolveHref(item: NavLeaf, activeSite: SiteSlug): string {
@@ -19,10 +19,9 @@ function resolveHref(item: NavLeaf, activeSite: SiteSlug): string {
 }
 
 /** Mirrors react-router's default (non-`end`) NavLink matching, so "which section is the current
- * route in" agrees with which nav item actually lights up. Strips a query string first — "Receiving
- * from Unit" links to `/jute/transfers?warehouse=...`, and pathname never contains one. */
+ * route in" agrees with which nav item actually lights up. */
 function isItemActive(pathname: string, item: NavLeaf, activeSite: SiteSlug): boolean {
-  const to = resolveHref(item, activeSite).split("?")[0];
+  const to = resolveHref(item, activeSite);
   if (item.end) return pathname === to;
   return pathname === to || pathname.startsWith(`${to}/`);
 }
@@ -102,7 +101,7 @@ export function AppNav({ open, onClose }: Props) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
         {NAV.map((section) => {
-          const items = section.items.filter((item) => !item.onlyForSite || item.onlyForSite === activeSite.slug);
+          const items = section.items;
           if (!items.length) return null;
           const collapsible = items.length > 1;
           const isOpen = !collapsible || openSections.has(section.label);

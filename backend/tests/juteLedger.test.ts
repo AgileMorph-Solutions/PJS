@@ -7,8 +7,9 @@ import { addLedgerRow } from "../src/services/ledgers.js";
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
-// Real fixture — the exact 3 sample rows from frontend/src/data/juteBags.ts's "warehouse-stock"
-// ledger, read directly from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx with openpyxl.
+// Real fixture — the exact 3 sample rows from packages/contract/src/data/juteBags.ts's
+// "warehouse-stock" ledger, read directly from ANAGROCI DATA PROCUREMENT 2026.xlsx's
+// "Jute Bags movement" sheet with openpyxl.
 const REAL_WAREHOUSE_STOCK_ROWS: LedgerRow[] = [
   {
     "S N": "1",

@@ -121,7 +121,7 @@ export function DashboardPage() {
       <ChartCard
         icon="warehouse"
         title="Jute bag warehouse stock"
-        note="Running balance from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx, continued by anything entered in this app."
+        note="Running balance computed from Jute Bags movement, continued by anything entered in this app."
       >
         <div className="max-w-xs">
           <KpiTile label="Current balance (bags)" value={balance} to="/jute/warehouse-stock" tone={balance < 0 ? "gap" : "default"} />

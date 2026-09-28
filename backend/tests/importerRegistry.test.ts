@@ -11,9 +11,10 @@
  * the same file; that's the whole point of ImportPanel always pinning an explicit importerId
  * rather than relying on auto-detection for this file.
  *
- * The old (pre-migration) workbooks are asserted here as explicit NON-matches — proving their
- * retired shapes (OFFLOADINGS, FINAL DRY RCN-YAKRO-2026, JUTE BAGS ISSUED) are gone, not silently
- * still readable — until they're deleted from the repo entirely, at which point these cases go too.
+ * The old (pre-migration) workbooks (OFFLOADINGS, FINAL DRY RCN-YAKRO-2026, JUTE BAGS ISSUED) used
+ * to be asserted here as explicit NON-matches, proving their retired shapes were gone, not silently
+ * still readable — removed along with the files themselves once "new sheets" was confirmed to be
+ * the only referenced source (see docs/Procurement's own history for the deletion).
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -52,14 +53,6 @@ const CASES: { file: string; expected: ImporterId[] }[] = [
     file: "new sheets/ANAGROCI DATA PROCUREMENT 2026.xlsx",
     expected: ["truckReception", "juteBagsMovement", "dryingBatch", "suppliersMaster", "warehouseReceiving", "warehouseActivityLedger"],
   },
-  // Known non-matches: the real corruption case (32-col ledger-4 lookalike), plus the three
-  // pre-migration workbooks whose own shapes (OFFLOADINGS, FINAL DRY RCN-YAKRO-2026,
-  // JUTE BAGS ISSUED) have no importer any more. Kept here, not just deleted, so a future importer
-  // added carelessly can't silently start matching a shape it wasn't meant to.
-  { file: "drive-download-20260903T100404Z-1-001/BOUAKE RCN RECEIVING.xlsx", expected: [] },
-  { file: "drive-download-20260903T100404Z-1-001/Rcn Offloading Details 2026.xlsx", expected: [] },
-  { file: "Drying Report_Factory warehouse.xlsx", expected: ["issuedToProduction"] },
-  { file: "BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx", expected: [] },
 ];
 
 describe("importer registry — every real file matches exactly its expected shape(s)", () => {

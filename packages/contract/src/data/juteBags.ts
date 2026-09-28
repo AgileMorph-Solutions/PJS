@@ -1,19 +1,23 @@
 // AUTO-TRANSCRIBED from the Jute bag management panel in ../../../flow-xl-map/NewProcurement.html
-// Ledger 1's real columns/sample rows come from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx →
-// JUTE BAGS ISSUED (229 real rows), read directly with openpyxl — not fabricated.
-// Ledger 4's real columns/sample rows come from BOUAKE RCN RECEIVING at Yamoussoukro as on
-// 9.9.2026.xlsx → Bouake Stock Reciving (367 real rows), also read directly with openpyxl.
-// Ledgers 2 and 3 are still backed only by a hand-tallied, undated summary block on
-// SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx → JUte Bag Record — real numbers, but not
-// a row-per-event ledger yet, so their columns stay "new" (see each ledger's flag for the figures).
+// Ledger 1's real columns/sample rows come from ANAGROCI DATA PROCUREMENT 2026.xlsx →
+// Jute Bags movement (298 real rows), read directly with openpyxl — not fabricated. Replaces the
+// old JUTE BAGS ISSUED sheet; its own BALANCE column has no equivalent here (see the "Balance"
+// column's own comment below).
+// Ledger 4's real columns/sample rows come from Bouake RCN Receiving at Factory Report.xlsx →
+// Bouake Stock Reciving (415 real rows), also read directly with openpyxl — a newer, larger
+// snapshot of the same shape the old file had (proven identical by importerRegistry.test.ts).
+// Ledgers 2 and 3 were backed only by a hand-tallied, undated summary block on
+// SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx → JUte Bag Record — real numbers, but
+// never a row-per-event ledger, and that file has since been retired (no equivalent sheet exists
+// in any of the current source workbooks); their columns stay "new" (see each ledger's flag).
 import type { JuteLedger } from "../types/stage.js";
 
 export const juteLedgers: JuteLedger[] = [
   {
     id: "warehouse-stock",
     title: "Warehouse stock",
-    file: "BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx",
-    sheet: "JUTE BAGS ISSUED · 10 columns · 229 rows",
+    file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
+    sheet: "Jute Bags movement · 9 columns · 298 rows",
     flag:
       "ACTIVITIES TYPE mixes process categories and supplier names. The running Balance goes negative (down to −11,027) — real, not a display bug.",
     columns: [
@@ -77,9 +81,9 @@ export const juteLedgers: JuteLedger[] = [
   {
     id: "supplier-movement",
     title: "Supplier movement",
-    file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx",
+    file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx (retired)",
     sheet: "JUte Bag Record",
-    flag: "Not yet a dated per-supplier ledger — today's numbers exist only as a hand-tallied summary, with no dates or transaction IDs.",
+    flag: "Not yet a dated per-supplier ledger — today's numbers exist only as a hand-tallied summary, with no dates or transaction IDs. The source file itself has since been retired; no replacement sheet exists in the current workbooks.",
     columns: [
       // Traceability required by the Sept 2026 clarification (every bag movement should trace to
       // Warehouse -> Supplier/Department -> Activity -> Quantity -> Movement Type -> Responsible
@@ -101,9 +105,9 @@ export const juteLedgers: JuteLedger[] = [
   {
     id: "factory-production-tracking",
     title: "Factory/Production tracking",
-    file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx",
+    file: "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx (retired)",
     sheet: "JUte Bag Record",
-    flag: "Same caveat as Supplier Movement — today's numbers exist only in an undated hand-tally, not a row-per-event ledger.",
+    flag: "Same caveat as Supplier Movement — today's numbers exist only in an undated hand-tally, not a row-per-event ledger, and the source file has since been retired.",
     columns: [
       // Same traceability gap as Supplier Movement — see the comment there.
       { label: "Date", real: false , col: "movementDate"},
@@ -123,8 +127,8 @@ export const juteLedgers: JuteLedger[] = [
   {
     id: "warehouse-to-warehouse-movement",
     title: "Warehouse-to-warehouse movement",
-    file: "BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx",
-    sheet: "Bouake Stock Reciving · 367 real rows",
+    file: "Bouake RCN Receiving at Factory Report.xlsx",
+    sheet: "Bouake Stock Reciving · 415 real rows",
     description:
       "A transfer reduces the source warehouse's stock and increases the destination's, recorded as its own movement (e.g. Warehouse A → Warehouse B).",
     flag: "Diffrence in Bag at Receiving is always exactly −(Received Bags) — a broken formula column, not independent data.",

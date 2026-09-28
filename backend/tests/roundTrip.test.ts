@@ -43,7 +43,10 @@ describe("golden seed round-trip", () => {
   });
 
   it("has the seeded receipts", () => {
-    expect(rows.length).toBe(50);
+    // 986, not 50, since the seed was regenerated from the new sheets' full Truck Reception
+    // register — every receipt now comes from prisma/seed.ts, so the golden cohort grew to the
+    // entire table, not a 50-row demo sample.
+    expect(rows.length).toBe(986);
   });
 
   it("reassembles every receipt's stageData identically to the pre-normalization JSON", () => {
@@ -90,10 +93,12 @@ describe("golden seed round-trip", () => {
    * field. Without this a regression that filled Lot Numbers everywhere — or filled the wrong
    * field — would slip through the two relaxed assertions above silently.
    *
-   * 29 is measured, not chosen: of the 452 lots the DISCHARGEMENT import writes, 29 land on seeded
-   * receipts (17 that already had a blank n-lot row, 12 that gain the stage).
+   * 452 is measured, not chosen: since the seed was regenerated to cover the entire Truck
+   * Reception register (986 receipts, not a 50-row demo sample), every one of the DISCHARGEMENT
+   * import's 452 successful lot write-backs (see LotWriteBackResult.written) now lands on a
+   * seeded receipt — the golden cohort IS the full receipt table now.
    */
-  it("enrichment is confined to the measured set: 29 seeded receipts, Lot Number only", () => {
+  it("enrichment is confined to the measured set: 452 seeded receipts, Lot Number only", () => {
     const enriched: string[] = [];
     for (const row of rows) {
       const original = JSON.parse(row.stageDataShadow!) as Record<string, Record<string, string>>;
@@ -103,7 +108,7 @@ describe("golden seed round-trip", () => {
       expect(original["n-lot"]?.["Lot Number"] ?? "", `${row.id} overwrote a real lot`).toBe("");
       enriched.push(row.id);
     }
-    expect(enriched.length).toBe(29);
+    expect(enriched.length).toBe(452);
   });
 });
 

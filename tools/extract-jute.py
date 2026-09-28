@@ -3,10 +3,15 @@
 Extract the two jute ledgers that have real row-level source data, straight from the client's
 workbooks with openpyxl — same approach as extract-seed.py, nothing fabricated.
 
-  Ledger 1 (warehouse-stock)                  BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx
-                                              -> 'JUTE BAGS ISSUED', header row 2, 298 data rows
-  Ledger 4 (warehouse-to-warehouse-movement)  BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx
-                                              -> 'Bouake Stock Reciving', header row 6, 367 data rows
+  Ledger 1 (warehouse-stock)                  ANAGROCI DATA PROCUREMENT 2026.xlsx
+                                              -> 'Jute Bags movement', header row 1, 298 data rows
+  Ledger 4 (warehouse-to-warehouse-movement)  Bouake RCN Receiving at Factory Report.xlsx
+                                              -> 'Bouake Stock Reciving', header row 6, 415 data rows
+
+  Ledger 1's old BALANCE column (10th) has no equivalent in "Jute Bags movement" at all —
+  reportedBalance is None for every row now. See negativeBalanceRows() (backend's domain/
+  juteBalance.ts) for why the real negative-balance finding still holds anyway: it reads the
+  computed running total, not this column.
 
 Ledgers 2 and 3 are deliberately NOT extracted as rows: their only source is an undated hand tally
 with no transaction ids, so rows would have to be invented. Those figures come out as labelled
@@ -28,10 +33,10 @@ except ImportError:
     sys.exit("openpyxl is required:  pip install openpyxl")
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-XL = os.path.join(os.path.dirname(ROOT), "flow-xl-map", "Procurement")
+XL = os.path.join(ROOT, "docs", "Procurement", "new sheets")
 
-L1 = ("BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx", "JUTE BAGS ISSUED", 2)
-L4 = ("BOUAKE RCN RECEIVING at Yamoussoukro as on 9.9.2026.xlsx", "Bouake Stock Reciving", 6)
+L1 = ("ANAGROCI DATA PROCUREMENT 2026.xlsx", "Jute Bags movement", 1)
+L4 = ("Bouake RCN Receiving at Factory Report.xlsx", "Bouake Stock Reciving", 6)
 
 
 def num(v):
@@ -94,9 +99,9 @@ def extract_l1():
             "whLocation": text(v[4]) or "",
             "truckNumber": text(v[5]), "wrNo": text(v[6]),
             "bagsIssued": num(v[7]), "bagsReceived": num(v[8]),
-            # The workbook's own BALANCE. Stored, never written by the app; it genuinely goes
-            # negative and the running balance is recomputed by a SQL view for comparison.
-            "reportedBalance": num(v[9]),
+            # No 10th column in "Jute Bags movement" at all — explicitly None, never read past
+            # column 9. The real negative-balance finding is unaffected; see this file's header.
+            "reportedBalance": None,
         })
     return recs
 
@@ -158,7 +163,7 @@ TALLY = [
     ("factory-production-tracking", "Good Bag Balance", 3675),
     ("factory-production-tracking", "Balance Bag (Damaged Bag)", 18444),
 ]
-TALLY_SOURCE = "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx"
+TALLY_SOURCE = "SUPPLIER OFFLOADING - Factory warehouse 9.9.2026.xlsx (retired; transcribed before removal, see docs/UPLOAD_GUIDE.md)"
 TALLY_SHEET = "JUte Bag Record (undated hand tally)"
 
 
@@ -181,12 +186,13 @@ def main():
         json.dump(payload, f, ensure_ascii=False, indent=1)
 
     # Report what came out, including the known defects, so a silent change is obvious.
+    # reportedBalance is always None now (see extract_l1()) — drift can no longer be measured
+    # against it (nothing to compare), and "negative" is measured against the computed running
+    # total instead, which is what negativeBalanceRows() also does server-side.
     run, drift, neg = 0, 0, 0
     for r in l1:
         run += (r["bagsReceived"] or 0) - (r["bagsIssued"] or 0)
-        if r["reportedBalance"] is not None and r["reportedBalance"] != run:
-            drift += 1
-        if (r["reportedBalance"] or 0) < 0:
+        if run < 0:
             neg += 1
     degen = sum(1 for r in l4 if r["reportedDiff"] is not None and r["bagsReceived"] is not None
                 and r["reportedDiff"] == -r["bagsReceived"])

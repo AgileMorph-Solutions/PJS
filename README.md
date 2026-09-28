@@ -33,31 +33,36 @@ instead; the vehicle/truck is kept only as provenance on the record.
     (`frontend/src/config/sites.ts`, `frontend/src/state/SiteContext.tsx`), not two duplicated page
     trees — a page reads `useSite()` for which warehouse to scope its API calls to, never a
     hardcoded name:
-    - **Unit / Regional Warehouse — Bouaké** (`/unit/*`): Truck Reception, Lots & Bins, Drying,
-      Dispatch to Central (`WarehouseDispatchLine`, the CHARGEMENT sheet — 544 lines, one row per
-      line, grouped by voyage number).
-    - **Central Warehouse — Yakro Factory** (`/central/*`): Truck Reception, Receiving from Unit
-      (a scoped deep link into Warehouse Transfers — ledger 4 genuinely spans both sites per row, so
-      it isn't forked into the site tree), Lots & Bins, Drying, Issue to Production (the BTM-spine
-      `issued-to-production` table, viewed per BTM).
-    - Within each: RCN Receipts is the register (search, filter by status, filter by store — Bouaké
+    - **Unit / Regional Warehouse — Bouaké** (`/unit/*`) and **Central Warehouse — Yakro Factory**
+      (`/central/*`) each expose exactly **Reception, Lots & Bins, Drying** — three sidebar entries,
+      not six. Dispatch to Central (`WarehouseDispatchLine`/CHARGEMENT), Receiving from Unit
+      (`WarehouseDischarge`/Warehouse Receiving) and Issue to Production (`IssuedToProduction`) used
+      to be their own standalone pages; that data is now surfaced from Reception instead — a
+      per-receipt "Downstream" status column (dispatched/received/dried/issued, computed by
+      `backend/src/services/receiptsDownstream.ts`), full linked rows on that receipt's own detail
+      page (`backend/src/services/receiptLinks.ts`), and an "Import ..." card per workbook shape
+      that belongs on Reception (see `docs/UPLOAD_GUIDE.md`'s mapping table).
+    - Within each: Reception is the register (search, filter by status, filter by store — Bouaké
       has 3 real physical stores under one site, Yakro Factory has one, so the store filter is real
       for one section and absent for the other, not a placebo control); Receipt detail is the
       canonical record — **one page, not forked per site** — all 16 stages as collapsible sections
       editable **in any order**, decision controls for QFS/Drying/Transfer, an activity timeline, and
       a "Linked records" card that can legitimately show a DIFFERENT Lot Number for the same physical
-      batch at the other site (that's the point of tracking Lot per-warehouse, not a bug); Lots &
+      batch at the other site (that's the point of tracking Lot per-warehouse, not a bug), plus the
+      dispatch/warehouse-receiving/drying-batch/production rows reached via FICHE or Lot; Lots &
       Bins and Drying are filtered views scoped to that site.
     - Old `/procurement/*` URLs redirect into the right site (a receipt's own `warehouse` field where
       one exists, the larger/Bouaké section otherwise) — see `frontend/src/pages/LegacyRedirects.tsx`.
   - **Jute Management** — the four ledgers as their own pages, top-level (not site-forked, for the
     same ledger-4-spans-both-sites reason above; Warehouse Stock and Warehouse Transfers each carry
-    their own in-page site filter instead). Warehouse Stock is backed by real data from `BOUAKE
-    WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx` — all 298 rows, with the running balance computed
-    server-side by a SQL window function so it has no stored column to drift. Warehouse-to-warehouse
-    is backed by its own 367 real rows (now with a real `destinationWarehouse`, header-inferred —
-    see `transfer_destination_inferred`); the other two have no row-level source in the client's
-    workbooks yet and are flagged as such rather than filled with invented rows.
+    their own in-page site filter instead). Warehouse Stock is backed by real data from
+    `ANAGROCI DATA PROCUREMENT 2026.xlsx`'s "Jute Bags movement" sheet — 298 rows; that export
+    carries no BALANCE column at all, so the running balance is entirely computed server-side by a
+    SQL window function (never read from a stored column, so nothing to drift). Warehouse-to-
+    warehouse is backed by 415 real rows from "Bouake RCN Receiving at Factory Report.xlsx" (now
+    with a real `destinationWarehouse`, header-inferred — see `transfer_destination_inferred`); the
+    other two have no row-level source in the client's workbooks yet and are flagged as such rather
+    than filled with invented rows.
   - **Production** (`/production`) — explicit placeholder: not built, phases/workbooks listed so the
     module list stays honest about what's coming rather than hiding it.
   - **Masters** — Suppliers, Warehouses, Bins, seeded from the real LBA codes and warehouse/bin
@@ -114,13 +119,23 @@ npm run gen:check            # fails if the generated stage map is stale
 
 ## Seed data
 
-`frontend/src/data/seed/` is committed, generated from real client workbooks — not fabricated:
+`frontend/src/data/seed/` is committed, generated by `tools/extract-seed.py` and
+`tools/extract-jute.py` from the real workbooks under `docs/Procurement/new sheets/` — not
+fabricated, and not a demo sample:
 
-- 50 real RCN receipt rows sampled from `Rcn Offloading Details 2026.xlsx` (987 total rows available),
-  spread across every status so the register and dashboard show a realistic mix on first load.
-- 75 real suppliers (LBA codes), warehouses (Bouaké BKE-001/002/003, Yakro Factory), and origins.
-- Real drying-job history from `Drying_Report_Factory_warehouse.xlsx`.
-- Jute Bag warehouse-stock ledger seeded from `BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx`.
+- All 986 real RCN receipt rows from `ANAGROCI DATA PROCUREMENT 2026.xlsx`'s "Truck Reception"
+  sheet — every stage a receipt gets is one its own row actually supports (see
+  `docs/UPLOAD_GUIDE.md`'s "per-stage presence rule"); no branch/decision is ever fabricated, so the
+  seed alone never shows a "rejected" or "in drying" receipt — those only appear once a real
+  decision or a later import (Lot assignment, Drying Batch, …) adds them.
+- 78 real suppliers (from the sheet's own dedicated "Suppliers" tab, unioned with any code only
+  ever seen on a receipt row), warehouses (Bouaké BKE-001/002/003, Yakro Factory), and origins.
+- Jute Bag warehouse-stock ledger (298 rows) and warehouse-to-warehouse transfers (415 rows) from
+  the same consolidated workbook's "Jute Bags movement" sheet and "Bouake RCN Receiving at Factory
+  Report.xlsx" respectively — see `docs/UPLOAD_GUIDE.md`'s mapping table for the rest.
+- `DryingJob` is deliberately NOT seeded any more — `DryingBatch` (from the "Drying Batch" sheet,
+  imported separately through the UI) is its replacement source; see
+  `backend/src/services/dryingBatches.ts`'s header comment for why the two were never merged.
 
 Every receipt record carries `source: "imported" | "entered"` so seeded history stays distinguishable
 from anything typed into the app.

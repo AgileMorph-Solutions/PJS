@@ -3,18 +3,29 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { DataTable } from "../../components/ui/DataTable";
-import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { ImportPanel } from "../../components/ImportPanel";
+import { ImportModal } from "../../components/ImportModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
-import { useTracking } from "../../state/TrackingContext";
+import { useTracking, useDownstreamStatus } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { siteSlugForSiteName } from "../../config/sites";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { stages } from "../../data/stages";
-import { RECEIPT_COLUMNS, fiche, storeCode } from "./columns";
+import { receiptColumns, fiche, storeCode } from "./columns";
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
+
+/** Every workbook shape Reception's Upload button offers — everything that lands on a receipt,
+ * its downstream dispatch/receiving/production status, or the jute ledgers (per request: jute
+ * uploads belong here too, not only on the Jute pages) — see docs/UPLOAD_GUIDE.md's mapping table. */
+const RECEPTION_IMPORTER_IDS = [
+  "truckReception",
+  "warehouseDispatches",
+  "juteWarehouseTransfer",
+  "issuedToProduction",
+  "warehouseActivityLedger",
+  "juteBagsMovement",
+];
 
 /** Site-scoped Receipts list — one component for both /unit/receipts and /central/receipts (see
  * SiteContext's useSite()). The section itself IS the warehouse filter now, so the old "All
@@ -25,9 +36,11 @@ export function ReceiptsListPage() {
   const { receipts, masters, createReceipt, refresh } = useTracking();
   const site = useSite();
   const switchSite = useSwitchSite();
+  const { status: downstreamStatus, refetch: refetchDownstream } = useDownstreamStatus(site.warehouseName);
   const [params, setParams] = useSearchParams();
   // Reads an initial ?q= from the global header search so a search there lands here pre-filled.
   const [q, setQ] = useState(() => params.get("q") ?? "");
+  const [uploadOpen, setUploadOpen] = useState(false);
   const navigate = useNavigate();
 
   const status = params.get("status") ?? "";
@@ -78,11 +91,19 @@ export function ReceiptsListPage() {
     <>
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
-        title="Truck Reception"
-        lede="Every RCN receipt at this site — open one to fill in or review its stages."
+        title="Reception"
+        lede="Every RCN receipt at this site — open one to fill in or review its stages. Dispatch,
+          receiving and production status for each receipt shows in the Downstream column below."
         actions={
           <div className="flex items-center gap-3">
             <SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />
+            <button
+              onClick={() => setUploadOpen(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
+            >
+              <span className="material-symbols-outlined text-[17px]">upload</span>
+              Upload
+            </button>
             <button
               onClick={handleNewReceipt}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
@@ -103,11 +124,16 @@ export function ReceiptsListPage() {
         <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={`/${site.slug}/receipts?status=rejected`} tone="gap" />
       </div>
 
-      <div className="mb-5">
-        <CollapsibleCard title="Import from workbook">
-          <ImportPanel importerId="truckReception" onCommitted={() => void refresh()} />
-        </CollapsibleCard>
-      </div>
+      {uploadOpen && (
+        <ImportModal
+          importerIds={RECEPTION_IMPORTER_IDS}
+          onClose={() => setUploadOpen(false)}
+          onCommitted={() => {
+            void refresh();
+            void refetchDownstream();
+          }}
+        />
+      )}
 
       <FilterBar>
         <input
@@ -137,7 +163,7 @@ export function ReceiptsListPage() {
       </FilterBar>
 
       <DataTable
-        columns={RECEIPT_COLUMNS[site.slug]}
+        columns={receiptColumns(site.slug, downstreamStatus)}
         rows={rows}
         keyFn={(r) => r.id}
         rowHref={(r) => `/${site.slug}/receipts/${r.id}`}

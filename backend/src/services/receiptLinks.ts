@@ -59,6 +59,56 @@ export interface LinkedBtmIntake {
   binNo: string;
 }
 
+/** CHARGEMENT dispatch lines — joined on this receipt's own FICHE directly (WarehouseDispatchLine
+ * has no Lot Number column at all to join on), so every row returned here is a real, confirmed
+ * match, not a coincidental Lot collision — no `ficheAgrees` flag needed. */
+export interface LinkedDispatch {
+  id: string;
+  chargeDate: string | null;
+  warehouseSite: string | null;
+  bin: string | null;
+  truckNo: string | null;
+  totalBags: number | null;
+}
+
+/** WarehouseDischarge rows sharing this receipt's Lot Number — the DISCHARGEMENT sheet's own row
+ * (the one that assigned the Lot in the first place) plus, when one exists, the central-site
+ * "Warehouse Receiving" row for the same Lot number (same table, `@@unique([warehouseSite, lotNo])`
+ * — at most one row per site). */
+export interface LinkedWarehouseReceiving {
+  id: string;
+  sn: number;
+  warehouseSite: string;
+  lotNo: string;
+  arrivalDate: string | null;
+  totalRecd: number | null;
+  ficheAgrees: boolean;
+}
+
+/** DryingBatch rows sharing this receipt's Lot Number — the replacement source for drying data
+ * (see dryingBatches.ts); kept alongside the legacy `dryingJobs` above rather than merged into it,
+ * since drying_batch_vs_drying_job_drift's own finding is exactly that the two disagree. */
+export interface LinkedDryingBatchRow {
+  id: string;
+  sn: number;
+  dryingDate: string | null;
+  warehouseSite: string | null;
+  status: string | null;
+  destinationRaw: string | null;
+  ficheAgrees: boolean;
+}
+
+/** IssuedToProduction rows reached via the same idTransfer -> BtmIntake.btmNo hop as `btmIntakes`
+ * above — a receipt's production record, one more join past the production bin it landed in. */
+export interface LinkedIssuedToProduction {
+  id: string;
+  btmNo: string;
+  date: string | null;
+  sourceBin: string | null;
+  dryBin: string | null;
+  binStatus: string | null;
+}
+
 export interface ReceiptLinks {
   /** The receipt's OWN Lot, as assigned at its unit warehouse — now the join key. Null for the
    * receipts no discharge sheet covers yet. */
@@ -70,6 +120,10 @@ export interface ReceiptLinks {
   dryingJobs: LinkedDryingJob[];
   transfers: LinkedTransfer[];
   btmIntakes: LinkedBtmIntake[];
+  dispatches: LinkedDispatch[];
+  warehouseReceiving: LinkedWarehouseReceiving[];
+  dryingBatches: LinkedDryingBatchRow[];
+  issuedToProduction: LinkedIssuedToProduction[];
 }
 
 /** DATE -> "YYYY-MM-DD"; falls back to the hand-typed original text when the source cell wasn't a
@@ -90,9 +144,28 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
   const fiche = verify?.fiche?.trim() || null;
   const lotNo = own?.lotNumber?.trim() || null;
   const lotWarehouse = own?.warehouseName?.trim() || null;
-  if (!lotNo) return { lotNo: null, lotWarehouse, fiche, dryingJobs: [], transfers: [], btmIntakes: [] };
 
-  const [dryingRows, transferRows] = await Promise.all([
+  // Fiche-joined, independent of whether a Lot has been assigned yet — a dispatch line can name
+  // this receipt's own truck/fiche before any unit-warehouse discharge has run at all.
+  const dispatches = fiche
+    ? (await prisma.warehouseDispatchLine.findMany({
+        where: { ficheCca: fiche },
+        select: { id: true, chargeDate: true, chargeDateRaw: true, warehouseSite: true, bin: true, truckNo: true, totalBags: true },
+        orderBy: { chargeDate: "asc" },
+      })).map((d) => ({
+        id: d.id, chargeDate: formatReceivedDate(d.chargeDate, d.chargeDateRaw),
+        warehouseSite: d.warehouseSite, bin: d.bin, truckNo: d.truckNo, totalBags: d.totalBags,
+      }))
+    : [];
+
+  if (!lotNo) {
+    return {
+      lotNo: null, lotWarehouse, fiche, dryingJobs: [], transfers: [], btmIntakes: [],
+      dispatches, warehouseReceiving: [], dryingBatches: [], issuedToProduction: [],
+    };
+  }
+
+  const [dryingRows, transferRows, warehouseReceivingRows, dryingBatchRows] = await Promise.all([
     prisma.dryingJob.findMany({
       where: { lotNo },
       select: { id: true, date: true, warehouse: true, bin: true, lotNo: true, status: true, dryType: true, destination: true, ficheNo: true },
@@ -106,14 +179,32 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       },
       orderBy: { sn: "asc" },
     }),
+    prisma.warehouseDischarge.findMany({
+      where: { lotNo },
+      select: { id: true, sn: true, warehouseSite: true, lotNo: true, arrivalDate: true, arrivalDateRaw: true, totalRecd: true, ficheCca: true },
+      orderBy: { warehouseSite: "asc" },
+    }),
+    prisma.dryingBatch.findMany({
+      where: { lotNo },
+      select: { id: true, sn: true, dryingDate: true, dryingDateRaw: true, warehouseSite: true, status: true, destinationRaw: true, ficheNoRaw: true },
+      orderBy: { sn: "asc" },
+    }),
   ]);
 
   // One more hop: idTransfer on a linked transfer is the production BTM number. Several transfers
   // can (rarely) share an idTransfer, so dedupe before the BtmIntake lookup.
   const btmNos = [...new Set(transferRows.map((r) => r.idTransfer?.trim()).filter((v): v is string => !!v))];
-  const btmIntakes = btmNos.length
-    ? await prisma.btmIntake.findMany({ where: { btmNo: { in: btmNos } }, select: { btmNo: true, binNo: true }, orderBy: { btmNo: "asc" } })
-    : [];
+  const [btmIntakes, issuedToProductionRows] = await Promise.all([
+    btmNos.length
+      ? prisma.btmIntake.findMany({ where: { btmNo: { in: btmNos } }, select: { btmNo: true, binNo: true }, orderBy: { btmNo: "asc" } })
+      : Promise.resolve([]),
+    btmNos.length
+      ? prisma.issuedToProduction.findMany({
+          where: { btmNo: { in: btmNos } },
+          select: { id: true, btmNo: true, date: true, sourceBin: true, dryBin: true, binStatus: true },
+        })
+      : Promise.resolve([]),
+  ]);
 
   // Only claim agreement when BOTH sides actually have a fiche — an absent fiche is unknown, not equal.
   const ficheAgrees = (theirs: string | null) =>
@@ -139,5 +230,19 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       ficheAgrees: ficheAgrees(r.noFiche),
     })),
     btmIntakes,
+    dispatches,
+    warehouseReceiving: warehouseReceivingRows.map((w) => ({
+      id: w.id, sn: w.sn, warehouseSite: w.warehouseSite, lotNo: w.lotNo,
+      arrivalDate: formatReceivedDate(w.arrivalDate, w.arrivalDateRaw), totalRecd: w.totalRecd,
+      ficheAgrees: ficheAgrees(w.ficheCca),
+    })),
+    dryingBatches: dryingBatchRows.map((b) => ({
+      id: b.id, sn: b.sn, dryingDate: formatReceivedDate(b.dryingDate, b.dryingDateRaw),
+      warehouseSite: b.warehouseSite, status: b.status, destinationRaw: b.destinationRaw,
+      ficheAgrees: ficheAgrees(b.ficheNoRaw),
+    })),
+    issuedToProduction: issuedToProductionRows.map((p) => ({
+      id: p.id, btmNo: p.btmNo ?? "", date: p.date, sourceBin: p.sourceBin, dryBin: p.dryBin, binStatus: p.binStatus,
+    })),
   };
 }

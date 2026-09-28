@@ -13,19 +13,22 @@ const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
 describe("receipt links (Lot Number cross-reference)", () => {
-  it("REC-2026-0025 (Lot 17 at BOUAKE) resolves to a DIFFERENT batch than the FICHE join would", async () => {
+  it("REC-2026-0025 (Lot 20 at BOUAKE) resolves to a DIFFERENT batch than the FICHE join would", async () => {
+    // Re-anchored after the seed was regenerated from the new sheets (receipt ids are reassigned
+    // across all 986 rows on every reseed) — this receipt still demonstrates the exact same
+    // failure mode the header comment documents: a Lot-matched transfer whose own FICHE disagrees.
     const links = await getReceiptLinks("REC-2026-0025");
-    expect(links.lotNo).toBe("17");
+    expect(links.lotNo).toBe("20");
     expect(links.lotWarehouse).toBe("BOUAKE");
-    expect(links.fiche).toBe("72566");
+    expect(links.fiche).toBe("72520");
 
-    // Lot-matching finds transfer SN 13 (also Lot 17) — but its FICHE is 72563, not this receipt's
-    // 72566, proving it's a different truck that merely shares the Lot number. This is exactly the
-    // failure mode the header comment documents, not a bug in the test.
+    // Lot-matching finds transfer SN 27 (also Lot 20) — but its FICHE disagrees with this receipt's
+    // 72520, proving it's a different truck that merely shares the Lot number.
     expect(links.transfers).toHaveLength(1);
-    expect(links.transfers[0]).toMatchObject({ sn: 13, lotNo: "17", binNo: "BIN-03C", ficheAgrees: false });
+    expect(links.transfers[0]).toMatchObject({ sn: 27, lotNo: "20", binNo: "BIN-03C", ficheAgrees: false });
 
-    // No drying job in the real data carries Lot 17 at all.
+    // No drying job exists in the DB at all any more — DryingBatch is the replacement source for
+    // drying data (see services/dryingBatches.ts), and prisma/seed.ts no longer seeds DryingJob.
     expect(links.dryingJobs).toHaveLength(0);
   });
 
@@ -54,8 +57,11 @@ describe("receipt links (Lot Number cross-reference)", () => {
       if (hasD) withDrying++;
       if (hasT || hasD) withEither++;
     }
+    // Re-measured against the regenerated seed + real new-sheets imports (DISCHARGEMENT/CHARGEMENT/
+    // etc.) — DryingJob is no longer seeded at all (see receiptLinks.ts's header: DryingBatch is the
+    // replacement source, but this join was never repointed to it), so withDrying is now always 0.
     expect({ withTransfer, withDrying, withEither }).toEqual({
-      withTransfer: 363, withDrying: 38, withEither: 363,
+      withTransfer: 410, withDrying: 0, withEither: 410,
     });
   });
 
@@ -73,8 +79,10 @@ describe("receipt links (Lot Number cross-reference)", () => {
       totalDryingRows += links.dryingJobs.length;
       confirmedDryingRows += links.dryingJobs.filter((d) => d.ficheAgrees).length;
     }
+    // Re-measured for the same reason as the coverage test above — totalDryingRows/confirmedDryingRows
+    // stay 0 since DryingJob is no longer seeded.
     expect({ totalTransferRows, confirmedTransferRows, totalDryingRows, confirmedDryingRows }).toEqual({
-      totalTransferRows: 365, confirmedTransferRows: 5, totalDryingRows: 40, confirmedDryingRows: 0,
+      totalTransferRows: 412, confirmedTransferRows: 5, totalDryingRows: 0, confirmedDryingRows: 0,
     });
   });
 

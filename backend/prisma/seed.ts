@@ -121,7 +121,6 @@ async function main() {
   const bins = read<string[]>("bins.json", []);
   const origins = read<string[]>("origins.json", []);
   const receipts = read<SeedReceipt[]>("receipts.json", []);
-  const dryingJobs = read<Record<string, string>[]>("dryingJobs.json", []);
   const jute = read<JuteSeed>("juteLedgers.json", { warehouseStock: [], warehouseTransfers: [], tallySnapshots: [] });
 
   // ── Masters: the observed union, with provenance ────────────────────────
@@ -133,25 +132,25 @@ async function main() {
     if (k && !m.has(k)) m.set(k, src);
   };
   warehouses.forEach((w) => add(whNames, w, "seed/warehouses.json"));
-  receipts.forEach((r) => add(whNames, r.warehouse, "Rcn Offloading Details 2026.xlsx"));
-  jute.warehouseStock.forEach((r) => add(whNames, r.whLocation, "BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx"));
-  jute.warehouseTransfers.forEach((r) => add(whNames, r.sourceWarehouse, "BOUAKE RCN RECEIVING at Yamoussoukro.xlsx"));
-  // NOTE: dryingJobs.warehouse ("ANAGROCI-01") is deliberately NOT added as a warehouse — it is an
-  // alias for an existing one, recorded below with its provenance so the client can confirm it.
+  receipts.forEach((r) => add(whNames, r.warehouse, "ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Truck Reception)"));
+  jute.warehouseStock.forEach((r) => add(whNames, r.whLocation, "ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Jute Bags movement)"));
+  jute.warehouseTransfers.forEach((r) => add(whNames, r.sourceWarehouse, "Bouake RCN Receiving at Factory Report.xlsx"));
+  // NOTE: ANAGROCI-01 (a store name real drying-history data uses) is deliberately NOT added as a
+  // bare warehouse — it is an alias for an existing one, recorded below with its provenance so the
+  // client can confirm it.
 
   const originNames = new Map<string, string>();
   origins.forEach((o) => add(originNames, o, "seed/origins.json"));
-  receipts.forEach((r) => add(originNames, r.origin, "Rcn Offloading Details 2026.xlsx"));
-  jute.warehouseTransfers.forEach((r) => add(originNames, r.origin, "BOUAKE RCN RECEIVING at Yamoussoukro.xlsx"));
+  receipts.forEach((r) => add(originNames, r.origin, "ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Truck Reception)"));
+  jute.warehouseTransfers.forEach((r) => add(originNames, r.origin, "Bouake RCN Receiving at Factory Report.xlsx"));
 
   const binCodes = new Map<string, string>();
   bins.forEach((b) => add(binCodes, b, "seed/bins.json"));
-  receipts.forEach((r) => add(binCodes, r.binNo, "Rcn Offloading Details 2026.xlsx"));
-  dryingJobs.forEach((d) => add(binCodes, d.bin, "Drying Report_Factory warehouse.xlsx"));
-  jute.warehouseTransfers.forEach((r) => add(binCodes, r.binNo, "BOUAKE RCN RECEIVING at Yamoussoukro.xlsx"));
+  receipts.forEach((r) => add(binCodes, r.binNo, "ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Truck Reception)"));
+  jute.warehouseTransfers.forEach((r) => add(binCodes, r.binNo, "Bouake RCN Receiving at Factory Report.xlsx"));
 
   const supplierCodes = new Map<string, string>(suppliers.map((s) => [s.code, "seed/suppliers.json"]));
-  jute.warehouseStock.forEach((r) => add(supplierCodes, r.supplierCode, "BOUAKE WAREHOUSE JUTE BAGS MOVEMENT REPORT.xlsx"));
+  jute.warehouseStock.forEach((r) => add(supplierCodes, r.supplierCode, "ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Jute Bags movement)"));
 
   await prisma.supplier.createMany({
     data: [...supplierCodes].map(([code, source]) => ({
@@ -177,45 +176,64 @@ async function main() {
   // filename-only inference gated on `dryingJobs.some(d => d.warehouse === "ANAGROCI-01")`, kept
   // here only as a historical note so the old reasoning isn't lost, not as code.
 
-  // ── Receipts + their stage rows ─────────────────────────────────────────
-  for (const r of receipts) {
-    await prisma.$transaction(async (tx) => {
-      await tx.receipt.create({
-        data: {
-          id: r.id,
-          source: r.source,
-          arrivalDate: r.arrivalDate,
-          supplierName: r.supplierName,
-          lbaCode: r.lbaCode,
-          vehicleNo: r.vehicleNo,
-          warehouse: r.warehouse,
-          origin: r.origin?.trim() || null,
-          // The pre-normalization JSON, kept read-only for one release so the round-trip tests
-          // have a live oracle and there is a rollback path. Dropped in the Phase 8 migration.
-          stageDataShadow: JSON.stringify(r.stageData),
-          timeline: { create: r.timeline.map((t) => ({ status: t.status, at: t.at, note: t.note ?? null })) },
-          branches: { create: Object.entries(r.branches).map(([stageId, branchId]) => ({ stageId, branchId })) },
-          // Presence is recorded for every stage the source touched — including stages whose
-          // fields are all blank, which is a real state that drives derived status.
-          stageEntries: { create: Object.keys(r.stageData).map((stageId) => ({ stageId })) },
-        },
-      });
+  // ── Receipts + their stage rows — batched, not one transaction per receipt ─────────────────
+  // At 986 receipts (was 50), one $transaction per receipt with up to 16 sequential per-stage
+  // creates inside it meant several thousand sequential round trips. This groups every table's
+  // rows across ALL receipts first (plain JS, no DB calls yet), then issues one createMany per
+  // table, all inside a SINGLE outer transaction — so a mid-run failure can't leave a half-seeded
+  // database that the "receipts already exist" bail above would then treat as fully seeded.
+  const timelineRows: { receiptId: string; status: string; at: string; note: string | null }[] = [];
+  const branchRows: { receiptId: string; stageId: string; branchId: string }[] = [];
+  const stageEntryRows: { receiptId: string; stageId: string }[] = [];
+  // One bucket per stage model, built once and filled while walking every receipt exactly once.
+  const stageRowsByModel = new Map<string, { data: Record<string, unknown> }[]>();
 
-      for (const [stageId, fields] of Object.entries(r.stageData)) {
-        const spec = STAGE_FIELD_MAP[stageId];
-        if (!spec) {
-          console.warn(`  ! ${r.id}: unknown stage "${stageId}" in seed data — skipped`);
-          continue;
-        }
-        const data = toColumnPayload(stageId, fields);
-        const model = (tx as any)[STAGE_MODEL_DELEGATE[stageId]];
-        if (spec.cardinality === "many") await model.create({ data: { receiptId: r.id, seq: 1, ...data } });
-        else await model.create({ data: { receiptId: r.id, ...data } });
+  for (const r of receipts) {
+    for (const t of r.timeline) timelineRows.push({ receiptId: r.id, status: t.status, at: t.at, note: t.note ?? null });
+    for (const [stageId, branchId] of Object.entries(r.branches)) branchRows.push({ receiptId: r.id, stageId, branchId });
+    for (const stageId of Object.keys(r.stageData)) stageEntryRows.push({ receiptId: r.id, stageId });
+
+    for (const [stageId, fields] of Object.entries(r.stageData)) {
+      const spec = STAGE_FIELD_MAP[stageId];
+      if (!spec) {
+        console.warn(`  ! ${r.id}: unknown stage "${stageId}" in seed data — skipped`);
+        continue;
       }
-    });
+      const data = toColumnPayload(stageId, fields);
+      const delegate = STAGE_MODEL_DELEGATE[stageId];
+      if (!stageRowsByModel.has(delegate)) stageRowsByModel.set(delegate, []);
+      const row = spec.cardinality === "many"
+        ? { receiptId: r.id, seq: 1, ...data }
+        : { receiptId: r.id, ...data };
+      stageRowsByModel.get(delegate)!.push({ data: row });
+    }
   }
 
-  await prisma.dryingJob.createMany({ data: dryingJobs as any, skipDuplicates: true });
+  await prisma.$transaction(async (tx) => {
+    await tx.receipt.createMany({
+      data: receipts.map((r) => ({
+        id: r.id,
+        source: r.source,
+        arrivalDate: r.arrivalDate,
+        supplierName: r.supplierName,
+        lbaCode: r.lbaCode,
+        vehicleNo: r.vehicleNo,
+        warehouse: r.warehouse,
+        origin: r.origin?.trim() || null,
+        // The pre-normalization JSON, kept read-only for one release so the round-trip tests
+        // have a live oracle and there is a rollback path. Dropped in the Phase 8 migration.
+        stageDataShadow: JSON.stringify(r.stageData),
+      })),
+    });
+    await tx.timelineEntry.createMany({ data: timelineRows });
+    if (branchRows.length) await tx.receiptBranch.createMany({ data: branchRows });
+    await tx.stageEntry.createMany({ data: stageEntryRows });
+    for (const [delegate, rows] of stageRowsByModel) {
+      await (tx as any)[delegate].createMany({ data: rows.map((r) => r.data) });
+    }
+  }, { timeout: 30_000 });
+  // ~20 bulk createMany calls at 986-receipt scale — generous headroom over Prisma's 5s default,
+  // which was sized for the old one-transaction-per-receipt shape.
 
   // ── Jute ledgers ────────────────────────────────────────────────────────
   // Ledgers 2 and 3 get no rows: their only source is an undated hand tally, so rows would mean
@@ -286,7 +304,6 @@ async function main() {
     suppliers: await prisma.supplier.count(), warehouses: await prisma.warehouse.count(),
     bins: await prisma.bin.count(), origins: await prisma.origin.count(),
     receipts: await prisma.receipt.count(), stageEntries: await prisma.stageEntry.count(),
-    dryingJobs: await prisma.dryingJob.count(),
     juteWarehouse: await prisma.juteWarehouseMovement.count(),
     juteTransfers: await prisma.juteWarehouseTransferReceipt.count(),
     tallySnapshots: await prisma.juteTallySnapshot.count(),

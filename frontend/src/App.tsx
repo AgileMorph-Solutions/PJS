@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
-import { SiteLayout, RequireSite } from "./state/SiteContext";
+import { SiteLayout } from "./state/SiteContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionPage } from "./pages/ProductionPage";
@@ -18,8 +18,6 @@ import { ReceiptDetailPage } from "./pages/warehouse/ReceiptDetailPage";
 import { StockPage } from "./pages/warehouse/StockPage";
 import { DryingJobsPage } from "./pages/warehouse/DryingJobsPage";
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
-import { DispatchPage } from "./pages/unit/DispatchPage";
-import { RcnIssueToProductionPage } from "./pages/central/RcnIssueToProductionPage";
 import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
 
 import { WarehouseStockPage } from "./pages/jute/WarehouseStockPage";
@@ -89,22 +87,6 @@ export default function App() {
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
               <Route path="stock" element={<StockPage />} />
               <Route path="drying" element={<DryingJobsPage />} />
-              <Route
-                path="dispatch"
-                element={
-                  <RequireSite slug="unit">
-                    <DispatchPage />
-                  </RequireSite>
-                }
-              />
-              <Route
-                path="issue-to-production"
-                element={
-                  <RequireSite slug="central">
-                    <RcnIssueToProductionPage />
-                  </RequireSite>
-                }
-              />
             </Route>
 
             {/* Legacy /procurement/* URLs — see pages/LegacyRedirects.tsx for exactly how each one

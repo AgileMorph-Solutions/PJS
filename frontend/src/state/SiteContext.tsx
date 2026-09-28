@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { Link, Outlet, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { SITES, isSiteSlug, type SiteConfig, type SiteSlug } from "../config/sites";
 
@@ -48,7 +48,7 @@ function readLastSite(): SiteSlug {
  * the URL when we're already under `/:site/*` (the source of truth there), or the last site the
  * user was actually looking at otherwise (Dashboard, Masters, Jute pages have no `:site` of their
  * own), or "unit" if neither exists yet. Every resolution from a real URL is remembered, so
- * following "Truck Reception" from the Dashboard lands back wherever you last were, not always
+ * following "Reception" from the Dashboard lands back wherever you last were, not always
  * back at Bouaké.
  */
 export function useActiveSite(): SiteConfig {
@@ -107,28 +107,3 @@ export function SiteLayout() {
   );
 }
 
-/** Guards a nav leaf that only makes sense at one site (Dispatch to Central / Issue to Production)
- * — visiting it from the other site's URL redirects to that site's Receipts page rather than
- * rendering a page whose data source doesn't exist there. */
-export function RequireSite({ slug, children }: { slug: SiteSlug; children: ReactNode }) {
-  const site = useSite();
-  if (site.slug !== slug) {
-    return <WrongSiteNotice thisSlug={site.slug} wantedSlug={slug} />;
-  }
-  return <>{children}</>;
-}
-
-function WrongSiteNotice({ thisSlug, wantedSlug }: { thisSlug: SiteSlug; wantedSlug: SiteSlug }) {
-  return (
-    <div className="p-10 max-w-md">
-      <h2 className="text-lg font-bold text-warmstone-900 mb-1.5">Not available in this section</h2>
-      <p className="text-sm text-warmstone-500 leading-relaxed mb-4">
-        This page belongs to {SITES[wantedSlug].label} ({SITES[wantedSlug].sublabel}), not{" "}
-        {SITES[thisSlug].label} ({SITES[thisSlug].sublabel}).
-      </p>
-      <Link to={`/${wantedSlug}/receipts`} className="text-sm font-semibold text-brand-700 hover:text-brand-800">
-        Go to {SITES[wantedSlug].label} →
-      </Link>
-    </div>
-  );
-}

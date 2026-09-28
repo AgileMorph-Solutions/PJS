@@ -1,7 +1,9 @@
 import type { Column } from "../../components/ui/DataTable";
 import type { ReceiptRecord } from "../../types/receipt";
 import type { SiteSlug } from "../../config/sites";
+import type { DownstreamStatus } from "../../repository/api";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
+import { DownstreamStatusChips } from "../../components/DownstreamStatusChips";
 import { deriveStatus } from "../../domain/receiptStatus";
 
 /** The real per-truck paperwork, straight from the OFFLOADINGS sheet's "Verify supplier documents"
@@ -27,21 +29,31 @@ const baseColumns: Column<ReceiptRecord>[] = [
   { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
 ];
 
+/** One column per site, built with the current downstream-status map — everything that used to be
+ * its own sidebar page (Dispatch to Central, Receiving from Unit, Issue to Production) is visible
+ * here instead. A factory rather than a static column list because the map is only known at render
+ * time (see DownstreamStatusChips's own header). */
+const downstreamColumn = (status: Map<string, DownstreamStatus>): Column<ReceiptRecord> => ({
+  label: "Downstream",
+  render: (r) => <DownstreamStatusChips status={status.get(r.id)} />,
+});
+
+const sourceColumn: Column<ReceiptRecord> = {
+  label: "Source",
+  render: (r) => (
+    <span
+      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+        r.source === "imported" ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+      }`}
+    >
+      {r.source === "imported" ? "imported" : "entered"}
+    </span>
+  ),
+};
+
 const tailColumns: Column<ReceiptRecord>[] = [
   { label: "Lot / Bin", render: (r) => `${r.lotNo || "—"} / ${r.binNo || "—"}` },
   { label: "Status", render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
-  {
-    label: "Source",
-    render: (r) => (
-      <span
-        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-          r.source === "imported" ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-        }`}
-      >
-        {r.source === "imported" ? "imported" : "entered"}
-      </span>
-    ),
-  },
 ];
 
 /**
@@ -56,11 +68,19 @@ const tailColumns: Column<ReceiptRecord>[] = [
  * Factory has exactly one (ANAGROCI-01) — showing the same column would be a constant, so central's
  * table doesn't get it.
  */
-export const RECEIPT_COLUMNS: Record<SiteSlug, Column<ReceiptRecord>[]> = {
-  unit: [
-    ...baseColumns,
-    { label: "Store", render: (r) => <span className="font-mono text-[12.5px]">{storeCode(r) || "—"}</span> },
-    ...tailColumns,
-  ],
-  central: [...baseColumns, ...tailColumns],
-};
+export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string, DownstreamStatus>): Column<ReceiptRecord>[] {
+  // Downstream comes right after Status, ahead of the lower-value Source column — it's the reason
+  // this column exists at all (everything Dispatch to Central/Receiving from Unit/Issue to
+  // Production used to show on their own pages), so it shouldn't be the last thing scrolled to on
+  // an already-wide table.
+  const dl = downstreamColumn(downstreamStatus);
+  return siteSlug === "unit"
+    ? [
+        ...baseColumns,
+        { label: "Store", render: (r) => <span className="font-mono text-[12.5px]">{storeCode(r) || "—"}</span> },
+        ...tailColumns,
+        dl,
+        sourceColumn,
+      ]
+    : [...baseColumns, ...tailColumns, dl, sourceColumn];
+}
