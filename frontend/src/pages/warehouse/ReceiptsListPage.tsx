@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { DataTable } from "../../components/ui/DataTable";
+import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { ImportModal } from "../../components/ImportModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
@@ -40,11 +41,12 @@ export function ReceiptsListPage() {
   const [params, setParams] = useSearchParams();
   // Reads an initial ?q= from the global header search so a search there lands here pre-filled.
   const [q, setQ] = useState(() => params.get("q") ?? "");
-  const [uploadOpen, setUploadOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"upload" | "export" | null>(null);
   const navigate = useNavigate();
 
   const status = params.get("status") ?? "";
   const store = params.get("store") ?? "";
+  const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
   const stores = useMemo(
     // siteSlugForSiteName, not a raw === — a store's `site` column can legitimately hold either
@@ -65,6 +67,8 @@ export function ReceiptsListPage() {
     return siteReceipts
       .filter((r) => !status || deriveStatus(r) === status)
       .filter((r) => !store || storeCode(r) === store)
+      .filter((r) => !dateRange.from || r.arrivalDate >= dateRange.from)
+      .filter((r) => !dateRange.to || r.arrivalDate <= dateRange.to)
       .filter((r) => {
         if (!q.trim()) return true;
         const needle = q.trim().toLowerCase();
@@ -78,7 +82,7 @@ export function ReceiptsListPage() {
         );
       })
       .sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1));
-  }, [siteReceipts, status, store, q]);
+  }, [siteReceipts, status, store, dateRange.from, dateRange.to, q]);
 
   async function handleNewReceipt() {
     // Async: the id is assigned by the server, and scoped to this section's own site so a truck
@@ -98,11 +102,19 @@ export function ReceiptsListPage() {
           <div className="flex items-center gap-3">
             <SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />
             <button
-              onClick={() => setUploadOpen(true)}
+              onClick={() => setDialogMode("upload")}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
             >
               <span className="material-symbols-outlined text-[17px]">upload</span>
               Upload
+            </button>
+            <button
+              onClick={() => setDialogMode("export")}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
+              title="Pick a workbook to export or download a template for"
+            >
+              <span className="material-symbols-outlined text-[17px]">download</span>
+              Export
             </button>
             <button
               onClick={handleNewReceipt}
@@ -124,11 +136,12 @@ export function ReceiptsListPage() {
         <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={`/${site.slug}/receipts?status=rejected`} tone="gap" />
       </div>
 
-      {uploadOpen && (
+      {dialogMode && (
         <ImportModal
           importerIds={RECEPTION_IMPORTER_IDS}
           siteSlug={site.slug}
-          onClose={() => setUploadOpen(false)}
+          mode={dialogMode}
+          onClose={() => setDialogMode(null)}
           onCommitted={() => {
             void refresh();
             void refetchDownstream();
@@ -161,6 +174,12 @@ export function ReceiptsListPage() {
             ))}
           </select>
         )}
+        <DateRangeInputs
+          value={dateRange}
+          onChange={(next) =>
+            setParams((p) => setOrDelete(setOrDelete(p, "from", next.from), "to", next.to))
+          }
+        />
       </FilterBar>
 
       <DataTable

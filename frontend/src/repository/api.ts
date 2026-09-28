@@ -374,6 +374,9 @@ export interface LinkedDryingBatchRow {
   dryingDate: string | null;
   warehouseSite: string | null;
   status: string | null;
+  dryType: string | null;
+  sourceBinNo: string | null;
+  destinationBinNo: string | null;
   destinationRaw: string | null;
   ficheAgrees: boolean;
 }

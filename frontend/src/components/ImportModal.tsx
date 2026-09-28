@@ -16,15 +16,25 @@ interface Props {
    * Yakro's never offers CHARGEMENT dispatch or the Bouaké-only jute ledger. Omit on a
    * site-agnostic page (e.g. a future Jute page) to show every id passed in unfiltered. */
   siteSlug?: SiteSlug;
+  /** Which action this dialog was opened for — "upload" offers Template + Import per row (no
+   * Export data button, since this flow is about getting data in); "export" offers Template +
+   * Export data per row (no Import button — picking one just downloads, never opens the
+   * ImportPanel). Same picker list either way, different action per row. */
+  mode: "upload" | "export";
   onClose: () => void;
   onCommitted?: (result: CommitImportResponse) => void;
 }
+
+const ghostBtn =
+  "inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-warmstone-200 text-warmstone-600 text-[11.5px] font-semibold hover:bg-warmstone-50 hover:text-warmstone-800 hover:border-warmstone-300 transition-colors whitespace-nowrap";
+const primaryBtn =
+  "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-700 hover:bg-brand-800 text-white text-[11.5px] font-bold transition-colors whitespace-nowrap ml-auto";
 
 /** One "Upload" button's worth of workbook shapes, behind a picker instead of a wall of always-
  * expanded panels — pick the sheet, then the familiar ImportPanel preview → commit flow runs
  * inside the same dialog. Labels come from the backend registry (GET /api/imports/types), not
  * hand-typed here, so they can't drift from the importer's own `label`. */
-export function ImportModal({ importerIds, siteSlug, onClose, onCommitted }: Props) {
+export function ImportModal({ importerIds, siteSlug, mode, onClose, onCommitted }: Props) {
   const [types, setTypes] = useState<ImporterTypeInfo[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -35,46 +45,54 @@ export function ImportModal({ importerIds, siteSlug, onClose, onCommitted }: Pro
   const options = (types ?? []).filter(
     (t) => importerIds.includes(t.id) && (!siteSlug || importerBelongsToSite(t.id, siteSlug))
   );
-  const chosen = options.find((t) => t.id === selected);
+  // Export never drills into a "chosen" sub-view — both row buttons are plain downloads, so
+  // `selected` only ever gets set from the Import button, which export mode doesn't render.
+  const chosen = mode === "upload" ? options.find((t) => t.id === selected) : undefined;
+  const verb = mode === "upload" ? "uploading" : "exporting";
 
   return (
-    <Modal title={chosen ? `Upload — ${chosen.label}` : "Upload a workbook"} onClose={onClose} wide={Boolean(chosen)}>
+    <Modal
+      title={chosen ? `Upload — ${chosen.label}` : mode === "upload" ? "Upload a workbook" : "Export a workbook"}
+      onClose={onClose}
+      wide={Boolean(chosen)}
+    >
       {!types ? (
         <p className="text-[12.5px] text-warmstone-400 animate-pulse">Loading workbook shapes…</p>
       ) : !chosen ? (
         <div className="space-y-2">
-          <p className="text-[12.5px] text-warmstone-500 mb-3">Which workbook are you uploading?</p>
+          <p className="text-[12.5px] text-warmstone-500 mb-3">Which workbook are you {verb}?</p>
           {options.map((t) => (
-            <div
-              key={t.id}
-              className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-warmstone-200 hover:border-brand-300 hover:bg-brand-50/50 transition-colors"
-            >
-              <button type="button" onClick={() => setSelected(t.id)} className="flex-1 min-w-0 text-left">
+            <div key={t.id} className="rounded-xl border border-warmstone-200 p-4">
+              <div className="mb-3">
                 <span className="block text-[13.5px] font-bold text-warmstone-900">{t.label}</span>
                 <span className="block text-[11.5px] text-warmstone-500 mt-0.5">
                   sheet <code className="font-mono">{t.expectedSheet}</code>
                 </span>
-              </button>
-              <div className="flex items-center gap-2 shrink-0">
+              </div>
+              <div className="flex items-center gap-2">
                 <a
                   href={`${BASE}/imports/${encodeURIComponent(t.id)}/template`}
-                  className="text-[11px] font-semibold text-brand-700 hover:text-brand-800 whitespace-nowrap"
+                  className={ghostBtn}
                   title={`Download a blank ${t.label} template`}
-                  onClick={(e) => e.stopPropagation()}
                 >
+                  <span className="material-symbols-outlined text-[15px]">description</span>
                   Template
                 </a>
-                <a
-                  href={`${BASE}/imports/${encodeURIComponent(t.id)}/export${siteSlug ? `?warehouse=${encodeURIComponent(SITES[siteSlug].warehouseName)}` : ""}`}
-                  className="text-[11px] font-semibold text-brand-700 hover:text-brand-800 whitespace-nowrap"
-                  title={`Export current ${t.label} data`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Export data
-                </a>
-                <button type="button" onClick={() => setSelected(t.id)} aria-label={`Upload ${t.label}`}>
-                  <span className="material-symbols-outlined text-[18px] text-warmstone-400">chevron_right</span>
-                </button>
+                {mode === "export" ? (
+                  <a
+                    href={`${BASE}/imports/${encodeURIComponent(t.id)}/export${siteSlug ? `?warehouse=${encodeURIComponent(SITES[siteSlug].warehouseName)}` : ""}`}
+                    className={primaryBtn}
+                    title={`Export current ${t.label} data`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">download</span>
+                    Export data
+                  </a>
+                ) : (
+                  <button type="button" onClick={() => setSelected(t.id)} className={primaryBtn}>
+                    <span className="material-symbols-outlined text-[15px]">upload</span>
+                    Import
+                  </button>
+                )}
               </div>
             </div>
           ))}

@@ -47,18 +47,15 @@ export const NAV: NavSection[] = [
     // stock pages, which is exactly where that ambiguity bit. Stays top-level (not site-scoped)
     // because ledger 4 genuinely spans both sites for a single row — see
     // WarehouseTransfersPage's own in-page SiteSwitcher instead.
+    //
+    // A single leaf now, not five: Warehouse Stock / Supplier Movement / Production Issue-Return
+    // / Warehouse Transfers / Warehouse Activity Ledger used to be five separate sidebar entries
+    // and pages, which read as unrelated sections even though they're all views over the same
+    // four jute ledgers + one activity log. They're one page now (JuteBagManagementLayout, with a
+    // tab bar) at the same leaf URLs, so one nav entry (`to: "/jute"`, not `end`) lights up for
+    // all five — see AppNav.tsx's isItemActive prefix match.
     label: "Jute Bag Management",
-    items: [
-      { label: "Warehouse Stock", to: "/jute/warehouse-stock", icon: "inventory_2" },
-      { label: "Supplier Movement", to: "/jute/suppliers", icon: "swap_horiz" },
-      { label: "Production Issue/Return", to: "/jute/production", icon: "sync_alt" },
-      { label: "Warehouse Transfers", to: "/jute/transfers", icon: "compare_arrows" },
-      // Genuinely no site column in the source sheet (verified — see
-      // warehouseActivityLedger.ts's own header comment), so this fits the same "not site-scoped"
-      // shape every other leaf in this section already has. Had zero UI before this entry — a
-      // route existed but nothing on the frontend called it.
-      { label: "Warehouse Activity Ledger", to: "/jute/warehouse-activity-ledger", icon: "receipt_long" },
-    ],
+    items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2" }],
   },
   {
     // Reverted to the single placeholder entry on request — the BTM/Bin/Lot pages, backend

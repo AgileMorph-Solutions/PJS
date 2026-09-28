@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
+import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
+import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { RecordDetailModal } from "../../components/ui/RecordDetailModal";
-import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { ImportPanel } from "../../components/ImportPanel";
 import { useWarehouseActivityLedger } from "../../state/TrackingContext";
 import type { WarehouseActivityLedgerEntry } from "../../repository/api";
 
@@ -15,7 +16,7 @@ import type { WarehouseActivityLedgerEntry } from "../../repository/api";
  * UI before this page (a route existed, nothing on the frontend called it).
  */
 export function WarehouseActivityLedgerPage() {
-  const { rows, refetch } = useWarehouseActivityLedger();
+  const { rows } = useWarehouseActivityLedger();
   const [detail, setDetail] = useState<WarehouseActivityLedgerEntry | null>(null);
 
   const columns: Column<WarehouseActivityLedgerEntry>[] = [
@@ -40,17 +41,21 @@ export function WarehouseActivityLedgerPage() {
     },
   ];
 
+  const dateFilter = useDateRangeFilter(rows, (r) => r.activityDate);
+  const search = useTableSearch(dateFilter.filtered, (r) => [r.activityType, r.particulars, r.ficheNo, r.lotNo, r.vendor]);
+
   return (
     <div className="space-y-5">
-      <PageHeader
-        kicker="Jute Bag Management"
-        title="Warehouse Activity Ledger"
-        lede="Every logged warehouse activity — no site column in the source, so this list is unscoped."
-      />
-      <CollapsibleCard title="Import from workbook">
-        <ImportPanel importerId="warehouseActivityLedger" onCommitted={() => void refetch()} />
-      </CollapsibleCard>
-      <DataTable columns={columns} rows={rows} keyFn={(r) => r.id} emptyTitle="No activity ledger rows yet" />
+      <FilterBar>
+        <input
+          placeholder="Search activity type, particulars, fiche, lot, vendor…"
+          value={search.q}
+          onChange={(e) => search.setQ(e.target.value)}
+          className="w-full sm:w-72"
+        />
+        <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
+      </FilterBar>
+      <DataTable columns={columns} rows={search.filtered} keyFn={(r) => r.id} emptyTitle="No activity ledger rows yet" />
       {detail && (
         <RecordDetailModal title="Warehouse activity ledger entry" record={detail} onClose={() => setDetail(null)} />
       )}

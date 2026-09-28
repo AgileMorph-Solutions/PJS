@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
+import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
+import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { ImportPanel } from "../../components/ImportPanel";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
@@ -57,6 +61,15 @@ export function StockPage() {
     { label: "Finalised", render: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] || "—" },
   ];
 
+  const lotsSearch = useTableSearch(withLot, (r) => [
+    r.stageData["n-lot"]?.["Lot Number"] || r.lotNo,
+    r.stageData["n-bin"]?.["Bin Number"] || r.binNo,
+    r.vehicleNo,
+    r.supplierName,
+  ]);
+  const dischargeDateFilter = useDateRangeFilter(discharges, (d) => d.arrivalDate);
+  const dischargeSearch = useTableSearch(dischargeDateFilter.filtered, (d) => [d.lotNo, d.ficheCca, d.warehouseSite]);
+
   return (
     <>
       <PageHeader
@@ -92,9 +105,17 @@ export function StockPage() {
         </CollapsibleCard>
       </div>
 
+      <FilterBar>
+        <input
+          placeholder="Search Lot No, Bin No, vehicle, supplier…"
+          value={lotsSearch.q}
+          onChange={(e) => lotsSearch.setQ(e.target.value)}
+          className="w-full sm:w-64"
+        />
+      </FilterBar>
       <DataTable
         columns={columns}
-        rows={withLot}
+        rows={lotsSearch.filtered}
         keyFn={(r) => r.id}
         rowHref={(r) => `/${site.slug}/receipts/${r.id}`}
         emptyTitle="No Lots or Bins assigned yet"
@@ -106,9 +127,18 @@ export function StockPage() {
           Every real column DISCHARGEMENT/Warehouse Receiving stores, not just what's already
           written onto a receipt above — including the two quality-inspection panels.
         </p>
+        <FilterBar>
+          <input
+            placeholder="Search Lot No, Fiche CCA, warehouse…"
+            value={dischargeSearch.q}
+            onChange={(e) => dischargeSearch.setQ(e.target.value)}
+            className="w-full sm:w-64"
+          />
+          <DateRangeInputs value={dischargeDateFilter.range} onChange={dischargeDateFilter.setRange} />
+        </FilterBar>
         <DataTable
           columns={dischargeColumns}
-          rows={discharges}
+          rows={dischargeSearch.filtered}
           keyFn={(d) => d.id}
           emptyTitle="No discharge/receiving rows imported yet"
         />

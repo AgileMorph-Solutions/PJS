@@ -435,6 +435,22 @@ function LinkedRecordsCard({
                   </span>
                 </li>
               ))}
+              {links.dryingBatches.map((b) => (
+                <li key={`b-${b.id}`} className="text-[12.5px] text-warmstone-700">
+                  Bin {b.destinationBinNo || b.sourceBinNo || "—"}
+                  {b.sourceBinNo && b.destinationBinNo && b.sourceBinNo !== b.destinationBinNo && (
+                    <span className="text-warmstone-400"> (from {b.sourceBinNo})</span>
+                  )}{" "}
+                  <span className="text-warmstone-400">— drying batch SN {b.sn}</span>
+                  <span
+                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                      b.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
+                    }`}
+                  >
+                    {b.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed — different FICHE"}
+                  </span>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -452,7 +468,11 @@ function LinkedRecordsCard({
                     key={t.sn}
                     className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
                   >
-                    <span>SN {t.sn} · {t.sourceWarehouse}</span>
+                    <span>
+                      SN {t.sn} · {t.sourceWarehouse} · Bin {t.binNo || "—"}
+                      {t.truckRegistration && <> · truck {t.truckRegistration}</>}
+                      {t.bagsReceived != null && <> · {t.bagsReceived} bags</>}
+                    </span>
                     <span className="text-warmstone-400">{t.receivedDate || "—"}</span>
                   </li>
                 ))}
@@ -474,7 +494,11 @@ function LinkedRecordsCard({
                     key={d.id}
                     className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
                   >
-                    <span>{d.id} · {d.status}</span>
+                    <span>
+                      {d.id} · {d.status} · Bin {d.bin || "—"}
+                      {d.dryType && <> · {d.dryType}</>}
+                      {d.destination && <> → {d.destination}</>}
+                    </span>
                     <span className="text-warmstone-400">{d.date || "—"}</span>
                   </li>
                 ))}
@@ -500,6 +524,7 @@ function LinkedRecordsCard({
                   >
                     <span>
                       SN {w.sn} · {w.warehouseSite}
+                      {w.totalRecd != null && <> · {w.totalRecd} recd</>}
                       <span
                         className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
                           w.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
@@ -532,7 +557,8 @@ function LinkedRecordsCard({
                     className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
                   >
                     <span>
-                      SN {b.sn} · {b.status || "—"}
+                      SN {b.sn} · {b.status || "—"} · Bin {b.sourceBinNo || "—"} → {b.destinationBinNo || "—"}
+                      {b.dryType && <> · {b.dryType}</>}
                       <span
                         className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
                           b.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"

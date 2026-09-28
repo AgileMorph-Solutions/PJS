@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
 import { useTracking } from "../../state/TrackingContext";
@@ -9,7 +11,8 @@ import { useTracking } from "../../state/TrackingContext";
 export function BinsPage() {
   const { masters, addBin, receipts } = useTracking();
   const [name, setName] = useState("");
-  const page = usePagination(masters.bins);
+  const search = useTableSearch(masters.bins, (b) => [b]);
+  const page = usePagination(search.filtered);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,6 +51,14 @@ export function BinsPage() {
           </button>
         </form>
       </CollapsibleCard>
+      <FilterBar>
+        <input
+          placeholder="Search bin code…"
+          value={search.q}
+          onChange={(e) => search.setQ(e.target.value)}
+          className="w-full sm:w-64"
+        />
+      </FilterBar>
       <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
         {page.pageRows.map((b) => (
           <Link

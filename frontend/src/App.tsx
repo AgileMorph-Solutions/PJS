@@ -22,6 +22,7 @@ import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
 import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
 
+import { JuteBagManagementLayout } from "./pages/jute/JuteBagManagementLayout";
 import { WarehouseStockPage } from "./pages/jute/WarehouseStockPage";
 import { SupplierMovementPage } from "./pages/jute/SupplierMovementPage";
 import { ProductionIssuePage } from "./pages/jute/ProductionIssuePage";
@@ -110,11 +111,19 @@ export default function App() {
             <Route path="/procurement/stock" element={<LegacyListRedirect leaf="stock" />} />
             <Route path="/procurement/drying" element={<LegacyListRedirect leaf="drying" />} />
 
-            <Route path="/jute/warehouse-stock" element={<WarehouseStockPage />} />
-            <Route path="/jute/suppliers" element={<SupplierMovementPage />} />
-            <Route path="/jute/production" element={<ProductionIssuePage />} />
-            <Route path="/jute/transfers" element={<WarehouseTransfersPage />} />
-            <Route path="/jute/warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
+            {/* One "Jute Bag Management" section (was five separate sidebar entries/pages) — shared
+                header + tab bar in JuteBagManagementLayout, each former page rendered via
+                <Outlet/>. Leaf paths are unchanged, so existing deep links elsewhere in the app
+                (ReceiptDetailPage, DashboardPage, WarehouseTransfersPage's own ?warehouse=) still
+                resolve exactly as before. */}
+            <Route path="/jute" element={<JuteBagManagementLayout />}>
+              <Route index element={<Navigate to="warehouse-stock" replace />} />
+              <Route path="warehouse-stock" element={<WarehouseStockPage />} />
+              <Route path="suppliers" element={<SupplierMovementPage />} />
+              <Route path="production" element={<ProductionIssuePage />} />
+              <Route path="transfers" element={<WarehouseTransfersPage />} />
+              <Route path="warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
+            </Route>
 
             <Route path="/production/btm" element={<BtmListPage />} />
             <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />

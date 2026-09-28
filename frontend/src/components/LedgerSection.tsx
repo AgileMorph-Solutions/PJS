@@ -3,6 +3,9 @@ import type { JuteLedger, JuteLedgerColumn } from "../types/stage";
 import { useTracking } from "../state/TrackingContext";
 import { usePagination } from "./ui/usePagination";
 import { Pagination } from "./ui/Pagination";
+import { FilterBar } from "./ui/FilterBar";
+import { DateRangeInputs } from "./ui/DateRangeInputs";
+import { useDateRangeFilter } from "./ui/useDateRangeFilter";
 // NOTE: allRowsFor() is deliberately NOT used any more. It prepended juteBags.ts's hardcoded
 // sampleRows to the entered rows, which was right when the ledger was empty demo data. The API now
 // serves the real 298/367 workbook rows — and those sample rows are among them — so prepending
@@ -50,7 +53,12 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
 
   // Every row comes from the server, sample rows included.
   const allRows = rowsOverride ?? (ledgerEntries[ledger.id] ?? []);
-  const page = usePagination(allRows);
+  // Every ledger has exactly one "Date"-labeled column today (see juteBags.ts) — matched by label
+  // rather than hardcoded per ledger, since JuteLedgerColumn carries no `kind: "date"` flag of its
+  // own. Falls back to no filter row at all if a future ledger genuinely has none.
+  const dateColumn = ledger.columns.find((c) => c.label.toLowerCase().includes("date"));
+  const dateFilter = useDateRangeFilter(allRows, (row) => (dateColumn ? row[dateColumn.label] : undefined));
+  const page = usePagination(dateFilter.filtered);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -134,6 +142,12 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
         </form>
       </details>
 
+      {dateColumn && (
+        <FilterBar>
+          <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
+        </FilterBar>
+      )}
+
       <div className="overflow-x-auto border border-warmstone-200 rounded-xl">
         <table className="w-full text-[12.5px] border-collapse">
           <thead>
@@ -146,10 +160,10 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
             </tr>
           </thead>
           <tbody>
-            {allRows.length === 0 && (
+            {dateFilter.filtered.length === 0 && (
               <tr>
                 <td colSpan={ledger.columns.length} className="px-3 py-4 text-warmstone-400 italic">
-                  No entries yet — add one above.
+                  {allRows.length === 0 ? "No entries yet — add one above." : "No entries in this date range."}
                 </td>
               </tr>
             )}

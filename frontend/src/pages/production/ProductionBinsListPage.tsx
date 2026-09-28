@@ -1,5 +1,7 @@
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
 import { useProductionBins } from "../../state/TrackingContext";
 import type { ProductionBinSummary } from "../../repository/api";
 
@@ -17,6 +19,8 @@ export function ProductionBinsListPage() {
     { label: "Source", render: (r) => r.source ?? "—" },
   ];
 
+  const search = useTableSearch(rows, (r) => [r.binNo, r.source]);
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -25,14 +29,24 @@ export function ProductionBinsListPage() {
         lede="The pivot every BTM lands in and every Lot is created from — a Bin accumulates many BTMs and many Lots, never the reverse."
       />
       {!loading && (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          keyFn={(r) => r.binNo}
-          rowHref={(r) => `/production/bins/${encodeURIComponent(r.binNo)}`}
-          emptyTitle="No production bins observed yet"
-          emptyHint="A Bin is auto-observed the first time a BTM or Lot references it."
-        />
+        <>
+          <FilterBar>
+            <input
+              placeholder="Search Bin No, source…"
+              value={search.q}
+              onChange={(e) => search.setQ(e.target.value)}
+              className="w-full sm:w-64"
+            />
+          </FilterBar>
+          <DataTable
+            columns={columns}
+            rows={search.filtered}
+            keyFn={(r) => r.binNo}
+            rowHref={(r) => `/production/bins/${encodeURIComponent(r.binNo)}`}
+            emptyTitle="No production bins observed yet"
+            emptyHint="A Bin is auto-observed the first time a BTM or Lot references it."
+          />
+        </>
       )}
     </div>
   );

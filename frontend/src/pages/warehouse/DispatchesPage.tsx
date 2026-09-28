@@ -1,6 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
+import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
+import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { RecordDetailModal } from "../../components/ui/RecordDetailModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { useWarehouseDispatches } from "../../state/TrackingContext";
@@ -19,6 +23,13 @@ export function DispatchesPage() {
   const switchSite = useSwitchSite();
   const { lines } = useWarehouseDispatches(site.warehouseName);
   const [detail, setDetail] = useState<WarehouseDispatchLine | null>(null);
+  const [status, setStatus] = useState("");
+  // Built from what the sheet actually contains, not a hardcoded guess — `status` is free text on
+  // the source workbook (see warehouseDispatches.ts: `status: string | null`, no closed set).
+  const statusOptions = useMemo(
+    () => [...new Set(lines.map((l) => l.status).filter((s): s is string => Boolean(s)))].sort(),
+    [lines]
+  );
 
   const columns: Column<WarehouseDispatchLine>[] = [
     { label: "SN", render: (l) => <span className="font-mono text-[12.5px]">{l.sn ?? "—"}</span> },
@@ -43,6 +54,10 @@ export function DispatchesPage() {
     },
   ];
 
+  const dateFilter = useDateRangeFilter(lines, (l) => l.chargeDate);
+  const search = useTableSearch(dateFilter.filtered, (l) => [l.vyogeNumber, l.truckNo, l.ficheCca, l.bin]);
+  const rows = status ? search.filtered.filter((l) => l.status === status) : search.filtered;
+
   return (
     <>
       <PageHeader
@@ -51,9 +66,28 @@ export function DispatchesPage() {
         lede="CHARGEMENT — every unit-warehouse dispatch line, one row per sheet line."
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
+      <FilterBar>
+        <input
+          placeholder="Search voyage, truck, Fiche CCA, bin…"
+          value={search.q}
+          onChange={(e) => search.setQ(e.target.value)}
+          className="w-full sm:w-64"
+        />
+        {statusOptions.length > 0 && (
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        )}
+        <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
+      </FilterBar>
       <DataTable
         columns={columns}
-        rows={lines}
+        rows={rows}
         keyFn={(l) => l.id}
         emptyTitle="No dispatch lines at this site"
         emptyHint="CHARGEMENT is a unit-warehouse (Bouaké) sheet — the central section has none."

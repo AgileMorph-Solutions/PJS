@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { PageHeader } from "../../components/ui/PageHeader";
 import { LedgerSection } from "../../components/LedgerSection";
-import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { ImportPanel } from "../../components/ImportPanel";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { juteLedgers } from "../../data/juteBags";
-import { useTracking, useJuteLedgerEntries } from "../../state/TrackingContext";
+import { useJuteLedgerEntries } from "../../state/TrackingContext";
 import { SITES, siteSlugForWarehouse, type SiteSlug } from "../../config/sites";
 
 const ledger = juteLedgers.find((l) => l.id === "warehouse-to-warehouse-movement")!;
@@ -20,7 +17,6 @@ const ledger = juteLedgers.find((l) => l.id === "warehouse-to-warehouse-movement
  * client-side filter over the already-loaded rows can't reproduce (this ledger doesn't even expose
  * a warehouse column to the client — see api.ts's listLedgerEntries comment). */
 export function WarehouseTransfersPage() {
-  const { refresh } = useTracking();
   const [params] = useSearchParams();
   const [site, setSite] = useState<SiteSlug | "">(() => siteSlugForWarehouse(params.get("warehouse") ?? "") ?? "");
   const warehouseName = site ? SITES[site].warehouseName : undefined;
@@ -28,15 +24,9 @@ export function WarehouseTransfersPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        kicker="Jute Bag Management"
-        title="Warehouse Transfers"
-        lede="Bag transfers between warehouses."
-        actions={<SiteSwitcher value={site} onChange={setSite} allowAll />}
-      />
-      <CollapsibleCard title="Import from workbook">
-        <ImportPanel importerId="juteWarehouseTransfer" onCommitted={() => void refresh()} />
-      </CollapsibleCard>
+      <div className="flex justify-end">
+        <SiteSwitcher value={site} onChange={setSite} allowAll />
+      </div>
       <LedgerSection ledger={ledger} rows={site ? filtered.rows : undefined} onEntryAdded={() => site && filtered.refetch()} />
     </div>
   );

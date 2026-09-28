@@ -87,13 +87,19 @@ export interface LinkedWarehouseReceiving {
 
 /** DryingBatch rows sharing this receipt's Lot Number — the replacement source for drying data
  * (see dryingBatches.ts); kept alongside the legacy `dryingJobs` above rather than merged into it,
- * since drying_batch_vs_drying_job_drift's own finding is exactly that the two disagree. */
+ * since drying_batch_vs_drying_job_drift's own finding is exactly that the two disagree.
+ * `sourceBinNo`/`destinationBinNo` were added so this row's own bin(s) can join the "Bin observed
+ * elsewhere" roll-up alongside `transfers`/`dryingJobs` below — DryingBatch has two distinct bin
+ * columns (batch went in from one bin, came out to another), unlike DryingJob's single `bin`. */
 export interface LinkedDryingBatchRow {
   id: string;
   sn: number;
   dryingDate: string | null;
   warehouseSite: string | null;
   status: string | null;
+  dryType: string | null;
+  sourceBinNo: string | null;
+  destinationBinNo: string | null;
   destinationRaw: string | null;
   ficheAgrees: boolean;
 }
@@ -186,7 +192,10 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
     }),
     prisma.dryingBatch.findMany({
       where: { lotNo },
-      select: { id: true, sn: true, dryingDate: true, dryingDateRaw: true, warehouseSite: true, status: true, destinationRaw: true, ficheNoRaw: true },
+      select: {
+        id: true, sn: true, dryingDate: true, dryingDateRaw: true, warehouseSite: true, status: true,
+        dryType: true, sourceBinNo: true, destinationBinNo: true, destinationRaw: true, ficheNoRaw: true,
+      },
       orderBy: { sn: "asc" },
     }),
   ]);
@@ -238,7 +247,8 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
     })),
     dryingBatches: dryingBatchRows.map((b) => ({
       id: b.id, sn: b.sn, dryingDate: formatReceivedDate(b.dryingDate, b.dryingDateRaw),
-      warehouseSite: b.warehouseSite, status: b.status, destinationRaw: b.destinationRaw,
+      warehouseSite: b.warehouseSite, status: b.status, dryType: b.dryType,
+      sourceBinNo: b.sourceBinNo, destinationBinNo: b.destinationBinNo, destinationRaw: b.destinationRaw,
       ficheAgrees: ficheAgrees(b.ficheNoRaw),
     })),
     issuedToProduction: issuedToProductionRows.map((p) => ({

@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { useTracking } from "../../state/TrackingContext";
 import type { Supplier } from "../../repository/mastersRepo";
@@ -25,6 +27,8 @@ export function SuppliersPage() {
     { label: "LBA Code", render: (s) => <span className="font-mono text-[12.5px]">{s.code}</span> },
     { label: "Supplier name", render: (s) => s.name },
   ];
+
+  const search = useTableSearch(masters.suppliers, (s) => [s.code, s.name]);
 
   return (
     <div className="space-y-5">
@@ -56,7 +60,15 @@ export function SuppliersPage() {
           </button>
         </form>
       </CollapsibleCard>
-      <DataTable columns={columns} rows={masters.suppliers} keyFn={(s) => s.code} emptyTitle="No suppliers yet" />
+      <FilterBar>
+        <input
+          placeholder="Search LBA code or name…"
+          value={search.q}
+          onChange={(e) => search.setQ(e.target.value)}
+          className="w-full sm:w-64"
+        />
+      </FilterBar>
+      <DataTable columns={columns} rows={search.filtered} keyFn={(s) => s.code} emptyTitle="No suppliers yet" />
     </div>
   );
 }

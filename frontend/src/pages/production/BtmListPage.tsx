@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DataTable, type Column } from "../../components/ui/DataTable";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
+import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
+import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { useBtmIntakes } from "../../state/TrackingContext";
 import { api, type BtmIntake } from "../../repository/api";
 
@@ -37,6 +41,9 @@ export function BtmListPage() {
     { label: "Source", render: (r) => r.source ?? "—" },
     { label: "Recorded", render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
+
+  const dateFilter = useDateRangeFilter(rows, (r) => r.createdAt?.slice(0, 10));
+  const search = useTableSearch(dateFilter.filtered, (r) => [r.btmNo, r.binNo, r.source]);
 
   return (
     <div className="space-y-5">
@@ -80,14 +87,25 @@ export function BtmListPage() {
       </div>
 
       {!loading && (
-        <DataTable
-          columns={columns}
-          rows={rows}
-          keyFn={(r) => r.btmNo}
-          rowHref={(r) => `/production/btm/${encodeURIComponent(r.btmNo)}`}
-          emptyTitle="No BTMs recorded yet"
-          emptyHint="Record the first one above, or import from a workbook once the importer lands."
-        />
+        <>
+          <FilterBar>
+            <input
+              placeholder="Search BTM No, bin, source…"
+              value={search.q}
+              onChange={(e) => search.setQ(e.target.value)}
+              className="w-full sm:w-64"
+            />
+            <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
+          </FilterBar>
+          <DataTable
+            columns={columns}
+            rows={search.filtered}
+            keyFn={(r) => r.btmNo}
+            rowHref={(r) => `/production/btm/${encodeURIComponent(r.btmNo)}`}
+            emptyTitle="No BTMs recorded yet"
+            emptyHint="Record the first one above, or import from a workbook once the importer lands."
+          />
+        </>
       )}
     </div>
   );
