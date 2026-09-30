@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { NAV, type NavLeaf } from "../config/nav";
 import { useActiveSite } from "../state/SiteContext";
+import { useMe } from "../state/AuthContext";
+import type { Role } from "../data/roles";
 import type { SiteSlug } from "../config/sites";
 
 interface Props {
@@ -26,18 +28,27 @@ function isItemActive(pathname: string, item: NavLeaf, activeSite: SiteSlug): bo
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function sectionForPath(pathname: string, activeSite: SiteSlug): string | undefined {
-  return NAV.find((section) => section.items.some((item) => isItemActive(pathname, item, activeSite)))?.label;
+/** NAV with each section's items filtered to what this role may see; sections left empty drop out. */
+function navFor(role: Role) {
+  return NAV
+    .map((section) => ({ ...section, items: section.items.filter((i) => !i.roles || i.roles.includes(role)) }))
+    .filter((section) => section.items.length > 0);
+}
+
+function sectionForPath(nav: ReturnType<typeof navFor>, pathname: string, activeSite: SiteSlug): string | undefined {
+  return nav.find((section) => section.items.some((item) => isItemActive(pathname, item, activeSite)))?.label;
 }
 
 export function AppNav({ open, onClose }: Props) {
   const location = useLocation();
   const activeSite = useActiveSite();
+  const me = useMe();
+  const nav = useMemo(() => navFor(me.role), [me.role]);
 
   // Starts on whichever section holds the current route; a section with only one item has
   // nothing to hide, so it's never collapsible in the first place (see the render below).
   const [openSections, setOpenSections] = useState<Set<string>>(() => {
-    const active = sectionForPath(location.pathname, activeSite.slug);
+    const active = sectionForPath(nav, location.pathname, activeSite.slug);
     return new Set(active ? [active] : []);
   });
 
@@ -45,10 +56,10 @@ export function AppNav({ open, onClose }: Props) {
   // opened by hand — this only ever adds to the set, a manual header click is the only way to
   // remove from it.
   useEffect(() => {
-    const active = sectionForPath(location.pathname, activeSite.slug);
+    const active = sectionForPath(nav, location.pathname, activeSite.slug);
     if (!active) return;
     setOpenSections((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
-  }, [location.pathname, activeSite.slug]);
+  }, [nav, location.pathname, activeSite.slug]);
 
   function toggleSection(label: string) {
     setOpenSections((prev) => {
@@ -100,7 +111,7 @@ export function AppNav({ open, onClose }: Props) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
-        {NAV.map((section) => {
+        {nav.map((section) => {
           const items = section.items;
           if (!items.length) return null;
           const collapsible = items.length > 1;

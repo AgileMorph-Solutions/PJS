@@ -7,6 +7,9 @@
 import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob,
 } from "@anagroci/contract/types/receipt";
+import type {
+  UserView, SubmissionView, BranchManagerView, SupplierRequestView,
+} from "@anagroci/contract/types/user";
 
 export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -41,11 +44,24 @@ async function errorFromResponse(res: Response): Promise<ApiError> {
 /** Writes answer { data, warnings } so a data-quality problem can surface at the point of capture. */
 export interface Written<T> { data: T; warnings: string[] }
 
+/** Fired when any call comes back 401 (session expired or revoked), so AuthContext can drop back to
+ * the login screen without every caller handling it. Login itself is exempt — a wrong password is a
+ * 401 the login form shows inline, not an expired session. */
+export const UNAUTHORIZED_EVENT = "anagroci:unauthorized";
+
+function checkUnauthorized(res: Response, path: string) {
+  if (res.status === 401 && path !== "/auth/login") window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    // The session is an httpOnly cookie; same-origin sends it by default, this covers `vite dev`
+    // against a backend on another port.
+    credentials: "include",
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
+  checkUnauthorized(res, path);
   if (!res.ok) throw await errorFromResponse(res);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
@@ -59,6 +75,44 @@ const withWarehouse = (path: string, warehouse?: string) =>
   warehouse ? `${path}${path.includes("?") ? "&" : "?"}warehouse=${encodeURIComponent(warehouse)}` : path;
 
 export const api = {
+  // ── Identity, users, approvals — their own capability, not part of TrackingApi (see
+  // state/AuthContext.tsx and the hooks in state/userManagement.ts). ────────────────────────────
+  login: (username: string, password: string) =>
+    request<UserView>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
+  me: () => request<UserView>("/auth/me"),
+
+  listUsers: () => request<UserView[]>("/users"),
+  createUser: (u: { username: string; password: string; displayName?: string; role: string; warehouse?: string | null }) =>
+    request<UserView>("/users", { method: "POST", body: JSON.stringify(u) }),
+  updateUser: (id: string, patch: { displayName?: string; role?: string; warehouse?: string | null; active?: boolean; password?: string }) =>
+    request<UserView>(`/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  submitForm: (receiptId: string, values: Record<string, Record<string, string>>) =>
+    request<{ id: string }>(`/receipts/${encodeURIComponent(receiptId)}/submissions`, { method: "POST", body: JSON.stringify({ values }) }),
+  listSubmissions: (q: { status?: string; receiptId?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (q.status) p.set("status", q.status);
+    if (q.receiptId) p.set("receiptId", q.receiptId);
+    return request<SubmissionView[]>(`/submissions${p.toString() ? `?${p}` : ""}`);
+  },
+  approveSubmission: (id: string) => request<{ ok: boolean }>(`/submissions/${encodeURIComponent(id)}/approve`, { method: "POST" }),
+  rejectSubmission: (id: string, reason: string) =>
+    request<{ ok: boolean }>(`/submissions/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
+  listBranchManagers: () => request<BranchManagerView[]>("/branch-managers"),
+  setBranchManagerSuppliers: (id: string, codes: string[]) =>
+    request<{ ok: boolean }>(`/branch-managers/${encodeURIComponent(id)}/suppliers`, { method: "PUT", body: JSON.stringify({ codes }) }),
+  mySuppliers: () => request<Supplier[]>("/my-suppliers"),
+  requestSupplier: (name: string, code?: string) =>
+    request<{ id: string }>("/supplier-requests", { method: "POST", body: JSON.stringify({ name, code }) }),
+  listSupplierRequests: (status?: string) =>
+    request<SupplierRequestView[]>(`/supplier-requests${status ? `?status=${status}` : ""}`),
+  approveSupplierRequest: (id: string, code?: string) =>
+    request<{ ok: boolean }>(`/supplier-requests/${encodeURIComponent(id)}/approve`, { method: "POST", body: JSON.stringify({ code }) }),
+  rejectSupplierRequest: (id: string, reason: string) =>
+    request<{ ok: boolean }>(`/supplier-requests/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+
   listReceipts: () => request<ReceiptRecord[]>("/receipts"),
   getReceipt: (id: string) => request<ReceiptRecord>(`/receipts/${encodeURIComponent(id)}`),
 
@@ -94,8 +148,11 @@ export const api = {
 
   masters: () => request<Masters>("/masters"),
   addSupplier: (s: Supplier) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
-  addWarehouse: (name: string, classification?: { kind?: string; site?: string }) =>
+  addWarehouse: (name: string, classification?: { kind?: string; site?: string; type?: string }) =>
     request<unknown>("/masters/warehouses", { method: "POST", body: JSON.stringify({ name, ...classification }) }),
+  /** Admin only: assign (or clear, with null) a site's Unit/Central type. */
+  setWarehouseType: (name: string, type: string | null) =>
+    request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ type }) }),
   addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
@@ -154,7 +211,8 @@ export const api = {
     const form = new FormData();
     form.append("file", file);
     if (importerId) form.append("importerId", importerId);
-    const res = await fetch(`${BASE}/imports/preview`, { method: "POST", body: form });
+    const res = await fetch(`${BASE}/imports/preview`, { method: "POST", body: form, credentials: "include" });
+    checkUnauthorized(res, "/imports/preview");
     if (!res.ok) throw await errorFromResponse(res);
     return res.json();
   },

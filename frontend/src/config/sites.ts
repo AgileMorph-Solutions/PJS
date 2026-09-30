@@ -48,6 +48,12 @@ export const SITES: Record<SiteSlug, SiteConfig> = {
 
 export const SITE_LIST: SiteConfig[] = Object.values(SITES);
 
+/** A user is assigned one warehouse, whose DB-side `type` (UNIT | CENTRAL — see
+ * data/warehouseTypes.ts) decides which section of the app they belong to. */
+export function siteSlugForType(type: string | null | undefined): SiteSlug | undefined {
+  return type === "UNIT" ? "unit" : type === "CENTRAL" ? "central" : undefined;
+}
+
 export function isSiteSlug(value: string | undefined): value is SiteSlug {
   return value === "unit" || value === "central";
 }

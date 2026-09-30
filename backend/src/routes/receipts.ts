@@ -5,7 +5,7 @@
  *
  * All the real work is in services/receipts.ts, which the seeder shares.
  */
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { DECISION_BRANCHES } from "@anagroci/contract/domain/decisions";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
@@ -17,7 +17,9 @@ import {
 import { getReceiptLinks } from "../services/receiptLinks.js";
 import { getDownstreamStatus } from "../services/receiptsDownstream.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
-import { resolveSite } from "../domain/site.js";
+import { scopedSite, scopedWarehouse, assertWarehouseAccess } from "../auth/scope.js";
+import { currentUser } from "../auth/plugin.js";
+import { assertReceiptVisible, filterReceiptsForUser } from "../auth/receiptAccess.js";
 
 /** Hard rules reject (422); unknown stage/field is a client bug (400). */
 export function sendError(reply: any, e: unknown) {
@@ -30,19 +32,23 @@ export function sendError(reply: any, e: unknown) {
  * Every mutating receipt route needs "does this id exist" first — five of them repeated the same
  * lookup-or-404. Centralised so the message and status code can't drift between them.
  */
-async function requireReceipt(id: string, reply: FastifyReply): Promise<ReceiptRecord | null> {
+async function requireReceipt(id: string, reply: FastifyReply, req: FastifyRequest): Promise<ReceiptRecord | null> {
   const r = await getReceipt(id);
   if (!r) {
     reply.code(404).send({ error: `Receipt ${id} not found` });
     return null;
   }
+  // Warehouse and (for Branch Managers) supplier visibility, checked in one place so no receipt
+  // route can forget it.
+  await assertWarehouseAccess(req, r.warehouse);
+  await assertReceiptVisible(currentUser(req), r);
   return r;
 }
 
 export async function receiptRoutes(app: FastifyInstance) {
   app.get("/api/receipts", async (req) => {
     const { warehouse } = req.query as { warehouse?: string };
-    return listReceipts(warehouse ? await resolveSite(warehouse) : undefined);
+    return filterReceiptsForUser(currentUser(req), await listReceipts(await scopedSite(req, warehouse)));
   });
 
   /**
@@ -52,27 +58,28 @@ export async function receiptRoutes(app: FastifyInstance) {
    */
   app.get("/api/receipts/downstream", async (req) => {
     const { warehouse } = req.query as { warehouse?: string };
-    const status = await getDownstreamStatus(warehouse ? await resolveSite(warehouse) : undefined);
+    const status = await getDownstreamStatus(await scopedSite(req, warehouse));
     return [...status.values()];
   });
 
   app.get("/api/receipts/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    return requireReceipt(id, reply);
+    return requireReceipt(id, reply, req);
   });
 
   app.post("/api/receipts", async (req, reply) => {
     const { warehouse } = (req.body ?? {}) as { warehouse?: string };
     try {
-      return reply.code(201).send(await createReceipt(warehouse));
+      // A Warehouse Incharge can only open receipts at their own warehouse.
+      return reply.code(201).send(await createReceipt(scopedWarehouse(req, warehouse) ?? warehouse));
     } catch (e) { return sendError(reply, e); }
   });
 
   app.patch("/api/receipts/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    if (!(await requireReceipt(id, reply))) return;
+    if (!(await requireReceipt(id, reply, req))) return;
     try {
-      const data = await patchReceipt(id, (req.body ?? {}) as Record<string, unknown>);
+      const data = await patchReceipt(id, (req.body ?? {}) as Record<string, unknown>, { actor: { id: currentUser(req).id, via: "direct" } });
       return { data, warnings: warningsForReceipt(data) };
     } catch (e) { return sendError(reply, e); }
   });
@@ -87,9 +94,9 @@ export async function receiptRoutes(app: FastifyInstance) {
     const { fields } = (req.body ?? {}) as { fields?: Record<string, string> };
     if (!STAGE_FIELD_MAP[stageId]) return reply.code(400).send({ error: `Unknown stage "${stageId}"` });
     if (!fields || typeof fields !== "object") return reply.code(400).send({ error: "body.fields is required" });
-    if (!(await requireReceipt(id, reply))) return;
+    if (!(await requireReceipt(id, reply, req))) return;
     try {
-      const data = await setStageFields(id, stageId, fields);
+      const data = await setStageFields(id, stageId, fields, { actor: { id: currentUser(req).id, via: "direct" } });
       return { data, warnings: warningsForReceipt(data) };
     } catch (e) { return sendError(reply, e); }
   });
@@ -102,9 +109,9 @@ export async function receiptRoutes(app: FastifyInstance) {
     if (!known || !known.some((b) => b.id === branchId)) {
       return reply.code(400).send({ error: `Unknown branch "${branchId}" for stage "${stageId}"` });
     }
-    if (!(await requireReceipt(id, reply))) return;
+    if (!(await requireReceipt(id, reply, req))) return;
     try {
-      const data = await setBranch(id, stageId, branchId, reason);
+      const data = await setBranch(id, stageId, branchId, reason, { actor: { id: currentUser(req).id, via: "direct" } });
       return { data, warnings: warningsForReceipt(data) };
     } catch (e) { return sendError(reply, e); }
   });
@@ -116,7 +123,7 @@ export async function receiptRoutes(app: FastifyInstance) {
    */
   app.get("/api/receipts/:id/activities", async (req, reply) => {
     const { id } = req.params as { id: string };
-    if (!(await requireReceipt(id, reply))) return;
+    if (!(await requireReceipt(id, reply, req))) return;
     return getReceiptActivities(id);
   });
 
@@ -127,7 +134,7 @@ export async function receiptRoutes(app: FastifyInstance) {
    */
   app.get("/api/receipts/:id/links", async (req, reply) => {
     const { id } = req.params as { id: string };
-    if (!(await requireReceipt(id, reply))) return;
+    if (!(await requireReceipt(id, reply, req))) return;
     return getReceiptLinks(id);
   });
 }

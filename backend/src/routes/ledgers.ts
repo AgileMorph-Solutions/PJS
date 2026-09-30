@@ -12,7 +12,7 @@ import { LEDGER_COLUMN_MAP, LEDGER_IDS } from "@anagroci/contract/generated/stag
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
 import { listLedgerRows, addLedgerRow } from "../services/ledgers.js";
 import { reconciliation, jsonSafe } from "../domain/juteBalance.js";
-import { resolveSite } from "../domain/site.js";
+import { scopedSite } from "../auth/scope.js";
 
 function requireLedger(ledgerId: string, reply: FastifyReply): boolean {
   if (LEDGER_COLUMN_MAP[ledgerId]) return true;
@@ -24,7 +24,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
   /** All four ledgers at once — matches the frontend's LedgerEntries shape. */
   app.get("/api/jute-ledgers", async (req) => {
     const { warehouse } = req.query as { warehouse?: string };
-    const site = warehouse ? await resolveSite(warehouse) : undefined;
+    const site = await scopedSite(req, warehouse);
     const out: Record<string, LedgerRow[]> = {};
     for (const id of LEDGER_IDS) out[id] = await listLedgerRows(id, site);
     return out;
@@ -34,7 +34,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
     const { ledgerId } = req.params as { ledgerId: string };
     const { warehouse } = req.query as { warehouse?: string };
     if (!requireLedger(ledgerId, reply)) return;
-    return listLedgerRows(ledgerId, warehouse ? await resolveSite(warehouse) : undefined);
+    return listLedgerRows(ledgerId, await scopedSite(req, warehouse));
   });
 
   app.post("/api/jute-ledgers/:ledgerId/entries", async (req, reply) => {
@@ -52,6 +52,6 @@ export async function ledgerRoutes(app: FastifyInstance) {
    */
   app.get("/api/jute-ledgers/reconciliation", async (req) => {
     const { warehouse } = req.query as { warehouse?: string };
-    return jsonSafe(await reconciliation(warehouse ? await resolveSite(warehouse) : undefined));
+    return jsonSafe(await reconciliation(await scopedSite(req, warehouse)));
   });
 }

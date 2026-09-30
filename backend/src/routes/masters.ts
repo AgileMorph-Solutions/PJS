@@ -3,7 +3,9 @@
 // here, on purpose, not an oversight.
 import type { FastifyInstance } from "fastify";
 import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
-import { listMasters, addSupplier, addWarehouse, addBin } from "../services/masters.js";
+import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
+import { requireRole } from "../auth/plugin.js";
+import { listMasters, addSupplier, addWarehouse, addBin, setWarehouseType } from "../services/masters.js";
 
 export async function masterRoutes(app: FastifyInstance) {
   app.get("/api/masters", async () => listMasters());
@@ -15,11 +17,17 @@ export async function masterRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/masters/warehouses", async (req, reply) => {
-    const { name, kind, site } = (req.body ?? {}) as { name?: string; kind?: WarehouseKind; site?: string };
+    const { name, kind, site, type } = (req.body ?? {}) as { name?: string; kind?: WarehouseKind; site?: string; type?: WarehouseType };
     if (!name) return reply.code(400).send({ error: "name is required" });
     // ValidationError (kind+site both set, or an unknown kind) is mapped to 422 by app.ts's
     // global error handler — no try/catch needed here, same as every other route in this file.
-    return reply.code(201).send(await addWarehouse(name, { kind, site }));
+    return reply.code(201).send(await addWarehouse(name, { kind, site, type }));
+  });
+
+  app.patch("/api/masters/warehouses/:name", { preHandler: requireRole("admin") }, async (req) => {
+    const { name } = req.params as { name: string };
+    const { type } = (req.body ?? {}) as { type?: string | null };
+    return setWarehouseType(name, type ?? null);
   });
 
   app.post("/api/masters/bins", async (req, reply) => {

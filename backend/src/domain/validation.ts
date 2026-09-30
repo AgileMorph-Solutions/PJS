@@ -77,3 +77,20 @@ export function assertOneBinPerLot(existingBinNo: string | null | undefined, inc
     );
   }
 }
+
+/** No valid session — the request never established who is asking (401). */
+export class UnauthorizedError extends Error {
+  constructor(message = "Sign in required.") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
+/** Signed in, but this role/warehouse may not do this (403). Distinct from ValidationError, which
+ * is about the data being wrong, not the caller. */
+export class ForbiddenError extends Error {
+  constructor(message = "You don't have permission to do that.") {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}

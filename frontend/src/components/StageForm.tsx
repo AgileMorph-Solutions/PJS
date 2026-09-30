@@ -7,12 +7,15 @@ interface Props {
   onFieldChange: (fieldName: string, value: string) => void;
   /** Called when a field loses focus, so the caller can flush its coalesced writes. */
   onFieldBlur?: () => void;
+  readOnly?: boolean;
+  /** Limit the grid to these field labels (a role's form covers only part of a stage). */
+  only?: string[];
 }
 
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, onFieldChange, onFieldBlur }: Props) {
+export function StageForm({ stage, values, onFieldChange, onFieldBlur, readOnly, only }: Props) {
   return (
     <div className="space-y-4">
       {stage.file && (
@@ -23,7 +26,7 @@ export function StageForm({ stage, values, onFieldChange, onFieldBlur }: Props) 
         </span>
       )}
       <div className="grid sm:grid-cols-2 gap-4">
-        {stage.fields.map((f) => (
+        {stage.fields.filter((f) => !only || only.includes(f.n)).map((f) => (
           <FieldInput
             key={f.n}
             field={f}
@@ -31,6 +34,7 @@ export function StageForm({ stage, values, onFieldChange, onFieldBlur }: Props) 
             onChange={(v) => onFieldChange(f.n, v)}
             onBlur={onFieldBlur}
             idPrefix={stage.id}
+            readOnly={readOnly}
           />
         ))}
       </div>

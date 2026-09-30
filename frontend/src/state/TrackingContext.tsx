@@ -87,7 +87,13 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [rs, ls, ms] = await Promise.all([api.listReceipts(), api.listLedgers(), api.masters()]);
+      // Branch Managers and QFS Officers aren't allowed the jute ledgers (403). That's "no access", not
+      // a failed load, so it must not blank the receipts they CAN see.
+      const ledgersOrNone = api.listLedgers().catch((e) => {
+        if (e instanceof ApiError && e.status === 403) return {} as LedgerEntries;
+        throw e;
+      });
+      const [rs, ls, ms] = await Promise.all([api.listReceipts(), ledgersOrNone, api.masters()]);
       setReceipts(rs);
       setLedgerEntries(ls);
       setMasters(ms);

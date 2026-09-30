@@ -10,7 +10,7 @@ import { IMPORTERS, getImporter } from "../domain/imports/registry.js";
 import { listImporterTypes, previewImport, commitImport, ImportRejectedError } from "../services/imports.js";
 import { buildTemplateWorkbook, buildExportWorkbook } from "../domain/imports/xlsxWriter.js";
 import { getExportRows } from "../services/importExports.js";
-import { resolveSite } from "../domain/site.js";
+import { scopedSite } from "../auth/scope.js";
 
 const KNOWN_IMPORTER_IDS = new Set(IMPORTERS.map((i) => i.id));
 
@@ -68,7 +68,7 @@ export async function importRoutes(app: FastifyInstance) {
     const { warehouse } = req.query as { warehouse?: string };
     const importerId = requireKnownImporter(id);
     const def = getImporter(importerId);
-    const rows = await getExportRows(importerId, warehouse ? await resolveSite(warehouse) : undefined);
+    const rows = await getExportRows(importerId, await scopedSite(req, warehouse));
     const buffer = await buildExportWorkbook(importerId, rows);
     const stamp = new Date().toISOString().slice(0, 10);
     reply

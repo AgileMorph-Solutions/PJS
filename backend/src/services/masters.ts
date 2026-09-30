@@ -5,23 +5,29 @@
  */
 import { prisma } from "../db.js";
 import { WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
+import { WAREHOUSE_TYPES, type WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { ValidationError } from "../domain/validation.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
+const VALID_TYPES = new Set<string>(WAREHOUSE_TYPES.map((t) => t.value));
 
 export async function listMasters() {
-  const [suppliers, warehouses, bins, origins] = await Promise.all([
+  const [suppliers, warehouses, bins, origins, aliases] = await Promise.all([
     prisma.supplier.findMany({ orderBy: { code: "asc" } }),
     prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
     prisma.bin.findMany({ orderBy: { code: "asc" } }),
     prisma.origin.findMany({ orderBy: { name: "asc" } }),
+    prisma.warehouseAlias.findMany({ orderBy: { alias: "asc" } }),
   ]);
   return {
     suppliers,
     // {name, kind, site} rather than a bare string[]: `kind` (Village/Regional/Factory, set only
     // on site rows) and `site` (null = this row IS a site) are what the two-section UI resolves a
     // row's section from — see packages/contract/src/data/warehouseKinds.ts.
-    warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, site: w.site })),
+    // `type` (UNIT | CENTRAL, site rows only) decides which app section a warehouse belongs to and
+    // which users can be assigned to it; `aliases` lets the UI group a store under its site.
+    warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, type: w.type, site: w.site })),
+    aliases: aliases.map((a) => ({ alias: a.alias, warehouseName: a.warehouseName })),
     bins: bins.map((b) => b.code),
     origins: origins.map((o) => o.name),
   };
@@ -39,15 +45,34 @@ export async function addSupplier(code: string, name: string) {
  * behavior this endpoint always had), but never both at once: that would leave a row claiming to
  * be a site and someone's store simultaneously, which nothing else in this app expects.
  */
-export async function addWarehouse(name: string, opts: { kind?: WarehouseKind; site?: string } = {}) {
-  const { kind, site } = opts;
+export async function addWarehouse(name: string, opts: { kind?: WarehouseKind; site?: string; type?: WarehouseType } = {}) {
+  const { kind, site, type } = opts;
   if (kind && site) throw new ValidationError("A warehouse is either a site (kind) or a store under one (site), not both.");
   if (kind && !VALID_KINDS.has(kind)) throw new ValidationError(`Unknown warehouse kind "${kind}".`);
+  assertTypeFits(type, site);
   return prisma.warehouse.upsert({
     where: { name },
-    update: { kind: kind ?? undefined, site: site ?? undefined },
-    create: { name, kind: kind ?? null, site: site ?? null },
+    update: { kind: kind ?? undefined, site: site ?? undefined, type: type ?? undefined },
+    create: { name, kind: kind ?? null, site: site ?? null, type: type ?? null },
   });
+}
+
+/** `type` is a property of a SITE (a store belongs to its site's section), so a store can't carry one. */
+function assertTypeFits(type: string | undefined | null, site: string | null | undefined) {
+  if (type && !VALID_TYPES.has(type)) throw new ValidationError(`Unknown warehouse type "${type}".`);
+  if (type && site) throw new ValidationError("Only a site can have a Unit/Central type, not a store under one.");
+}
+
+/** Admin assigns (or clears) the Unit/Central type on a site. */
+export async function setWarehouseType(name: string, type: string | null) {
+  const wh = await prisma.warehouse.findUnique({ where: { name } });
+  if (!wh) throw Object.assign(new Error("Warehouse not found"), { code: "P2025" });
+  assertTypeFits(type, wh.site);
+  // Users are pinned to typed sites; clearing the type of a site that has users would strand them.
+  if (!type && (await prisma.user.count({ where: { warehouse: name, active: true } }))) {
+    throw new ValidationError(`"${name}" has active users — reassign them before clearing its type.`);
+  }
+  return prisma.warehouse.update({ where: { name }, data: { type } });
 }
 
 export async function addBin(code: string, warehouseName?: string) {

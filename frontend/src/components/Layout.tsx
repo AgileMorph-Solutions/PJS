@@ -1,9 +1,13 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppNav } from "./AppNav";
+import { useAuth } from "../state/AuthContext";
+import { ROLE_LABEL } from "../data/roles";
+import { siteSlugForType } from "../config/sites";
 
 export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const { me, logout } = useAuth();
   const [q, setQ] = useState("");
   // Below `lg` the sidebar is an off-canvas drawer (see AppNav), closed by default so it never
   // covers the content on a phone/tablet the way a permanently-fixed w-72 sidebar used to.
@@ -15,7 +19,9 @@ export function Layout({ children }: { children: ReactNode }) {
     // No site to scope a header search to — lands on the unit section (the larger of the two,
     // matching pages/LegacyRedirects.tsx's own default), same as visiting a stale /procurement/*
     // link with no other info to resolve from.
-    navigate(`/unit/receipts?q=${encodeURIComponent(q.trim())}`);
+    // A non-admin only has their own section.
+    const slug = me && me.role !== "admin" ? siteSlugForType(me.warehouseType) ?? "unit" : "unit";
+    navigate(`/${slug}/receipts?q=${encodeURIComponent(q.trim())}`);
     setNavOpen(false);
   }
 
@@ -46,6 +52,24 @@ export function Layout({ children }: { children: ReactNode }) {
               className="w-full pl-10 pr-4 py-1.5 bg-warmstone-50 border border-warmstone-200 focus:border-brand-700 focus:bg-white rounded-xl text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:ring-1 focus:ring-brand-700"
             />
           </form>
+          {me && (
+            <div className="ml-auto flex items-center gap-3 shrink-0">
+              <div className="hidden sm:block text-right leading-tight">
+                <div className="text-[13px] font-semibold text-warmstone-900">{me.displayName}</div>
+                <div className="text-[11px] text-warmstone-500">
+                  {ROLE_LABEL[me.role]}{me.warehouse ? ` · ${me.warehouse}` : ""}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => { void logout().then(() => navigate("/")); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-xs font-semibold hover:bg-warmstone-50 transition-all shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[16px]">logout</span>
+                Sign out
+              </button>
+            </div>
+          )}
         </header>
         <main className="pt-16 min-h-screen">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>

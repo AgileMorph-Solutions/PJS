@@ -36,7 +36,11 @@ export function toReceiptRecord(row: AnyRow): ReceiptRecord & { status: ReceiptS
     timeline: (row.timeline ?? [])
       .slice()
       .sort((a: AnyRow, b: AnyRow) => a.id - b.id)
-      .map((t: AnyRow) => ({ status: t.status as ReceiptStatus, at: t.at, note: t.note })),
+      .map((t: AnyRow) => ({
+        status: t.status as ReceiptStatus, at: t.at, note: t.note,
+        // Only present when a user caused the entry, so pre-existing records serialize exactly as before.
+        ...(t.actor?.displayName ? { actor: t.actor.displayName as string } : {}),
+      })),
   };
 
   return { ...record, status: deriveStatus(record) };

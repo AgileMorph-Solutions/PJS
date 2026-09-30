@@ -1,3 +1,5 @@
+import type { Role } from "../data/roles";
+
 export interface NavLeaf {
   label: string;
   /** Literal path — used for leaves that don't depend on which site is active. Exactly one of
@@ -14,6 +16,9 @@ export interface NavLeaf {
   /** Short pill shown after the label, e.g. "Soon" for a page that's an intentional placeholder
    * (see ProductionPage.tsx) — so clicking into it isn't mistaken for a broken link. */
   badge?: string;
+  /** Who sees this item. Omitted = every signed-in role. The API is the real gate (see
+   * backend/src/auth/policy.ts); this only keeps people from seeing links that would 403. */
+  roles?: Role[];
 }
 
 export interface NavSection {
@@ -24,7 +29,7 @@ export interface NavSection {
 export const NAV: NavSection[] = [
   {
     label: "Overview",
-    items: [{ label: "Dashboard", to: "/", icon: "dashboard", end: true }],
+    items: [{ label: "Dashboard", to: "/", icon: "dashboard", end: true, roles: ["admin", "warehouse_incharge"] }],
   },
   {
     // One section for both sites — which warehouse a `sitePath` leaf actually points at is
@@ -37,8 +42,8 @@ export const NAV: NavSection[] = [
     label: "Warehouse",
     items: [
       { label: "Reception", sitePath: "receipts", icon: "receipt_long" },
-      { label: "Lots & Bins", sitePath: "stock", icon: "grid_view" },
-      { label: "Drying", sitePath: "drying", icon: "wb_sunny" },
+      { label: "Lots & Bins", sitePath: "stock", icon: "grid_view", roles: ["admin", "warehouse_incharge"] },
+      { label: "Drying", sitePath: "drying", icon: "wb_sunny", roles: ["admin", "warehouse_incharge"] },
     ],
   },
   {
@@ -55,7 +60,7 @@ export const NAV: NavSection[] = [
     // tab bar) at the same leaf URLs, so one nav entry (`to: "/jute"`, not `end`) lights up for
     // all five — see AppNav.tsx's isItemActive prefix match.
     label: "Jute Bag Management",
-    items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2" }],
+    items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2", roles: ["admin", "warehouse_incharge"] }],
   },
   {
     // Reverted to the single placeholder entry on request — the BTM/Bin/Lot pages, backend
@@ -65,15 +70,30 @@ export const NAV: NavSection[] = [
     // list that was here (git history has it), no other code changes needed.
     label: "Production",
     items: [
-      { label: "Production", to: "/production", icon: "precision_manufacturing", badge: "Soon" },
+      { label: "Production", to: "/production", icon: "precision_manufacturing", badge: "Soon", roles: ["admin", "warehouse_incharge"] },
     ],
   },
   {
     label: "Masters",
     items: [
-      { label: "Suppliers", to: "/masters/suppliers", icon: "groups" },
-      { label: "Warehouses", to: "/masters/warehouses", icon: "domain" },
-      { label: "Bins", to: "/masters/bins", icon: "inventory" },
+      { label: "Suppliers", to: "/masters/suppliers", icon: "groups", roles: ["admin", "warehouse_incharge"] },
+      { label: "Warehouses", to: "/masters/warehouses", icon: "domain", roles: ["admin", "warehouse_incharge"] },
+      { label: "Bins", to: "/masters/bins", icon: "inventory", roles: ["admin", "warehouse_incharge"] },
     ],
+  },
+  {
+    // Where the approval flow lives. Warehouse Incharge approves BM/QFS submissions and assigns
+    // suppliers; a Branch Manager sees their own suppliers and can request new ones.
+    label: "Approvals",
+    items: [
+      { label: "Approvals", to: "/approvals", icon: "approval", roles: ["admin", "warehouse_incharge"] },
+      { label: "Supplier assignment", to: "/supplier-assignment", icon: "assignment_ind", roles: ["admin", "warehouse_incharge"] },
+      { label: "My suppliers", to: "/my-suppliers", icon: "groups", roles: ["branch_manager"] },
+      { label: "My submissions", to: "/my-submissions", icon: "outbox", roles: ["branch_manager", "qfs_officer"] },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [{ label: "Users", to: "/admin/users", icon: "manage_accounts", roles: ["admin"] }],
   },
 ];

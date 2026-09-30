@@ -128,8 +128,38 @@ Fifteen findings ship against the real data, including:
 | POST | `/api/imports/preview` | Multipart `.xlsx` upload → parsed rows + findings, cached under a token |
 | POST | `/api/imports/:token/commit` | Writes the previewed rows — see `docs/UPLOAD_GUIDE.md` |
 
+### Auth and user management
+
+Every `/api/*` route except `/api/health` and `/api/auth/login` needs a session (httpOnly cookie,
+12h, only its SHA-256 stored). Four roles — `admin`, `warehouse_incharge`, `branch_manager`,
+`qfs_officer` — defined with their forms in `packages/contract/src/data/roles.ts`; the design and
+the reasoning are in `../docs/usermanagement.md`.
+
+| Method | Path | Who |
+|---|---|---|
+| POST | `/api/auth/login`, `/api/auth/logout`; GET `/api/auth/me` | anyone / signed in |
+| GET/POST/PATCH | `/api/users[/:id]` | admin — role, one warehouse (a typed site), active, password reset |
+| PATCH | `/api/masters/warehouses/:name` | admin — sets a site's Unit/Central `type` |
+| POST | `/api/receipts/:id/submissions` | Branch Manager (reception form) / QFS Officer (jute check) |
+| GET | `/api/submissions?status=&receiptId=` | reviewers: their warehouse; submitters: their own |
+| POST | `/api/submissions/:id/approve`, `/reject` | Warehouse Incharge / admin. Reject needs `{reason}` and is final |
+| GET/PUT | `/api/branch-managers`, `/api/branch-managers/:id/suppliers` | Warehouse Incharge — assign suppliers (whole set) |
+| GET | `/api/my-suppliers` | Branch Manager |
+| GET/POST | `/api/supplier-requests`, POST `.../:id/approve`, `.../:id/reject` | Branch Manager requests; Warehouse Incharge decides |
+
+- **Scope.** `?warehouse=` goes through `auth/scope.ts`'s `scopedSite()`, which wraps `resolveSite()`:
+  admin may ask for any warehouse; everyone else is pinned to their own (naming another is 403).
+- **Default-deny for the narrow roles.** `auth/policy.ts` lists the only requests a Branch Manager or
+  QFS Officer may make; a new route is closed to them until it's listed there.
+- **Submissions are staged.** A submission is stored as-is and touches no stage table, so it can't
+  move derived status. Approval applies it through `applyStageFields` in one transaction with the
+  status/timeline change. Every changed field (direct edit or approval) lands in `StageFieldChange`.
+- **First admin.** The seed creates one from `ADMIN_USERNAME` / `ADMIN_PASSWORD` while no admin
+  exists; with no password set, nothing is created. Set `COOKIE_SECURE=true` behind HTTPS.
+- Old data has no actor: seeded/imported receipts and their timeline entries stay `actorId = NULL`.
+
 Hard rules answer **422** (lot-before-bin, lot uniqueness, rejection-needs-reason,
-drying-needs-lot); an unknown stage or field label answers **400** rather than silently dropping
+drying-needs-lot); a missing/expired session answers **401**, a role or warehouse the caller isn't allowed **403**; an unknown stage or field label answers **400** rather than silently dropping
 the write. See `../docs/UPLOAD_GUIDE.md` for which real workbook feeds which endpoint above, what's
 deliberately not importable, and the dedup rules each importer applies.
 

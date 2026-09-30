@@ -22,6 +22,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../src/stageStore.js";
+import { hashPassword } from "../src/auth/password.js";
 
 const prisma = new PrismaClient();
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -88,6 +89,27 @@ async function backfillWarehouseTypology() {
     update: { warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
     create: { alias: "YAMOUSSOUKRO", warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
   });
+
+  // Unit/Central app tier (Warehouse.type). Only fills a NULL: an admin can reassign a type in
+  // Masters, and re-running the seed must not silently undo that.
+  await prisma.warehouse.updateMany({ where: { name: "BOUAKE", type: null }, data: { type: "UNIT" } });
+  await prisma.warehouse.updateMany({ where: { name: "YAKRO FACTORY", type: null }, data: { type: "CENTRAL" } });
+}
+
+/**
+ * Creates the first admin from ADMIN_USERNAME / ADMIN_PASSWORD, only while no admin exists — so a
+ * fresh database (docker compose up) is usable, and re-running never resets a changed password.
+ * Without both variables nothing is created: there is deliberately no default password.
+ */
+async function ensureBootstrapAdmin() {
+  const username = process.env.ADMIN_USERNAME?.trim();
+  const password = process.env.ADMIN_PASSWORD;
+  if (!username || !password) return;
+  if (await prisma.user.count({ where: { role: "admin" } })) return;
+  await prisma.user.create({
+    data: { username, displayName: username, role: "admin", passwordHash: hashPassword(password) },
+  });
+  console.log(`Created bootstrap admin "${username}".`);
 }
 
 /**
@@ -110,6 +132,7 @@ async function main() {
   // once applied.
   await backfillWarehouseTypology();
   await backfillTransferDestination();
+  await ensureBootstrapAdmin();
 
   if ((await prisma.receipt.count()) > 0) {
     console.log("Database already seeded — skipping.");

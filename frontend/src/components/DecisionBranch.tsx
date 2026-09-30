@@ -4,9 +4,11 @@ interface Props {
   branches: BranchOutcome[];
   chosen?: string;
   onChoose: (branchId: string) => void;
+  /** Show the decision without letting the viewer change it. */
+  readOnly?: boolean;
 }
 
-export function DecisionBranch({ branches, chosen, onChoose }: Props) {
+export function DecisionBranch({ branches, chosen, onChoose, readOnly }: Props) {
   return (
     <div className="grid sm:grid-cols-2 gap-3">
       {branches.map((b) => {
@@ -16,7 +18,8 @@ export function DecisionBranch({ branches, chosen, onChoose }: Props) {
             key={b.id}
             type="button"
             onClick={() => onChoose(b.id)}
-            className={`text-left rounded-xl border-2 p-4 transition-all ${
+            disabled={readOnly}
+            className={`text-left rounded-xl border-2 p-4 transition-all disabled:cursor-default ${
               isChosen
                 ? "border-brand-700 bg-brand-50 shadow-sm"
                 : "border-dashed border-warmstone-300 bg-white hover:border-warmstone-400 hover:bg-warmstone-50"

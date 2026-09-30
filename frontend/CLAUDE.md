@@ -14,6 +14,11 @@ src/repository/*Repo.ts     Thin re-exports of @anagroci/contract types, plus on
                              — TrackingContext is.
 src/state/TrackingContext.tsx  The single state container. See "State shape" below before touching
                              this file — it has real concurrency handling in it, not just useState.
+src/state/AuthContext.tsx   `useAuth()` / `useMe()` — who is signed in. App.tsx renders LoginPage until
+                             there is one, and keys TrackingProvider by user id. Role-gated routes use
+                             `components/RequireRole`, nav items carry `roles` (config/nav.ts) — both
+                             are courtesy; backend/src/auth/policy.ts is the real gate. Non-admins are
+                             pinned to their own warehouse's section in SiteContext.
 src/config/sites.ts          The two real sites (Bouaké/Yakro Factory) as URL slugs + the real
                              `Warehouse.name` each one scopes API reads by. Adding a third site is
                              meant to be one more entry here — see its own header comment.

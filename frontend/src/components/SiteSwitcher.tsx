@@ -1,4 +1,5 @@
 import { SITE_LIST, isSiteSlug, type SiteSlug } from "../config/sites";
+import { useMe } from "../state/AuthContext";
 
 interface Props {
   value: SiteSlug | "";
@@ -19,6 +20,8 @@ interface Props {
  * opinion on what picking one *does*, which is what keeps both call sites simple.
  */
 export function SiteSwitcher({ value, onChange, allowAll }: Props) {
+  // Only admin can look across warehouses; everyone else is pinned to theirs by the API.
+  if (useMe().role !== "admin") return null;
   return (
     <select
       value={value}

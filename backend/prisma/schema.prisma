@@ -68,6 +68,12 @@ model Warehouse {
   /// indistinguishable from a real one, same discipline as WarehouseAlias.provenance below.
   kind String?
 
+  /// The app's operational tier ("UNIT" | "CENTRAL" — see contract's warehouseTypes.ts), set ONLY on
+  /// SITE rows. Separate from `kind`: kind is the client's own vocabulary, type decides which
+  /// section of the app the warehouse belongs to and which users can be assigned to it. Nullable and
+  /// never defaulted, same discipline as `kind`.
+  type String?
+
   /// NULL means this row IS a site. Non-null means this row is a STORE belonging to that site.
   site    String?
   siteRef Warehouse?  @relation("WarehouseSite", fields: [site], references: [name])
@@ -79,8 +85,10 @@ model Warehouse {
   transfersOut  JuteWarehouseTransferReceipt[] @relation("TransferSource")
   transfersIn   JuteWarehouseTransferReceipt[] @relation("TransferDestination")
   aliases       WarehouseAlias[]
+  users         User[]
 
   @@index([kind])
+  @@index([type])
   @@index([site])
 }
 
@@ -141,6 +149,8 @@ model Receipt {
   stageEntries StageEntry[]
   branches     ReceiptBranch[]
   timeline     TimelineEntry[]
+  submissions  FormSubmission[]
+  fieldChanges StageFieldChange[]
 
   gate            StageGateEntry?
   verify          StageVerifyDocs?
@@ -204,6 +214,10 @@ model TimelineEntry {
   status    String
   at        String
   note      String?
+  /// Who caused this entry. NULL on every row that predates the role system — not backfilled, since
+  /// naming an actor for old rows would be fabricating one.
+  actorId   String?
+  actor     User?   @relation(fields: [actorId], references: [id])
 
   @@index([receiptId])
 }
@@ -1091,21 +1105,21 @@ model DryingBatch {
 model DryingSortingReport {
   id String @id @default(uuid())
 
-  sn            Int?
-  dryingDate    DateTime?
-  dryingDateRaw String?
-  warehouseSite String?
-  warehouse     String?
-  unloadingBin    String?
-  afterDryingBin  String?
+  sn                   Int?
+  dryingDate           DateTime?
+  dryingDateRaw        String?
+  warehouseSite        String?
+  warehouse            String?
+  unloadingBin         String?
+  afterDryingBin       String?
   /// Clean only when column 7 is unambiguously a single integer — null on all 11 comma-joined rows.
-  lotNo    String?
+  lotNo                String?
   /// Verbatim twin — e.g. "12,5" on the 11 rows lotNo can't resolve.
-  lotNoRaw String?
+  lotNoRaw             String?
   /// Verbatim only — column 8 also carries slash/comma-joined multi-values ("813, 805") on 12/57 rows.
-  whReceiptNoRaw String?
-  origin         String?
-  supplierName   String?
+  whReceiptNoRaw       String?
+  origin               String?
+  supplierName         String?
   /// Verbatim — "Supplier's Code (Anagroci)", multi-valued on some rows ("LBA-013-DAG/ LBA-009-SCO").
   supplierCodeAnagroci String?
   /// Verbatim — "Supplier's Code (CCAK)", same multi-value shape.
@@ -1113,30 +1127,30 @@ model DryingSortingReport {
 
   issuedNetWeightGrn           Decimal?
   receivedNetWeightAfterDrying Decimal?
-  inputMoisture  Decimal?
-  inputNutCount  Decimal?
-  inputKor       Decimal?
-  outputMoisture Decimal?
-  outputNutCount Decimal?
-  outputKor      Decimal?
+  inputMoisture                Decimal?
+  inputNutCount                Decimal?
+  inputKor                     Decimal?
+  outputMoisture               Decimal?
+  outputNutCount               Decimal?
+  outputKor                    Decimal?
   /// Column 21, "Draige Loss Kg's" (first occurrence).
-  drainageLossKg  Decimal?
-  lossPct         Decimal?
+  drainageLossKg               Decimal?
+  lossPct                      Decimal?
   /// Column 23, "Draige Loss Kg's" (second occurrence) — see this model's header comment.
-  drainageLossKg2 Decimal?
+  drainageLossKg2              Decimal?
   /// Column 24, "DRIAGE LOSS  %".
-  drainageLossPct Decimal?
+  drainageLossPct              Decimal?
 
   /// Column 25, "Good or Dried Sacs" — blank on every one of the 57 real rows in the source file.
   /// Kept nullable and genuinely empty rather than invented; a future export may fill it.
-  goodOrDriedSacs        String?
-  damagedNutsKgTriage    Decimal?
+  goodOrDriedSacs       String?
+  damagedNutsKgTriage   Decimal?
   /// Column 27, "Total Sac Received" — also blank on every real row today, same reasoning.
-  totalSacReceived       String?
-  inputBagsForDrying     Int?
-  outputBagsAfterDrying  Int?
-  dryingPicking          String?
-  remarks                String?
+  totalSacReceived      String?
+  inputBagsForDrying    Int?
+  outputBagsAfterDrying Int?
+  dryingPicking         String?
+  remarks               String?
 
   sheetRow  Int?
   source    String?
@@ -1981,4 +1995,119 @@ model IssuedToProduction {
 
   @@unique([source, sheetRow])
   @@index([btmNo])
+}
+
+// ── User management ───────────────────────────────────────────────────────
+// Roles and who-may-write-what live in packages/contract's roles.ts; only identity, scope and the
+// approval workflow's own records live here.
+
+/// `role` is a string validated against contract's Role union (same convention as the rest of the
+/// schema). `warehouse` is a SITE row with a `type` set; NULL only for admin.
+model User {
+  id           String     @id @default(cuid())
+  username     String     @unique
+  passwordHash String
+  displayName  String
+  role         String
+  warehouse    String?
+  warehouseRef Warehouse? @relation(fields: [warehouse], references: [name])
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  sessions            Session[]
+  suppliers           BranchManagerSupplier[] @relation("BmSuppliers")
+  assignedSuppliers   BranchManagerSupplier[] @relation("SupplierAssigner")
+  supplierRequests    SupplierRequest[]       @relation("SupplierRequester")
+  reviewedRequests    SupplierRequest[]       @relation("SupplierReviewer")
+  submissions         FormSubmission[]        @relation("SubmissionAuthor")
+  reviewedSubmissions FormSubmission[]        @relation("SubmissionReviewer")
+  fieldChanges        StageFieldChange[]
+  timeline            TimelineEntry[]
+
+  @@index([role])
+  @@index([warehouse])
+}
+
+/// Only the SHA-256 of the cookie token is stored, so a database read can't be replayed as a login.
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Which suppliers a Branch Manager may report for. Supplier.code is the LBA code.
+model BranchManagerSupplier {
+  userId       String
+  user         User     @relation("BmSuppliers", fields: [userId], references: [id], onDelete: Cascade)
+  supplierCode String
+  assignedById String
+  assignedBy   User     @relation("SupplierAssigner", fields: [assignedById], references: [id])
+  assignedAt   DateTime @default(now())
+
+  @@id([userId, supplierCode])
+  @@index([supplierCode])
+}
+
+/// A Branch Manager asking the Warehouse Incharge to add a supplier to the master.
+model SupplierRequest {
+  id            String    @id @default(cuid())
+  requestedById String
+  requestedBy   User      @relation("SupplierRequester", fields: [requestedById], references: [id])
+  code          String?
+  name          String
+  /// "pending" | "approved" | "rejected"
+  status        String    @default("pending")
+  reviewedById  String?
+  reviewedBy    User?     @relation("SupplierReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  reason        String?
+  createdAt     DateTime  @default(now())
+
+  @@index([status])
+}
+
+/// A Branch Manager / QFS Officer's staged entry. `values` is an immutable record of what was
+/// submitted ({stageId: {label: value}}); it is applied to the stage tables via setStageFields only
+/// on approval, so a pending submission never moves derived status. Rejection is terminal.
+model FormSubmission {
+  id            String    @id @default(cuid())
+  receiptId     String
+  receipt       Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  formId        String
+  values        Json
+  submittedById String
+  submittedBy   User      @relation("SubmissionAuthor", fields: [submittedById], references: [id])
+  /// "submitted" | "approved" | "rejected"
+  status        String    @default("submitted")
+  reviewedById  String?
+  reviewedBy    User?     @relation("SubmissionReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime  @default(now())
+
+  @@index([receiptId, formId])
+  @@index([status])
+}
+
+/// Audit of every stage-field change made by a user: who, when, old -> new.
+model StageFieldChange {
+  id        Int      @id @default(autoincrement())
+  receiptId String
+  receipt   Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  stageId   String
+  label     String
+  oldValue  String?
+  newValue  String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  at        DateTime @default(now())
+  /// "direct" (Warehouse Incharge / admin edit) | "approval" (applied from a FormSubmission)
+  via       String
+
+  @@index([receiptId])
 }

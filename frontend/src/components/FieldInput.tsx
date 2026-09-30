@@ -8,6 +8,8 @@ interface Props {
   onBlur?: () => void;
   /** Makes the generated input id unique across stages that render on the same page. */
   idPrefix?: string;
+  /** Shown but not editable — for roles that submit a form for approval instead of editing directly. */
+  readOnly?: boolean;
 }
 
 /** One field row: label + an optional "new" badge + a controlled input. `field.v` only ever
@@ -15,7 +17,7 @@ interface Props {
  * displayed value always comes from the record itself via `value`, never from the generic sample
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange, onBlur, idPrefix }: Props) {
+export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly }: Props) {
   const isNew = field.v === "";
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
 
@@ -34,8 +36,9 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix }: Props) 
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
+        readOnly={readOnly}
         placeholder={value ? "" : "Not recorded yet"}
-        className="w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
+        className={`w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${readOnly ? "cursor-default text-warmstone-600" : ""}`}
       />
     </div>
   );

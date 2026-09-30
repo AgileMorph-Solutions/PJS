@@ -2,6 +2,9 @@ import { useMemo, useState, type FormEvent } from "react";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { useTracking } from "../../state/TrackingContext";
+import { useMe } from "../../state/AuthContext";
+import { api } from "../../repository/api";
+import { WAREHOUSE_TYPES } from "../../data/warehouseTypes";
 import { SITE_LIST, siteSlugForWarehouse, siteSlugForSiteName, type SiteSlug } from "../../config/sites";
 import { WAREHOUSE_KINDS, type WarehouseKind } from "../../data/warehouseKinds";
 import type { WarehouseMaster } from "../../types/receipt";
@@ -38,8 +41,40 @@ function decodeChoice(value: string): TypeChoice | null {
   return null;
 }
 
+/** Admin-only Unit/Central assignment for a SITE. Users can only be assigned to a typed site, so
+ * this is where a warehouse becomes assignable. The API refuses to clear a type while active users
+ * are pinned to it, and shows that message here rather than failing silently. */
+function TypeSelect({ warehouse }: { warehouse: WarehouseMaster }) {
+  const { refresh } = useTracking();
+  const [error, setError] = useState<string | null>(null);
+  async function change(value: string) {
+    setError(null);
+    try {
+      await api.setWarehouseType(warehouse.name, value || null);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      <select
+        aria-label={`Unit/Central type for ${warehouse.name}`}
+        value={warehouse.type ?? ""}
+        onChange={(e) => void change(e.target.value)}
+        className="px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-semibold text-warmstone-800 outline-none focus:border-brand-700"
+      >
+        <option value="">No type</option>
+        {WAREHOUSE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+      </select>
+      {error && <span role="alert" className="text-[11.5px] text-danger-700">{error}</span>}
+    </span>
+  );
+}
+
 export function WarehousesPage() {
   const { masters, addWarehouse, receipts } = useTracking();
+  const isAdmin = useMe().role === "admin";
   const [name, setName] = useState("");
   const [type, setType] = useState("");
 
@@ -132,8 +167,14 @@ export function WarehousesPage() {
 
       {SITE_LIST.map((site) => (
         <div key={site.slug}>
-          <h3 className="px-1 mb-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
-            {site.label} <span className="normal-case font-medium text-warmstone-300">· {site.sublabel}</span>
+          <h3 className="px-1 mb-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider flex items-center gap-3">
+            <span>
+              {site.label} <span className="normal-case font-medium text-warmstone-300">· {site.sublabel}</span>
+            </span>
+            {isAdmin && (() => {
+              const row = masters.warehouses.find((w) => w.name === site.warehouseName);
+              return row ? <TypeSelect warehouse={row} /> : null;
+            })()}
           </h3>
           <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
             {storesFor(site.slug).map((w) => (
@@ -166,6 +207,7 @@ export function WarehousesPage() {
                 <span className="font-semibold text-warmstone-800 flex items-center gap-2">
                   <span className="material-symbols-outlined text-[17px] text-warmstone-400">help</span>
                   {w.name}
+                  {isAdmin && !w.site && <TypeSelect warehouse={w} />}
                 </span>
                 <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
               </div>

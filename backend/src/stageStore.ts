@@ -16,7 +16,7 @@ import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 
 /** Prisma `include` covering every stage relation plus the receipt's own children. */
 export const RECEIPT_INCLUDE = {
-  timeline: { orderBy: { id: "asc" } },
+  timeline: { orderBy: { id: "asc" }, include: { actor: { select: { displayName: true } } } },
   stageEntries: true,
   branches: true,
   ...Object.fromEntries(

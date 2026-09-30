@@ -103,6 +103,14 @@ actually contains; the measured-count tests above have already caught real probl
 ## Error handling convention
 
 `app.ts`'s error handler maps exception types to HTTP codes in one place:
-`ValidationError` → 422, `UnknownStageFieldError` → 400, Prisma `P2002`/`P2003`/`P2025` → 409/422/404.
+`ValidationError` → 422, `UnauthorizedError` → 401, `ForbiddenError` → 403, `UnknownStageFieldError` → 400, Prisma `P2002`/`P2003`/`P2025` → 409/422/404.
 New domain errors should be a typed class thrown from the service/domain layer and added there —
 not a `reply.code(...)` scattered inline in a route, which is how the codes drift from each other.
+
+## Auth
+
+`auth/plugin.ts`'s `registerAuth(app)` must be called **before** the route registrations in `app.ts`
+(its hook only covers routes added after it). New site-scoped reads use `scopedSite(req, warehouse)`,
+never `resolveSite` directly; new writes for Warehouse Incharge/admin only need nothing extra, and a
+route a Branch Manager / QFS Officer should reach must be added to `auth/policy.ts`. Route tests
+that need a session use `buildApp().inject()` — see `tests/userManagement.test.ts`.

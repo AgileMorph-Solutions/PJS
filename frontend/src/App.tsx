@@ -1,4 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth, homePathFor } from "./state/AuthContext";
+import { RequireRole } from "./components/RequireRole";
+import { LoginPage } from "./pages/LoginPage";
+import { UsersPage } from "./pages/admin/UsersPage";
+import { ApprovalsPage } from "./pages/warehouse/ApprovalsPage";
+import { SupplierAssignmentPage } from "./pages/masters/SupplierAssignmentPage";
+import { MySuppliersPage } from "./pages/MySuppliersPage";
+import { MySubmissionsPage } from "./pages/MySubmissionsPage";
+import type { Role } from "./data/roles";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 import { SiteLayout } from "./state/SiteContext";
@@ -34,6 +43,16 @@ import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
 import { BinDetailPage } from "./pages/masters/BinDetailPage";
 
+/** Everything a Branch Manager / QFS Officer can't reach; the API refuses it for them too. */
+const REVIEWERS: Role[] = ["admin", "warehouse_incharge"];
+
+/** Dashboard for admin / Warehouse Incharge; everyone else lands on their own Reception. */
+function HomeRoute() {
+  const { me } = useAuth();
+  if (!me) return null;
+  return REVIEWERS.includes(me.role) ? <DashboardPage /> : <Navigate to={homePathFor(me)} replace />;
+}
+
 /** Holds the first render until the initial load finishes, so pages never flash an empty dataset.
  * /production/* is exempted: those pages fetch their own data independently (useBtmIntakes,
  * useProductionBins, ...), so a slow or erroring procurement load has no reason to block them. */
@@ -68,14 +87,10 @@ function LoadGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-export default function App() {
+function AppRoutes() {
   return (
-    <TrackingProvider>
-      <BrowserRouter>
-        <Layout>
-          <LoadGate>
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
+            <Route path="/" element={<HomeRoute />} />
 
             {/* One /:site/* tree for both sections (see state/SiteContext.tsx) — "/unit/receipts"
                 and "/central/receipts" render the exact same components, scoped by useSite(), not
@@ -83,69 +98,108 @@ export default function App() {
                 than silently rendering garbage. */}
             <Route path="/:site" element={<SiteLayout />}>
               <Route path="receipts" element={<ReceiptsListPage />} />
-              <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
               {/* NOT forked per site — one receipt record, one page; a receipt detail page can
                   legitimately show cross-site linked records by design (see ReceiptDetailPage's own
                   header comment and receiptLinks.ts, whose /links route deliberately never accepts
                   ?warehouse=). Only the breadcrumb reads useSite(). */}
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
-              <Route path="stock" element={<StockPage />} />
-              <Route path="drying" element={<DryingJobsPage />} />
+              <Route element={<RequireRole roles={REVIEWERS} />}>
+                <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
+                <Route path="stock" element={<StockPage />} />
+                <Route path="drying" element={<DryingJobsPage />} />
               {/* Not in nav.ts (see its own comment) — reached from Reception's Downstream chips
                   and a receipt's "Linked records" card, same as the legacy /procurement/* URLs
                   below are reachable without a sidebar entry. */}
-              <Route path="dispatches" element={<DispatchesPage />} />
+                <Route path="dispatches" element={<DispatchesPage />} />
+              </Route>
             </Route>
 
-            {/* No site dimension on this table at all (see IssuedToProductionPage's own header
-                comment) — deliberately outside the /:site/* tree, unlike dispatches above. */}
-            <Route path="/issued-to-production" element={<IssuedToProductionPage />} />
+            <Route element={<RequireRole roles={REVIEWERS} />}>
+              {/* No site dimension on this table at all (see IssuedToProductionPage's own header
+                  comment) — deliberately outside the /:site/* tree, unlike dispatches above. */}
+              <Route path="/issued-to-production" element={<IssuedToProductionPage />} />
 
-            {/* Legacy /procurement/* URLs — see pages/LegacyRedirects.tsx for exactly how each one
-                resolves a site to redirect into. No "Receiving"/"Warehouse Receiving" legacy route
-                existed pre-split (that page didn't exist yet), so there's nothing to redirect for
-                it. */}
-            <Route path="/procurement/receipts" element={<LegacyListRedirect leaf="receipts" />} />
-            <Route path="/procurement/receipts/new/:id/:stageId" element={<LegacyIntakeRedirect />} />
-            <Route path="/procurement/receipts/:id" element={<LegacyReceiptDetailRedirect />} />
-            <Route path="/procurement/stock" element={<LegacyListRedirect leaf="stock" />} />
-            <Route path="/procurement/drying" element={<LegacyListRedirect leaf="drying" />} />
+              {/* Legacy /procurement/* URLs — see pages/LegacyRedirects.tsx for exactly how each one
+                  resolves a site to redirect into. No "Receiving"/"Warehouse Receiving" legacy route
+                  existed pre-split (that page didn't exist yet), so there's nothing to redirect for
+                  it. */}
+              <Route path="/procurement/receipts" element={<LegacyListRedirect leaf="receipts" />} />
+              <Route path="/procurement/receipts/new/:id/:stageId" element={<LegacyIntakeRedirect />} />
+              <Route path="/procurement/receipts/:id" element={<LegacyReceiptDetailRedirect />} />
+              <Route path="/procurement/stock" element={<LegacyListRedirect leaf="stock" />} />
+              <Route path="/procurement/drying" element={<LegacyListRedirect leaf="drying" />} />
 
-            {/* One "Jute Bag Management" section (was five separate sidebar entries/pages) — shared
-                header + tab bar in JuteBagManagementLayout, each former page rendered via
-                <Outlet/>. Leaf paths are unchanged, so existing deep links elsewhere in the app
-                (ReceiptDetailPage, DashboardPage, WarehouseTransfersPage's own ?warehouse=) still
-                resolve exactly as before. */}
-            <Route path="/jute" element={<JuteBagManagementLayout />}>
-              <Route index element={<Navigate to="warehouse-stock" replace />} />
-              <Route path="warehouse-stock" element={<WarehouseStockPage />} />
-              <Route path="suppliers" element={<SupplierMovementPage />} />
-              <Route path="production" element={<ProductionIssuePage />} />
-              <Route path="transfers" element={<WarehouseTransfersPage />} />
-              <Route path="warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
+              {/* One "Jute Bag Management" section (was five separate sidebar entries/pages) — shared
+                  header + tab bar in JuteBagManagementLayout, each former page rendered via
+                  <Outlet/>. Leaf paths are unchanged, so existing deep links elsewhere in the app
+                  (ReceiptDetailPage, DashboardPage, WarehouseTransfersPage's own ?warehouse=) still
+                  resolve exactly as before. */}
+              <Route path="/jute" element={<JuteBagManagementLayout />}>
+                <Route index element={<Navigate to="warehouse-stock" replace />} />
+                <Route path="warehouse-stock" element={<WarehouseStockPage />} />
+                <Route path="suppliers" element={<SupplierMovementPage />} />
+                <Route path="production" element={<ProductionIssuePage />} />
+                <Route path="transfers" element={<WarehouseTransfersPage />} />
+                <Route path="warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
+              </Route>
+
+              <Route path="/production/btm" element={<BtmListPage />} />
+              <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />
+              <Route path="/production/bins" element={<ProductionBinsListPage />} />
+              <Route path="/production/bins/:binNo" element={<ProductionBinDetailPage />} />
+              <Route path="/production/lots" element={<LotsListPage />} />
+              <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
+              <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
+              {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) — every
+                  route above still works if visited directly; only the sidebar entry point changed. */}
+              <Route path="/production" element={<ProductionPage />} />
+
+              <Route path="/masters/suppliers" element={<SuppliersPage />} />
+              <Route path="/masters/warehouses" element={<WarehousesPage />} />
+              <Route path="/masters/bins" element={<BinsPage />} />
+              <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />
+              <Route path="/approvals" element={<ApprovalsPage />} />
+              <Route path="/supplier-assignment" element={<SupplierAssignmentPage />} />
             </Route>
 
-            <Route path="/production/btm" element={<BtmListPage />} />
-            <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />
-            <Route path="/production/bins" element={<ProductionBinsListPage />} />
-            <Route path="/production/bins/:binNo" element={<ProductionBinDetailPage />} />
-            <Route path="/production/lots" element={<LotsListPage />} />
-            <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
-            <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
-            {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) — every
-                route above still works if visited directly; only the sidebar entry point changed. */}
-            <Route path="/production" element={<ProductionPage />} />
-
-            <Route path="/masters/suppliers" element={<SuppliersPage />} />
-            <Route path="/masters/warehouses" element={<WarehousesPage />} />
-            <Route path="/masters/bins" element={<BinsPage />} />
-            <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />
+            <Route element={<RequireRole roles={["branch_manager"]} />}>
+              <Route path="/my-suppliers" element={<MySuppliersPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["branch_manager", "qfs_officer"]} />}>
+              <Route path="/my-submissions" element={<MySubmissionsPage />} />
+            </Route>
+            <Route element={<RequireRole roles={["admin"]} />}>
+              <Route path="/admin/users" element={<UsersPage />} />
+            </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          </LoadGate>
-        </Layout>
-      </BrowserRouter>
+  );
+}
+
+/** Signed-out → login form; signed-in → the app. TrackingProvider is keyed by user id so signing
+ * out and back in as someone else can never show the previous user's loaded data. */
+function AuthGate() {
+  const { status, me } = useAuth();
+  if (status === "loading") return <div className="min-h-screen bg-warmstone-50" aria-busy="true" />;
+  if (status === "anonymous" || !me) return <LoginPage />;
+  return (
+    <TrackingProvider key={me.id}>
+      <Layout>
+        <LoadGate>
+          <AppRoutes />
+        </LoadGate>
+      </Layout>
     </TrackingProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <AuthGate />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

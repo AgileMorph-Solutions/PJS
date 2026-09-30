@@ -18,7 +18,12 @@ import { toReceiptRecord } from "../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ValidationError } from "../domain/validation.js";
 
 type Tx = Prisma.TransactionClient;
-export interface WriteOpts { bypassValidation?: boolean }
+export interface WriteOpts {
+  bypassValidation?: boolean;
+  /** Who is writing, and how — when set, every changed field is recorded in StageFieldChange.
+   * The seeder and importers pass nothing: their data predates users and gets no invented actor. */
+  actor?: { id: string; via: "direct" | "approval" };
+}
 
 export async function loadReceiptRow(id: string, tx: Tx | typeof prisma = prisma) {
   return tx.receipt.findUnique({ where: { id }, include: RECEIPT_INCLUDE });
@@ -104,17 +109,36 @@ export async function createReceipt(warehouse?: string) {
 /** Mirrors updateReceiptField(id, patch) — top-level ReceiptRecord fields only. */
 const PATCHABLE = ["source", "arrivalDate", "supplierName", "lbaCode", "vehicleNo", "warehouse", "origin"] as const;
 
-export async function patchReceipt(id: string, patch: Record<string, unknown>) {
+export async function patchReceipt(id: string, patch: Record<string, unknown>, opts: WriteOpts = {}) {
   const data: Record<string, unknown> = {};
   for (const k of PATCHABLE) if (k in patch) data[k] = patch[k] === "" && k === "origin" ? null : patch[k];
   // lotNo / binNo are not columns here — they live on their stage rows. Route them properly
   // instead of silently ignoring them.
-  if ("lotNo" in patch) await setStageFields(id, "n-lot", { "Lot Number": String(patch.lotNo ?? "") });
-  if ("binNo" in patch) await setStageFields(id, "n-bin", { "Bin Number": String(patch.binNo ?? "") });
+  if ("lotNo" in patch) await setStageFields(id, "n-lot", { "Lot Number": String(patch.lotNo ?? "") }, opts);
+  if ("binNo" in patch) await setStageFields(id, "n-bin", { "Bin Number": String(patch.binNo ?? "") }, opts);
 
   if (Object.keys(data).length) await prisma.receipt.update({ where: { id }, data });
   const row = await loadReceiptRow(id);
   return toReceiptRecord(row!);
+}
+
+/**
+ * The partial unique index is the real guarantee (it can't be raced); this check exists only so the
+ * caller gets the rule explained rather than a bare constraint violation. Scoped to the receipt's
+ * OWN warehouse, matching writeLotsOntoReceipts (services/imports.ts) and the DB index itself — a
+ * global check would reject Yakro's Lot 1 as a clash with Bouaké's Lot 1. Shared with the
+ * submission flow so a clashing Lot is rejected at submit time, not first discovered at approval.
+ */
+export async function assertLotAvailable(tx: Tx | typeof prisma, receiptId: string, warehouse: string, lotNumber: string) {
+  const clash = await tx.stageLotAssignment.findFirst({
+    where: { lotNumber, warehouseName: warehouse, receiptId: { not: receiptId } },
+    select: { receiptId: true },
+  });
+  if (clash) {
+    throw new ValidationError(
+      `Lot ${lotNumber} is already assigned to receipt ${clash.receiptId} at ${warehouse} — one truck = one Lot, always.`
+    );
+  }
 }
 
 /**
@@ -125,8 +149,13 @@ export async function patchReceipt(id: string, patch: Record<string, unknown>) {
  * permanently sets that status — because the migration must be behaviour-preserving. The
  * resulting "present but empty" stages are reported by /api/data-quality rather than silently
  * changed. See stageStore.ts's header.
+ *
+ * This is the transactional body, exposed so a caller that needs several writes to land atomically
+ * (approving a submission touches up to six stages plus the timeline) can run them in one
+ * transaction. Everything else goes through setStageFields below.
  */
-export async function setStageFields(
+export async function applyStageFields(
+  tx: Tx,
   id: string,
   stageId: string,
   fields: Record<string, string>,
@@ -138,61 +167,72 @@ export async function setStageFields(
   const data: Record<string, unknown> = toColumnPayload(stageId, fields);
   const delegate = STAGE_MODEL_DELEGATE[stageId];
 
-  await prisma.$transaction(async (tx) => {
-    if (!opts.bypassValidation && stageId === "n-bin" && "Bin Number" in fields) {
-      const existing = await tx.stageLotAssignment.findUnique({ where: { receiptId: id } });
-      assertLotBeforeBin(existing?.lotNumber, fields["Bin Number"]);
+  if (!opts.bypassValidation && stageId === "n-bin" && "Bin Number" in fields) {
+    const existing = await tx.stageLotAssignment.findUnique({ where: { receiptId: id } });
+    assertLotBeforeBin(existing?.lotNumber, fields["Bin Number"]);
+  }
+
+  if (stageId === "n-lot") {
+    // warehouseName is not a stage field (see the model's own comment) — it's a controlled copy
+    // of Receipt.warehouse, kept in sync here on every n-lot write rather than only by the
+    // discharge importer's write-back, so a manually-entered Lot is scoped by warehouse exactly
+    // like an imported one. Without this, a hand-typed Lot stores warehouseName = NULL, and
+    // Postgres's partial unique index never treats two NULLs as equal — it would silently bypass
+    // per-warehouse uniqueness rather than enforce it.
+    const receipt = await tx.receipt.findUnique({ where: { id }, select: { warehouse: true } });
+    data.warehouseName = receipt!.warehouse;
+
+    if (!opts.bypassValidation && (fields["Lot Number"] ?? "").trim()) {
+      await assertLotAvailable(tx, id, receipt!.warehouse, fields["Lot Number"].trim());
     }
+  }
 
-    if (stageId === "n-lot") {
-      // warehouseName is not a stage field (see the model's own comment) — it's a controlled copy
-      // of Receipt.warehouse, kept in sync here on every n-lot write rather than only by the
-      // discharge importer's write-back, so a manually-entered Lot is scoped by warehouse exactly
-      // like an imported one. Without this, a hand-typed Lot stores warehouseName = NULL, and
-      // Postgres's partial unique index never treats two NULLs as equal — it would silently bypass
-      // per-warehouse uniqueness rather than enforce it.
-      const receipt = await tx.receipt.findUnique({ where: { id }, select: { warehouse: true } });
-      data.warehouseName = receipt!.warehouse;
-
-      // The partial unique index is the real guarantee (it can't be raced); this check exists only
-      // so the caller gets the rule explained rather than a bare constraint violation. Scoped to
-      // THIS receipt's warehouse, matching writeLotsOntoReceipts (services/imports.ts) and the DB
-      // index itself — a global check would reject Yakro's Lot 1 as a clash with Bouaké's Lot 1.
-      if (!opts.bypassValidation && (fields["Lot Number"] ?? "").trim()) {
-        const lotNumber = fields["Lot Number"].trim();
-        const clash = await tx.stageLotAssignment.findFirst({
-          where: { lotNumber, warehouseName: receipt!.warehouse, receiptId: { not: id } },
-          select: { receiptId: true },
-        });
-        if (clash) {
-          throw new ValidationError(
-            `Lot ${lotNumber} is already assigned to receipt ${clash.receiptId} at ${receipt!.warehouse} — one truck = one Lot, always.`
-          );
-        }
-      }
-    }
-
-    await tx.stageEntry.upsert({
-      where: { receiptId_stageId: { receiptId: id, stageId } },
-      update: {},
-      create: { receiptId: id, stageId },
-    });
-
-    const model = (tx as any)[delegate];
-    if (spec.cardinality === "many") {
-      // The assembler projects the highest-seq row, so setStageField targets that same row,
-      // creating seq 1 if none exists. Extra rows are created via the activities endpoint.
-      const latest = await model.findFirst({ where: { receiptId: id }, orderBy: { seq: "desc" } });
-      if (latest) await model.update({ where: { id: latest.id }, data });
-      else await model.create({ data: { receiptId: id, seq: 1, ...data } });
-    } else {
-      await model.upsert({
-        where: { receiptId: id },
-        update: data,
-        create: { receiptId: id, ...data },
-      });
-    }
+  await tx.stageEntry.upsert({
+    where: { receiptId_stageId: { receiptId: id, stageId } },
+    update: {},
+    create: { receiptId: id, stageId },
   });
+
+  const model = (tx as any)[delegate];
+
+  if (opts.actor) {
+    const before =
+      spec.cardinality === "many"
+        ? await model.findFirst({ where: { receiptId: id }, orderBy: { seq: "desc" } })
+        : await model.findUnique({ where: { receiptId: id } });
+    const changes = Object.entries(fields).flatMap(([label, value]) => {
+      const col = spec.fields.find((f) => f.label === label)!.col;
+      const old = before?.[col] ?? null;
+      return String(old ?? "") === value ? [] : [{
+        receiptId: id, stageId, label, oldValue: old === null ? null : String(old), newValue: value,
+        userId: opts.actor!.id, via: opts.actor!.via,
+      }];
+    });
+    if (changes.length) await tx.stageFieldChange.createMany({ data: changes });
+  }
+
+  if (spec.cardinality === "many") {
+    // The assembler projects the highest-seq row, so setStageField targets that same row,
+    // creating seq 1 if none exists. Extra rows are created via the activities endpoint.
+    const latest = await model.findFirst({ where: { receiptId: id }, orderBy: { seq: "desc" } });
+    if (latest) await model.update({ where: { id: latest.id }, data });
+    else await model.create({ data: { receiptId: id, seq: 1, ...data } });
+  } else {
+    await model.upsert({
+      where: { receiptId: id },
+      update: data,
+      create: { receiptId: id, ...data },
+    });
+  }
+}
+
+export async function setStageFields(
+  id: string,
+  stageId: string,
+  fields: Record<string, string>,
+  opts: WriteOpts = {}
+) {
+  await prisma.$transaction((tx) => applyStageFields(tx, id, stageId, fields, opts));
 
   const row = await loadReceiptRow(id);
   return toReceiptRecord(row!);
@@ -233,7 +273,7 @@ export async function setBranch(
 
     const fresh = await loadReceiptRow(id, tx);
     const status = deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord);
-    await tx.timelineEntry.create({ data: { receiptId: id, status, at: new Date().toISOString() } });
+    await tx.timelineEntry.create({ data: { receiptId: id, status, at: new Date().toISOString(), actorId: opts.actor?.id } });
   });
 
   const row = await loadReceiptRow(id);

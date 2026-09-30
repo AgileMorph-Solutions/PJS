@@ -1,6 +1,11 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
+import { registerAuth } from "./auth/plugin.js";
+import { authRoutes } from "./routes/auth.js";
+import { userRoutes } from "./routes/users.js";
+import { submissionRoutes } from "./routes/submissions.js";
+import { supplierAccessRoutes } from "./routes/supplierAccess.js";
 import { receiptRoutes } from "./routes/receipts.js";
 import { ledgerRoutes } from "./routes/ledgers.js";
 import { masterRoutes } from "./routes/masters.js";
@@ -15,7 +20,7 @@ import { dryingSortingReportRoutes } from "./routes/dryingSortingReports.js";
 import { warehouseActivityLedgerRoutes } from "./routes/warehouseActivityLedger.js";
 import { issuedToProductionRoutes } from "./routes/issuedToProduction.js";
 import { warehouseDischargeRoutes } from "./routes/warehouseDischarges.js";
-import { ValidationError } from "./domain/validation.js";
+import { ValidationError, UnauthorizedError, ForbiddenError } from "./domain/validation.js";
 import { UnknownStageFieldError } from "./stageStore.js";
 import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
 
@@ -26,7 +31,8 @@ export function buildApp() {
   // It matters for `vite dev` against a bare `npm run dev` backend, and for direct API calls.
   const origins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://localhost:8080")
     .split(",").map((o) => o.trim()).filter(Boolean);
-  app.register(cors, { origin: origins, methods: ["GET", "POST", "PATCH", "PUT", "DELETE"] });
+  // credentials: the session is an httpOnly cookie, which cross-origin fetches only send when allowed.
+  app.register(cors, { origin: origins, credentials: true, methods: ["GET", "POST", "PATCH", "PUT", "DELETE"] });
 
   // 20MB cap — the largest real workbook is ~395KB; this is headroom against a wrong/huge file,
   // not a tight fit. Row/column guards on top of this live in services/imports.ts.
@@ -34,6 +40,8 @@ export function buildApp() {
 
   // Without this a Prisma unique-constraint violation surfaces as an opaque 500.
   app.setErrorHandler((err, _req, reply) => {
+    if (err instanceof UnauthorizedError) return reply.code(401).send({ error: err.message });
+    if (err instanceof ForbiddenError) return reply.code(403).send({ error: err.message });
     if (err instanceof ValidationError) return reply.code(422).send({ error: err.message });
     if (err instanceof UnknownStageFieldError) return reply.code(400).send({ error: err.message });
     if (err instanceof ImportRejectedError) return reply.code(422).send({ error: err.message, detail: err.detail });
@@ -47,6 +55,13 @@ export function buildApp() {
   });
 
   app.get("/api/health", async () => ({ ok: true }));
+
+  // Must come before the route registrations below: its hook only covers routes added after it.
+  registerAuth(app);
+  app.register(authRoutes);
+  app.register(userRoutes);
+  app.register(submissionRoutes);
+  app.register(supplierAccessRoutes);
 
   app.register(receiptRoutes);
   app.register(ledgerRoutes);

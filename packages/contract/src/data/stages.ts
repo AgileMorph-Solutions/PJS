@@ -85,7 +85,7 @@ export const stages: Stage[] = [
     title: "Assign Lot Number to truck",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "gap",
-    note: "Confirmed (Procurement clarification, Sept 2026): once a truck is approved for unloading, the Warehouse Team assigns it a Lot Number. One truck = one Lot, always — this is not an either/or with Bin. The Lot Number is what lets us trace the complete quantity back to that specific truck later, however it ends up stored.",
+    note: "Confirmed (Procurement clarification, Sept 2026): once a truck is approved for unloading, the Warehouse Team assigns it a Lot Number. One truck = one Lot, always — this is not an either/or with Bin. The Lot Number is what lets us trace the complete quantity back to that specific truck later, however it ends up stored. Sept 30 clarification: the Branch Manager also submits the Lot Number after unloading (bm-reception form in data/roles.ts); it applies to this stage only once the Warehouse Incharge approves it.",
     fields: [
       { n: "Lot Number", v: "" , col: "lotNumber"},
       { n: "Truck reference", v: "" , col: "truckReference"},
@@ -148,7 +148,7 @@ export const stages: Stage[] = [
     kind: "system",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "Net = Gross − Tare, less refraction — should be system-derived, never typed. Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number.",
+    note: "Net = Gross − Tare, less refraction — should be system-derived, never typed. Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Sept 30 clarification: the client wants the Branch Manager to submit NET WT KGS as the workbook records it today, which conflicts with this being system-derived. Both are kept: the BM's figure is stored on approval, and the derivation rule above is unchanged.",
     fields: [
       { n: "NET WT KGS", v: "40822" , col: "netWtKgs"},
       { n: "PAID WT", v: "40762" , col: "paidWt"},
@@ -162,7 +162,7 @@ export const stages: Stage[] = [
     kind: "entry",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "By this point the row is complete — it is the GRN. Doc §3 also wants the system to show, for any period: total trucks received, accepted & unloaded, GRN completed, pending QA, pending unload after QA, and rejected (with reason).",
+    note: "By this point the row is complete — it is the GRN. Doc §3 also wants the system to show, for any period: total trucks received, accepted & unloaded, GRN completed, pending QA, pending unload after QA, and rejected (with reason). Sept 30 clarification: PRICE is the price the Branch Manager negotiated, submitted via the bm-reception form (data/roles.ts) and applied on Warehouse Incharge approval.",
     fields: [
       { n: "PRICE", v: "470" , col: "price"},
       { n: "AMOUNT", v: "19158140" , col: "amount"},

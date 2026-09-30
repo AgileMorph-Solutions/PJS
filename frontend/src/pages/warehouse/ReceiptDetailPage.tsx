@@ -2,6 +2,10 @@ import { useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useTracking, useReceiptLinks } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
+import { useCanEditDirectly, useMe } from "../../state/AuthContext";
+import { useSubmissions } from "../../state/userManagement";
+import { SubmissionCard } from "../../components/SubmissionCard";
+import { SubmissionReview } from "../../components/SubmissionReview";
 import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
 import { DECISION_BRANCHES } from "../../domain/decisions";
 import { stages, rejectStage } from "../../data/stages";
@@ -33,6 +37,11 @@ export function ReceiptDetailPage() {
   const site = useSite();
   const { receipts, getReceipt, setStageField, setBranch, flushStage } = useTracking();
   const receipt = getReceipt(id);
+  const me = useMe();
+  // Warehouse Incharge/admin edit stages directly; a Branch Manager / QFS Officer sees them
+  // read-only and submits their own form (SubmissionCard) for approval instead.
+  const canEdit = useCanEditDirectly();
+  const submissions = useSubmissions({ receiptId: id });
   const [copied, setCopied] = useState(false);
 
   const otherInSameBin = useMemo(
@@ -172,6 +181,8 @@ export function ReceiptDetailPage() {
             <span className="text-xs font-medium text-warmstone-500">{stages.length} stages, any order</span>
           </div>
 
+          {!canEdit && <SubmissionCard receipt={receipt} role={me.role} />}
+
           {stages.map((stage) => {
             const done = doneIds.has(stage.id);
             const isActive = stage.id === activeStage?.id;
@@ -239,10 +250,11 @@ export function ReceiptDetailPage() {
                       values={values}
                       onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
                       onFieldBlur={() => flushStage(receipt.id, stage.id)}
+                      readOnly={!canEdit}
                     />
                     {branchOptions && (
                       <div className="mt-4">
-                        <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)} />
+                        <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)} readOnly={!canEdit} />
                       </div>
                     )}
                   </div>
@@ -268,6 +280,7 @@ export function ReceiptDetailPage() {
                   values={receipt.stageData["n-reject"] ?? {}}
                   onFieldChange={(fieldName, value) => setStageField(receipt.id, "n-reject", fieldName, value)}
                   onFieldBlur={() => flushStage(receipt.id, "n-reject")}
+                  readOnly={!canEdit}
                 />
               </div>
             </details>
@@ -277,7 +290,23 @@ export function ReceiptDetailPage() {
 
         {/* Right: real cross-references only */}
         <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-20">
-          {pendingDecision && (
+          {canEdit && submissions.rows.length > 0 && (
+            <CollapsibleCard
+              title="Submissions"
+              meta={`${submissions.rows.filter((r) => r.status === "submitted").length} waiting`}
+              defaultOpen={submissions.rows.some((r) => r.status === "submitted")}
+            >
+              <div className="space-y-5 pt-3">
+                {submissions.rows.map((sub) => (
+                  <div key={sub.id} className="pb-5 border-b border-warmstone-100 last:border-0 last:pb-0">
+                    <SubmissionReview submission={sub} receipt={receipt} onDone={() => void submissions.refetch()} />
+                  </div>
+                ))}
+              </div>
+            </CollapsibleCard>
+          )}
+
+          {pendingDecision && canEdit && (
             <div className="bg-white rounded-2xl border border-warmstone-200 p-5 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Next action</span>
@@ -329,7 +358,9 @@ export function ReceiptDetailPage() {
               {timelinePage.pageRows.map((e, i) => (
                 <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
                   <ReceiptStatusPill status={e.status} />
-                  <span className="text-[11px] text-warmstone-400">{new Date(e.at).toLocaleString()}</span>
+                  <span className="text-[11px] text-warmstone-400">
+                    {new Date(e.at).toLocaleString()}{e.actor ? ` · ${e.actor}` : ""}
+                  </span>
                   {e.note && <p className="text-[12px] text-warmstone-500">{e.note}</p>}
                 </li>
               ))}

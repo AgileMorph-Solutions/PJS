@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect } from "react";
-import { Link, Outlet, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
-import { SITES, isSiteSlug, type SiteConfig, type SiteSlug } from "../config/sites";
+import { Link, Navigate, Outlet, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
+import { SITES, isSiteSlug, siteSlugForType, type SiteConfig, type SiteSlug } from "../config/sites";
+import { homePathFor, useMe } from "./AuthContext";
 
 const SiteCtx = createContext<SiteConfig | null>(null);
 
@@ -52,6 +53,7 @@ function readLastSite(): SiteSlug {
  * back at Bouaké.
  */
 export function useActiveSite(): SiteConfig {
+  const me = useMe();
   const location = useLocation();
   const match = matchPath("/:site/*", location.pathname);
   const fromUrl = isSiteSlug(match?.params.site) ? match.params.site : undefined;
@@ -65,7 +67,17 @@ export function useActiveSite(): SiteConfig {
     }
   }, [fromUrl]);
 
+  // A non-admin has exactly one section (their warehouse's Unit/Central type) — never a remembered
+  // or URL-derived one, and its warehouse is THEIR warehouse, not the section's default.
+  if (me.role !== "admin") return siteFor(me) ?? SITES[fromUrl ?? readLastSite()];
   return SITES[fromUrl ?? readLastSite()];
+}
+
+/** The section a non-admin belongs to, scoped to their own assigned warehouse (which may differ
+ * from the section's default `warehouseName` once a second warehouse of the same type exists). */
+function siteFor(me: { warehouseType: string | null; warehouse: string | null }): SiteConfig | undefined {
+  const slug = siteSlugForType(me.warehouseType);
+  return slug && me.warehouse ? { ...SITES[slug], warehouseName: me.warehouse } : undefined;
 }
 
 /**
@@ -76,7 +88,12 @@ export function useActiveSite(): SiteConfig {
  * silently land them somewhere else that looks plausible.
  */
 export function SiteLayout() {
+  const me = useMe();
   const { site } = useParams<{ site: string }>();
+  const own = me.role === "admin" ? undefined : siteFor(me);
+  // Someone stranded without a typed warehouse (or asking for the other section) goes to their own
+  // home rather than seeing another site's data — the API would 403 it anyway.
+  if (me.role !== "admin" && (!own || site !== own.slug)) return <Navigate to={homePathFor(me)} replace />;
   if (!isSiteSlug(site)) {
     return (
       <div className="p-10 max-w-md">
@@ -101,7 +118,7 @@ export function SiteLayout() {
     );
   }
   return (
-    <SiteCtx.Provider value={SITES[site]}>
+    <SiteCtx.Provider value={own ?? SITES[site]}>
       <Outlet />
     </SiteCtx.Provider>
   );

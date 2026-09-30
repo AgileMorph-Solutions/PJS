@@ -18,6 +18,8 @@ export interface TimelineEntry {
    * the API echoes that rather than quietly dropping it.
    */
   note?: string | null;
+  /** Display name of whoever caused this entry; absent on every row that predates user accounts. */
+  actor?: string | null;
 }
 
 export interface ReceiptRecord {
@@ -46,8 +48,9 @@ export interface Supplier { code: string; name: string }
 /** `kind` (Village/Regional/Factory) is set only on SITE rows; `site` is null for a site row and
  * the parent site's name for a store row (e.g. "BKE-002" -> site "BOUAKE") — see
  * data/warehouseKinds.ts and Warehouse's self-relation in backend/prisma/schema.prisma. */
-export interface WarehouseMaster { name: string; kind: string | null; site: string | null }
-export interface Masters { suppliers: Supplier[]; warehouses: WarehouseMaster[]; bins: string[]; origins: string[] }
+export interface WarehouseMaster { name: string; kind: string | null; type?: string | null; site: string | null }
+export interface WarehouseAliasMaster { alias: string; warehouseName: string }
+export interface Masters { suppliers: Supplier[]; warehouses: WarehouseMaster[]; aliases?: WarehouseAliasMaster[]; bins: string[]; origins: string[] }
 
 export interface DryingJob {
   id: string; date: string; warehouse: string; bin: string;

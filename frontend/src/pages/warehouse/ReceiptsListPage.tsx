@@ -9,6 +9,7 @@ import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
 import { useTracking, useDownstreamStatus } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
+import { useCanEditDirectly } from "../../state/AuthContext";
 import { siteSlugForSiteName } from "../../config/sites";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { stages } from "../../data/stages";
@@ -36,6 +37,7 @@ const RECEPTION_IMPORTER_IDS = [
 export function ReceiptsListPage() {
   const { receipts, masters, createReceipt, refresh } = useTracking();
   const site = useSite();
+  const canEdit = useCanEditDirectly();
   const switchSite = useSwitchSite();
   const { status: downstreamStatus, refetch: refetchDownstream } = useDownstreamStatus(site.warehouseName);
   const [params, setParams] = useSearchParams();
@@ -101,28 +103,34 @@ export function ReceiptsListPage() {
         actions={
           <div className="flex items-center gap-3">
             <SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />
-            <button
-              onClick={() => setDialogMode("upload")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
-            >
-              <span className="material-symbols-outlined text-[17px]">upload</span>
-              Upload
-            </button>
-            <button
-              onClick={() => setDialogMode("export")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
-              title="Pick a workbook to export or download a template for"
-            >
-              <span className="material-symbols-outlined text-[17px]">download</span>
-              Export
-            </button>
-            <button
-              onClick={handleNewReceipt}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
-            >
-              <span className="material-symbols-outlined text-[17px]">add</span>
-              New RCN receipt
-            </button>
+            {/* Direct writes and workbook imports are Warehouse Incharge/admin only; a Branch
+                Manager or QFS Officer submits a form from the receipt page instead. */}
+            {canEdit && (
+              <>
+              <button
+                onClick={() => setDialogMode("upload")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[17px]">upload</span>
+                Upload
+              </button>
+              <button
+                onClick={() => setDialogMode("export")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
+                title="Pick a workbook to export or download a template for"
+              >
+                <span className="material-symbols-outlined text-[17px]">download</span>
+                Export
+              </button>
+              <button
+                onClick={handleNewReceipt}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[17px]">add</span>
+                New RCN receipt
+              </button>
+              </>
+            )}
           </div>
         }
       />
