@@ -31,6 +31,11 @@ services:
       # ADMIN_PASSWORD unset and no admin is created (export it, or put it in a .env file).
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Demo accounts, one per role (admin, incharge.bouake, manager.bouake, qfs.bouake) — DEV ONLY,
+      # with one shared, publicly-known password. Set SEED_DEMO_USERS=false for anything shared or
+      # deployed, and change DEMO_PASSWORD if you keep them.
+      SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-demo-pass-123}
     ports:
       - "3000:3000"
     depends_on:

@@ -253,6 +253,48 @@ describe("QFS Officer submission and terminal rejection", () => {
   });
 });
 
+describe("QFS Officer quality analysis", () => {
+  let receiptId: string;
+  let submissionId: string;
+  const quality = { "MOIS. (moisture)": "10.3", "NUT COUNT": "165", KOR: "40.03599", "FINAL KOR": "40.1" };
+
+  beforeAll(async () => {
+    receiptId = (await createReceipt("BOUAKE")).id;
+    createdReceipts.push(receiptId);
+    // Reached QFS: gate + supplier docs done, no decision yet.
+    await setStageFields(receiptId, "n-gate", { "VEHICLE NO.": "QFS-1" });
+    await setStageFields(receiptId, "n-verify", { "LBA CODE": SUPPLIER });
+  });
+
+  it("takes the four measurements together with the bag counts in one submission", async () => {
+    const res = await as(P + "qfs", "POST", `/api/receipts/${receiptId}/submissions`, {
+      values: { "n-qfs": quality, "n-unload": { "SACS (bags)": "478" } },
+    });
+    expect(res.statusCode).toBe(201);
+    submissionId = res.json().id;
+  });
+
+  it("applies the measurements on approval but records no Pass/Fail decision", async () => {
+    const before = (await as(P + "wi", "GET", `/api/receipts/${receiptId}`)).json();
+    expect(before.stageData["n-qfs"]).toBeUndefined();
+
+    expect((await as(P + "wi", "POST", `/api/submissions/${submissionId}/approve`)).statusCode).toBe(200);
+    const after = (await as(P + "wi", "GET", `/api/receipts/${receiptId}`)).json();
+    expect(after.stageData["n-qfs"]).toMatchObject(quality);
+    expect(after.stageData["n-unload"]["SACS (bags)"]).toBe("478");
+    // The decision is the Warehouse Incharge's: nothing here sets it.
+    expect(after.branches["n-qfs"]).toBeUndefined();
+  });
+
+  it("still refuses QFS a field outside its form, and the Pass/Fail decision itself", async () => {
+    const other = (await createReceipt("BOUAKE")).id;
+    createdReceipts.push(other);
+    const outside = await as(P + "qfs", "POST", `/api/receipts/${other}/submissions`, { values: { "n-gross": { "GROSS WT KGS": "1" } } });
+    expect(outside.statusCode).toBe(422);
+    expect((await as(P + "qfs", "POST", `/api/receipts/${other}/branch`, { stageId: "n-qfs", branchId: "pass" })).statusCode).toBe(403);
+  });
+});
+
 describe("supplier requests", () => {
   it("runs request → approval, adding the supplier and assigning it", async () => {
     const req = await as(P + "bm", "POST", "/api/supplier-requests", { name: "UM Requested Supplier", code: "UMTEST-REQ" });

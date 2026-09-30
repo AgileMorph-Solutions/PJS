@@ -156,6 +156,8 @@ the reasoning are in `../docs/usermanagement.md`.
   status/timeline change. Every changed field (direct edit or approval) lands in `StageFieldChange`.
 - **First admin.** The seed creates one from `ADMIN_USERNAME` / `ADMIN_PASSWORD` while no admin
   exists; with no password set, nothing is created. Set `COOKIE_SECURE=true` behind HTTPS.
+- **Demo users.** `prisma/demoUsers.ts` seeds one account per role when `SEED_DEMO_USERS=true` and
+  `DEMO_PASSWORD` is set — docker-compose.yml turns it on (password `demo-pass-123`), dev only.
 - Old data has no actor: seeded/imported receipts and their timeline entries stay `actorId = NULL`.
 
 Hard rules answer **422** (lot-before-bin, lot uniqueness, rejection-needs-reason,

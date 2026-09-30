@@ -23,6 +23,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../src/stageStore.js";
 import { hashPassword } from "../src/auth/password.js";
+import { ensureDemoUsers } from "./demoUsers.js";
 
 const prisma = new PrismaClient();
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -133,6 +134,8 @@ async function main() {
   await backfillWarehouseTypology();
   await backfillTransferDestination();
   await ensureBootstrapAdmin();
+  const demo = await ensureDemoUsers(prisma);
+  if (demo.length) console.log(`Created demo users: ${demo.join(", ")}.`);
 
   if ((await prisma.receipt.count()) > 0) {
     console.log("Database already seeded — skipping.");

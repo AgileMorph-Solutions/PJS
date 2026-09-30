@@ -32,13 +32,11 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fields = useMemo(
+  const groups = useMemo(
     () => (form?.stages ?? []).flatMap(({ stageId, labels }) => {
       const stage = stages.find((s) => s.id === stageId);
-      return labels.flatMap((label) => {
-        const field = stage?.fields.find((f) => f.n === label);
-        return field ? [{ stageId, field }] : [];
-      });
+      const fields = labels.flatMap((label) => stage?.fields.find((f) => f.n === label) ?? []);
+      return stage ? [{ stageId, title: stage.title, fields }] : [];
     }),
     [form]
   );
@@ -53,9 +51,11 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
     setError(null);
     try {
       const values: Record<string, Record<string, string>> = {};
-      for (const { stageId, field } of fields) {
-        const v = valueOf(stageId, field.n).trim();
-        if (v) (values[stageId] ??= {})[field.n] = v;
+      for (const g of groups) {
+        for (const field of g.fields) {
+          const v = valueOf(g.stageId, field.n).trim();
+          if (v) (values[g.stageId] ??= {})[field.n] = v;
+        }
       }
       await api.submitForm(receipt.id, values);
       await refetch();
@@ -82,18 +82,26 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
         )}
       </div>
       <div className="px-5 pb-5 pt-4 border-t border-warmstone-100 bg-warmstone-50/60 space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          {fields.map(({ stageId, field }) => (
-            <FieldInput
-              key={`${stageId}/${field.n}`}
-              field={field}
-              value={valueOf(stageId, field.n)}
-              onChange={(v) => setDraft((d) => ({ ...d, [stageId]: { ...d[stageId], [field.n]: v } }))}
-              idPrefix={`form-${stageId}`}
-              readOnly={Boolean(existing)}
-            />
-          ))}
-        </div>
+        {groups.map((g) => (
+          <div key={g.stageId} className="space-y-3">
+            {/* Only worth a heading when the form spans more than one stage. */}
+            {groups.length > 1 && (
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500">{g.title}</h3>
+            )}
+            <div className="grid sm:grid-cols-2 gap-4">
+              {g.fields.map((field) => (
+                <FieldInput
+                  key={`${g.stageId}/${field.n}`}
+                  field={field}
+                  value={valueOf(g.stageId, field.n)}
+                  onChange={(v) => setDraft((d) => ({ ...d, [g.stageId]: { ...d[g.stageId], [field.n]: v } }))}
+                  idPrefix={`form-${g.stageId}`}
+                  readOnly={Boolean(existing)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
         {existing?.status === "rejected" && (
           <p role="status" className="text-[13px] text-danger-700 bg-danger-100 rounded-lg px-3 py-2">
             Rejected{existing.reviewedBy ? ` by ${existing.reviewedBy}` : ""}: {existing.rejectReason}. This can't be

@@ -13,7 +13,7 @@ the API and the UI read.
 | **Admin** | all warehouses | Creates users, sets roles, assigns each person to **one warehouse**, and assigns each warehouse its Unit/Central type. Can do everything a Warehouse Incharge can, at any warehouse. |
 | **Warehouse Incharge** | one warehouse | Top of the operational hierarchy. Fills every stage that isn't a Branch Manager / QFS form (gate, quality analysis, tare, bin, drying, …) **directly, with no approval**. Approves or rejects Branch Manager and QFS submissions. Can correct any entry, including approved ones — every correction is audited. Assigns suppliers to Branch Managers and decides their supplier requests. Runs imports, jute ledgers and masters. |
 | **Branch Manager** | one warehouse, plus assigned suppliers | After unloading, submits: truck no., supplier, LBA code, FICHE, gross weight, net weight, lot no., negotiated price. Only sees and reports on suppliers the Warehouse Incharge assigned. Can ask the Warehouse Incharge to add a supplier. |
-| **QFS Officer** | one warehouse | After unloading, checks the jute bags on the truck and submits the bag counts (total, good, damp, torn). |
+| **QFS Officer** | one warehouse | After unloading, does the quality analysis (moisture, nut count, KOR, final KOR) and checks the jute bags on the truck (total, good, damp, torn), and submits both together. |
 
 Assumption worth confirming with the client: "request branch manager to add suppliers" was read as
 the **Branch Manager requesting the Warehouse Incharge**.
@@ -55,7 +55,11 @@ Every changed field — a Warehouse Incharge's direct edit or an approval — is
 | Form | Stage → field |
 |---|---|
 | Branch Manager | `n-gate` VEHICLE NO. · `n-verify` SUPPLIERS NAME, LBA CODE, FICHE · `n-gross` GROSS WT KGS · `n-netwt` NET WT KGS · `n-lot` Lot Number · `n-grn` PRICE |
-| QFS Officer | `n-unload` SACS (bags), BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) |
+| QFS Officer | `n-qfs` MOIS. (moisture), NUT COUNT, KOR, FINAL KOR · `n-unload` SACS (bags), BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) |
+
+The QFS **Pass / Fail** decision is not part of the form: the Warehouse Incharge records it, because a
+Fail rejects the truck. Approving the QFS form writes the four measurements only — it sets no
+decision, so it doesn't by itself move a receipt past QFS.
 
 "Fiche number" is the `FICHE` column, not `FICHE CODE`. `n-netwt` is `kind: "system"` in `stages.ts`
 ("never typed"), but the client wants the Branch Manager's figure as the workbook records it today;
@@ -86,16 +90,31 @@ the conflict is noted on that stage rather than resolved silently.
 
 ## Setting up
 
-The seed creates the first admin from `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`, only
-while no admin exists. There is no default password: with `ADMIN_PASSWORD` unset, no admin is
-created.
+**Demo accounts (dev).** `docker compose up --build` seeds one account per role, all with the same
+password — `demo-pass-123` unless you set `DEMO_PASSWORD`:
+
+| Username | Role | Warehouse |
+|---|---|---|
+| `admin` | Admin | all |
+| `incharge.bouake` | Warehouse Incharge | BOUAKE (Unit) |
+| `manager.bouake` | Branch Manager | BOUAKE (Unit) |
+| `qfs.bouake` | QFS Officer | BOUAKE (Unit) |
+
+They are created only if the username doesn't exist yet (a changed password is never reset), and the
+Branch Manager starts with **no suppliers** — sign in as `incharge.bouake` and assign some under
+*Supplier assignment*. The password is publicly known: for anything shared or deployed, set
+`SEED_DEMO_USERS=false` (nothing runs without `SEED_DEMO_USERS=true` and a `DEMO_PASSWORD`) and
+create real accounts instead. There is no Central-warehouse demo user; create one under Users.
+
+**Your own first admin.** Set `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`; the seed
+creates it only while no admin exists. With no password set, none is created.
 
 ```bash
-ADMIN_PASSWORD='choose-one' docker compose up --build
+SEED_DEMO_USERS=false ADMIN_PASSWORD='choose-one' docker compose up --build
 # or, against a local database:
 ADMIN_USERNAME=admin ADMIN_PASSWORD='choose-one' npm run seed -w backend
 ```
 
-Then sign in, and under Masters › Warehouses confirm each warehouse's type; under Users create a
-Warehouse Incharge, Branch Managers and QFS Officers per warehouse; the Warehouse Incharge assigns
-suppliers under *Supplier assignment*. Set `COOKIE_SECURE=true` when serving over HTTPS.
+Then, under Masters › Warehouses confirm each warehouse's type; under Users create a Warehouse
+Incharge, Branch Managers and QFS Officers per warehouse; the Warehouse Incharge assigns suppliers
+under *Supplier assignment*. Set `COOKIE_SECURE=true` when serving over HTTPS.

@@ -58,10 +58,15 @@ export const ROLE_FORMS: RoleForm[] = [
     ],
   },
   {
+    // id keeps its original name: it's stored on every FormSubmission, so renaming it would orphan
+    // existing submissions. The form grew from the jute check alone to include quality analysis.
     id: "qfs-jute-check",
-    title: "QFS Officer — jute bag check",
+    title: "QFS Officer — quality analysis & jute bag check",
     role: "qfs_officer",
     stages: [
+      // The four measurements only. The Pass/Fail decision (n-qfs's branch) is NOT part of this
+      // form — the Warehouse Incharge still records it, since a Fail rejects the truck.
+      { stageId: "n-qfs", labels: ["MOIS. (moisture)", "NUT COUNT", "KOR", "FINAL KOR"] },
       {
         stageId: "n-unload",
         labels: ["SACS (bags)", "BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"],
