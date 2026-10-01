@@ -102,14 +102,14 @@ export function ReceiptsListPage() {
                 <span className="material-symbols-outlined text-[17px]">download</span>
                 Export
               </button>
-              {/* The one way to add trucks: a grid, whether it's one truck or twenty. */}
+              {/* The one way to add entries: a grid, whether it's one truck or twenty. */}
               <button
                 onClick={() => navigate(`/${site.slug}/receipts/batch`)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
-                title="Add one or more trucks from a grid"
+                title="Add one or more entries from a grid"
               >
                 <span className="material-symbols-outlined text-[17px]">add</span>
-                Add trucks
+                Add entries
               </button>
               </>
             )}

@@ -67,7 +67,7 @@ the conflict is noted on that stage rather than resolved silently.
 
 ## Adding several trucks at once (Warehouse Incharge)
 
-Reception › **Add trucks** opens a grid: one row per truck (one truck or many), with the fields known at the
+Reception › **Add entries** opens a grid: one row per truck (one truck or many), with the fields known at the
 gate — date of arrival, vehicle no. (required), supplier (a picker that fills both supplier name and
 LBA code), fiche no., credit/cash, origin, remarks. **Create** opens every row as a receipt in one
 step, at the incharge's own warehouse.

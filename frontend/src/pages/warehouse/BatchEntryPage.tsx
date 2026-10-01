@@ -130,7 +130,7 @@ export function BatchEntryPage() {
         </div>
         <div className="flex gap-3">
           <button className={btnSecondary} onClick={() => { setRows(Array.from({ length: INITIAL_ROWS }, () => newRow(today()))); setCreated(null); }}>
-            <span className="material-symbols-outlined text-[16px]">add</span>Add more trucks
+            <span className="material-symbols-outlined text-[16px]">add</span>Add more entries
           </button>
           <Link to={`/${site.slug}/receipts`} className={btnSecondary}>Back to Reception</Link>
         </div>
@@ -142,7 +142,7 @@ export function BatchEntryPage() {
     <div className="space-y-5">
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
-        title="Add trucks"
+        title="Add entries"
         lede="One row per truck. Save creates all of them together — if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
         actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
