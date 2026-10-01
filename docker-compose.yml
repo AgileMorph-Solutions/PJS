@@ -36,6 +36,23 @@ services:
       # deployed, and change DEMO_PASSWORD if you keep them.
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-demo-pass-123}
+    # DEV: same startup as the image (migrate, seed, serve), but the last step is `tsx watch`, so the
+    # API restarts by itself whenever a source file under ./backend or ./packages/contract is saved.
+    # (A new migration or a changed prisma/schema.prisma still needs `docker compose restart backend`
+    # — migrate and prisma generate run at startup, not on every save.) docker-compose.prod.yml is
+    # the real deployment; nothing here is used there.
+    command:
+      - sh
+      - -c
+      - npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx prisma/seedProduction.ts && npx tsx watch src/server.ts
+    volumes:
+      - ./backend:/app/backend
+      - ./packages/contract:/app/packages/contract
+      # The seeder reads the real data out of the frontend's seed folder (see backend/Dockerfile).
+      - ./frontend/src/data/seed:/app/frontend/src/data/seed:ro
+      # Keep the container's own node_modules (Linux binaries, Prisma's generated client): the bind
+      # mount above would otherwise cover them with the host's macOS ones.
+      - /app/backend/node_modules
     ports:
       - "3000:3000"
     depends_on:
@@ -48,8 +65,22 @@ services:
       # Repo root, not ./frontend — the app depends on the @anagroci/contract workspace package.
       context: .
       dockerfile: frontend/Dockerfile
+      # DEV: stop at the Node + dependencies stage, not the nginx one — this service runs the Vite
+      # dev server so a saved file shows up in the browser at once (hot reload), instead of serving
+      # a static bundle that would need a rebuild.
+      target: build
+    command: ["npm", "-w", "frontend", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+    environment:
+      # Vite proxies /api to the backend (vite.config.ts), same as nginx does in the production image.
+      VITE_API_TARGET: http://backend:3000
+    volumes:
+      - ./frontend:/app/frontend
+      - ./packages/contract:/app/packages/contract
+      # As for the backend: keep the container's own node_modules (rolldown ships a native binding).
+      - /app/frontend/node_modules
     ports:
-      - "8080:80"
+      # Still http://localhost:8080 in the browser; Vite listens on 5173 inside the container.
+      - "8080:5173"
     depends_on:
       - backend
     restart: unless-stopped

@@ -96,6 +96,13 @@ docker compose up --build
 # http://localhost:8080
 ```
 
+This is the **dev** stack, with hot reload: `./backend`, `./frontend` and `./packages/contract` are
+bind-mounted into the containers, the frontend runs the Vite dev server and the backend runs
+`tsx watch`, so a saved file shows up in the browser within a second or two — no rebuild. Rebuild
+(`docker compose up --build -V`, the `-V` renews the containers' `node_modules`) only when a
+`package.json` dependency changes; restart the backend (`docker compose restart backend`) after a new
+Prisma migration or a `schema.prisma` change. Production is `docker-compose.prod.yml` (see DEPLOY.md).
+
 That starts Postgres, waits for it to be healthy, applies the migrations, seeds the real data, and
 serves the app with `/api` proxied same-origin — so the browser never needs CORS.
 

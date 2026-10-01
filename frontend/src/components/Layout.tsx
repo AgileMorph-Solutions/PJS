@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { AppNav } from "./AppNav";
 import { useAuth } from "../state/AuthContext";
 import { ROLE_LABEL } from "../data/roles";
+import { WAREHOUSE_TYPE_LABEL } from "../data/warehouseTypes";
 import { siteSlugForType } from "../config/sites";
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -54,6 +55,21 @@ export function Layout({ children }: { children: ReactNode }) {
           </form>
           {me && (
             <div className="ml-auto flex items-center gap-3 shrink-0">
+              {/* Which kind of warehouse this user is assigned to (their warehouse's Unit/Central type).
+                  An admin has none, so no badge. */}
+              {me.warehouseType && (
+                <span
+                  title={me.warehouse ?? undefined}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11.5px] font-bold whitespace-nowrap ${
+                    me.warehouseType === "UNIT"
+                      ? "bg-ambernut-100 text-ambernut-800 border-ambernut-200"
+                      : "bg-brand-50 text-brand-800 border-brand-200"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">warehouse</span>
+                  {WAREHOUSE_TYPE_LABEL[me.warehouseType]}
+                </span>
+              )}
               <div className="hidden sm:block text-right leading-tight">
                 <div className="text-[13px] font-semibold text-warmstone-900">{me.displayName}</div>
                 <div className="text-[11px] text-warmstone-500">

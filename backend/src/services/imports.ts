@@ -534,7 +534,7 @@ async function commitDryingSorting(rows: ParsedRow<DryingSortingRow>[], filename
 }
 
 /** Same reading of the overloaded ACTIVITIES TYPE column as prisma/seed.ts's categorise(). */
-function categoriseActivity(v: string): string | null {
+export function categoriseActivity(v: string): string | null {
   const s = v.toUpperCase();
   if (!s) return null;
   if (s.includes("TRANSFF") || s.includes("TRANSFER")) return "TRANSFER_OUT";

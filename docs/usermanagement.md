@@ -65,6 +65,27 @@ decision, so it doesn't by itself move a receipt past QFS.
 ("never typed"), but the client wants the Branch Manager's figure as the workbook records it today;
 the conflict is noted on that stage rather than resolved silently.
 
+## Adding several trucks at once (Warehouse Incharge)
+
+Reception › **Add trucks** opens a grid: one row per truck (one truck or many), with the fields known at the
+gate — date of arrival, vehicle no. (required), supplier (a picker that fills both supplier name and
+LBA code), fiche no., credit/cash, origin, remarks. **Create** opens every row as a receipt in one
+step, at the incharge's own warehouse.
+
+- **All or nothing.** Every row is checked first and everything is written in one transaction, so a
+  bad row (say row 7 has no vehicle no., or a date that isn't a real `YYYY-MM-DD`) creates *no*
+  receipts and the message names the row. Nothing is half-created.
+- **Same as a hand-entered truck.** Each row gets the next `REC-<year>-NNNN`, the gate/supplier-document
+  stages are written through the normal stage code (so status shows *Pending QA*, or *Arrived* if the
+  row had no supplier details), and every field is audited. Weights, lot, bin, etc. are filled on each
+  receipt afterwards.
+- Blank rows are ignored; new rows copy the previous row's date; Enter jumps to the same column in the
+  next row; a row can be duplicated (keeps supplier and date, clears vehicle and fiche). At most 200
+  trucks per batch.
+- Warehouse Incharge and admin only — a Branch Manager or QFS Officer can't reach it. Columns are
+  defined in `packages/contract/src/data/batchEntry.ts`.
+- For a large backlog that already exists in a workbook, the Reception *Upload* is still the better tool.
+
 ## Enforcement
 
 - **Sign-in:** httpOnly session cookie; every `/api/*` route except health and login is 401 without it.

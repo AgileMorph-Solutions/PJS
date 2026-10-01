@@ -8,9 +8,7 @@ import type { FastifyInstance } from "fastify";
 import type { ImporterId } from "../domain/imports/types.js";
 import { IMPORTERS, getImporter } from "../domain/imports/registry.js";
 import { listImporterTypes, previewImport, commitImport, ImportRejectedError } from "../services/imports.js";
-import { buildTemplateWorkbook, buildExportWorkbook } from "../domain/imports/xlsxWriter.js";
-import { getExportRows } from "../services/importExports.js";
-import { scopedSite } from "../auth/scope.js";
+import { buildTemplateWorkbook } from "../domain/imports/xlsxWriter.js";
 
 const KNOWN_IMPORTER_IDS = new Set(IMPORTERS.map((i) => i.id));
 
@@ -59,21 +57,6 @@ export async function importRoutes(app: FastifyInstance) {
       .header("Content-Disposition", `attachment; filename="${def.expectedSheet} template.xlsx"`)
       .send(buffer);
   });
-
-  /** Current database rows for this importer's table, as .xlsx — see importExports.ts for which
-   * `list*` function backs each shape. `?warehouse=` scopes it the same way every other
-   * site-scoped read does; omitted for shapes with no site dimension (see importExports.ts). */
-  app.get("/api/imports/:id/export", async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const { warehouse } = req.query as { warehouse?: string };
-    const importerId = requireKnownImporter(id);
-    const def = getImporter(importerId);
-    const rows = await getExportRows(importerId, await scopedSite(req, warehouse));
-    const buffer = await buildExportWorkbook(importerId, rows);
-    const stamp = new Date().toISOString().slice(0, 10);
-    reply
-      .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-      .header("Content-Disposition", `attachment; filename="${def.expectedSheet} export ${stamp}.xlsx"`)
-      .send(buffer);
-  });
+  // Exporting current data is not here: it follows our tables, not the client's workbook shapes —
+  // see routes/exports.ts.
 }

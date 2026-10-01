@@ -14,6 +14,7 @@ import { UnknownStageFieldError } from "../stageStore.js";
 import {
   listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities,
 } from "../services/receipts.js";
+import { createReceiptsBatch } from "../services/receiptBatch.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
 import { getDownstreamStatus } from "../services/receiptsDownstream.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
@@ -73,6 +74,19 @@ export async function receiptRoutes(app: FastifyInstance) {
       // A Warehouse Incharge can only open receipts at their own warehouse.
       return reply.code(201).send(await createReceipt(scopedWarehouse(req, warehouse) ?? warehouse));
     } catch (e) { return sendError(reply, e); }
+  });
+
+  /**
+   * Several trucks at once from the batch grid — all or nothing (services/receiptBatch.ts). Like
+   * POST /api/receipts, a Warehouse Incharge is pinned to their own warehouse; an admin names one.
+   * (Branch Manager / QFS Officer never reach this: auth/policy.ts doesn't list it for them.)
+   */
+  app.post("/api/receipts/batch", async (req, reply) => {
+    const { warehouse, rows } = (req.body ?? {}) as { warehouse?: string; rows?: unknown };
+    const wh = scopedWarehouse(req, warehouse) ?? warehouse;
+    if (!wh) return reply.code(400).send({ error: "warehouse is required" });
+    const ids = await createReceiptsBatch(wh, rows, currentUser(req).id);
+    return reply.code(201).send({ ids });
   });
 
   app.patch("/api/receipts/:id", async (req, reply) => {

@@ -5,7 +5,7 @@ interface Props {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  /** Widens the panel for content that needs more room (e.g. an embedded ImportPanel's preview
+  /** Widens the panel for content that needs more room (e.g. the workbook upload's preview
    * table) — plain `max-w-lg` is the default, matching every other dialog-shaped UI in this app. */
   wide?: boolean;
 }

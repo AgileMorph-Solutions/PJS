@@ -4,6 +4,7 @@ import { RequireRole } from "./components/RequireRole";
 import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/admin/UsersPage";
 import { ApprovalsPage } from "./pages/warehouse/ApprovalsPage";
+import { BatchEntryPage } from "./pages/warehouse/BatchEntryPage";
 import { SupplierAssignmentPage } from "./pages/masters/SupplierAssignmentPage";
 import { MySuppliersPage } from "./pages/MySuppliersPage";
 import { MySubmissionsPage } from "./pages/MySubmissionsPage";
@@ -104,6 +105,8 @@ function AppRoutes() {
                   ?warehouse=). Only the breadcrumb reads useSite(). */}
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
               <Route element={<RequireRole roles={REVIEWERS} />}>
+                {/* Static, so it wins over the open `receipts/:id` above — "batch" is never an id. */}
+                <Route path="receipts/batch" element={<BatchEntryPage />} />
                 <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="drying" element={<DryingJobsPage />} />

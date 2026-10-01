@@ -10,6 +10,7 @@ import type {
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
 } from "@anagroci/contract/types/user";
+import type { BatchTruckRow } from "@anagroci/contract/data/batchEntry";
 
 export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -123,6 +124,11 @@ export const api = {
   createReceipt: (warehouse?: string) =>
     request<ReceiptRecord>("/receipts", { method: "POST", body: JSON.stringify(warehouse ? { warehouse } : {}) }),
 
+  /** Several trucks at once — all or nothing; a rejected row's message names it ("Row 3: …") and
+   * nothing is created. Returns the new receipt ids in row order. */
+  createReceiptsBatch: (warehouse: string, rows: BatchTruckRow[]) =>
+    request<{ ids: string[] }>("/receipts/batch", { method: "POST", body: JSON.stringify({ warehouse, rows }) }),
+
   patchReceipt: async (id: string, patch: Partial<ReceiptRecord>) =>
     unwrap(await request<Written<ReceiptRecord>>(`/receipts/${encodeURIComponent(id)}`, {
       method: "PATCH", body: JSON.stringify(patch),
@@ -202,25 +208,49 @@ export const api = {
   },
   dataQuality: () => request<{ generatedAt: string; checks: unknown[] }>("/data-quality"),
 
-  listImporterTypes: () => request<ImporterTypeInfo[]>("/imports/types"),
+  // ── The ANAGROCI workbook: ONE .xlsx in our own table format, for both Export and Upload. ────────
+  workbookInfo: (warehouse: string) =>
+    request<WorkbookInfo>(`/workbook/info?warehouse=${encodeURIComponent(warehouse)}`),
+
+  /** Downloads the workbook (or, with `blank`, the headers-only template). Returns the file for the
+   * caller to save rather than pointing a link at the URL, so a 401/403 shows as a message instead
+   * of JSON in a new tab. */
+  downloadWorkbook: async (
+    warehouse: string,
+    opts: { from?: string; to?: string; blank?: boolean } = {}
+  ): Promise<{ blob: Blob; filename: string; exported: number; withoutDate: number }> => {
+    const q = new URLSearchParams({ warehouse });
+    // Inclusive, either end optional — the backend validates and reports what it left out.
+    if (opts.from) q.set("from", opts.from);
+    if (opts.to) q.set("to", opts.to);
+    const path = `/workbook${opts.blank ? "/template" : ""}?${q}`;
+    const res = await fetch(`${BASE}${path}`, { credentials: "include" });
+    checkUnauthorized(res, path);
+    if (!res.ok) throw await errorFromResponse(res);
+    const filename = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "ANAGROCI workbook.xlsx";
+    return {
+      blob: await res.blob(),
+      filename,
+      exported: Number(res.headers.get("x-rows-exported") ?? 0),
+      withoutDate: Number(res.headers.get("x-rows-without-date") ?? 0),
+    };
+  },
 
   /** Multipart upload — the one call in this file that isn't JSON, so it can't go through
    * request(): a FormData body needs the browser's own multipart Content-Type (with boundary),
-   * never the hardcoded "application/json" header every other call sends. */
-  previewImport: async (file: File, importerId?: string): Promise<PreviewImportResponse> => {
+   * never the hardcoded "application/json" header every other call sends. Writes nothing. */
+  previewWorkbook: async (file: File, warehouse: string): Promise<WorkbookPreview> => {
     const form = new FormData();
+    form.append("warehouse", warehouse); // fields before the file, so the server has it when it reads the file
     form.append("file", file);
-    if (importerId) form.append("importerId", importerId);
-    const res = await fetch(`${BASE}/imports/preview`, { method: "POST", body: form, credentials: "include" });
-    checkUnauthorized(res, "/imports/preview");
+    const res = await fetch(`${BASE}/workbook/preview`, { method: "POST", body: form, credentials: "include" });
+    checkUnauthorized(res, "/workbook/preview");
     if (!res.ok) throw await errorFromResponse(res);
     return res.json();
   },
 
-  commitImport: (token: string, skipFlagged: boolean) =>
-    request<CommitImportResponse>(`/imports/${encodeURIComponent(token)}/commit`, {
-      method: "POST", body: JSON.stringify({ skipFlagged }),
-    }),
+  commitWorkbook: (token: string) =>
+    request<WorkbookCommitResult>(`/workbook/${encodeURIComponent(token)}/commit`, { method: "POST" }),
 
   // ── Production — its own capability, not part of TrackingApi (see repository/api.ts's header:
   // same reasoning as dryingJobs/receiptLinks — a new hook, not a reshaped context). ─────────────
@@ -330,39 +360,43 @@ export interface LotDetail extends ProductionLot {
   status: string;
 }
 
-export interface ImporterTypeInfo {
-  id: string;
-  label: string;
-  exampleFilename: string;
-  expectedSheet: string;
+export interface WorkbookSheetInfo {
+  name: string;
+  /** Master data (suppliers, bins, …): always complete, never date-filtered. */
+  master: boolean;
+  /** The date a from/to range filters this sheet on, or null when it isn't date-filterable. */
+  dateLabel: string | null;
 }
+export interface WorkbookInfo { warehouse: string; type: "UNIT" | "CENTRAL"; sheets: WorkbookSheetInfo[] }
 
-export interface ImportFinding {
-  id: string;
-  severity: "info" | "warning" | "critical";
-  title: string;
-  entity: string;
-  affectedCount: number;
-  sampleIds: string[];
-  evidence: string;
-}
-
-export interface PreviewImportResponse {
-  token: string;
-  importerId: string;
-  label: string;
-  rowCount: number;
-  skippedCount: number;
-  duplicateCount: number;
-  findings: ImportFinding[];
-  sampleRows: unknown[];
-}
-
-export interface CommitImportResponse {
-  importerId: string;
+export interface WorkbookRowError { row: number; column?: string; message: string }
+export interface WorkbookSample { row: number; key: string; changes: { column: string; from: string; to: string }[] }
+export interface WorkbookSheetPlan {
+  name: string;
+  rows: number;
   created: number;
-  skippedDuplicates: number;
-  skippedInvalid: number;
+  changed: number;
+  unchanged: number;
+  errorCount: number;
+  /** The first few only; `errorCount` is the full number. */
+  errors: WorkbookRowError[];
+  samples: WorkbookSample[];
+}
+export interface WorkbookPreview {
+  token: string;
+  filename: string;
+  warehouse: string;
+  type: "UNIT" | "CENTRAL";
+  sheets: WorkbookSheetPlan[];
+  notices: string[];
+  errorCount: number;
+  totalCreated: number;
+  totalChanged: number;
+}
+export interface WorkbookCommitResult {
+  applied: { name: string; created: number; updated: number }[];
+  totalCreated: number;
+  totalUpdated: number;
 }
 
 /** Cross-referenced by the receipt's own Lot Number — see backend/src/services/receiptLinks.ts's

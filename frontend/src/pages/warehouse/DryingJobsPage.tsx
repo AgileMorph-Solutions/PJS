@@ -9,15 +9,13 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
-import { ImportModal } from "../../components/ImportModal";
+import { WorkbookModal } from "../../components/WorkbookModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { RecordDetailModal } from "../../components/ui/RecordDetailModal";
 import { useTracking, useDryingBatches, useDryingSortingReports } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { DryingBatch, DryingSortingReport } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
-
-const DRYING_IMPORTER_IDS = ["dryingBatch", "dryingSorting"];
 
 /** A "View all fields" cell — every DataTable row here may also be a link (rowHref), so this stops
  * the click from bubbling into the row's own navigation. */
@@ -117,7 +115,7 @@ export function DryingJobsPage() {
             <button
               onClick={() => setDialogMode("export")}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
-              title="Pick a workbook to export or download a template for"
+              title="Download the ANAGROCI workbook for this warehouse"
             >
               <span className="material-symbols-outlined text-[17px]">download</span>
               Export
@@ -127,10 +125,10 @@ export function DryingJobsPage() {
       />
 
       {dialogMode && (
-        <ImportModal
-          importerIds={DRYING_IMPORTER_IDS}
-          siteSlug={site.slug}
+        <WorkbookModal
           mode={dialogMode}
+          warehouse={site.warehouseName}
+          sectionLabel={`${site.label} · ${site.sublabel}`}
           onClose={() => setDialogMode(null)}
           onCommitted={() => {
             void refetchBatches();

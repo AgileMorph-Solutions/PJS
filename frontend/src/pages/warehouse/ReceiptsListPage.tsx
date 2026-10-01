@@ -4,7 +4,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { DataTable } from "../../components/ui/DataTable";
 import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
-import { ImportModal } from "../../components/ImportModal";
+import { WorkbookModal } from "../../components/WorkbookModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
 import { useTracking, useDownstreamStatus } from "../../state/TrackingContext";
@@ -12,22 +12,9 @@ import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { siteSlugForSiteName } from "../../config/sites";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
-import { stages } from "../../data/stages";
 import { receiptColumns, fiche, storeCode } from "./columns";
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
-
-/** Every workbook shape Reception's Upload button offers — everything that lands on a receipt,
- * its downstream dispatch/receiving/production status, or the jute ledgers (per request: jute
- * uploads belong here too, not only on the Jute pages) — see docs/UPLOAD_GUIDE.md's mapping table. */
-const RECEPTION_IMPORTER_IDS = [
-  "truckReception",
-  "warehouseDispatches",
-  "juteWarehouseTransfer",
-  "issuedToProduction",
-  "warehouseActivityLedger",
-  "juteBagsMovement",
-];
 
 /** Site-scoped Receipts list — one component for both /unit/receipts and /central/receipts (see
  * SiteContext's useSite()). The section itself IS the warehouse filter now, so the old "All
@@ -35,7 +22,7 @@ const RECEPTION_IMPORTER_IDS = [
  * one store to choose from (derived from /api/masters' {name,kind,site} shape — a store is any
  * warehouse row whose `site` equals this section's warehouseName). */
 export function ReceiptsListPage() {
-  const { receipts, masters, createReceipt, refresh } = useTracking();
+  const { receipts, masters, refresh } = useTracking();
   const site = useSite();
   const canEdit = useCanEditDirectly();
   const switchSite = useSwitchSite();
@@ -86,13 +73,6 @@ export function ReceiptsListPage() {
       .sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1));
   }, [siteReceipts, status, store, dateRange.from, dateRange.to, q]);
 
-  async function handleNewReceipt() {
-    // Async: the id is assigned by the server, and scoped to this section's own site so a truck
-    // created from /unit or /central lands at the right warehouse from the start.
-    const id = await createReceipt(site.warehouseName);
-    navigate(`/${site.slug}/receipts/new/${id}/${stages[0].id}`);
-  }
-
   return (
     <>
       <PageHeader
@@ -117,17 +97,19 @@ export function ReceiptsListPage() {
               <button
                 onClick={() => setDialogMode("export")}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
-                title="Pick a workbook to export or download a template for"
+                title="Download the ANAGROCI workbook for this warehouse"
               >
                 <span className="material-symbols-outlined text-[17px]">download</span>
                 Export
               </button>
+              {/* The one way to add trucks: a grid, whether it's one truck or twenty. */}
               <button
-                onClick={handleNewReceipt}
+                onClick={() => navigate(`/${site.slug}/receipts/batch`)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
+                title="Add one or more trucks from a grid"
               >
                 <span className="material-symbols-outlined text-[17px]">add</span>
-                New RCN receipt
+                Add trucks
               </button>
               </>
             )}
@@ -145,10 +127,10 @@ export function ReceiptsListPage() {
       </div>
 
       {dialogMode && (
-        <ImportModal
-          importerIds={RECEPTION_IMPORTER_IDS}
-          siteSlug={site.slug}
+        <WorkbookModal
           mode={dialogMode}
+          warehouse={site.warehouseName}
+          sectionLabel={`${site.label} · ${site.sublabel}`}
           onClose={() => setDialogMode(null)}
           onCommitted={() => {
             void refresh();

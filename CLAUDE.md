@@ -16,7 +16,9 @@ frontend/             Vite + React + TypeScript SPA. See frontend/CLAUDE.md.
 tools/                Python extractors (openpyxl) that regenerate frontend/src/data/seed/*.json
                       and juteLedgers.json from the client's real .xlsx files. Re-run + rebuild
                       seed data if the source workbooks change; nothing else reads .xlsx directly.
-docker-compose.yml    db (Postgres) + backend (:3000) + frontend (:8080, nginx proxies /api).
+docker-compose.yml    DEV stack with hot reload: db (Postgres) + backend (:3000, tsx watch) + frontend
+                      (:8080, Vite dev server proxying /api); source is bind-mounted. Production is
+                      docker-compose.prod.yml.
 ```
 
 It's an npm workspace (`workspaces: ["packages/*", "backend", "frontend"]`). `npm install` at the

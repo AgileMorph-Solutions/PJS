@@ -75,13 +75,17 @@ export async function listLedgerRows(ledgerId: string, site?: string[]): Promise
 
   const model = (prisma as any)[DELEGATE[ledgerId]];
   const orderBy = ledgerId === "warehouse-to-warehouse-movement" ? { sn: "asc" } : { createdAt: "asc" };
-  const where = !site
-    ? {}
-    : ledgerId === "warehouse-to-warehouse-movement"
-      ? { OR: [{ sourceWarehouse: { in: site } }, { destinationWarehouse: { in: site } }] }
-      : { whLocation: { in: site } };
-  const rows = await model.findMany({ where, orderBy });
+  const rows = await model.findMany({ where: ledgerSiteWhere(ledgerId, site), orderBy });
   return rows.map((r: Record<string, unknown>) => toLedgerRow(ledgerId, r));
+}
+
+/** The site filter for a ledger's own table — shared with the table export (services/exports.ts)
+ * so "which rows belong to this section" is decided in exactly one place. */
+export function ledgerSiteWhere(ledgerId: string, site?: string[]) {
+  if (!site) return {};
+  return ledgerId === "warehouse-to-warehouse-movement"
+    ? { OR: [{ sourceWarehouse: { in: site } }, { destinationWarehouse: { in: site } }] }
+    : { whLocation: { in: site } };
 }
 
 const INT_COLS = new Set([

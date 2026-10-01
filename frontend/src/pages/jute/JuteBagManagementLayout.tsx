@@ -2,15 +2,9 @@ import { useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Tabs, type TabItem } from "../../components/ui/Tabs";
-import { ImportModal } from "../../components/ImportModal";
+import { WorkbookModal } from "../../components/WorkbookModal";
+import { useActiveSite } from "../../state/SiteContext";
 import { useTracking } from "../../state/TrackingContext";
-
-/** Every workbook shape that lands on one of this section's five tabs — Warehouse Stock
- * (juteBagsMovement), Warehouse Transfers (juteWarehouseTransfer) and Warehouse Activity Ledger
- * (warehouseActivityLedger). Supplier Movement and Production Issue/Return have no importer of
- * their own yet (verified against backend/src/domain/imports/types.ts — nothing produces either
- * ledger from a workbook today), so they're not in this list. */
-const JUTE_IMPORTER_IDS = ["juteBagsMovement", "juteWarehouseTransfer", "warehouseActivityLedger"];
 
 const TABS: (TabItem & { lede: string })[] = [
   {
@@ -59,6 +53,8 @@ const TABS: (TabItem & { lede: string })[] = [
 export function JuteBagManagementLayout() {
   const { pathname } = useLocation();
   const { refresh } = useTracking();
+  // Not under /:site, so the workbook is for whichever section the user is currently in.
+  const site = useActiveSite();
   const [dialogMode, setDialogMode] = useState<"upload" | "export" | null>(null);
   // Bumped after a commit and used as the <Outlet/>'s key: the active tab's own data hook
   // (useJuteLedgerEntries / useWarehouseActivityLedger) only fetches on mount, and lives in
@@ -85,7 +81,7 @@ export function JuteBagManagementLayout() {
             <button
               onClick={() => setDialogMode("export")}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
-              title="Pick a workbook to export or download a template for"
+              title="Download the ANAGROCI workbook for this warehouse"
             >
               <span className="material-symbols-outlined text-[17px]">download</span>
               Export
@@ -95,9 +91,10 @@ export function JuteBagManagementLayout() {
       />
       <Tabs items={TABS} />
       {dialogMode && (
-        <ImportModal
-          importerIds={JUTE_IMPORTER_IDS}
+        <WorkbookModal
           mode={dialogMode}
+          warehouse={site.warehouseName}
+          sectionLabel={`${site.label} · ${site.sublabel}`}
           onClose={() => setDialogMode(null)}
           onCommitted={() => {
             void refresh();

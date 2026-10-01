@@ -22,7 +22,7 @@ export interface WriteOpts {
   bypassValidation?: boolean;
   /** Who is writing, and how — when set, every changed field is recorded in StageFieldChange.
    * The seeder and importers pass nothing: their data predates users and gets no invented actor. */
-  actor?: { id: string; via: "direct" | "approval" };
+  actor?: { id: string; via: "direct" | "approval" | "import" };
 }
 
 export async function loadReceiptRow(id: string, tx: Tx | typeof prisma = prisma) {
@@ -239,6 +239,41 @@ export async function setStageFields(
 }
 
 /**
+ * The decision write itself, without the timeline entry — exposed so a caller that records several
+ * changes at once (the workbook upload) can run it inside its own transaction and append ONE
+ * timeline entry for the lot. A QFS fail still needs a reason, here as everywhere.
+ */
+export async function applyBranch(
+  tx: Tx,
+  id: string,
+  stageId: string,
+  branchId: string,
+  reason?: string,
+  opts: WriteOpts = {}
+) {
+  if (!opts.bypassValidation && stageId === "n-qfs") assertRejectionHasReason(branchId, reason);
+
+  await tx.receiptBranch.upsert({
+    where: { receiptId_stageId: { receiptId: id, stageId } },
+    update: { branchId, decidedAt: new Date() },
+    create: { receiptId: id, stageId, branchId },
+  });
+
+  if (stageId === "n-qfs" && branchId === "fail" && reason) {
+    await tx.stageEntry.upsert({
+      where: { receiptId_stageId: { receiptId: id, stageId: "n-reject" } },
+      update: {},
+      create: { receiptId: id, stageId: "n-reject" },
+    });
+    await tx.stageRejection.upsert({
+      where: { receiptId: id },
+      update: { reason },
+      create: { receiptId: id, reason },
+    });
+  }
+}
+
+/**
  * Mirrors setBranch(): records the decision, recomputes status server-side, appends a timeline
  * entry — the same three steps TrackingContext does client-side today, but as the source of truth.
  */
@@ -249,27 +284,8 @@ export async function setBranch(
   reason?: string,
   opts: WriteOpts = {}
 ) {
-  if (!opts.bypassValidation && stageId === "n-qfs") assertRejectionHasReason(branchId, reason);
-
   await prisma.$transaction(async (tx) => {
-    await tx.receiptBranch.upsert({
-      where: { receiptId_stageId: { receiptId: id, stageId } },
-      update: { branchId, decidedAt: new Date() },
-      create: { receiptId: id, stageId, branchId },
-    });
-
-    if (stageId === "n-qfs" && branchId === "fail" && reason) {
-      await tx.stageEntry.upsert({
-        where: { receiptId_stageId: { receiptId: id, stageId: "n-reject" } },
-        update: {},
-        create: { receiptId: id, stageId: "n-reject" },
-      });
-      await tx.stageRejection.upsert({
-        where: { receiptId: id },
-        update: { reason },
-        create: { receiptId: id, reason },
-      });
-    }
+    await applyBranch(tx, id, stageId, branchId, reason, opts);
 
     const fresh = await loadReceiptRow(id, tx);
     const status = deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord);

@@ -1,5 +1,66 @@
 # Uploading real workbooks — what goes where, and why
 
+## The ANAGROCI workbook (what Upload and Export use now)
+
+There is **one file format**, in plain words — not the client's Excel layouts, and not database
+names. Export downloads it; Upload takes the same file back. It is one `.xlsx` with one sheet for each
+kind of record, and every column header is ordinary words ("Arrival Date", "Price (CFA/kg)"). It
+opens on **Truck Reception**. The headers follow the client's own sheets in
+`docs/Procurement/new sheets/`, minus their pivot-table leftovers and duplicate columns.
+
+**It differs only by section.** Which warehouse you are in decides which sheets the file carries and
+whose rows it holds:
+
+| Sheet | Unit | Central | What it is |
+|---|---|---|---|
+| **Truck Reception** | ✓ | ✓ | One row per truck: dates, supplier, truck, fiche, quality (moisture, nut count, KOR), weights, bags, price, lot, bin |
+| **Warehouse Receiving** | ✓ | ✓ | Per lot: bins, bags by type, weights, GRN, and the lab results in full — Bouaké's **Sample** and **Final** panels, or Yakro's (which add Murli) |
+| **Drying** | ✓ | ✓ | Drying batches |
+| **Stock Transfers** | ✓ | ✓ | Bouaké → Yakro transfers |
+| **Activity Ledger** | ✓ | ✓ | The warehouse activity log |
+| **Suppliers** | ✓ | ✓ | Supplier code and name |
+| **Drying & Sorting**, **Dispatch**, **Jute Bags** | ✓ | | Unit only |
+| **Issued to Production** | | ✓ | Central only |
+
+**What it asks for, and what it doesn't.** Only what people provide. It leaves out the app's own
+columns (where a row came from, timestamps, internal numbers), anything the app works out (a
+receipt's status, a jute running balance, weight and bag differences, loss %), and the warehouse a row
+belongs to — the section already decides that, and a new row gets this warehouse. Where the database
+holds a hand-typed value only as text (a date written "13-01-2026"), it appears in an extra
+"… (as written)" column so it isn't hidden. Bins, origins and warehouses are managed in the app, not
+in the file (a new origin town typed on Truck Reception is simply added).
+
+**The rules** (the same in both directions):
+- **Leave the first column empty to add a row** (Receipt ID / Row ID); the app assigns it, and the next
+  "No" where a sheet has one. A known id updates that row. An id that doesn't exist is an error, never
+  a quiet create.
+- **Nothing is ever deleted.** A row missing from the file stays in the database — so a date-filtered
+  export is safe to upload.
+- **Only cells that differ are written.** Exporting and uploading a file unchanged writes nothing — no
+  row, no audit entry, no `updatedAt`. That is also why a record that already breaks a rule (a rejected
+  truck with no reason) isn't re-judged by an upload that doesn't touch it. A column you delete from
+  the file leaves that field alone; it never blanks it.
+- **Nothing is guessed.** Dates must be `YYYY-MM-DD`, numbers use a decimal point; a value that doesn't
+  fit is reported with its sheet, row and the column's own header. Sheet and column names are matched
+  ignoring case and spacing; a sheet or column we don't use is ignored, with a notice.
+- **Preview first, then apply.** Upload shows new / changed / unchanged per sheet and every problem.
+  **Apply** re-checks against the database and writes in ONE transaction: any problem writes nothing.
+- **Truck Reception goes through the app's own stage code**, so the lot-uniqueness, lot-before-bin and
+  "a failed quality check needs a reason" rules apply, each change is audited (`via = import`), and
+  there is one timeline entry per receipt. Changing a receipt's supplier, supplier code, truck no or
+  arrival date also updates the matching step, so the two never disagree. Quality Result is typed as
+  Pass or Fail.
+- **Scope.** A Warehouse Incharge works on their own warehouse; an admin picks one. A row must belong to
+  that warehouse — before and after the change. Rows with no warehouse set aren't in a section's file.
+
+Everything below this line documents the **earlier client-workbook importers** (Truck Reception,
+CHARGEMENT, Jute Bags movement, …). They are no longer offered in the UI; the code, the `/api/imports/*`
+routes and their tests remain because the real data came in through them.
+
+---
+
+# Client-workbook importers (history)
+
 This app can import 11 real workbook shapes directly through the UI — each importer panel lives
 embedded on the one page its rows belong to (Reception, Lots & Bins, Drying, Jute ▸ Warehouse
 Stock/Transfers, Masters ▸ Suppliers — see each page's own "Import ..." card), or

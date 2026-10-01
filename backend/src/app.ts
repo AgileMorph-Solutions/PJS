@@ -13,6 +13,7 @@ import { dryingRoutes } from "./routes/drying.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataQualityRoutes } from "./routes/dataQuality.js";
 import { importRoutes } from "./routes/imports.js";
+import { workbookRoutes } from "./routes/workbook.js";
 import { productionRoutes } from "./routes/production.js";
 import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
 import { dryingBatchRoutes } from "./routes/dryingBatches.js";
@@ -32,7 +33,12 @@ export function buildApp() {
   const origins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://localhost:8080")
     .split(",").map((o) => o.trim()).filter(Boolean);
   // credentials: the session is an httpOnly cookie, which cross-origin fetches only send when allowed.
-  app.register(cors, { origin: origins, credentials: true, methods: ["GET", "POST", "PATCH", "PUT", "DELETE"] });
+  // exposedHeaders: a cross-origin fetch (vite dev) can only read these if they're listed — the
+  // export download reads its filename and the "rows left out for having no date" count from them.
+  app.register(cors, {
+    origin: origins, credentials: true, methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+    exposedHeaders: ["Content-Disposition", "X-Rows-Without-Date", "X-Rows-Exported"],
+  });
 
   // 20MB cap — the largest real workbook is ~395KB; this is headroom against a wrong/huge file,
   // not a tight fit. Row/column guards on top of this live in services/imports.ts.
@@ -70,6 +76,7 @@ export function buildApp() {
   app.register(dashboardRoutes);
   app.register(dataQualityRoutes);
   app.register(importRoutes);
+  app.register(workbookRoutes);
   app.register(productionRoutes);
   app.register(warehouseDispatchRoutes);
   app.register(warehouseActivityLedgerRoutes);

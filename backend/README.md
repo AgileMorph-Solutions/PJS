@@ -7,7 +7,7 @@ and the jute reconciliation arithmetic.
 ## Run it
 
 ```bash
-docker compose up --build          # db + backend (:3000) + frontend (:8080)
+docker compose up --build          # db + backend (:3000) + frontend (:8080) — hot reload, see ../README.md
 open http://localhost:8080
 ```
 
@@ -111,6 +111,7 @@ Fifteen findings ship against the real data, including:
 | GET | `/api/health` | |
 | GET | `/api/receipts`, `/api/receipts/:id` | Full `ReceiptRecord` with derived `status`. List accepts `?warehouse=` (a site name — see below) |
 | POST | `/api/receipts` | Server-assigned `REC-<year>-NNNN`, serializable |
+| POST | `/api/receipts/batch` | `{warehouse, rows}` — several trucks (gate + supplier-document fields) in one transaction, all or nothing; a bad row is a 422 naming it and creates none. Warehouse Incharge / admin |
 | PATCH | `/api/receipts/:id` | Top-level fields; `lotNo`/`binNo` route to their stage rows |
 | PATCH | `/api/receipts/:id/stages/:stageId` | **Batched** — the client coalesces per stage |
 | POST | `/api/receipts/:id/branch` | Recomputes status + appends a timeline entry |
@@ -124,9 +125,11 @@ Fifteen findings ship against the real data, including:
 | GET | `/api/warehouse-dispatches` | Unit-warehouse dispatch out (CHARGEMENT), one row per line. Accepts `?warehouse=` |
 | GET | `/api/warehouse-activity-ledger` | Its own table — the source sheet has no site column, so this one can't be scoped |
 | GET | `/api/data-quality` | |
-| GET | `/api/imports/types` | The 10 known workbook shapes this app can import |
-| POST | `/api/imports/preview` | Multipart `.xlsx` upload → parsed rows + findings, cached under a token |
-| POST | `/api/imports/:token/commit` | Writes the previewed rows — see `docs/UPLOAD_GUIDE.md` |
+| GET | `/api/workbook?warehouse=&from=&to=` | **The ANAGROCI workbook**: ONE .xlsx in plain words, used for both Export and Upload — sheet titles like `Truck Reception` / `Warehouse Receiving` and headers like `Arrival Date` (defined in `domain/workbook/fields.ts`), not table or column names. Which sheets it carries and whose rows it holds depends on the section (the warehouse's Unit/Central type). `?from=&to=` (inclusive, `YYYY-MM-DD`, either optional) filters each dated sheet on its own date; Suppliers is never filtered. Rows with no usable date are left out under a range and counted in `X-Rows-Without-Date`. Warehouse Incharge (own warehouse) / admin (names a warehouse) |
+| GET | `/api/workbook/template`, `/api/workbook/info` | The same workbook with headers only (the Upload dialog's sample); the section's sheet list |
+| POST | `/api/workbook/preview` | Multipart `file` (+ `warehouse` for an admin). **Writes nothing**: returns, per sheet, new / changed / unchanged counts, sample changes and every problem (sheet, row, column, message), under a token |
+| POST | `/api/workbook/:token/commit` | Re-checks and writes in **one transaction**, all or nothing. Upsert, never delete: a blank id adds a row, a known id is updated (only cells that differ), a missing row is left alone. Receipts go through the same stage-write code as every other edit |
+| GET/POST | `/api/imports/*` | The earlier **client-workbook** importers (Truck Reception, CHARGEMENT, …). Kept — the seed and the real data came in this way and their tests guard the parsers — but the UI no longer offers them; Upload is the workbook above. See `docs/UPLOAD_GUIDE.md` |
 
 ### Auth and user management
 

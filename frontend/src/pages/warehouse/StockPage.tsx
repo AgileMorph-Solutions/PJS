@@ -5,8 +5,7 @@ import { FilterBar } from "../../components/ui/FilterBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
 import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
-import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { ImportPanel } from "../../components/ImportPanel";
+import { WorkbookModal } from "../../components/WorkbookModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { RecordDetailModal } from "../../components/ui/RecordDetailModal";
 import { useTracking, useWarehouseDischarges } from "../../state/TrackingContext";
@@ -25,6 +24,7 @@ export function StockPage() {
   const switchSite = useSwitchSite();
   const { rows: discharges, refetch: refetchDischarges } = useWarehouseDischarges(site.warehouseName);
   const [detail, setDetail] = useState<WarehouseDischargeRow | null>(null);
+  const [dialogMode, setDialogMode] = useState<"upload" | "export" | null>(null);
   const withLot = useMemo(
     () => receipts.filter((r) => r.warehouse === site.warehouseName && (r.stageData["n-lot"] || r.stageData["n-bin"])),
     [receipts, site.warehouseName]
@@ -76,34 +76,37 @@ export function StockPage() {
         kicker={`${site.label} · ${site.sublabel}`}
         title="Lots & Bins"
         lede="Lot = one truck. Bin = physical storage, and can hold several Lots."
-        actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
+        actions={
+          <div className="flex items-center gap-3">
+            <SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />
+            <button
+              onClick={() => setDialogMode("upload")}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
+            >
+              <span className="material-symbols-outlined text-[17px]">upload</span>
+              Upload
+            </button>
+            <button
+              onClick={() => setDialogMode("export")}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-bold hover:bg-warmstone-50 transition-all shadow-xs"
+              title="Download the ANAGROCI workbook for this warehouse"
+            >
+              <span className="material-symbols-outlined text-[17px]">download</span>
+              Export
+            </button>
+          </div>
+        }
       />
 
-      <div className="mb-5">
-        <CollapsibleCard title="Import from workbook">
-          {site.slug === "unit" ? (
-            // DISCHARGEMENT is where a Lot Number is actually ASSIGNED — this is the only import
-            // that writes a real Lot onto a receipt (see the Lot write-back in
-            // backend/src/services/imports.ts), so it lives on the one page that shows Lots.
-            <ImportPanel
-              importerId="warehouseDischarges"
-              onCommitted={() => { void refresh(); void refetchDischarges(); }}
-            />
-          ) : (
-            <>
-              <ImportPanel
-                importerId="warehouseReceiving"
-                onCommitted={() => { void refresh(); void refetchDischarges(); }}
-              />
-              <p className="text-[12px] text-warmstone-400 mt-2.5">
-                Stored verbatim for the record — unlike DISCHARGEMENT, this import does not assign a
-                Lot onto a receipt, so committing it won't change the Lots/Bins table below (it DOES
-                add rows to the raw discharge/receiving table further down).
-              </p>
-            </>
-          )}
-        </CollapsibleCard>
-      </div>
+      {dialogMode && (
+        <WorkbookModal
+          mode={dialogMode}
+          warehouse={site.warehouseName}
+          sectionLabel={`${site.label} · ${site.sublabel}`}
+          onClose={() => setDialogMode(null)}
+          onCommitted={() => { void refresh(); void refetchDischarges(); }}
+        />
+      )}
 
       <FilterBar>
         <input
