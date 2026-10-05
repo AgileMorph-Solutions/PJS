@@ -44,6 +44,11 @@ services:
       PORT: "3000"
       # Browser reaches /api same-origin through nginx; this only matters for direct calls.
       CORS_ORIGIN: https://${DOMAIN:-pjs.agilemorph.in}
+      # The first admin, created by the seeder only while no admin exists (it never resets a changed
+      # password). Without both there is NO account and nobody can sign in — sign-in is required for
+      # every request. Set them in .env.prod; demo accounts are deliberately not enabled here.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

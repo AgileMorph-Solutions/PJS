@@ -35,7 +35,8 @@ both.
 ```bash
 cd /root/PJS-rcn-tracking/PJS   # or wherever this repo lives on the host
 cp .env.prod.example .env.prod
-# edit .env.prod: set a strong POSTGRES_PASSWORD
+# edit .env.prod: set a strong POSTGRES_PASSWORD, and ADMIN_PASSWORD (+ optionally ADMIN_USERNAME,
+# default "admin") — the first admin. Without ADMIN_PASSWORD no account exists and nobody can sign in.
 
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
@@ -52,6 +53,14 @@ needed:
 ```bash
 docker logs -f traefik-traefik-1 | grep -i pjs
 ```
+
+## First admin
+
+Every request needs a signed-in user, and a fresh (or newly-upgraded) database has none. The
+seeder creates the first admin from `ADMIN_USERNAME` / `ADMIN_PASSWORD` in `.env.prod`, but only
+while no admin exists, so it never overwrites a changed password. After the first sign-in, create the
+real users under Administration › Users and change the admin password. There are no demo accounts in
+production.
 
 ## Redeploying after a code change
 
