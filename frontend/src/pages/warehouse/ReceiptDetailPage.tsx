@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useTracking, useReceiptLinks } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
@@ -8,7 +8,8 @@ import { SubmissionCard } from "../../components/SubmissionCard";
 import { SubmissionReview } from "../../components/SubmissionReview";
 import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
 import { DECISION_BRANCHES } from "../../domain/decisions";
-import { stages, rejectStage } from "../../data/stages";
+import { stages, rejectStage, RECEPTION_STEPS } from "../../data/stages";
+import { computeDerivedFields } from "../../domain/receiptMath";
 import { StageForm } from "../../components/StageForm";
 import { DecisionBranch } from "../../components/DecisionBranch";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
@@ -49,9 +50,14 @@ export function ReceiptDetailPage() {
     [receipts, receipt?.binNo, receipt?.id]
   );
   const timelinePage = usePagination(receipt ? [...receipt.timeline].reverse() : []);
+  // What the system calculates from the readings as they stand — shown at once, so a net weight
+  // follows the tare weight as it is typed rather than appearing after the server has saved it.
+  const derived = useMemo(() => (receipt ? computeDerivedFields(receipt.stageData) : {}), [receipt]);
   const { links, loading: linksLoading } = useReceiptLinks(receipt?.id);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
+  // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
+  if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
 
   const status = deriveStatus(receipt);
   const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
@@ -178,12 +184,22 @@ export function ReceiptDetailPage() {
               <span className="material-symbols-outlined text-[19px] text-brand-700">fact_check</span>
               Delivery stages
             </h2>
-            <span className="text-xs font-medium text-warmstone-500">{stages.length} stages, any order</span>
+            <span className="text-xs font-medium text-warmstone-500">
+              {RECEPTION_STEPS.map((st) => st.title).join(" → ")}
+            </span>
           </div>
 
           {!canEdit && <SubmissionCard receipt={receipt} role={me.role} />}
 
-          {stages.map((stage) => {
+          {stages.map((stage, stageIndex) => {
+            // The reception stages are grouped into the seven steps the team works through
+            // (Arrival → Weight → Quality → Unloading → Lot → Bin → GRN); a heading marks where each
+            // starts, and the stages after GRN carry on under their own.
+            const stepIndex = RECEPTION_STEPS.findIndex((st) => st.stageIds.includes(stage.id));
+            const step = stepIndex >= 0 ? RECEPTION_STEPS[stepIndex] : undefined;
+            const startsStep = step?.stageIds[0] === stage.id;
+            const startsLater =
+              !step && stageIndex > 0 && RECEPTION_STEPS.some((st) => st.stageIds.includes(stages[stageIndex - 1]!.id));
             const done = doneIds.has(stage.id);
             const isActive = stage.id === activeStage?.id;
             const branchOptions = DECISION_BRANCHES[stage.id];
@@ -192,8 +208,13 @@ export function ReceiptDetailPage() {
             const blank = done && isStageBlank(values);
 
             return (
+              <Fragment key={stage.id}>
+              {(startsStep || startsLater) && (
+                <h3 className="px-1 pt-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
+                  {startsStep ? `Step ${stepIndex + 1} · ${step!.title}` : "After reception"}
+                </h3>
+              )}
               <details
-                key={stage.id}
                 open={isActive}
                 className={`bg-white rounded-2xl overflow-hidden transition-all ${
                   isActive ? "border-2 border-brand-700 shadow-md shadow-brand-700/10" : "border border-warmstone-200 shadow-xs"
@@ -248,6 +269,7 @@ export function ReceiptDetailPage() {
                     <StageForm
                       stage={stage}
                       values={values}
+                      derived={derived[stage.id]}
                       onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
                       onFieldBlur={() => flushStage(receipt.id, stage.id)}
                       readOnly={!canEdit}
@@ -260,6 +282,7 @@ export function ReceiptDetailPage() {
                   </div>
                 </div>
               </details>
+              </Fragment>
             );
           })}
 

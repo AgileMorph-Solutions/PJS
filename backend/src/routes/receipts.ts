@@ -69,10 +69,10 @@ export async function receiptRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/receipts", async (req, reply) => {
-    const { warehouse } = (req.body ?? {}) as { warehouse?: string };
+    const { warehouse, arrivalDate, deliveryPlanId } = (req.body ?? {}) as { warehouse?: string; arrivalDate?: string; deliveryPlanId?: string };
     try {
       // A Warehouse Incharge can only open receipts at their own warehouse.
-      return reply.code(201).send(await createReceipt(scopedWarehouse(req, warehouse) ?? warehouse));
+      return reply.code(201).send(await createReceipt(scopedWarehouse(req, warehouse) ?? warehouse, arrivalDate, deliveryPlanId));
     } catch (e) { return sendError(reply, e); }
   });
 

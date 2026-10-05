@@ -39,12 +39,15 @@ services:
     # DEV: same startup as the image (migrate, seed, serve), but the last step is `tsx watch`, so the
     # API restarts by itself whenever a source file under ./backend or ./packages/contract is saved.
     # (A new migration or a changed prisma/schema.prisma still needs `docker compose restart backend`
-    # — migrate and prisma generate run at startup, not on every save.) docker-compose.prod.yml is
-    # the real deployment; nothing here is used there.
+    # — migrate and prisma generate run at startup, not on every save.) `prisma generate` has to be
+    # in this command: the source is bind-mounted but the Prisma client lives in the image, so
+    # without it a schema change leaves the old client behind and the API crashes on start
+    # ("Unknown argument …") until the image is rebuilt. docker-compose.prod.yml is the real
+    # deployment; nothing here is used there.
     command:
       - sh
       - -c
-      - npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx prisma/seedProduction.ts && npx tsx watch src/server.ts
+      - npx prisma migrate deploy && npx prisma generate && npx tsx prisma/seed.ts && npx tsx prisma/seedProduction.ts && npx tsx watch src/server.ts
     volumes:
       - ./backend:/app/backend
       - ./packages/contract:/app/packages/contract

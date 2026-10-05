@@ -52,13 +52,28 @@ export const stages: Stage[] = [
     ],
   },
   {
+    id: "n-gross",
+    num: 3,
+    title: "Weight truck (Gross weight)",
+    phase: "Phase 2 · Truck arrival & reception",
+    kind: "entry",
+    file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
+    sheet: "Truck Reception · 28 columns",
+    note: "Loaded truck on the weighbridge, before quality and unloading (Oct 2026 team flow: Arrival → Weight → Quality → Unloading → Lot → Bin → GRN). The empty truck is weighed again after unloading (n-tare); GROSS WT KGS — the RCN plus its bags, already net of the truck in the real sheet (41,300 kg for 478 bags) — is then calculated as loaded − empty. Doc §4 asks Gross / Net / GRN / Paid Weight / Refraction to each be kept separately, not blended.",
+    fields: [
+      // v: "" — no workbook column; it is the Bordereau de Livraison's "Poids Entrés camion".
+      { n: "Loaded truck weight (kg)", v: "" , col: "loadedTruckWtKgs"},
+      { n: "GROSS WT KGS", v: "41300" , col: "grossWtKgs"},
+    ],
+  },
+  {
     id: "n-qfs",
     title: "Quality analysis (QFS)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "decision",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "A sample is cut and scored. Fail here and the truck is turned away before it ever enters — see the reject branch, which now must keep a record (doc §3).",
+    note: "A sample is cut and scored. Fail here and the truck is turned away before it ever enters — see the reject branch, which now must keep a record (doc §3). Oct 2026: Pass is the \"accepted reception\" moment — it issues the truck's Lot Number automatically (see n-lot).",
     fields: [
       { n: "MOIS. (moisture)", v: "10.2" , col: "moisture"},
       { n: "NUT COUNT", v: "172" , col: "nutCount"},
@@ -67,55 +82,14 @@ export const stages: Stage[] = [
     ],
   },
   {
-    id: "n-gross",
-    num: 3,
-    title: "Weight truck (Gross weight)",
-    phase: "Phase 2 · Truck arrival & reception",
-    kind: "entry",
-    file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
-    sheet: "Truck Reception · 28 columns",
-    note: "Loaded truck on the weighbridge. Doc §4 asks Gross / Net / GRN / Paid Weight / Refraction to each be kept separately, not blended.",
-    fields: [
-      { n: "GROSS WT KGS", v: "41300" , col: "grossWtKgs"},
-    ],
-  },
-  {
-    id: "n-lot",
-    num: 4,
-    title: "Assign Lot Number to truck",
-    phase: "Phase 2 · Truck arrival & reception",
-    kind: "gap",
-    note: "Confirmed (Procurement clarification, Sept 2026): once a truck is approved for unloading, the Warehouse Team assigns it a Lot Number. One truck = one Lot, always — this is not an either/or with Bin. The Lot Number is what lets us trace the complete quantity back to that specific truck later, however it ends up stored. Sept 30 clarification: the Branch Manager also submits the Lot Number after unloading (bm-reception form in data/roles.ts); it applies to this stage only once the Warehouse Incharge approves it.",
-    fields: [
-      { n: "Lot Number", v: "" , col: "lotNumber"},
-      { n: "Truck reference", v: "" , col: "truckReference"},
-      { n: "Assigned by (Warehouse Team)", v: "" , col: "assignedBy"},
-      { n: "Date/time assigned", v: "" , col: "assignedAt"},
-    ],
-  },
-  {
-    id: "n-bin",
-    num: 5,
-    title: "Allocate Bin (physical storage location)",
-    phase: "Phase 2 · Truck arrival & reception",
-    kind: "gap",
-    note: "Confirmed: after the Lot Number is assigned, the Warehouse Team (with Quality Team input where needed) decides which Bin physically stores that Lot's RCN — based on moisture, quality, KOR, available space and operational needs. This can be finalised the same day, or the next day if operations require it. One Bin can hold RCN from many different Lots/trucks — the Bin is a storage location, not a traceability unit; the Lot is what keeps the truck-level trace intact even after several Lots share a Bin.",
-    fields: [
-      { n: "Bin Number", v: "" , col: "binNumber"},
-      { n: "Linked Lot Number(s)", v: "" , col: "linkedLotNumbers"},
-      { n: "Basis for allocation (moisture / quality / KOR / space)", v: "" , col: "allocationBasis"},
-      { n: "Finalised (same day / next day)", v: "" , col: "finalisedWhen"},
-    ],
-  },
-  {
     id: "n-unload",
-    num: 6,
+    num: 4,
     title: "Unload RCN at warehouse",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "Doc §5.1 sequence: park at unloading area → labour + manpower contractor allocated → tarpaulin removed → Tally Clerk counts bags → cleaning labour manages spillage → bags on pallets (30/pallet) → forklift moves pallet to the location the Warehouse team decided. This is also the flow's jute bag touchpoint — the bag counts below feed both the Warehouse-level and Supplier-level jute bag ledgers (see the panel above and the note alongside).",
+    note: "Doc §5.1 sequence: park at unloading area → labour + manpower contractor allocated → tarpaulin removed → Tally Clerk counts bags → cleaning labour manages spillage → bags on pallets (30/pallet) → forklift moves pallet to the location the Warehouse team decided. This is also the flow's jute bag touchpoint — the bag counts below feed both the Warehouse-level and Supplier-level jute bag ledgers (see the panel above and the note alongside). SACS is calculated as good + damp + torn (domain/receiptMath.ts); 44 real rows disagree with that sum and are kept as recorded and reported.",
     fields: [
       { n: "DATE OF OFFLOADING", v: "2026-02-16" , col: "dateOfOffloading"},
       { n: "SACS (bags)", v: "478" , col: "sacs"},
@@ -131,27 +105,55 @@ export const stages: Stage[] = [
   },
   {
     id: "n-tare",
-    num: 7,
+    num: 5,
     title: "Weigh truck (Empty – Tare weight)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
-    note: "Empty truck back on the weighbridge. The current Truck Reception sheet has no separate Tare column — only Gross and the resulting Net are stored, so today the tare reading itself is lost.",
+    note: "Empty truck back on the weighbridge, after unloading. The current Truck Reception sheet has no separate Tare column — only Gross and the resulting Net are stored, so today the tare reading itself is lost.",
     fields: [
       { n: "Tare / empty truck weight (kg)", v: "" , col: "tareWtKgs"},
     ],
   },
   {
     id: "n-netwt",
-    num: 8,
+    num: 6,
     title: "Calculate net weight",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "Net = Gross − Tare, less refraction — should be system-derived, never typed. Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Sept 30 clarification: the client wants the Branch Manager to submit NET WT KGS as the workbook records it today, which conflicts with this being system-derived. Both are kept: the BM's figure is stored on approval, and the derivation rule above is unchanged.",
+    note: "System-derived, never typed (domain/receiptMath.ts): NET = Gross − 1 kg per bag, PAID = Net − Refraction — both hold on every one of the real sheet's rows (728/728, 716/716). Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Oct 2026 team feedback (\"automatically calculating Net Weight…\") supersedes the Sept 30 request for the Branch Manager to type NET WT KGS.",
     fields: [
       { n: "NET WT KGS", v: "40822" , col: "netWtKgs"},
       { n: "PAID WT", v: "40762" , col: "paidWt"},
+    ],
+  },
+  {
+    id: "n-lot",
+    num: 7,
+    title: "Assign Lot Number to truck",
+    phase: "Phase 2 · Truck arrival & reception",
+    kind: "system",
+    note: "Confirmed (Procurement clarification, Sept 2026): one truck = one Lot, always — this is not an either/or with Bin. The Lot Number is what lets us trace the complete quantity back to that specific truck later, however it ends up stored. Oct 2026 team feedback: the system issues it (LOT-<warehouse code>-<arrival year>-NNN, domain/ids.ts) when the truck passes quality — nobody types it, which supersedes the Sept 30 Branch Manager submission. Once issued it is never changed or reused.",
+    fields: [
+      { n: "Lot Number", v: "" , col: "lotNumber"},
+      { n: "Truck reference", v: "" , col: "truckReference"},
+      { n: "Assigned by (Warehouse Team)", v: "" , col: "assignedBy"},
+      { n: "Date/time assigned", v: "" , col: "assignedAt"},
+    ],
+  },
+  {
+    id: "n-bin",
+    num: 8,
+    title: "Allocate Bin (physical storage location)",
+    phase: "Phase 2 · Truck arrival & reception",
+    kind: "gap",
+    note: "Confirmed: after the Lot Number is assigned, the Warehouse Team (with Quality Team input where needed) decides which Bin physically stores that Lot's RCN — based on moisture, quality, KOR, available space and operational needs. This can be finalised the same day, or the next day if operations require it. One Bin can hold RCN from many different Lots/trucks — the Bin is a storage location, not a traceability unit; the Lot is what keeps the truck-level trace intact even after several Lots share a Bin.",
+    fields: [
+      { n: "Bin Number", v: "" , col: "binNumber"},
+      { n: "Linked Lot Number(s)", v: "" , col: "linkedLotNumbers"},
+      { n: "Basis for allocation (moisture / quality / KOR / space)", v: "" , col: "allocationBasis"},
+      { n: "Finalised (same day / next day)", v: "" , col: "finalisedWhen"},
     ],
   },
   {
@@ -162,7 +164,7 @@ export const stages: Stage[] = [
     kind: "entry",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "By this point the row is complete — it is the GRN. Doc §3 also wants the system to show, for any period: total trucks received, accepted & unloaded, GRN completed, pending QA, pending unload after QA, and rejected (with reason). Sept 30 clarification: PRICE is the price the Branch Manager negotiated, submitted via the bm-reception form (data/roles.ts) and applied on Warehouse Incharge approval.",
+    note: "By this point the row is complete — it is the GRN. Doc §3 also wants the system to show, for any period: total trucks received, accepted & unloaded, GRN completed, pending QA, pending unload after QA, and rejected (with reason). Sept 30 clarification: PRICE is the price the Branch Manager negotiated, submitted via the bm-reception form (data/roles.ts) and applied on Warehouse Incharge approval. AMOUNT is calculated as PRICE × PAID WT (715/715 real rows).",
     fields: [
       { n: "PRICE", v: "470" , col: "price"},
       { n: "AMOUNT", v: "19158140" , col: "amount"},
@@ -244,6 +246,28 @@ export const stages: Stage[] = [
 ];
 
 export const stageById = Object.fromEntries(stages.map(s => [s.id, s]));
+
+export interface ReceptionStep {
+  id: string;
+  title: string;
+  stageIds: string[];
+}
+
+/**
+ * The Oct 2026 team flow — Arrival → Weight → Quality → Unloading → Lot → Bin → GRN — as groups of
+ * the stages above. The information arrives at different times, so each step is filled on its own.
+ * Tare sits under Unloading because the empty truck is weighed after it is unloaded. Everything
+ * after GRN keeps its own stage-by-stage layout.
+ */
+export const RECEPTION_STEPS: ReceptionStep[] = [
+  { id: "arrival", title: "Arrival", stageIds: ["n-gate", "n-verify"] },
+  { id: "weight", title: "Weight", stageIds: ["n-gross"] },
+  { id: "quality", title: "Quality", stageIds: ["n-qfs"] },
+  { id: "unloading", title: "Unloading", stageIds: ["n-unload", "n-tare", "n-netwt"] },
+  { id: "lot", title: "Lot", stageIds: ["n-lot"] },
+  { id: "bin", title: "Bin", stageIds: ["n-bin"] },
+  { id: "grn", title: "GRN", stageIds: ["n-grn"] },
+];
 
 export const rejectStage: Stage = {
   id: "n-reject",

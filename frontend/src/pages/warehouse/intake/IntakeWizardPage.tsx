@@ -1,5 +1,6 @@
 import { useNavigate, useParams, Navigate, Link } from "react-router-dom";
-import { stages, stageById, rejectStage } from "../../../data/stages";
+import { stages, stageById, rejectStage, RECEPTION_STEPS } from "../../../data/stages";
+import { computeDerivedFields } from "../../../domain/receiptMath";
 import { StageForm } from "../../../components/StageForm";
 import { DecisionBranch } from "../../../components/DecisionBranch";
 import { DECISION_BRANCHES } from "../../../domain/decisions";
@@ -70,6 +71,10 @@ export function IntakeWizardPage() {
   const branchOptions = DECISION_BRANCHES[stageId];
   const chosen = receipt.branches[stageId];
   const values = receipt.stageData[stageId] ?? {};
+  // Calculated fields show what the readings so far add up to, before the server has saved them.
+  const derived = computeDerivedFields(receipt.stageData)[stageId];
+  const stepIndex = RECEPTION_STEPS.findIndex((st) => st.stageIds.includes(stageId));
+  const stepLabel = stepIndex >= 0 ? `Step ${stepIndex + 1} of ${RECEPTION_STEPS.length} · ${RECEPTION_STEPS[stepIndex]!.title}` : "After reception";
 
   function handleNext() {
     if (stageId === "n-qfs" && chosen === "fail") {
@@ -89,7 +94,7 @@ export function IntakeWizardPage() {
     <div className="space-y-5">
       <div>
         <p className="text-[11px] font-bold text-warmstone-500 uppercase tracking-wider mb-1.5">
-          New RCN receipt · {id} · Step {stage.num ?? "—"} of {stages.length} · {stage.phase}
+          New RCN receipt · {id} · {stepLabel}
         </p>
         <h1 className="text-2xl font-bold text-warmstone-900 tracking-tight">{stage.title}</h1>
       </div>
@@ -98,6 +103,7 @@ export function IntakeWizardPage() {
         <StageForm
           stage={stage}
           values={values}
+          derived={derived}
           onFieldChange={(fieldName, value) => setStageField(id, stageId, fieldName, value)}
           onFieldBlur={() => flushStage(id, stageId)}
         />

@@ -5,7 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -118,11 +118,14 @@ export const api = {
   getReceipt: (id: string) => request<ReceiptRecord>(`/receipts/${encodeURIComponent(id)}`),
 
   /** `warehouse` scopes the new receipt to a site (e.g. "BOUAKE") — see createReceipt in
-   * services/receipts.ts, which already accepted this and picked an arbitrary warehouse when it
-   * was omitted. The site-scoped "New RCN receipt" buttons under /unit and /central now pass their
-   * own section's warehouseName so a truck created from either section lands at the right site. */
-  createReceipt: (warehouse?: string) =>
-    request<ReceiptRecord>("/receipts", { method: "POST", body: JSON.stringify(warehouse ? { warehouse } : {}) }),
+   * services/receipts.ts. Recording the arrival is what issues the Receipt ID, so the server also
+   * takes the arrival date (the year in the ID) and, optionally, the Delivery Plan the truck is
+   * arriving against — which copies its supplier and warehouse onto the receipt. */
+  createReceipt: (warehouse?: string, opts: { arrivalDate?: string; deliveryPlanId?: string } = {}) =>
+    request<ReceiptRecord>("/receipts", {
+      method: "POST",
+      body: JSON.stringify({ ...(warehouse ? { warehouse } : {}), ...opts }),
+    }),
 
   /** Several trucks at once — all or nothing; a rejected row's message names it ("Row 3: …") and
    * nothing is created. Returns the new receipt ids in row order. */
@@ -159,6 +162,25 @@ export const api = {
   /** Admin only: assign (or clear, with null) a site's Unit/Central type. */
   setWarehouseType: (name: string, type: string | null) =>
     request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ type }) }),
+  /** The code printed into every ID issued at a site (REC-<code>-2027-001). Admin only. */
+  setWarehouseCode: (name: string, code: string | null) =>
+    request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ code }) }),
+
+  listDeliveryPlans: (warehouse?: string) => request<DeliveryPlan[]>(withWarehouse("/delivery-plans", warehouse)),
+  createDeliveryPlan: (plan: Partial<Omit<DeliveryPlan, "id" | "deliveryStatus" | "actualArrivalDate" | "truckNo" | "receiptIds">>) =>
+    request<DeliveryPlan>("/delivery-plans", { method: "POST", body: JSON.stringify(plan) }),
+  updateDeliveryPlan: (id: string, patch: Partial<DeliveryPlan>) =>
+    request<DeliveryPlan>(`/delivery-plans/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  listTransfers: (warehouse?: string) => request<TransferRequest[]>(withWarehouse("/transfers", warehouse)),
+  createTransfer: (t: {
+    transferDate: string; fromWarehouse: string; toWarehouse: string; remarks?: string;
+    lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[];
+  }) => request<TransferRequest>("/transfers", { method: "POST", body: JSON.stringify(t) }),
+  addTransferLines: (id: string, lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[]) =>
+    request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/lines`, { method: "POST", body: JSON.stringify({ lines }) }),
+  setTransferStatus: (id: string, status: string) =>
+    request<TransferRequest>(`/transfers/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its

@@ -15,7 +15,7 @@ import { stages, rejectStage } from "@anagroci/contract/data/stages";
 const byId = Object.fromEntries([...stages, rejectStage].map((s) => [s.id, s]));
 // Columns that carry a typed shadow for reporting/DQ (see plan: all stage cols are String in v1).
 const SHADOW: Record<string, string[]> = {
-  "n-gross": ["grossWtKgs"], "n-tare": ["tareWtKgs"], "n-netwt": ["netWtKgs", "paidWt"],
+  "n-gross": ["loadedTruckWtKgs", "grossWtKgs"], "n-tare": ["tareWtKgs"], "n-netwt": ["netWtKgs", "paidWt"],
   "n-unload": ["sacs", "bonSacs", "humidSacs", "sacsDechires", "refraction"],
   "n-qfs": ["moisture", "nutCount", "kor", "finalKor"], "n-grn": ["price", "amount", "grnWeight"],
 };

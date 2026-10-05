@@ -74,12 +74,21 @@ model Warehouse {
   /// never defaulted, same discipline as `kind`.
   type String?
 
+  /// The code embedded in every system ID issued at this warehouse (REC-/LOT-/DP-<code>-<year>-NNN,
+  /// contract's domain/ids.ts). Set from the master by an admin, never derived from the name: the
+  /// team gave BOUAKE = BKE01; anything else is NULL until someone enters it, and a warehouse with
+  /// no code refuses to issue an ID rather than issuing a guessed one.
+  code String? @unique
+
   /// NULL means this row IS a site. Non-null means this row is a STORE belonging to that site.
   site    String?
   siteRef Warehouse?  @relation("WarehouseSite", fields: [site], references: [name])
   stores  Warehouse[] @relation("WarehouseSite")
 
   receipts      Receipt[]
+  deliveryPlans DeliveryPlan[]
+  transfersFrom TransferRequest[]              @relation("TransferRequestFrom")
+  transfersTo   TransferRequest[]              @relation("TransferRequestTo")
   dryingJobs    DryingJob[]
   juteMovements JuteWarehouseMovement[]
   transfersOut  JuteWarehouseTransferReceipt[] @relation("TransferSource")
@@ -129,8 +138,18 @@ model WarehouseAlias {
 // shape by the assembler. Keeping a second copy here is what forced the old stage-field sync block.
 
 model Receipt {
+  /// REC-<warehouse code>-<arrival year>-NNN (contract's domain/ids.ts), issued once and never changed.
   id     String @id
   source String /// "imported" | "entered"
+
+  /// The REC-2026-NNNN id this receipt had before system IDs were standardised (Oct 2026), so old
+  /// links, exports and bookmarks still resolve. NULL on every receipt created after the change.
+  legacyId String? @unique
+
+  /// The plan this truck arrived against, if any — unplanned trucks are allowed. The plan's actual
+  /// arrival date, truck and delivery status are read from here, never stored on the plan.
+  deliveryPlanId String?
+  deliveryPlan   DeliveryPlan? @relation(fields: [deliveryPlanId], references: [id])
 
   arrivalDate  String
   supplierName String
@@ -146,11 +165,12 @@ model Receipt {
   /// round-trip tests have a live oracle and a rollback path. Dropped in the Phase 8 migration.
   stageDataShadow String?
 
-  stageEntries StageEntry[]
-  branches     ReceiptBranch[]
-  timeline     TimelineEntry[]
-  submissions  FormSubmission[]
-  fieldChanges StageFieldChange[]
+  stageEntries  StageEntry[]
+  branches      ReceiptBranch[]
+  timeline      TimelineEntry[]
+  submissions   FormSubmission[]
+  fieldChanges  StageFieldChange[]
+  transferLines TransferRequestLine[]
 
   gate            StageGateEntry?
   verify          StageVerifyDocs?
@@ -179,6 +199,68 @@ model Receipt {
   /// receipts importer has no natural unique key from the source sheet, so this triple is checked
   /// on every uploaded row and needs to not be a table scan.
   @@index([vehicleNo])
+  @@index([deliveryPlanId])
+}
+
+/// Expected arrivals, captured before the truck comes (Oct 2026 team feedback). Columns are the
+/// client's own "Delivery Plan" sheet in ANAGROCI DATA PROCUREMENT 2026.xlsx, minus the three that
+/// describe what actually happened (actual arrival date, delivery status, truck no) — those come
+/// from the linked Receipt, so the plan can never disagree with the truck that arrived.
+model DeliveryPlan {
+  /// DP-<destination warehouse code>-<expected arrival year>-NNN
+  id                   String    @id
+  plannedDeliveryDate  String?
+  supplierName         String
+  supplierCode         String?
+  expectedQuantityKg   Decimal?
+  expectedTruckType    String?
+  expectedArrivalDate  String
+  destinationWarehouse String
+  warehouseRef         Warehouse @relation(fields: [destinationWarehouse], references: [name])
+  remarks              String?
+  receipts             Receipt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([destinationWarehouse, expectedArrivalDate])
+}
+
+/// A request to move Lots from one warehouse to another (Oct 2026 team feedback: "Transfer Request →
+/// BKT Transfer ID"). Minimal on purpose: which Lots, from where, to where, and how far it got.
+model TransferRequest {
+  /// BKT-<transfer year>-NNN — continues the 2026 dispatch sheet's own BKT001 / BKT-414 numbering.
+  id            String                @id
+  transferDate  String
+  fromWarehouse String
+  fromRef       Warehouse             @relation("TransferRequestFrom", fields: [fromWarehouse], references: [name])
+  toWarehouse   String
+  toRef         Warehouse             @relation("TransferRequestTo", fields: [toWarehouse], references: [name])
+  /// "requested" | "dispatched" | "received"
+  status        String                @default("requested")
+  remarks       String?
+  lines         TransferRequestLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fromWarehouse])
+  @@index([toWarehouse])
+}
+
+/// One Lot on a transfer. The Lot, supplier and fiche are read from the receipt, not retyped; bags
+/// and weight are what is actually sent, which can be less than the whole Lot.
+model TransferRequestLine {
+  id          Int             @id @default(autoincrement())
+  transferId  String
+  transfer    TransferRequest @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  receiptId   String
+  receipt     Receipt         @relation(fields: [receiptId], references: [id])
+  bags        Int?
+  netWeightKg Decimal?
+
+  @@unique([transferId, receiptId])
+  @@index([receiptId])
 }
 
 /// The single source of truth for "has this receipt reached this stage?" — the only thing
@@ -232,6 +314,9 @@ model DryingJob {
   warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
   bin          String
   lotNo        String
+  /// The lot exactly as the workbook wrote it ("17"). lotNo holds the system format
+  /// (LOT-<code>-<year>-017) since the Oct 2026 ID standardisation; see contract's domain/ids.ts.
+  lotNoRaw     String?
   ficheNo      String
   status       String
   dryType      String
@@ -310,10 +395,12 @@ model StageQualityQfs {
 /// Stage n-gross (entry) — Weight truck (Gross weight)
 /// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageGrossWeight {
-  receiptId     String   @id
-  grossWtKgs    String? /// GROSS WT KGS
-  grossWtKgsNum Decimal? /// typed shadow of grossWtKgs, for reporting/DQ only — never round-tripped
-  receipt       Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptId           String   @id
+  loadedTruckWtKgs    String? /// Loaded truck weight (kg)
+  grossWtKgs          String? /// GROSS WT KGS
+  loadedTruckWtKgsNum Decimal? /// typed shadow of loadedTruckWtKgs, for reporting/DQ only — never round-tripped
+  grossWtKgsNum       Decimal? /// typed shadow of grossWtKgs, for reporting/DQ only — never round-tripped
+  receipt             Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
 /// Stage n-lot (gap) — Assign Lot Number to truck
@@ -560,6 +647,9 @@ model JuteSupplierMovement {
   responsibleParty String?
   receiptId        String?
   lotNo            String?
+  /// The lot exactly as the workbook wrote it ("17"). lotNo holds the system format
+  /// (LOT-<code>-<year>-017) since the Oct 2026 ID standardisation; see contract's domain/ids.ts.
+  lotNoRaw         String?
 
   createdAt DateTime @default(now())
 
@@ -611,6 +701,9 @@ model JuteWarehouseTransferReceipt {
 
   truckRegistration String?
   lotNo             String?
+  /// The lot exactly as the workbook wrote it ("17"). lotNo holds the system format
+  /// (LOT-<code>-<year>-017) since the Oct 2026 ID standardisation; see contract's domain/ids.ts.
+  lotNoRaw          String?
   lotDry            String?
   noFiche           String?
   ccaFicheNumber    String?
@@ -718,7 +811,10 @@ model WarehouseDischarge {
 
   /// The sheet's own real key WITHIN one site (454/454 distinct at Bouaké) — but not globally, see
   /// the `id` comment above. Dedup on re-upload is `@@unique([warehouseSite, lotNo])`, below.
-  lotNo String
+  lotNo    String
+  /// The lot exactly as the workbook wrote it ("17"). lotNo holds the system format
+  /// (LOT-<code>-<year>-017) since the Oct 2026 ID standardisation; see contract's domain/ids.ts.
+  lotNoRaw String?
 
   scaleLocation String?
   whReceiptNo   String?
@@ -905,31 +1001,34 @@ model WarehouseDispatchLine {
   /// continuation lines. Not a key; see the model comment above.
   sn Int?
 
-  chargeDate    DateTime?
-  chargeDateRaw String?
-  warehouseSite String?
+  chargeDate     DateTime?
+  chargeDateRaw  String?
+  warehouseSite  String?
   /// The voyage/trip number this line belongs to — see the model comment. Nullable: 40/544 lines
   /// carry none, and a blank one is still a real line (never skipped).
-  vyogeNumber   String?
-  remark        String?
-  scaleLocation String?
+  vyogeNumber    String?
+  /// The voyage number exactly as the workbook wrote it ("BKT001" / "BKT-414"). vyogeNumber holds
+  /// the system format (BKT-2026-001) since the Oct 2026 ID standardisation.
+  vyogeNumberRaw String?
+  remark         String?
+  scaleLocation  String?
   /// The STORE (BKE-001/002/003), same level as WarehouseDischarge.warehouse — not upserted as a
   /// site by this importer (see upsertObservedStores in services/imports.ts).
-  warehouse     String?
-  whOrDirect    String?
-  bin           String?
-  origin        String?
-  truckNo       String?
-  transporter   String?
-  driver        String?
+  warehouse      String?
+  whOrDirect     String?
+  bin            String?
+  origin         String?
+  truckNo        String?
+  transporter    String?
+  driver         String?
   /// Kept as text (not Int) — a phone number is an identifier, not a quantity, and this column
   /// never appears anywhere else in this schema as anything else.
-  phone         String?
-  whReceiptNo   String?
+  phone          String?
+  whReceiptNo    String?
   /// Bridges back to a Receipt the same way WarehouseDischarge.ficheCca does, but NOT required
   /// here (unlike that model) — 0/544 lines are skipped for lacking one; this importer does no
   /// receipt-stage write-back at all, so there is nothing that needs the bridge to be non-null.
-  ficheCca      String?
+  ficheCca       String?
 
   /// This LINE's own contribution — on a continuation line these three describe just that line's
   /// bin, not the whole voyage's total (the sheet never labels which row, if any, is "the total").
@@ -1188,6 +1287,9 @@ model WarehouseActivityLedgerEntry {
   /// ("Pallet") or a bin code on others. Stored verbatim; never joined on.
   ficheNo                    String?
   lotNo                      String?
+  /// The lot exactly as the workbook wrote it ("17"). lotNo holds the system format
+  /// (LOT-<code>-<year>-017) since the Oct 2026 ID standardisation; see contract's domain/ids.ts.
+  lotNoRaw                   String?
   vendor                     String?
   rate                       String?
   total                      String?

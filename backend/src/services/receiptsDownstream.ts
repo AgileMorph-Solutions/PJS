@@ -42,8 +42,8 @@ export async function getDownstreamStatus(site?: string[]): Promise<Map<string, 
     }),
     prisma.dryingBatch.findMany({ select: { ficheNoRaw: true, lotNo: true, warehouseSite: true } }),
     prisma.juteWarehouseTransferReceipt.findMany({
-      where: { lotNo: { not: null }, idTransfer: { not: null } },
-      select: { lotNo: true, idTransfer: true },
+      where: { idTransfer: { not: null } },
+      select: { lotNo: true, noFiche: true, idTransfer: true },
     }),
   ]);
 
@@ -66,12 +66,19 @@ export async function getDownstreamStatus(site?: string[]): Promise<Map<string, 
   }
 
   // issued <- transfer.idTransfer -> BtmIntake.btmNo -> IssuedToProduction.btmNo, reached here via
-  // this receipt's own Lot -> a transfer sharing that Lot -> that transfer's idTransfer. Never
-  // IssuedToProduction.ficheNo directly — see production_issue_fiche_column_contaminated.
+  // a transfer sharing this receipt's own Lot OR its Fiche -> that transfer's idTransfer. Never
+  // IssuedToProduction.ficheNo directly — see production_issue_fiche_column_contaminated. The Fiche
+  // is what reaches a transfer at another warehouse: since the Oct 2026 ID standardisation a Lot
+  // carries its own warehouse's code, so it only ever matches within one warehouse (receiptLinks.ts).
   const idTransfersByLot = new Map<string, string[]>();
+  const idTransfersByFiche = new Map<string, string[]>();
+  const push = (m: Map<string, string[]>, key: string | null | undefined, v: string) => {
+    const k = key?.trim();
+    if (k) (m.get(k) ?? m.set(k, []).get(k)!).push(v);
+  };
   for (const t of transferIdsByLot) {
-    const lot = t.lotNo!.trim();
-    (idTransfersByLot.get(lot) ?? idTransfersByLot.set(lot, []).get(lot)!).push(t.idTransfer!.trim());
+    push(idTransfersByLot, t.lotNo, t.idTransfer!.trim());
+    push(idTransfersByFiche, t.noFiche, t.idTransfer!.trim());
   }
   const allBtmNos = [...new Set(transferIdsByLot.map((t) => t.idTransfer!.trim()))];
   const issuedBtmNos = allBtmNos.length
@@ -92,7 +99,8 @@ export async function getDownstreamStatus(site?: string[]): Promise<Map<string, 
       ? true
       : !!(lot && lotSite && driedLotSiteSet.has(`${lot}::${lotSite}`));
 
-    const issued = !!lot && (idTransfersByLot.get(lot) ?? []).some((btm) => issuedBtmNos.has(btm));
+    const transfers = [...(lot ? idTransfersByLot.get(lot) ?? [] : []), ...(fiche ? idTransfersByFiche.get(fiche) ?? [] : [])];
+    const issued = transfers.some((btm) => issuedBtmNos.has(btm));
 
     result.set(r.id, {
       receiptId: r.id,

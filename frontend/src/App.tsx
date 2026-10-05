@@ -28,6 +28,8 @@ import { ReceiptDetailPage } from "./pages/warehouse/ReceiptDetailPage";
 import { StockPage } from "./pages/warehouse/StockPage";
 import { DryingJobsPage } from "./pages/warehouse/DryingJobsPage";
 import { DispatchesPage } from "./pages/warehouse/DispatchesPage";
+import { DeliveryPlansPage } from "./pages/warehouse/DeliveryPlansPage";
+import { TransfersPage } from "./pages/warehouse/TransfersPage";
 import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage";
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
 import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
@@ -110,6 +112,8 @@ function AppRoutes() {
                 <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="drying" element={<DryingJobsPage />} />
+                <Route path="delivery-plans" element={<DeliveryPlansPage />} />
+                <Route path="transfers" element={<TransfersPage />} />
               {/* Not in nav.ts (see its own comment) — reached from Reception's Downstream chips
                   and a receipt's "Linked records" card, same as the legacy /procurement/* URLs
                   below are reachable without a sidebar entry. */}

@@ -31,6 +31,8 @@ export function toReceiptRecord(row: AnyRow): ReceiptRecord & { status: ReceiptS
     origin: row.origin ?? undefined,
     lotNo: lotNo || undefined,
     binNo: binNo || undefined,
+    ...(row.legacyId ? { legacyId: row.legacyId as string } : {}),
+    ...(row.deliveryPlanId ? { deliveryPlanId: row.deliveryPlanId as string } : {}),
     stageData,
     branches,
     timeline: (row.timeline ?? [])

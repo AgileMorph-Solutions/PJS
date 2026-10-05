@@ -21,6 +21,8 @@ import { dryingSortingReportRoutes } from "./routes/dryingSortingReports.js";
 import { warehouseActivityLedgerRoutes } from "./routes/warehouseActivityLedger.js";
 import { issuedToProductionRoutes } from "./routes/issuedToProduction.js";
 import { warehouseDischargeRoutes } from "./routes/warehouseDischarges.js";
+import { deliveryPlanRoutes } from "./routes/deliveryPlans.js";
+import { transferRoutes } from "./routes/transfers.js";
 import { ValidationError, UnauthorizedError, ForbiddenError } from "./domain/validation.js";
 import { UnknownStageFieldError } from "./stageStore.js";
 import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
@@ -70,6 +72,8 @@ export function buildApp() {
   app.register(supplierAccessRoutes);
 
   app.register(receiptRoutes);
+  app.register(deliveryPlanRoutes);
+  app.register(transferRoutes);
   app.register(ledgerRoutes);
   app.register(masterRoutes);
   app.register(dryingRoutes);

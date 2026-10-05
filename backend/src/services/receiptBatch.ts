@@ -13,7 +13,8 @@ import {
 } from "@anagroci/contract/data/batchEntry";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
-import { applyStageFields, nextReceiptId } from "./receipts.js";
+import { applyStageFields } from "./receipts.js";
+import { nextReceiptId } from "./ids.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -60,12 +61,13 @@ export async function createReceiptsBatch(warehouse: string, rawRows: unknown, a
       const gate = row["n-gate"];
       const verify = row["n-verify"];
       // Sequential within the transaction, so each call sees the receipt the previous one created.
-      const id = await nextReceiptId(tx);
+      const arrivalDate = gate["DATE OF ARRIVAL"] ?? today;
+      const id = await nextReceiptId(tx, warehouse, arrivalDate);
       await tx.receipt.create({
         data: {
           id,
           source: "entered",
-          arrivalDate: gate["DATE OF ARRIVAL"] ?? today,
+          arrivalDate,
           // The receipt's own columns mirror these stage fields (see PATCHABLE in receipts.ts).
           supplierName: verify?.["SUPPLIERS NAME"] ?? "",
           lbaCode: verify?.["LBA CODE"] ?? "",

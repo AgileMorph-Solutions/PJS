@@ -9,6 +9,7 @@ import type { ImporterId } from "../domain/imports/types.js";
 import { IMPORTERS, getImporter } from "../domain/imports/registry.js";
 import { listImporterTypes, previewImport, commitImport, ImportRejectedError } from "../services/imports.js";
 import { buildTemplateWorkbook } from "../domain/imports/xlsxWriter.js";
+import { scopedWarehouse } from "../auth/scope.js";
 
 const KNOWN_IMPORTER_IDS = new Set(IMPORTERS.map((i) => i.id));
 
@@ -36,7 +37,14 @@ export async function importRoutes(app: FastifyInstance) {
       throw new ImportRejectedError(`Unknown importer type "${importerIdRaw}".`, { known: [...KNOWN_IMPORTER_IDS] });
     }
 
-    return previewImport(buffer, file.filename, importerIdRaw as ImporterId | undefined);
+    // The warehouse this file is for — a Warehouse Incharge's own, an admin's pick. It decides the
+    // code printed into the IDs, and rows naming another warehouse are flagged in the preview.
+    const warehouseField = file.fields.warehouse;
+    const warehouseRaw =
+      warehouseField && !Array.isArray(warehouseField) && warehouseField.type === "field" ? String(warehouseField.value) : undefined;
+    const warehouse = scopedWarehouse(req, warehouseRaw);
+
+    return previewImport(buffer, file.filename, importerIdRaw as ImporterId | undefined, warehouse);
   });
 
   app.post("/api/imports/:token/commit", async (req) => {

@@ -110,11 +110,13 @@ Fifteen findings ship against the real data, including:
 |---|---|---|
 | GET | `/api/health` | |
 | GET | `/api/receipts`, `/api/receipts/:id` | Full `ReceiptRecord` with derived `status`. List accepts `?warehouse=` (a site name — see below) |
-| POST | `/api/receipts` | Server-assigned `REC-<year>-NNNN`, serializable |
+| POST | `/api/receipts` | `{warehouse?, arrivalDate?, deliveryPlanId?}` — issues `REC-<warehouse code>-<arrival year>-NNN` (serializable). A warehouse with no code is refused; a plan copies its supplier onto the receipt |
 | POST | `/api/receipts/batch` | `{warehouse, rows}` — several trucks (gate + supplier-document fields) in one transaction, all or nothing; a bad row is a 422 naming it and creates none. Warehouse Incharge / admin |
-| PATCH | `/api/receipts/:id` | Top-level fields; `lotNo`/`binNo` route to their stage rows |
+| PATCH | `/api/receipts/:id` | Top-level fields; `binNo` routes to its stage row. `lotNo` is refused — the system issues the Lot (see `docs/system-ids-and-reception-flow.md`) |
 | PATCH | `/api/receipts/:id/stages/:stageId` | **Batched** — the client coalesces per stage |
-| POST | `/api/receipts/:id/branch` | Recomputes status + appends a timeline entry |
+| POST | `/api/receipts/:id/branch` | Recomputes status + appends a timeline entry. `n-qfs` = `pass` issues the truck's Lot (once, never reissued) |
+| GET/POST/PATCH | `/api/delivery-plans[/:id]` | Expected arrivals, `DP-<code>-<year>-NNN`; actual arrival/truck/status are read from the linked receipt |
+| GET/POST/PATCH | `/api/transfers[/:id]`, POST `/api/transfers/:id/lines` | Transfer requests, `BKT-<year>-NNN`; adding a Lot sets that receipt's transfer decision. Status steps requested → dispatched → received |
 | GET | `/api/receipts/:id/activities` | Full 1:N history for `n-otheract` / `n-ledger` |
 | GET | `/api/receipts/:id/links` | Cross-site by design — deliberately does **not** accept `?warehouse=` (see below) |
 | GET/POST | `/api/jute-ledgers[/:id/entries]` | Server assigns `S N` and the running balance. GET accepts `?warehouse=` |
@@ -142,7 +144,7 @@ the reasoning are in `../docs/usermanagement.md`.
 |---|---|---|
 | POST | `/api/auth/login`, `/api/auth/logout`; GET `/api/auth/me` | anyone / signed in |
 | GET/POST/PATCH | `/api/users[/:id]` | admin — role, one warehouse (a typed site), active, password reset |
-| PATCH | `/api/masters/warehouses/:name` | admin — sets a site's Unit/Central `type` |
+| PATCH | `/api/masters/warehouses/:name` | admin — sets a site's Unit/Central `type` and/or the `code` printed into its IDs (frozen once an ID carries it) |
 | POST | `/api/receipts/:id/submissions` | Branch Manager (reception form) / QFS Officer (jute check) |
 | GET | `/api/submissions?status=&receiptId=` | reviewers: their warehouse; submitters: their own |
 | POST | `/api/submissions/:id/approve`, `/reject` | Warehouse Incharge / admin. Reject needs `{reason}` and is final |

@@ -12,10 +12,12 @@ import { Prisma } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
+import { DERIVED_RULES, computeDerivedFields, derivedRuleFor } from "@anagroci/contract/domain/receiptMath";
 import { prisma } from "../db.js";
-import { RECEIPT_INCLUDE, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
+import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ValidationError } from "../domain/validation.js";
+import { nextLotNumber, nextReceiptId } from "./ids.js";
 
 type Tx = Prisma.TransactionClient;
 export interface WriteOpts {
@@ -30,8 +32,14 @@ export async function loadReceiptRow(id: string, tx: Tx | typeof prisma = prisma
 }
 
 export async function getReceipt(id: string) {
-  const row = await loadReceiptRow(id);
+  // An old REC-2026-NNNN id (a bookmark, an export, a printed form) resolves to the renumbered receipt.
+  const row = (await loadReceiptRow(id)) ?? (await loadByLegacyId(id));
   return row ? toReceiptRecord(row) : null;
+}
+
+async function loadByLegacyId(legacyId: string) {
+  const hit = await prisma.receipt.findUnique({ where: { legacyId }, select: { id: true } });
+  return hit ? loadReceiptRow(hit.id) : null;
 }
 
 export interface ReceiptActivities {
@@ -63,40 +71,37 @@ export async function listReceipts(site?: string[]) {
 }
 
 /**
- * Next id in the REC-<year>-NNNN series.
- *
- * Scoped to the current year's prefix — the previous implementation took the max trailing number
- * across ALL years, so an existing REC-2025-0099 produced REC-2026-0100. Wrapped in a serializable
- * transaction by the caller so two concurrent creates can't collide.
+ * A blank receipt with a seeded `planned` timeline entry. Recording the arrival is what issues the
+ * Receipt ID (REC-<warehouse code>-<arrival year>-NNN), so the warehouse and arrival date are known
+ * up front — the year in the id is the arrival date's, not the day the form happened to be opened.
  */
-export async function nextReceiptId(tx: Tx): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `REC-${year}-`;
-  const rows = await tx.receipt.findMany({ where: { id: { startsWith: prefix } }, select: { id: true } });
-  const max = rows
-    .map((r) => Number(r.id.slice(prefix.length)))
-    .filter((n) => Number.isFinite(n))
-    .reduce((a, b) => Math.max(a, b), 0);
-  return `${prefix}${String(max + 1).padStart(4, "0")}`;
-}
-
-/** Mirrors createReceipt(): a blank receipt with a seeded `planned` timeline entry. */
-export async function createReceipt(warehouse?: string) {
+export async function createReceipt(warehouse?: string, arrivalDate?: string, deliveryPlanId?: string) {
   const row = await prisma.$transaction(async (tx) => {
-    const id = await nextReceiptId(tx);
     const now = new Date().toISOString();
+    // Arriving against a plan copies what the plan already knows, so nobody types it twice. Only the
+    // receipt's own columns — the stage rows are written when the gate step is actually filled, so
+    // picking a plan doesn't on its own move the truck to "arrived".
+    const plan = deliveryPlanId ? await tx.deliveryPlan.findUnique({ where: { id: deliveryPlanId } }) : null;
+    if (deliveryPlanId && !plan) throw new ValidationError(`Delivery plan ${deliveryPlanId} doesn't exist.`);
+    if (plan && warehouse && plan.destinationWarehouse !== warehouse) {
+      throw new ValidationError(`Delivery plan ${plan.id} is for ${plan.destinationWarehouse}, not ${warehouse}.`);
+    }
     // Receipt.warehouse is a hard FK, so a blank receipt needs a real warehouse to point at.
-    const wh = warehouse ?? (await tx.warehouse.findFirst({ orderBy: { name: "asc" } }))?.name;
-    if (!wh) throw new ValidationError("No warehouses exist yet — add one before creating a receipt.");
+    const wh = plan?.destinationWarehouse ?? warehouse
+      ?? (await tx.warehouse.findFirst({ where: { site: null, code: { not: null } }, orderBy: { name: "asc" } }))?.name;
+    if (!wh) throw new ValidationError("No warehouse with a code exists yet — set one in Masters › Warehouses before creating a receipt.");
+    const date = arrivalDate ?? now.slice(0, 10);
+    const id = await nextReceiptId(tx, wh, date);
     await tx.receipt.create({
       data: {
         id,
         source: "entered",
-        arrivalDate: now.slice(0, 10),
-        supplierName: "",
-        lbaCode: "",
+        arrivalDate: date,
+        supplierName: plan?.supplierName ?? "",
+        lbaCode: plan?.supplierCode ?? "",
         vehicleNo: "",
         warehouse: wh,
+        deliveryPlanId: plan?.id ?? null,
         timeline: { create: [{ status: "planned", at: now }] },
       },
     });
@@ -113,7 +118,9 @@ export async function patchReceipt(id: string, patch: Record<string, unknown>, o
   const data: Record<string, unknown> = {};
   for (const k of PATCHABLE) if (k in patch) data[k] = patch[k] === "" && k === "origin" ? null : patch[k];
   // lotNo / binNo are not columns here — they live on their stage rows. Route them properly
-  // instead of silently ignoring them.
+  // instead of silently ignoring them. The Lot is issued by the system on quality pass, so a
+  // request to set one is refused rather than routed.
+  if ("lotNo" in patch && !opts.bypassValidation) throw new ValidationError(SYSTEM_LOT_MESSAGE);
   if ("lotNo" in patch) await setStageFields(id, "n-lot", { "Lot Number": String(patch.lotNo ?? "") }, opts);
   if ("binNo" in patch) await setStageFields(id, "n-bin", { "Bin Number": String(patch.binNo ?? "") }, opts);
 
@@ -153,6 +160,13 @@ export async function assertLotAvailable(tx: Tx | typeof prisma, receiptId: stri
  * This is the transactional body, exposed so a caller that needs several writes to land atomically
  * (approving a submission touches up to six stages plus the timeline) can run them in one
  * transaction. Everything else goes through setStageFields below.
+ *
+ * Two kinds of field are the system's, not the caller's (Oct 2026 team feedback): the Lot (issued
+ * on quality pass — see applyBranch) and the calculated weights/totals/amount (contract's
+ * domain/receiptMath.ts). A person writing either is refused; after any write that feeds a
+ * calculation, the calculated fields are rewritten in the same transaction. Imports and the seeder
+ * (bypassValidation) skip both: they carry the workbook's own recorded values, which are kept
+ * verbatim even where they disagree with the formula (44 real rows' bag totals do) and reported.
  */
 export async function applyStageFields(
   tx: Tx,
@@ -160,6 +174,47 @@ export async function applyStageFields(
   stageId: string,
   fields: Record<string, string>,
   opts: WriteOpts = {}
+) {
+  if (!opts.bypassValidation) assertCallerMayWrite(stageId, fields);
+  await writeStageFields(tx, id, stageId, fields, opts);
+  if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts);
+}
+
+export const SYSTEM_LOT_MESSAGE =
+  "The Lot Number is issued by the system when the truck passes quality — it can't be typed or changed.";
+
+function assertCallerMayWrite(stageId: string, fields: Record<string, string>) {
+  if (stageId === "n-lot") throw new ValidationError(SYSTEM_LOT_MESSAGE);
+  for (const label of Object.keys(fields)) {
+    const rule = derivedRuleFor(stageId, label);
+    if (rule) throw new ValidationError(`${label} is calculated (${rule.formula}) — change the values it is calculated from instead.`);
+  }
+}
+
+/** Stages whose fields feed at least one calculation — a write anywhere else can't change a derived value. */
+const DERIVED_INPUT_STAGES = new Set(DERIVED_RULES.flatMap((r) => r.inputs.map(([stageId]) => stageId)));
+
+/**
+ * Rewrites every calculated field whose inputs are all present and whose stored value differs.
+ * Calculated values are audited like any other change (same actor, same channel), so the history
+ * shows why a net weight moved.
+ */
+async function refreshDerivedFields(tx: Tx, id: string, opts: WriteOpts) {
+  const row = await loadReceiptRow(id, tx);
+  const current = assembleStageData(row as Record<string, unknown>);
+  for (const [stageId, values] of Object.entries(computeDerivedFields(current))) {
+    const changed = Object.fromEntries(Object.entries(values).filter(([label, v]) => current[stageId]?.[label] !== v));
+    if (Object.keys(changed).length) await writeStageFields(tx, id, stageId, changed, opts);
+  }
+}
+
+/** The write itself, with no say over WHO may write which field — callers above decide that. */
+async function writeStageFields(
+  tx: Tx,
+  id: string,
+  stageId: string,
+  fields: Record<string, string>,
+  opts: WriteOpts
 ) {
   const spec = STAGE_FIELD_MAP[stageId];
   if (!spec) throw new ValidationError(`Unknown stage "${stageId}"`);
@@ -271,6 +326,35 @@ export async function applyBranch(
       create: { receiptId: id, reason },
     });
   }
+
+  // Imports and the seeder record history: a truck the workbook never gave a Lot doesn't get one
+  // invented now.
+  if (stageId === "n-qfs" && branchId === "pass" && !opts.bypassValidation) {
+    return { lotIssued: await issueLotIfMissing(tx, id, opts) };
+  }
+  return {};
+}
+
+/**
+ * Passing quality is the "accepted reception" moment — one accepted truck creates one original Lot
+ * (Oct 2026 team feedback). Issued at most once: switching the decision to fail and back to pass
+ * keeps the Lot it already has, and a Lot is never taken back or reused.
+ */
+async function issueLotIfMissing(tx: Tx, id: string, opts: WriteOpts): Promise<string | undefined> {
+  const existing = await tx.stageLotAssignment.findUnique({ where: { receiptId: id }, select: { lotNumber: true } });
+  if (existing?.lotNumber?.trim()) return undefined;
+
+  const receipt = await tx.receipt.findUniqueOrThrow({ where: { id }, select: { warehouse: true, arrivalDate: true } });
+  const lotNumber = await nextLotNumber(tx, receipt.warehouse, receipt.arrivalDate);
+  const by = opts.actor
+    ? (await tx.user.findUnique({ where: { id: opts.actor.id }, select: { displayName: true } }))?.displayName ?? "System"
+    : "System";
+  await writeStageFields(tx, id, "n-lot", {
+    "Lot Number": lotNumber,
+    "Assigned by (Warehouse Team)": by,
+    "Date/time assigned": new Date().toISOString(),
+  }, opts);
+  return lotNumber;
 }
 
 /**
@@ -285,11 +369,13 @@ export async function setBranch(
   opts: WriteOpts = {}
 ) {
   await prisma.$transaction(async (tx) => {
-    await applyBranch(tx, id, stageId, branchId, reason, opts);
+    const { lotIssued } = await applyBranch(tx, id, stageId, branchId, reason, opts);
 
     const fresh = await loadReceiptRow(id, tx);
     const status = deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord);
-    await tx.timelineEntry.create({ data: { receiptId: id, status, at: new Date().toISOString(), actorId: opts.actor?.id } });
+    await tx.timelineEntry.create({
+      data: { receiptId: id, status, at: new Date().toISOString(), actorId: opts.actor?.id, note: lotIssued ? `Lot ${lotIssued} issued` : undefined },
+    });
   });
 
   const row = await loadReceiptRow(id);

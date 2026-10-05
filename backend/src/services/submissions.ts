@@ -13,7 +13,7 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { formById, formForRole, type Role } from "@anagroci/contract/data/roles";
 import { prisma } from "../db.js";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
-import { loadReceiptRow, applyStageFields, assertLotAvailable } from "./receipts.js";
+import { loadReceiptRow, applyStageFields } from "./receipts.js";
 import { toReceiptRecord } from "../serialize.js";
 import { assignedSupplierCodes } from "../auth/receiptAccess.js";
 
@@ -43,7 +43,7 @@ function cleanValues(role: Role, raw: unknown) {
 export async function submitForm(user: User & { role: Role }, receiptId: string, raw: unknown) {
   const { form, values } = cleanValues(user.role, raw);
 
-  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, select: { id: true, warehouse: true, lbaCode: true } });
+  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, select: { id: true, lbaCode: true } });
   if (!receipt) throw Object.assign(new Error("Receipt not found"), { code: "P2025" });
 
   if (user.role === "branch_manager") {
@@ -66,9 +66,6 @@ export async function submitForm(user: User & { role: Role }, receiptId: string,
         : `This form has already been ${existing.status}.`
     );
   }
-
-  const lot = values["n-lot"]?.["Lot Number"];
-  if (lot) await assertLotAvailable(prisma, receiptId, receipt.warehouse, lot);
 
   return prisma.formSubmission.create({ data: { receiptId, formId: form.id, values, submittedById: user.id } });
 }

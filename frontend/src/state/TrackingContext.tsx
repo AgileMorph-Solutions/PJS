@@ -26,11 +26,13 @@ import type { Masters, Supplier } from "../repository/mastersRepo";
  */
 interface TrackingApi {
   receipts: ReceiptRecord[];
+  /** Also resolves an old REC-2026-NNNN id to the renumbered receipt (its `legacyId`). */
   getReceipt: (id: string) => ReceiptRecord | undefined;
   /** `warehouse` scopes the new receipt to a site (e.g. "BOUAKE") — still genuinely about receipts,
    * so this stays on TrackingApi rather than becoming a separate hook (see frontend/CLAUDE.md's
-   * "extend, don't reshape" rule: only receipts/ledgers/masters capabilities belong here). */
-  createReceipt: (warehouse?: string) => Promise<string>;
+   * "extend, don't reshape" rule: only receipts/ledgers/masters capabilities belong here).
+   * `opts` is the arrival date (the year in the new Receipt ID) and the Delivery Plan, if any. */
+  createReceipt: (warehouse?: string, opts?: { arrivalDate?: string; deliveryPlanId?: string }) => Promise<string>;
   updateReceiptField: (id: string, patch: Partial<ReceiptRecord>) => void;
   setStageField: (id: string, stageId: string, fieldName: string, value: string) => void;
   setBranch: (id: string, stageId: string, branchId: string, reason?: string) => void;
@@ -152,10 +154,10 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const api_: TrackingApi = useMemo(
     () => ({
       receipts,
-      getReceipt: (id) => receipts.find((r) => r.id === id),
+      getReceipt: (id) => receipts.find((r) => r.id === id) ?? receipts.find((r) => r.legacyId === id),
 
-      createReceipt: async (warehouse) => {
-        const created = await api.createReceipt(warehouse);
+      createReceipt: async (warehouse, opts) => {
+        const created = await api.createReceipt(warehouse, opts);
         mergeReceipt(created);
         return created.id;
       },
@@ -267,6 +269,34 @@ export function useDryingJobs(warehouse?: string) {
     void refetch().finally(() => setLoading(false));
   }, [refetch]);
   return { jobs, loading, refetch };
+}
+
+/**
+ * Delivery Plans and Transfer Requests — their own hooks for the same reason as useDryingJobs: new
+ * tables that are not receipts, ledgers or masters, so they never grow TrackingApi. Writes go
+ * through `api` and then `refetch()`, because the server issues the ID and derives the plan's
+ * status from the receipt that arrived — nothing here could predict either.
+ */
+export function useDeliveryPlans(warehouse?: string) {
+  const [plans, setPlans] = useState<import("@anagroci/contract/types/receipt").DeliveryPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listDeliveryPlans(warehouse).then(setPlans).catch(() => {}), [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { plans, loading, refetch };
+}
+
+export function useTransfers(warehouse?: string) {
+  const [transfers, setTransfers] = useState<import("@anagroci/contract/types/receipt").TransferRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listTransfers(warehouse).then(setTransfers).catch(() => {}), [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { transfers, loading, refetch };
 }
 
 /**

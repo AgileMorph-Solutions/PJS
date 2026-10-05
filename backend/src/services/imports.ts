@@ -27,6 +27,8 @@ import type { WarehouseReceivingRow } from "../domain/imports/warehouseReceiving
 import type { WarehouseActivityLedgerRow } from "../domain/imports/warehouseActivityLedger.js";
 import { prisma } from "../db.js";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
+import { lotNormalizer, normalizeVoyage, receiptIdAllocator, siteOf, type IdAllocator } from "./ids.js";
+import { yearOf } from "@anagroci/contract/domain/ids";
 
 export class ImportRejectedError extends Error {
   constructor(message: string, public detail: unknown) {
@@ -65,8 +67,12 @@ function guardWorkbookSize(workbook: ExcelJS.Workbook) {
 interface CacheEntry {
   importerId: ImporterId;
   filename: string;
+  /** The warehouse picked for this upload (a site), when one was. */
+  warehouse?: string;
   rows: ParsedRow<unknown>[];
   duplicates: DuplicateFlag[];
+  /** Rows whose own warehouse column names a different site than the one picked for the upload. */
+  otherWarehouse: DuplicateFlag[];
   timer: NodeJS.Timeout;
 }
 
@@ -101,10 +107,17 @@ export interface PreviewResponse {
   sampleRows: unknown[];
 }
 
+/**
+ * `warehouse` is the warehouse picked for this upload. It decides which code goes into the IDs a
+ * row is given when the sheet itself carries no warehouse column (the activity ledger), and any row
+ * whose own warehouse column names a different site is flagged — shown in the preview and, like a
+ * likely duplicate, skipped by default — rather than silently filed under the picked one.
+ */
 export async function previewImport(
   buffer: Buffer,
   filename: string,
-  importerIdOverride?: ImporterId
+  importerIdOverride?: ImporterId,
+  warehouse?: string
 ): Promise<PreviewResponse> {
   const workbook = new ExcelJS.Workbook();
   try {
@@ -148,7 +161,21 @@ export async function previewImport(
   const rows = def.parse(workbook);
 
   const { findings, duplicates } = await computeFindings(importerId, rows, filename);
-  const token = cachePut({ importerId, filename, rows, duplicates });
+  const site = warehouse ? await siteOf(prisma, warehouse) : undefined;
+  if (warehouse && !site) throw new ImportRejectedError(`Warehouse "${warehouse}" isn't in the warehouse master.`, { warehouse });
+  const otherWarehouse = site ? await findOtherWarehouseRows(importerId, rows, site) : [];
+  if (otherWarehouse.length) {
+    findings.push({
+      id: "rows_for_another_warehouse",
+      severity: "warning",
+      title: `Rows that belong to a warehouse other than ${site}`,
+      entity: filename,
+      affectedCount: otherWarehouse.length,
+      sampleIds: otherWarehouse.slice(0, 5).map((d) => `row ${d.sheetRow}: ${d.reason}`),
+      evidence: `This upload was made for ${site}. These rows name another warehouse in their own warehouse column, so they are skipped by default rather than filed under ${site}.`,
+    });
+  }
+  const token = cachePut({ importerId, filename, warehouse: site, rows, duplicates, otherWarehouse });
 
   return {
     token,
@@ -156,10 +183,67 @@ export async function previewImport(
     label: def.label,
     rowCount: rows.length,
     skippedCount: rows.filter((r) => r.skipReason).length,
-    duplicateCount: duplicates.length,
+    duplicateCount: duplicates.length + otherWarehouse.length,
     findings,
     sampleRows: rows.slice(0, 10).map((r) => r.data),
   };
+}
+
+/** Each shape's own warehouse column, where it has one. Shapes with none are filed under the upload's warehouse. */
+const ROW_WAREHOUSE: Partial<Record<ImporterId, (d: any) => string | null | undefined>> = {
+  truckReception: (d: OffloadingRow) => d.warehouse,
+  warehouseDischarges: (d: WarehouseDischargeRow) => d.warehouseSite ?? d.warehouse,
+  warehouseReceiving: (d: WarehouseReceivingRow) => d.warehouseSite ?? d.warehouse,
+  warehouseDispatches: (d: WarehouseDispatchLineRow) => d.warehouseSite ?? d.warehouse,
+  dryingBatch: (d: DryingBatchRow) => d.warehouseSite ?? d.warehouse,
+  dryingSorting: (d: DryingSortingRow) => d.warehouseSite ?? d.warehouse,
+  juteBagsMovement: (d: JuteWarehouseStockRow) => d.whLocation,
+  juteWarehouseTransfer: (d: JuteWarehouseTransferRow) => d.sourceWarehouse,
+};
+
+async function findOtherWarehouseRows(importerId: ImporterId, rows: ParsedRow<unknown>[], site: string): Promise<DuplicateFlag[]> {
+  const pick = ROW_WAREHOUSE[importerId];
+  if (!pick) return [];
+  const siteByName = new Map<string, string | undefined>();
+  const flags: DuplicateFlag[] = [];
+  for (const r of rows) {
+    if (r.skipReason) continue;
+    const name = pick(r.data)?.trim();
+    if (!name) continue;
+    if (!siteByName.has(name)) siteByName.set(name, await siteOf(prisma, name));
+    const rowSite = siteByName.get(name);
+    // A name the master doesn't know yet is a new warehouse the importer will add, not a mismatch.
+    if (rowSite && rowSite !== site) flags.push({ sheetRow: r.sheetRow, matchedAgainst: rowSite, reason: `warehouse ${name} is ${rowSite}` });
+  }
+  return flags;
+}
+
+/**
+ * The date whose year goes into a discharge/receiving row's Lot: its arrival, or — on the 133 real
+ * Yamoussoukro rows whose arrival cell isn't a readable date ("03/052026") — its discharge. The
+ * renumber script (services/renumber.ts) uses this same rule, so a re-upload reproduces its values.
+ */
+export const dischargeLotDate = (arrival: string | null, discharge: string | null) => arrival ?? discharge;
+
+/**
+ * Replaces each row's legacy lot ("17") with the system format (LOT-BKE01-2026-017) before it is
+ * stored, and hands back the original text for the row's *Raw twin. Values that can't be formatted
+ * safely (no code for that warehouse yet, no date, "12,5") are stored exactly as written.
+ */
+async function withSystemLots<T extends { lotNo: string | null }>(
+  rows: ParsedRow<T>[],
+  site: (d: T) => string | null | undefined,
+  date: (d: T) => string | null | undefined
+): Promise<{ rows: ParsedRow<T>[]; raw: (string | null)[] }> {
+  const normalize = await lotNormalizer(prisma);
+  const out: ParsedRow<T>[] = [];
+  const raw: (string | null)[] = [];
+  for (const r of rows) {
+    const n = await normalize(r.data.lotNo, site(r.data), date(r.data));
+    out.push({ ...r, data: { ...r.data, lotNo: n.value as T["lotNo"] } });
+    raw.push(n.raw);
+  }
+  return { rows: out, raw };
 }
 
 /** GET /api/imports/types payload — the known shapes, for the manual-override dropdown. */
@@ -311,7 +395,9 @@ export async function commitImport(token: string, opts: { skipFlagged: boolean }
   const entry = cacheTake(token);
   const skippedInvalid = entry.rows.filter((r) => r.skipReason).length;
   const usable = entry.rows.filter((r) => !r.skipReason);
-  const duplicateRows = opts.skipFlagged ? new Set(entry.duplicates.map((d) => d.sheetRow)) : new Set<number>();
+  const duplicateRows = opts.skipFlagged
+    ? new Set([...entry.duplicates, ...entry.otherWarehouse].map((d) => d.sheetRow))
+    : new Set<number>();
   const toWrite = usable.filter((r) => !duplicateRows.has(r.sheetRow));
 
   let created = 0;
@@ -356,7 +442,7 @@ export async function commitImport(token: string, opts: { skipFlagged: boolean }
       created = await commitWarehouseReceiving(toWrite as ParsedRow<WarehouseReceivingRow>[], entry.filename);
       break;
     case "warehouseActivityLedger":
-      created = await commitWarehouseActivityLedger(toWrite as ParsedRow<WarehouseActivityLedgerRow>[], entry.filename);
+      created = await commitWarehouseActivityLedger(toWrite as ParsedRow<WarehouseActivityLedgerRow>[], entry.filename, entry.warehouse);
       break;
   }
 
@@ -402,6 +488,25 @@ async function upsertObservedSuppliers(codeToName: Map<string, string>, filename
 async function commitReceipts(rows: ParsedRow<OffloadingRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
 
+  // One counter per (warehouse, arrival year) — one scan each, not one per row. All of them are set
+  // up before anything is written — masters included — so a warehouse with no code yet (or one not in
+  // the master at all) rejects the whole upload instead of leaving it half-imported.
+  // Keyed by the resolved SITE, not the name on the row: "BOUAKE" and its store "BKE-002" share one
+  // REC-BKE01-… sequence, and two counters over it would hand out the same number twice.
+  const allocators = new Map<string, IdAllocator>();
+  const keyOf = new Map<ParsedRow<OffloadingRow>, string>();
+  for (const row of rows) {
+    const d = row.data;
+    const key = `${(await siteOf(prisma, d.warehouse.trim())) ?? d.warehouse.trim()}\u0000${yearOf(d.arrivalDate)}`;
+    keyOf.set(row, key);
+    if (allocators.has(key)) continue;
+    try {
+      allocators.set(key, await receiptIdAllocator(prisma, d.warehouse.trim(), d.arrivalDate));
+    } catch (e) {
+      throw new ImportRejectedError(`Nothing was imported: ${(e as Error).message}`, { warehouse: d.warehouse, arrivalDate: d.arrivalDate });
+    }
+  }
+
   const warehouses = new Set(rows.map((r) => r.data.warehouse.trim()).filter(Boolean));
   const origins = new Set(rows.map((r) => r.data.origin.trim()).filter(Boolean));
   const suppliers = new Map<string, string>();
@@ -409,22 +514,10 @@ async function commitReceipts(rows: ParsedRow<OffloadingRow>[], filename: string
   await upsertObservedMasters(warehouses, origins, filename);
   await upsertObservedSuppliers(suppliers, filename);
 
-  // Batch-computed starting id — one scan, not one per row (avoids the O(n^2) rescan
-  // nextReceiptId() does per-call, which is fine for a single interactive create but not for
-  // hundreds of rows in one commit).
-  const year = new Date().getFullYear();
-  const prefix = `REC-${year}-`;
-  const existingIds = await prisma.receipt.findMany({ where: { id: { startsWith: prefix } }, select: { id: true } });
-  let counter = existingIds
-    .map((r) => Number(r.id.slice(prefix.length)))
-    .filter((n) => Number.isFinite(n))
-    .reduce((a, b) => Math.max(a, b), 0);
-
   let created = 0;
   for (const row of rows) {
-    counter += 1;
-    const id = `${prefix}${String(counter).padStart(4, "0")}`;
     const d = row.data;
+    const id = allocators.get(keyOf.get(row)!)!.next();
     await prisma.$transaction(async (tx) => {
       await tx.receipt.create({
         data: {
@@ -503,6 +596,8 @@ async function commitSuppliersMaster(rows: ParsedRow<SupplierMasterRow>[]): Prom
 
 async function commitDryingSorting(rows: ParsedRow<DryingSortingRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
+  // Only the resolved lotNo is reformatted; lotNoRaw already holds the verbatim cell.
+  rows = (await withSystemLots(rows, (d) => d.warehouseSite ?? d.warehouse, (d) => d.dryingDate)).rows;
   const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
   await upsertObservedMasters(warehouses, new Set(), filename);
 
@@ -551,17 +646,21 @@ const INFERRED_DESTINATION = "YAKRO FACTORY";
 
 async function commitJuteWarehouseTransfer(rows: ParsedRow<JuteWarehouseTransferRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
+  // This sheet's Lot is the RECEIVING warehouse's own number, not the source's — measured: the batch
+  // that is Lot 17 at Bouaké is Lot 20 on these rows (see services/receiptLinks.ts's header).
+  const sys = await withSystemLots(rows, () => INFERRED_DESTINATION, (d) => d.receivedDate);
+  rows = sys.rows;
   const warehouses = new Set(rows.map((r) => r.data.sourceWarehouse?.trim()).filter((v): v is string => Boolean(v)));
   warehouses.add(INFERRED_DESTINATION);
   await upsertObservedMasters(warehouses, new Set(), filename);
 
   const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
   const result = await prisma.juteWarehouseTransferReceipt.createMany({
-    data: rows.map((r) => ({
+    data: rows.map((r, i) => ({
       sn: r.data.sn,
       receivedDate: r.data.receivedDate ? new Date(r.data.receivedDate) : null,
       rawDate: r.data.rawDate, month: r.data.month, dryUndry: r.data.dryUndry, idTransfer: r.data.idTransfer,
-      truckRegistration: r.data.truckRegistration, lotNo: r.data.lotNo, lotDry: r.data.lotDry,
+      truckRegistration: r.data.truckRegistration, lotNo: r.data.lotNo, lotNoRaw: sys.raw[i], lotDry: r.data.lotDry,
       noFiche: r.data.noFiche, ccaFicheNumber: r.data.ccaFicheNumber, binNo: r.data.binNo,
       damagedBags: r.data.damagedBags, newBagsUsed: r.data.newBagsUsed, recondition: r.data.recondition,
       // Non-null by construction: rows with a blank source warehouse are skipped by the parser
@@ -623,6 +722,9 @@ async function commitWarehouseDischarges(
 ): Promise<{ created: number; lotWriteBack: LotWriteBackResult }> {
   const empty: LotWriteBackResult = { written: 0, skippedUnmatched: 0, skippedAmbiguous: 0, skippedConflict: 0 };
   if (rows.length === 0) return { created: 0, lotWriteBack: empty };
+  // Lot in the system format from here on — both what is stored and what is written onto receipts.
+  const sys = await withSystemLots(rows, (d) => d.warehouseSite ?? d.warehouse, (d) => dischargeLotDate(d.arrivalDate, d.dischargeDate));
+  rows = sys.rows;
 
   // ── Step A: masters, then the sheet stored verbatim ──
   // Real hierarchy is Site -> Store -> Bin (BOUAKE -> BKE-002 -> BKE-002-BIN-026). `warehouseSite`
@@ -651,10 +753,10 @@ async function commitWarehouseDischarges(
 
   const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
   const created = await prisma.warehouseDischarge.createMany({
-    data: rows.map((r) => {
+    data: rows.map((r, i) => {
       const d = r.data;
       return {
-        lotNo: d.lotNo, sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
+        lotNo: d.lotNo, lotNoRaw: sys.raw[i], sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
         // Non-null by construction: the parser's third skip-guard filters out every row with a
         // blank warehouseSite before it reaches `usable`/`toWrite`, so nothing without one gets here.
         warehouseSite: d.warehouseSite!, warehouse: d.warehouse,
@@ -746,6 +848,7 @@ async function writeLotsOntoReceipts(rows: ParsedRow<WarehouseDischargeRow>[]): 
     }),
   ]);
   const hasRow = new Set(existingForTargets.map((e) => e.receiptId));
+  const currentLot = new Map(existingForTargets.map((e) => [e.receiptId, e.lotNumber?.trim() ?? ""]));
   const ownerOf = new Map(owners.map((o) => [`${o.warehouseName}\u0000${o.lotNumber}`, o.receiptId]));
 
   const toCreate: Target[] = [];
@@ -756,6 +859,9 @@ async function writeLotsOntoReceipts(rows: ParsedRow<WarehouseDischargeRow>[]): 
     if (owner === t.receiptId) continue;
     // Someone else's → refuse. Reassigning would silently move a lot between trucks.
     if (owner) { out.skippedConflict += 1; continue; }
+    // The receipt already holds a DIFFERENT lot (the system issues one on quality pass): never
+    // overwritten — an issued Lot is permanent — and counted so the mismatch is visible.
+    if (currentLot.get(t.receiptId)) { out.skippedConflict += 1; continue; }
     (hasRow.has(t.receiptId) ? toUpdate : toCreate).push(t);
   }
 
@@ -876,7 +982,8 @@ async function commitWarehouseDispatches(rows: ParsedRow<WarehouseDispatchLineRo
       const d = r.data;
       return {
         sn: d.sn, chargeDate: d.chargeDate ? new Date(d.chargeDate) : null, chargeDateRaw: d.chargeDateRaw,
-        warehouseSite: d.warehouseSite, vyogeNumber: d.vyogeNumber, remark: d.remark,
+        // BKT-<year>-NNN, keyed to the line's own charge date; the sheet's text stays in vyogeNumberRaw.
+        warehouseSite: d.warehouseSite, ...voyageColumns(d.vyogeNumber, d.chargeDate), remark: d.remark,
         scaleLocation: d.scaleLocation, warehouse: d.warehouse, whOrDirect: d.whOrDirect, bin: d.bin,
         origin: d.origin, truckNo: d.truckNo, transporter: d.transporter, driver: d.driver,
         phone: d.phone, whReceiptNo: d.whReceiptNo, ficheCca: d.ficheCca,
@@ -898,6 +1005,11 @@ async function commitWarehouseDispatches(rows: ParsedRow<WarehouseDispatchLineRo
   return result.count;
 }
 
+function voyageColumns(raw: string | null, chargeDate: string | null) {
+  const v = normalizeVoyage(raw, chargeDate);
+  return { vyogeNumber: v.value, vyogeNumberRaw: v.raw };
+}
+
 /**
  * Consolidated Drying Batch (both sites). Stores the client's own *_raw twins verbatim; the clean
  * `lotNo` is exactly what dryingBatch.ts's resolveCleanLotNo() already decided — no further logic
@@ -906,6 +1018,8 @@ async function commitWarehouseDispatches(rows: ParsedRow<WarehouseDispatchLineRo
  */
 async function commitDryingBatch(rows: ParsedRow<DryingBatchRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
+  // Only the resolved lotNo is reformatted; lotNoRaw already holds the verbatim cell.
+  rows = (await withSystemLots(rows, (d) => d.warehouseSite ?? d.warehouse, (d) => d.dryingDate)).rows;
 
   const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
   const bins = new Set<string>();
@@ -1003,6 +1117,10 @@ async function commitIssuedToProduction(rows: ParsedRow<IssuedToProductionRow>[]
  */
 async function commitWarehouseReceiving(rows: ParsedRow<WarehouseReceivingRow>[], filename: string): Promise<number> {
   if (rows.length === 0) return 0;
+  // Same conversion as commitWarehouseDischarges — both write WarehouseDischarge, and its
+  // (warehouseSite, lotNo) re-upload key only holds if they agree on the format.
+  const sys = await withSystemLots(rows, (d) => d.warehouseSite ?? d.warehouse, (d) => dischargeLotDate(d.arrivalDate, d.dischargeDate));
+  rows = sys.rows;
 
   const warehouses = new Set(rows.map((r) => r.data.warehouseSite?.trim()).filter((v): v is string => !!v));
   const origins = new Set(rows.map((r) => r.data.origin?.trim()).filter((v): v is string => !!v));
@@ -1028,10 +1146,10 @@ async function commitWarehouseReceiving(rows: ParsedRow<WarehouseReceivingRow>[]
 
   const dec = (v: number | null) => (v === null ? null : new Prisma.Decimal(v));
   const result = await prisma.warehouseDischarge.createMany({
-    data: rows.map((r) => {
+    data: rows.map((r, i) => {
       const d = r.data;
       return {
-        lotNo: d.lotNo, sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
+        lotNo: d.lotNo, lotNoRaw: sys.raw[i], sn: d.sn, sheetRow: r.sheetRow, source: `upload: ${filename}`,
         warehouseSite: d.warehouseSite, warehouse: d.warehouse,
         unloadingBin: d.initialBinNo, afterDryingBin: d.afterDryingBinNo,
         lotDry: d.lotDry, deliveryNoteNo: d.deliveryNoteNo,
@@ -1076,15 +1194,23 @@ async function commitWarehouseReceiving(rows: ParsedRow<WarehouseReceivingRow>[]
 /** Warehouse activity ledger — its own site-agnostic table (the source sheet carries no site
  * column at all — see WarehouseActivityLedgerEntry's schema.prisma comment). No master upserts:
  * every field is plain verbatim text with no FK. */
-async function commitWarehouseActivityLedger(rows: ParsedRow<WarehouseActivityLedgerRow>[], filename: string): Promise<number> {
+async function commitWarehouseActivityLedger(
+  rows: ParsedRow<WarehouseActivityLedgerRow>[],
+  filename: string,
+  uploadWarehouse?: string
+): Promise<number> {
   if (rows.length === 0) return 0;
+  // The sheet names no warehouse, so its lots take the code of the warehouse the upload was made
+  // for; with none picked they are stored as written.
+  const sys = await withSystemLots(rows, () => uploadWarehouse, (d) => d.activityDate);
+  rows = sys.rows;
   const result = await prisma.warehouseActivityLedgerEntry.createMany({
-    data: rows.map((r) => {
+    data: rows.map((r, i) => {
       const d = r.data;
       return {
         activityDate: d.activityDate ? new Date(d.activityDate) : null, activityDateRaw: d.activityDateRaw,
         activityType: d.activityType, particulars: d.particulars, offloaded: d.offloaded, bags: d.bags,
-        quantityMt: d.quantityMt, ficheNo: d.ficheNo, lotNo: d.lotNo, vendor: d.vendor, rate: d.rate,
+        quantityMt: d.quantityMt, ficheNo: d.ficheNo, lotNo: d.lotNo, lotNoRaw: sys.raw[i], vendor: d.vendor, rate: d.rate,
         total: d.total, referenceNo: d.referenceNo, remarks: d.remarks,
         grossWeightWithPalletKg: d.grossWeightWithPalletKg, palletCount: d.palletCount,
         grossWeightKg: d.grossWeightKg, grossWeightWithoutPalletKg: d.grossWeightWithoutPalletKg,

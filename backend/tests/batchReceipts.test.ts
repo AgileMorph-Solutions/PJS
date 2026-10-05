@@ -14,6 +14,10 @@ const app = buildApp();
 const PW = "test-password-1";
 const P = "batchtest-";
 const VEHICLE = "BATCHTEST-";
+// A throwaway site with a code of its own, so the admin-names-a-warehouse test doesn't depend on
+// whether an admin has set Yakro's code in the live database.
+const TEST_SITE = "BATCHTEST-SITE";
+const TEST_CODE = "BTST1";
 const cookies: Record<string, string> = {};
 
 async function mkUser(key: string, role: string, warehouse: string | null) {
@@ -36,11 +40,13 @@ const batchReceipts = () => prisma.receipt.findMany({ where: { vehicleNo: { star
 async function cleanup() {
   await prisma.receipt.deleteMany({ where: { vehicleNo: { startsWith: VEHICLE } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: P } } });
+  await prisma.warehouse.deleteMany({ where: { name: TEST_SITE } });
 }
 
 let wiId: string;
 beforeAll(async () => {
   await cleanup();
+  await prisma.warehouse.create({ data: { name: TEST_SITE, kind: "REGIONAL_CENTRAL", type: "UNIT", code: TEST_CODE } });
   wiId = (await mkUser("wi", "warehouse_incharge", "BOUAKE")).id;
   await mkUser("wiY", "warehouse_incharge", "YAKRO FACTORY");
   await mkUser("bm", "branch_manager", "BOUAKE");
@@ -125,15 +131,31 @@ describe("POST /api/receipts/batch", () => {
   it("lets an admin name the warehouse, and requires one", async () => {
     expect((await post("admin", { rows: [truck(40)] })).statusCode).toBe(400);
     expect((await post("admin", { warehouse: "NO SUCH SITE", rows: [truck(41)] })).statusCode).toBe(422);
-    const ok = await post("admin", { warehouse: "YAKRO FACTORY", rows: [truck(42)] });
+    const ok = await post("admin", { warehouse: TEST_SITE, rows: [truck(42)] });
     expect(ok.statusCode).toBe(201);
-    expect((await prisma.receipt.findUnique({ where: { id: ok.json().ids[0] } }))!.warehouse).toBe("YAKRO FACTORY");
+    const made = await prisma.receipt.findUnique({ where: { id: ok.json().ids[0] } });
+    expect(made!.warehouse).toBe(TEST_SITE);
+    // Numbered with the code the master holds for that warehouse, and the year of the arrival date.
+    expect(made!.id).toBe(`REC-${TEST_CODE}-2026-001`);
   });
 
-  it("numbers receipts continuously across batches", async () => {
+  it("refuses a warehouse that has no code yet, rather than inventing one", async () => {
+    await prisma.warehouse.create({ data: { name: TEST_SITE + "-NOCODE", kind: "REGIONAL_CENTRAL", type: "UNIT" } });
+    try {
+      const res = await post("admin", { warehouse: TEST_SITE + "-NOCODE", rows: [truck(43)] });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toMatch(/has no code yet/);
+      expect(await prisma.receipt.count({ where: { vehicleNo: `${VEHICLE}43` } })).toBe(0);
+    } finally {
+      await prisma.warehouse.deleteMany({ where: { name: TEST_SITE + "-NOCODE" } });
+    }
+  });
+
+  it("numbers receipts continuously across batches, per warehouse, year and code", async () => {
     const a = (await post("wi", { rows: [truck(50), truck(51)] })).json().ids as string[];
     const b = (await post("wi", { rows: [truck(52)] })).json().ids as string[];
-    const n = (id: string) => Number(id.split("-")[2]);
+    const n = (id: string) => Number(id.split("-")[3]);
+    expect(a.every((id) => /^REC-BKE01-2026-\d{3,}$/.test(id))).toBe(true);
     expect(n(a[1])).toBe(n(a[0]) + 1);
     expect(n(b[0])).toBe(n(a[1]) + 1);
   });

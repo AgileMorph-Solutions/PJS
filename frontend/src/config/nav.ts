@@ -34,16 +34,18 @@ export const NAV: NavSection[] = [
   {
     // One section for both sites — which warehouse a `sitePath` leaf actually points at is
     // resolved per-render against the currently active site (see AppNav.tsx), switched from a
-    // control on the page itself (components/SiteSwitcher.tsx). Deliberately just these three
-    // leaves — Dispatch to Central, Receiving from Unit and Issue to Production used to be
-    // separate pages here; their data is now viewable from Reception instead (a status column
-    // plus upload panels for each of those workbooks — see ReceiptsListPage.tsx) so they no
-    // longer need their own sidebar entries.
+    // control on the page itself (components/SiteSwitcher.tsx). Dispatch to Central, Receiving from
+    // Unit and Issue to Production used to be separate pages here; their data is now viewable from
+    // Reception instead (a status column plus upload panels for each of those workbooks — see
+    // ReceiptsListPage.tsx) so they no longer need their own sidebar entries. Delivery plans and
+    // Transfers (Oct 2026) are the two new ones: planning before a truck arrives, and moving Lots on.
     label: "Warehouse",
     items: [
+      { label: "Delivery plans", sitePath: "delivery-plans", icon: "event_upcoming", roles: ["admin", "warehouse_incharge"] },
       { label: "Reception", sitePath: "receipts", icon: "receipt_long" },
       { label: "Lots & Bins", sitePath: "stock", icon: "grid_view", roles: ["admin", "warehouse_incharge"] },
       { label: "Drying", sitePath: "drying", icon: "wb_sunny", roles: ["admin", "warehouse_incharge"] },
+      { label: "Transfers", sitePath: "transfers", icon: "swap_horiz", roles: ["admin", "warehouse_incharge"] },
     ],
   },
   {

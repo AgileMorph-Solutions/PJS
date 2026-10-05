@@ -24,6 +24,7 @@ import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../src/stageStore.js";
 import { hashPassword } from "../src/auth/password.js";
 import { ensureDemoUsers } from "./demoUsers.js";
+import { applyRenumber, planRenumber } from "../src/services/renumber.js";
 
 const prisma = new PrismaClient();
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -95,6 +96,12 @@ async function backfillWarehouseTypology() {
   // Masters, and re-running the seed must not silently undo that.
   await prisma.warehouse.updateMany({ where: { name: "BOUAKE", type: null }, data: { type: "UNIT" } });
   await prisma.warehouse.updateMany({ where: { name: "YAKRO FACTORY", type: null }, data: { type: "CENTRAL" } });
+
+  // The one warehouse code the client has given (Oct 2026: "REC-BKE01-2027-001") — the same value
+  // the system_ids migration sets on an existing database; on a fresh one BOUAKE doesn't exist yet
+  // when that migration runs. Only fills a NULL, like the type above. Every other warehouse gets
+  // its code from an admin, never from here.
+  await prisma.warehouse.updateMany({ where: { name: "BOUAKE", code: null }, data: { code: "BKE01" } });
 }
 
 /**
@@ -325,6 +332,11 @@ async function main() {
       skipDuplicates: true,
     });
   }
+
+  // The source data carries the old REC-2026-NNNN ids and bare lot numbers; a fresh database ends up
+  // with exactly the system IDs an existing one gets from scripts/renumberIds.ts.
+  const renumbered = await applyRenumber(await planRenumber());
+  console.log(`Renumbered onto system IDs: ${renumbered.receipts} receipts, ${renumbered.values} lot/voyage values.`);
 
   const counts = {
     suppliers: await prisma.supplier.count(), warehouses: await prisma.warehouse.count(),

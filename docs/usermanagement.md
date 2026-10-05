@@ -12,7 +12,7 @@ the API and the UI read.
 |---|---|---|
 | **Admin** | all warehouses | Creates users, sets roles, assigns each person to **one warehouse**, and assigns each warehouse its Unit/Central type. Can do everything a Warehouse Incharge can, at any warehouse. |
 | **Warehouse Incharge** | one warehouse | Top of the operational hierarchy. Fills every stage that isn't a Branch Manager / QFS form (gate, quality analysis, tare, bin, drying, …) **directly, with no approval**. Approves or rejects Branch Manager and QFS submissions. Can correct any entry, including approved ones — every correction is audited. Assigns suppliers to Branch Managers and decides their supplier requests. Runs imports, jute ledgers and masters. |
-| **Branch Manager** | one warehouse, plus assigned suppliers | After unloading, submits: truck no., supplier, LBA code, FICHE, gross weight, net weight, lot no., negotiated price. Only sees and reports on suppliers the Warehouse Incharge assigned. Can ask the Warehouse Incharge to add a supplier. |
+| **Branch Manager** | one warehouse, plus assigned suppliers | After unloading, submits: truck no., supplier, LBA code, FICHE, negotiated price. (Lot number, gross weight and net weight are no longer typed — see `docs/system-ids-and-reception-flow.md`.) Only sees and reports on suppliers the Warehouse Incharge assigned. Can ask the Warehouse Incharge to add a supplier. |
 | **QFS Officer** | one warehouse | After unloading, does the quality analysis (moisture, nut count, KOR, final KOR) and checks the jute bags on the truck (total, good, damp, torn), and submits both together. |
 
 Assumption worth confirming with the client: "request branch manager to add suppliers" was read as
@@ -44,8 +44,8 @@ to leave it alone.
    - **Rejects** with a reason — **final**. Nothing is applied and the form can't be resubmitted;
      the Warehouse Incharge fixes the receipt directly afterwards. (This is separate from rejecting
      the *truck* at QFS, which is still the `n-qfs` fail branch.)
-5. A lot number that clashes with another receipt at the same warehouse is refused at submit time
-   and again at approval.
+5. No form carries a Lot Number any more: the system issues it when the truck passes quality (Oct 2026
+   team feedback), so there is no Lot clash to check at submit or approval.
 
 Every changed field — a Warehouse Incharge's direct edit or an approval — is recorded in
 `StageFieldChange` (who, when, old → new, `direct` | `approval`).
@@ -54,8 +54,8 @@ Every changed field — a Warehouse Incharge's direct edit or an approval — is
 
 | Form | Stage → field |
 |---|---|
-| Branch Manager | `n-gate` VEHICLE NO. · `n-verify` SUPPLIERS NAME, LBA CODE, FICHE · `n-gross` GROSS WT KGS · `n-netwt` NET WT KGS · `n-lot` Lot Number · `n-grn` PRICE |
-| QFS Officer | `n-qfs` MOIS. (moisture), NUT COUNT, KOR, FINAL KOR · `n-unload` SACS (bags), BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) |
+| Branch Manager | `n-gate` VEHICLE NO. · `n-verify` SUPPLIERS NAME, LBA CODE, FICHE · `n-grn` PRICE |
+| QFS Officer | `n-qfs` MOIS. (moisture), NUT COUNT, KOR, FINAL KOR · `n-unload` BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) — the total SACS is calculated from these three |
 
 The QFS **Pass / Fail** decision is not part of the form: the Warehouse Incharge records it, because a
 Fail rejects the truck. Approving the QFS form writes the four measurements only — it sets no
@@ -75,7 +75,7 @@ step, at the incharge's own warehouse.
 - **All or nothing.** Every row is checked first and everything is written in one transaction, so a
   bad row (say row 7 has no vehicle no., or a date that isn't a real `YYYY-MM-DD`) creates *no*
   receipts and the message names the row. Nothing is half-created.
-- **Same as a hand-entered truck.** Each row gets the next `REC-<year>-NNNN`, the gate/supplier-document
+- **Same as a hand-entered truck.** Each row gets the next Receipt ID (`REC-<warehouse code>-<arrival year>-NNN`), the gate/supplier-document
   stages are written through the normal stage code (so status shows *Pending QA*, or *Arrived* if the
   row had no supplier details), and every field is audited. Weights, lot, bin, etc. are filled on each
   receipt afterwards.

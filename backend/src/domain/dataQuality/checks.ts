@@ -7,6 +7,12 @@
 import type { Check } from "./types.js";
 import { negativeBalanceRows, transferFlagRows } from "../juteBalance.js";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
+import { storedFormulaMismatches } from "@anagroci/contract/domain/receiptMath";
+import { legacyLotSeq, parseSiteId } from "@anagroci/contract/domain/ids";
+
+/** The number inside a lot, whether system-format (LOT-BKE01-2026-017) or still the workbook's bare 17. */
+const lotSeq = (lot: string) => parseSiteId(lot)?.seq ?? legacyLotSeq(lot) ?? lot;
+import { RECEIPT_INCLUDE, assembleStageData } from "../../stageStore.js";
 
 export const CHECKS: Check[] = [
   {
@@ -264,7 +270,9 @@ export const CHECKS: Check[] = [
         const ours = lotByFiche.get(fiche);
         if (!ours || !theirs) return;
         compared += 1;
-        if (ours !== theirs) disagreements.push(`${label} fiche ${fiche}: unit-warehouse Lot ${ours} vs ${theirs}`);
+        // Compared by sequence number: since the Oct 2026 renumber one side can be LOT-BKE01-2026-017
+        // and the other the bare 17 it was before — the same number, not a disagreement.
+        if (lotSeq(ours) !== lotSeq(theirs)) disagreements.push(`${label} fiche ${fiche}: unit-warehouse Lot ${ours} vs ${theirs}`);
       };
       for (const d of dry) note("drying", (d.ficheNo ?? "").trim(), (d.lotNo ?? "").trim());
       for (const t of xfer) note("transfer", (t.noFiche ?? "").trim(), (t.lotNo ?? "").trim());
@@ -839,6 +847,79 @@ export const CHECKS: Check[] = [
           '"Source Bin No" column (e.g. 96, 95, 122) — a Lot does not exist until Cooking, so these ' +
           "cannot be real Lot numbers. Same disjoint-namespace confusion procurement's " +
           "lot_namespace_conflict already documents. Stored verbatim under the sheet's own column name.",
+      };
+    },
+  },
+  {
+    // Oct 2026: SACS, NET, PAID and AMOUNT are calculated (contract's domain/receiptMath.ts). The
+    // imported rows keep what the workbook recorded; where that disagrees with the formula it is
+    // reported here, never recalculated. Measured: 44 Truck Reception rows' bag totals
+    // (good + damp + torn ≠ SACS); net, paid and amount agreed on every real row.
+    id: "stored_value_disagrees_with_formula",
+    async run({ prisma }) {
+      const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
+      const byField = new Map<string, string[]>();
+      for (const row of rows) {
+        for (const m of storedFormulaMismatches(assembleStageData(row as Record<string, unknown>))) {
+          const list = byField.get(m.label) ?? [];
+          list.push(`${row.id} (${m.stored} vs ${m.expected})`);
+          byField.set(m.label, list);
+        }
+      }
+      const affected = [...byField.values()].flat();
+      if (!affected.length) return null;
+      return {
+        id: "stored_value_disagrees_with_formula", severity: "warning",
+        title: "Recorded totals that don't match how they are calculated",
+        entity: "Receipt", affectedCount: affected.length, sampleIds: affected.slice(0, 5),
+        evidence:
+          [...byField].map(([label, l]) => `${label}: ${l.length}`).join("; ") +
+          ". These values came from the workbook and are kept exactly as recorded. New entries are " +
+          "calculated, so a mismatch here is a question for whoever filled the original sheet.",
+      };
+    },
+  },
+  {
+    // A Lot is issued on quality pass and never taken back — so a truck whose decision was later
+    // changed to Fail still holds one. Not wrong, but worth a look.
+    id: "rejected_receipt_holds_lot",
+    async run({ prisma }) {
+      const rows = await prisma.receiptBranch.findMany({
+        where: { stageId: "n-qfs", branchId: "fail", receipt: { lot: { lotNumber: { not: "" } } } },
+        select: { receiptId: true, receipt: { select: { lot: { select: { lotNumber: true } } } } },
+      });
+      const hits = rows.filter((r) => r.receipt.lot?.lotNumber);
+      if (!hits.length) return null;
+      return {
+        id: "rejected_receipt_holds_lot", severity: "info",
+        title: "Rejected trucks that still hold a Lot",
+        entity: "Receipt", affectedCount: hits.length,
+        sampleIds: hits.slice(0, 5).map((h) => `${h.receiptId} (${h.receipt.lot!.lotNumber})`),
+        evidence:
+          "These trucks passed quality (which issued the Lot) and were later marked Fail. The Lot " +
+          "stays with the truck — an issued Lot is never reused — so it doesn't hold any stock.",
+      };
+    },
+  },
+  {
+    // Measured: YAKRO FACTORY (302 seeded receipts) has no code until an admin sets one.
+    id: "warehouse_without_code",
+    async run({ prisma }) {
+      const sites = await prisma.warehouse.findMany({
+        where: { site: null, code: null },
+        select: { name: true, _count: { select: { receipts: true, deliveryPlans: true } } },
+      });
+      const pending = sites.filter((s) => s._count.receipts + s._count.deliveryPlans > 0);
+      if (!pending.length) return null;
+      return {
+        id: "warehouse_without_code", severity: "warning",
+        title: "Warehouses with records but no ID code",
+        entity: "Warehouse", affectedCount: pending.length,
+        sampleIds: pending.map((s) => `${s.name} (${s._count.receipts} receipts)`),
+        evidence:
+          "No Receipt ID, Lot or Delivery Plan can be issued at these warehouses, and their existing " +
+          "records keep their old numbers, until an admin sets the code in Masters › Warehouses and " +
+          "the renumber (backend/scripts/renumberIds.ts) is run again.",
       };
     },
   },

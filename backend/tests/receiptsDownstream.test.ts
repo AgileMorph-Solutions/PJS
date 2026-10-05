@@ -34,7 +34,9 @@ describe("downstream status", () => {
     const status = await getDownstreamStatus();
     const rows = [...status.values()];
     expect(rows.filter((r) => r.dried).length).toBe(74);
-    expect(rows.filter((r) => r.issued).length).toBe(51);
+    // 43 since the Oct 2026 renumber (51 before): `issued` is reached through a transfer matched on the
+    // receipt's Lot OR Fiche, and the 8 that went were Lot collisions with another warehouse's "17".
+    expect(rows.filter((r) => r.issued).length).toBe(43);
   });
 
   it("scoping by warehouse only ever narrows the result, never changes an individual receipt's flags", async () => {

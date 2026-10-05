@@ -5,7 +5,7 @@ import type { BranchOutcome } from "../types/stage.js";
 // detail page's decision controls.
 export const DECISION_BRANCHES: Record<string, BranchOutcome[]> = {
   "n-qfs": [
-    { id: "pass", label: "Pass — quality ok", note: "Continue on to Weight truck (Gross weight)." },
+    { id: "pass", label: "Pass — quality ok", note: "Issues the truck's Lot Number, then continue on to unloading." },
     {
       id: "fail",
       label: "Fail — reject truck",

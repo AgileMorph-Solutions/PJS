@@ -72,6 +72,51 @@ function TypeSelect({ warehouse }: { warehouse: WarehouseMaster }) {
   );
 }
 
+/** Admin-only: the code printed into every ID issued at this site (REC-<code>-2027-001). Saved when
+ * the field loses focus or Enter is pressed. The API refuses to change it once an ID carries it, and
+ * says why here. Everyone else sees it read-only — and an empty one is called out, because a site
+ * with no code can't issue a Receipt ID, Lot or Delivery Plan. */
+function CodeInput({ warehouse, editable }: { warehouse: WarehouseMaster; editable: boolean }) {
+  const { refresh } = useTracking();
+  const [value, setValue] = useState(warehouse.code ?? "");
+  const [error, setError] = useState<string | null>(null);
+  async function save() {
+    const next = value.trim().toUpperCase();
+    if (next === (warehouse.code ?? "")) return;
+    setError(null);
+    try {
+      await api.setWarehouseCode(warehouse.name, next || null);
+      setValue(next);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setValue(warehouse.code ?? "");
+    }
+  }
+  if (!editable) {
+    return warehouse.code ? (
+      <span className="text-[12px] font-mono font-semibold text-warmstone-600">ID code {warehouse.code}</span>
+    ) : (
+      <span className="text-[12px] font-semibold text-ambernut-800">No ID code yet — no IDs can be issued here</span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2 normal-case">
+      <input
+        aria-label={`ID code for ${warehouse.name}`}
+        value={value}
+        onChange={(e) => setValue(e.target.value.toUpperCase())}
+        onBlur={() => void save()}
+        onKeyDown={(e) => e.key === "Enter" && (e.currentTarget.blur())}
+        placeholder="ID code, e.g. BKE01"
+        maxLength={12}
+        className="w-36 px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-mono font-semibold text-warmstone-800 outline-none focus:border-brand-700"
+      />
+      {error && <span role="alert" className="text-[11.5px] text-danger-700">{error}</span>}
+    </span>
+  );
+}
+
 export function WarehousesPage() {
   const { masters, addWarehouse, receipts } = useTracking();
   const isAdmin = useMe().role === "admin";
@@ -171,9 +216,15 @@ export function WarehousesPage() {
             <span>
               {site.label} <span className="normal-case font-medium text-warmstone-300">· {site.sublabel}</span>
             </span>
-            {isAdmin && (() => {
+            {(() => {
               const row = masters.warehouses.find((w) => w.name === site.warehouseName);
-              return row ? <TypeSelect warehouse={row} /> : null;
+              if (!row) return null;
+              return (
+                <>
+                  {isAdmin && <TypeSelect warehouse={row} />}
+                  <CodeInput key={`${row.name}:${row.code ?? ""}`} warehouse={row} editable={isAdmin} />
+                </>
+              );
             })()}
           </h3>
           <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">

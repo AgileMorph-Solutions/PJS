@@ -13,9 +13,11 @@ import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { DECISION_BRANCHES } from "@anagroci/contract/domain/decisions";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
+import { derivedRuleFor } from "@anagroci/contract/domain/receiptMath";
 import {
-  applyBranch, applyStageFields, assertLotAvailable, listReceipts, loadReceiptRow, nextReceiptId,
+  applyBranch, applyStageFields, listReceipts, loadReceiptRow, SYSTEM_LOT_MESSAGE,
 } from "../../services/receipts.js";
+import { nextReceiptId, warehouseCodeFor } from "../../services/ids.js";
 import { toReceiptRecord } from "../../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ValidationError } from "../validation.js";
 import { canonical, parseCell } from "./cells.js";
@@ -81,7 +83,6 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
   const all = await listReceipts();
   const byId = new Map(all.map((r) => [r.id, { record: r, flat: flatten(r) }]));
   const seenIds = new Set<string>();
-  const newLots = new Set<string>();
 
   for (const { rowNumber, cells } of sheet.rows) {
     const errs: RowError[] = [];
@@ -124,7 +125,11 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
         else top[col] = col === "origin" ? next : next ?? "";
       } else if (STAGE_HEADER.has(h)) {
         const { stageId, label } = STAGE_HEADER.get(h)!;
-        (stages[stageId] ??= {})[label] = next ?? "";
+        // Only a CHANGED cell gets here, so an exported file re-uploaded untouched still passes.
+        const rule = derivedRuleFor(stageId, label);
+        if (stageId === "n-lot") err(SYSTEM_LOT_MESSAGE, h);
+        else if (rule) err(`is calculated (${rule.formula}) — change the values it is calculated from instead`, h);
+        else (stages[stageId] ??= {})[label] = next ?? "";
       } else if (BRANCH_HEADER.has(h)) {
         const stageId = BRANCH_HEADER.get(h)!;
         if (next === null) err(`a recorded decision can't be cleared`, h);
@@ -161,13 +166,10 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
     // The same hard rules the app applies, checked now so the preview shows them.
     const finalOf = (h: string) => (given.has(h) ? given.get(h) ?? null : existing ? str(existing.flat[h]) : null);
     try {
-      const lot = finalOf("StageLotAssignment.lotNumber");
-      if (stages["n-lot"]?.["Lot Number"] && warehouse) {
-        const key = `${warehouse}|${lot}`;
-        if (newLots.has(key)) throw new ValidationError(`Lot ${lot} is used by more than one receipt in this sheet`);
-        newLots.add(key);
-        await assertLotAvailable(ctx.db, id ?? "", warehouse, lot!);
-      }
+      // A new row is given a Receipt ID on commit, which needs the warehouse's code.
+      if (!existing && warehouse) await warehouseCodeFor(ctx.db, warehouse);
+      // A Pass in this same row issues the Lot before the Bin is written (see applyReceipt).
+      const lot = (existing ? str(existing.flat["StageLotAssignment.lotNumber"]) : null) ?? (branches["n-qfs"] === "pass" ? "(issued on pass)" : null);
       if (stages["n-bin"]?.["Bin Number"]) assertLotBeforeBin(lot, stages["n-bin"]["Bin Number"]);
       if (branches["n-qfs"]) assertRejectionHasReason(branches["n-qfs"], finalOf(REASON_HEADER) ?? undefined);
     } catch (e) {
@@ -190,8 +192,8 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
   return result;
 }
 
-/** Writes one planned receipt. Stages go in the order the process runs (lot before bin), through the
- * same stage-write code as every other edit, and the whole upload is ONE timeline entry per receipt. */
+/** Writes one planned receipt, through the same stage-write code as every other edit; the whole
+ * upload is ONE timeline entry per receipt. */
 export async function applyReceipt(ctx: Ctx, op: ReceiptOp): Promise<void> {
   const tx = ctx.db;
   const actor = { id: ctx.userId, via: "import" as const };
@@ -201,7 +203,7 @@ export async function applyReceipt(ctx: Ctx, op: ReceiptOp): Promise<void> {
     if (typeof op.top.origin === "string" && op.top.origin) {
       await tx.origin.upsert({ where: { name: op.top.origin }, update: {}, create: { name: op.top.origin, source: `workbook: ${ctx.filename}` } });
     }
-    id = await nextReceiptId(tx);
+    id = await nextReceiptId(tx, op.top.warehouse as string, op.top.arrivalDate as string);
     await tx.receipt.create({
       data: {
         id, source: "entered",
@@ -220,11 +222,12 @@ export async function applyReceipt(ctx: Ctx, op: ReceiptOp): Promise<void> {
     await tx.receipt.update({ where: { id: id! }, data: op.top });
   }
 
-  for (const s of STAGES) {
-    if (op.stages[s.stageId]) await applyStageFields(tx, id!, s.stageId, op.stages[s.stageId], { actor });
-  }
+  // Decisions first: a quality Pass issues the Lot, and a Bin in the same row needs that Lot to exist.
   for (const [stageId, branchId] of Object.entries(op.branches)) {
     await applyBranch(tx, id!, stageId, branchId, op.reason, { actor });
+  }
+  for (const s of STAGES) {
+    if (op.stages[s.stageId]) await applyStageFields(tx, id!, s.stageId, op.stages[s.stageId], { actor });
   }
 
   const fresh = await loadReceiptRow(id!, tx);

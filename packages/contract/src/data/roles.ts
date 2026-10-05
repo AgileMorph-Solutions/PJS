@@ -38,9 +38,10 @@ export interface RoleForm {
 /**
  * Forms that need Warehouse Incharge approval before their values touch the stage tables.
  *
- * bm-reception: Sept-30 clarification — the Branch Manager enters these after unloading. NET WT
- * is `kind: "system"` in stages.ts ("never typed"), but the client wants the BM's figure as the
- * workbook records it today, so it is submitted here and the conflict is noted on n-netwt.
+ * bm-reception: Sept-30 clarification — the Branch Manager enters these after unloading. Lot
+ * Number, GROSS WT KGS and NET WT KGS used to be here too; the Oct 2026 team feedback made them
+ * system-produced (Lot issued on quality pass; weights calculated from the weighbridge readings —
+ * see stages.ts n-lot and domain/receiptMath.ts), so nobody types them.
  * "FICHE" is the fiche number; "FICHE CODE" is a separate column and not part of this form.
  */
 export const ROLE_FORMS: RoleForm[] = [
@@ -51,9 +52,6 @@ export const ROLE_FORMS: RoleForm[] = [
     stages: [
       { stageId: "n-gate", labels: ["VEHICLE NO."] },
       { stageId: "n-verify", labels: ["SUPPLIERS NAME", "LBA CODE", "FICHE"] },
-      { stageId: "n-gross", labels: ["GROSS WT KGS"] },
-      { stageId: "n-netwt", labels: ["NET WT KGS"] },
-      { stageId: "n-lot", labels: ["Lot Number"] },
       { stageId: "n-grn", labels: ["PRICE"] },
     ],
   },
@@ -67,9 +65,10 @@ export const ROLE_FORMS: RoleForm[] = [
       // The four measurements only. The Pass/Fail decision (n-qfs's branch) is NOT part of this
       // form — the Warehouse Incharge still records it, since a Fail rejects the truck.
       { stageId: "n-qfs", labels: ["MOIS. (moisture)", "NUT COUNT", "KOR", "FINAL KOR"] },
+      // SACS (total) is not here: it is calculated as good + damp + torn (domain/receiptMath.ts).
       {
         stageId: "n-unload",
-        labels: ["SACS (bags)", "BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"],
+        labels: ["BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"],
       },
     ],
   },

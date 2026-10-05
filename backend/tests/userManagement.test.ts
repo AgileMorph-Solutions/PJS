@@ -22,7 +22,7 @@ const SUPPLIER = "UMTEST-SUP";
 const cookies: Record<string, string> = {};
 const ids: Record<string, string> = {};
 let receiptA: string; // BOUAKE, the receipt the flows run on
-let receiptB: string; // BOUAKE, holds a clashing Lot
+let receiptB: string; // BOUAKE, the QFS jute-check flows run on
 const createdReceipts: string[] = [];
 
 async function login(username: string) {
@@ -66,7 +66,6 @@ beforeAll(async () => {
     if (key === "a") receiptA = r.id; else receiptB = r.id;
   }
   await setStageFields(receiptA, "n-gate", { "VEHICLE NO.": "GATE-1" });
-  await setStageFields(receiptB, "n-lot", { "Lot Number": "UMTEST-LOT-CLASH" });
 });
 afterAll(async () => {
   await cleanup();
@@ -78,9 +77,6 @@ const bmForm = (extra: Record<string, Record<string, string>> = {}) => ({
   values: {
     "n-gate": { "VEHICLE NO.": "TRUCK-42" },
     "n-verify": { "SUPPLIERS NAME": "UM Test Supplier", "LBA CODE": SUPPLIER, FICHE: "F-100" },
-    "n-gross": { "GROSS WT KGS": "41000" },
-    "n-netwt": { "NET WT KGS": "40500" },
-    "n-lot": { "Lot Number": "UMTEST-LOT-1" },
     "n-grn": { PRICE: "470" },
     ...extra,
   },
@@ -157,12 +153,20 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect((await as(P + "bm", "GET", "/api/my-suppliers")).json().map((s: any) => s.code)).toEqual([SUPPLIER]);
   });
 
-  it("rejects fields outside the Branch Manager form and a clashing Lot", async () => {
+  it("rejects fields outside the Branch Manager form — including the Lot and the weights the system now produces", async () => {
     const outside = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, { values: { "n-tare": { "Tare / empty truck weight (kg)": "1" } } });
     expect(outside.statusCode).toBe(422);
-    const clash = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, bmForm({ "n-lot": { "Lot Number": "UMTEST-LOT-CLASH" } }));
-    expect(clash.statusCode).toBe(422);
-    expect(clash.json().error).toMatch(/one truck = one Lot/);
+    // Lot is issued on quality pass; gross and net are calculated — nobody submits them any more.
+    const extras: Record<string, Record<string, string>>[] = [
+      { "n-lot": { "Lot Number": "UMTEST-LOT-1" } },
+      { "n-gross": { "GROSS WT KGS": "41000" } },
+      { "n-netwt": { "NET WT KGS": "40500" } },
+    ];
+    for (const extra of extras) {
+      const res = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, bmForm(extra));
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toMatch(/isn't part of the Branch Manager/);
+    }
   });
 
   it("stores a pending submission without touching the receipt", async () => {
@@ -194,13 +198,13 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
 
     const r = (await as(P + "wi", "GET", `/api/receipts/${receiptA}`)).json();
     expect(r.stageData["n-grn"]["PRICE"]).toBe("470");
-    expect(r.stageData["n-gross"]["GROSS WT KGS"]).toBe("41000");
     expect(r.stageData["n-verify"]["FICHE"]).toBe("F-100");
-    expect(r.lotNo).toBe("UMTEST-LOT-1");
+    // Approving the Branch Manager's form never hands out a Lot — that happens on quality pass.
+    expect(r.lotNo ?? "").toBe("");
     expect(r).toMatchObject({ lbaCode: SUPPLIER, supplierName: "UM Test Supplier", vehicleNo: "TRUCK-42", status: "grn_completed" });
 
     const changes = await prisma.stageFieldChange.findMany({ where: { receiptId: receiptA } });
-    expect(changes.length).toBeGreaterThanOrEqual(8);
+    expect(changes.length).toBeGreaterThanOrEqual(5);
     expect(changes.every((c) => c.via === "approval" && c.userId === ids.wi)).toBe(true);
     // The gate's vehicle number changed GATE-1 -> TRUCK-42, and the audit says so.
     expect(changes.find((c) => c.label === "VEHICLE NO.")).toMatchObject({ oldValue: "GATE-1", newValue: "TRUCK-42" });
@@ -224,7 +228,8 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
 });
 
 describe("QFS Officer submission and terminal rejection", () => {
-  const form = { values: { "n-unload": { "SACS (bags)": "478", "BON SACS (good bags)": "463" } } };
+  // The total (SACS) isn't submitted: it is calculated from the three counts.
+  const form = { values: { "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } } };
   let id: string;
 
   it("stores the jute check as pending", async () => {
@@ -248,7 +253,7 @@ describe("QFS Officer submission and terminal rejection", () => {
   });
 
   it("lets the Warehouse Incharge fix the data afterwards", async () => {
-    const res = await as(P + "wi", "PATCH", `/api/receipts/${receiptB}/stages/n-unload`, { fields: { "SACS (bags)": "470" } });
+    const res = await as(P + "wi", "PATCH", `/api/receipts/${receiptB}/stages/n-unload`, { fields: { "BON SACS (good bags)": "460" } });
     expect(res.statusCode).toBe(200);
   });
 });
@@ -268,7 +273,7 @@ describe("QFS Officer quality analysis", () => {
 
   it("takes the four measurements together with the bag counts in one submission", async () => {
     const res = await as(P + "qfs", "POST", `/api/receipts/${receiptId}/submissions`, {
-      values: { "n-qfs": quality, "n-unload": { "SACS (bags)": "478" } },
+      values: { "n-qfs": quality, "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } },
     });
     expect(res.statusCode).toBe(201);
     submissionId = res.json().id;
@@ -281,6 +286,7 @@ describe("QFS Officer quality analysis", () => {
     expect((await as(P + "wi", "POST", `/api/submissions/${submissionId}/approve`)).statusCode).toBe(200);
     const after = (await as(P + "wi", "GET", `/api/receipts/${receiptId}`)).json();
     expect(after.stageData["n-qfs"]).toMatchObject(quality);
+    // Approval wrote the three counts; the total is the system's own sum of them.
     expect(after.stageData["n-unload"]["SACS (bags)"]).toBe("478");
     // The decision is the Warehouse Incharge's: nothing here sets it.
     expect(after.branches["n-qfs"]).toBeUndefined();

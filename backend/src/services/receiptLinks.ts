@@ -21,6 +21,14 @@
  * collision, and the frontend renders a prominent warning rather than presenting these as verified
  * links. Bin can't do this job at all: it's two disjoint per-warehouse namespaces (Bouaké BKE-* vs
  * Yakro BIN-*).
+ *
+ * Since the Oct 2026 ID standardisation every lot carries its warehouse's code (LOT-BKE01-2026-017),
+ * so an exact Lot match can no longer pair one warehouse's "17" with another's — the coincidental
+ * collisions described above are gone, and so are the (rare) real cross-site links they happened to
+ * include, because a batch's Lot at a downstream warehouse is a different number in its own
+ * warehouse's format. So every table is now matched on the exact Lot OR on this receipt's FICHE,
+ * the one identifier that genuinely travels with a batch. `ficheAgrees` still says which matched
+ * rows are confirmed by the fiche.
  */
 import { prisma } from "../db.js";
 
@@ -140,6 +148,15 @@ function formatReceivedDate(receivedDate: Date | null, rawDate: string | null): 
   return rawDate;
 }
 
+/** "matches this Lot, or this Fiche" for one table's own two columns — either key may be absent. */
+function byLotOrFiche<L extends string, F extends string>(lotCol: L, lotNo: string | null, ficheCol: F, fiche: string | null) {
+  const or = [
+    ...(lotNo ? [{ [lotCol]: lotNo } as Record<L, string>] : []),
+    ...(fiche ? [{ [ficheCol]: fiche } as Record<F, string>] : []),
+  ];
+  return { OR: or };
+}
+
 export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
   const [verify, own] = await Promise.all([
     prisma.stageVerifyDocs.findUnique({ where: { receiptId: id }, select: { fiche: true } }),
@@ -164,7 +181,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       }))
     : [];
 
-  if (!lotNo) {
+  if (!lotNo && !fiche) {
     return {
       lotNo: null, lotWarehouse, fiche, dryingJobs: [], transfers: [], btmIntakes: [],
       dispatches, warehouseReceiving: [], dryingBatches: [], issuedToProduction: [],
@@ -173,12 +190,12 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
 
   const [dryingRows, transferRows, warehouseReceivingRows, dryingBatchRows] = await Promise.all([
     prisma.dryingJob.findMany({
-      where: { lotNo },
+      where: byLotOrFiche("lotNo", lotNo, "ficheNo", fiche),
       select: { id: true, date: true, warehouse: true, bin: true, lotNo: true, status: true, dryType: true, destination: true, ficheNo: true },
       orderBy: { date: "asc" },
     }),
     prisma.juteWarehouseTransferReceipt.findMany({
-      where: { lotNo },
+      where: byLotOrFiche("lotNo", lotNo, "noFiche", fiche),
       select: {
         sn: true, receivedDate: true, rawDate: true, lotNo: true, binNo: true,
         truckRegistration: true, bagsReceived: true, sourceWarehouse: true, idTransfer: true, noFiche: true,
@@ -186,12 +203,12 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       orderBy: { sn: "asc" },
     }),
     prisma.warehouseDischarge.findMany({
-      where: { lotNo },
+      where: byLotOrFiche("lotNo", lotNo, "ficheCca", fiche),
       select: { id: true, sn: true, warehouseSite: true, lotNo: true, arrivalDate: true, arrivalDateRaw: true, totalRecd: true, ficheCca: true },
       orderBy: { warehouseSite: "asc" },
     }),
     prisma.dryingBatch.findMany({
-      where: { lotNo },
+      where: byLotOrFiche("lotNo", lotNo, "ficheNoRaw", fiche),
       select: {
         id: true, sn: true, dryingDate: true, dryingDateRaw: true, warehouseSite: true, status: true,
         dryType: true, sourceBinNo: true, destinationBinNo: true, destinationRaw: true, ficheNoRaw: true,

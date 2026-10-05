@@ -265,10 +265,10 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
     expect(r.stageData["n-grn"]["PRICE"]).toBe("");
   });
 
-  it("a blank Receipt ID adds a truck at the section's warehouse; Pass is understood, a new origin is added", async () => {
+  it("a blank Receipt ID adds a truck at the section's warehouse; Pass issues its Lot, a new origin is added", async () => {
     const buf = await edited("wi", (wb) => {
       addRow(wb.getWorksheet("Truck Reception")!, {
-        "Truck No": VEH + "NEW", "Supplier Name": "WB New", "Price (CFA/kg)": "77", "Lot No": "WBTEST-LOT-1",
+        "Truck No": VEH + "NEW", "Supplier Name": "WB New", "Price (CFA/kg)": "77",
         "Origin": "WBTEST-ORIGIN", "Quality Result": "Pass ",
       });
     });
@@ -279,11 +279,13 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
 
     const made = await prisma.receipt.findFirstOrThrow({ where: { vehicleNo: VEH + "NEW" } });
     expect(made).toMatchObject({ source: "entered", warehouse: "BOUAKE", supplierName: "WB New", origin: "WBTEST-ORIGIN" });
-    expect(made.id).toMatch(/^REC-\d{4}-\d{4}$/);
+    // Numbered by the system: the warehouse's code, then the year of the arrival date.
+    expect(made.id).toMatch(/^REC-BKE01-\d{4}-\d{3,}$/);
     const r = (await get("wi", `/api/receipts/${made.id}`)).json();
     expect(r.stageData["n-grn"]["PRICE"]).toBe("77");
     expect(r.stageData["n-gate"]["VEHICLE NO."]).toBe(VEH + "NEW"); // the stage got it too
-    expect(r.lotNo).toBe("WBTEST-LOT-1");
+    // The Pass in the same row issued the Lot — nobody typed it.
+    expect(r.lotNo).toMatch(/^LOT-BKE01-\d{4}-\d{3,}$/);
     expect(r.branches["n-qfs"]).toBe("pass");
     expect(await prisma.stageFieldChange.count({ where: { receiptId: made.id, via: "import" } })).toBeGreaterThanOrEqual(4);
     expect(r.timeline[r.timeline.length - 1].note).toMatch(/Created from workbook/);
@@ -362,7 +364,8 @@ describe("what a bad upload does", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     await removeSentinels();
     await prisma.receipt.create({ data: { id: SENTINEL, source: "entered", arrivalDate: "2026-09-30", supplierName: "", lbaCode: "", vehicleNo: VEH + "ERR", warehouse: "BOUAKE" } });
-    await setStageFields(SENTINEL, "n-lot", { "Lot Number": "WBTEST-LOT-A" });
+    // Written the importers' way: a person can no longer type a Lot (the system issues it).
+    await setStageFields(SENTINEL, "n-lot", { "Lot Number": "WBTEST-LOT-A" }, { bypassValidation: true });
   });
   afterAll(removeSentinels);
 
@@ -396,7 +399,9 @@ describe("what a bad upload does", { timeout: 60_000 }, () => {
   });
 
   it("refuses another warehouse's rows, whichever sheet they are on", async () => {
-    const yakro = await prisma.receipt.findFirstOrThrow({ where: { warehouse: "YAKRO FACTORY" } });
+    // The FIRST Yakro receipt in export order: the preview shows only the first few errors per sheet,
+    // and Yakro has hundreds of receipts, so an arbitrary one would fall outside what it shows.
+    const yakro = await prisma.receipt.findFirstOrThrow({ where: { warehouse: "YAKRO FACTORY" }, orderBy: { createdAt: "asc" } });
     // Yakro's file, uploaded as Bouaké: its receipts and its receiving rows belong elsewhere.
     const buf = await edited("wiY", (wb) => {
       const t = wb.getWorksheet("Truck Reception")!;
@@ -413,16 +418,16 @@ describe("what a bad upload does", { timeout: 60_000 }, () => {
     expect((await prisma.receipt.findUniqueOrThrow({ where: { id: yakro.id } })).supplierName).not.toBe("hijacked");
   });
 
-  it("applies the app's own rules: a lot can't be reused, a bin needs a lot, a fail needs a reason", async () => {
+  it("applies the app's own rules: a lot can't be typed, a bin needs a lot, a fail needs a reason", async () => {
     const errs = await errorsOf((wb) => {
       const ws = wb.getWorksheet("Truck Reception")!;
-      addRow(ws, { "Truck No": VEH + "L1", "Lot No": "WBTEST-LOT-A" });            // clashes with the sentinel's lot
+      addRow(ws, { "Truck No": VEH + "L1", "Lot No": "WBTEST-LOT-A" });            // a Lot can't be typed at all
       addRow(ws, { "Truck No": VEH + "L2", "Bin No": "BIN-X" });                    // bin, no lot
       addRow(ws, { "Truck No": VEH + "L3", "Quality Result": "Fail" });             // fail, no reason
       addRow(ws, { "Truck No": VEH + "L4", "Quality Result": "maybe" });            // not a decision
     });
     const msgs = errs.map((e: any) => e.message).join(" | ");
-    expect(msgs).toMatch(/one truck = one Lot/);
+    expect(msgs).toMatch(/issued by the system/);
     expect(msgs).toMatch(/Bin/i);
     expect(msgs).toMatch(/reason/i);
     expect(msgs).toMatch(/isn't a valid decision/);

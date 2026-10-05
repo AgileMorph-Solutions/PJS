@@ -6,6 +6,7 @@
 import { prisma } from "../db.js";
 import { WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import { WAREHOUSE_TYPES, type WarehouseType } from "@anagroci/contract/data/warehouseTypes";
+import { isValidWarehouseCode } from "@anagroci/contract/domain/ids";
 import { ValidationError } from "../domain/validation.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
@@ -26,7 +27,8 @@ export async function listMasters() {
     // row's section from — see packages/contract/src/data/warehouseKinds.ts.
     // `type` (UNIT | CENTRAL, site rows only) decides which app section a warehouse belongs to and
     // which users can be assigned to it; `aliases` lets the UI group a store under its site.
-    warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, type: w.type, site: w.site })),
+    // `code` (site rows only) is what every system ID issued there carries — see setWarehouseCode.
+    warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, type: w.type, site: w.site, code: w.code })),
     aliases: aliases.map((a) => ({ alias: a.alias, warehouseName: a.warehouseName })),
     bins: bins.map((b) => b.code),
     origins: origins.map((o) => o.name),
@@ -74,6 +76,37 @@ export async function setWarehouseType(name: string, type: string | null) {
   }
   return prisma.warehouse.update({ where: { name }, data: { type } });
 }
+
+/**
+ * Admin sets the code printed into every ID issued at a site (REC-<code>-2027-001). Set on sites
+ * only — a store's receipts are numbered with its site's code. Once any ID carries the code it is
+ * frozen: those IDs are permanent, and a renamed code would restart the numbering under a second
+ * name for the same warehouse.
+ */
+export async function setWarehouseCode(name: string, code: string | null) {
+  const wh = await prisma.warehouse.findUnique({ where: { name } });
+  if (!wh) throw Object.assign(new Error("Warehouse not found"), { code: "P2025" });
+  if (wh.site) throw new ValidationError(`"${name}" is a store of ${wh.site} — IDs there use ${wh.site}'s code.`);
+  const next = code?.trim().toUpperCase() || null;
+  if (next && !isValidWarehouseCode(next)) {
+    throw new ValidationError("A warehouse code is 2–12 capital letters or digits, no spaces or dashes (e.g. BKE01).");
+  }
+  if (wh.code && wh.code !== next && (await codeInUse(wh.code))) {
+    throw new ValidationError(`${wh.code} is already printed in issued IDs, so it can't be changed or cleared.`);
+  }
+  return prisma.warehouse.update({ where: { name }, data: { code: next } });
+}
+
+async function codeInUse(code: string): Promise<boolean> {
+  const [receipts, lots, plans] = await Promise.all([
+    prisma.receipt.count({ where: { id: { startsWith: siteIdPrefixAnyYear("REC", code) } } }),
+    prisma.stageLotAssignment.count({ where: { lotNumber: { startsWith: siteIdPrefixAnyYear("LOT", code) } } }),
+    prisma.deliveryPlan.count({ where: { id: { startsWith: siteIdPrefixAnyYear("DP", code) } } }),
+  ]);
+  return receipts + lots + plans > 0;
+}
+
+const siteIdPrefixAnyYear = (kind: string, code: string) => `${kind}-${code}-`;
 
 export async function addBin(code: string, warehouseName?: string) {
   return prisma.bin.upsert({
