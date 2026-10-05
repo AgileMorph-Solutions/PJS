@@ -111,7 +111,7 @@ step, at the incharge's own warehouse.
 
 ## Setting up
 
-**Demo accounts (dev).** `docker compose up --build` seeds one account per role, all with the same
+**Demo accounts (dev).** `docker compose up --build` seeds one account per role per site, all with the same
 password — `demo-pass-123` unless you set `DEMO_PASSWORD`:
 
 | Username | Role | Warehouse |
@@ -120,12 +120,15 @@ password — `demo-pass-123` unless you set `DEMO_PASSWORD`:
 | `incharge.bouake` | Warehouse Incharge | BOUAKE (Unit) |
 | `manager.bouake` | Branch Manager | BOUAKE (Unit) |
 | `qfs.bouake` | QFS Officer | BOUAKE (Unit) |
+| `incharge.yakro` | Warehouse Incharge | YAKRO FACTORY (Central) |
+| `manager.yakro` | Branch Manager | YAKRO FACTORY (Central) |
+| `qfs.yakro` | QFS Officer | YAKRO FACTORY (Central) |
 
 They are created only if the username doesn't exist yet (a changed password is never reset), and the
 Branch Manager starts with **no suppliers** — sign in as `incharge.bouake` and assign some under
 *Supplier assignment*. The password is publicly known: for anything shared or deployed, set
 `SEED_DEMO_USERS=false` (nothing runs without `SEED_DEMO_USERS=true` and a `DEMO_PASSWORD`) and
-create real accounts instead. There is no Central-warehouse demo user; create one under Users.
+create real accounts instead.
 
 **Your own first admin.** Set `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD`; the seed
 creates it only while no admin exists. With no password set, none is created.

@@ -10,8 +10,11 @@ afterAll(() => prisma.$disconnect());
 // Demo accounts are opt-in and must satisfy the same rule the users API enforces: non-admins sit on
 // a typed site, or they'd have no section to land in.
 describe("demo users", () => {
-  it("covers each of the four roles exactly once", () => {
-    expect(DEMO_USERS.map((u) => u.role).sort()).toEqual(["admin", "branch_manager", "qfs_officer", "warehouse_incharge"]);
+  it("covers every role, and every non-admin role on both a Unit and a Central site", () => {
+    expect(new Set(DEMO_USERS.map((u) => u.role))).toEqual(new Set(["admin", "branch_manager", "qfs_officer", "warehouse_incharge"]));
+    for (const role of ["branch_manager", "qfs_officer", "warehouse_incharge"]) {
+      expect(DEMO_USERS.filter((u) => u.role === role).map((u) => u.warehouse).sort(), role).toEqual(["BOUAKE", "YAKRO FACTORY"]);
+    }
     expect(DEMO_USERS.every((u) => isRole(u.role))).toBe(true);
   });
 
