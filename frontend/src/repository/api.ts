@@ -446,7 +446,11 @@ export interface LinkedTransfer {
   binNo: string | null;
   truckRegistration: string | null;
   bagsReceived: number | null;
+  bagsDispatched: number | null;
+  netWeightDispatched: number | null;
+  idTransfer: string | null;
   sourceWarehouse: string;
+  destinationWarehouse: string | null;
   ficheAgrees: boolean;
 }
 
@@ -464,6 +468,10 @@ export interface LinkedDispatch {
   bin: string | null;
   truckNo: string | null;
   totalBags: number | null;
+  vyogeNumber: string | null;
+  transporter: string | null;
+  driver: string | null;
+  netWeight: number | null;
 }
 
 /** WarehouseDischarge row sharing this receipt's Lot Number — includes both the unit-warehouse row
@@ -476,6 +484,8 @@ export interface LinkedWarehouseReceiving {
   lotNo: string;
   arrivalDate: string | null;
   totalRecd: number | null;
+  truckNo: string | null;
+  netWeight: number | null;
   ficheAgrees: boolean;
 }
 
@@ -492,6 +502,16 @@ export interface LinkedDryingBatchRow {
   sourceBinNo: string | null;
   destinationBinNo: string | null;
   destinationRaw: string | null;
+  inputBags: number | null;
+  outputBags: number | null;
+  inputMoisturePct: number | null;
+  outputMoisturePct: number | null;
+  inputKor: number | null;
+  outputKor: number | null;
+  issuedNetWeightKg: number | null;
+  receivedNetWeightKg: number | null;
+  dryingLossKg: number | null;
+  remarks: string | null;
   ficheAgrees: boolean;
 }
 

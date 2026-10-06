@@ -78,7 +78,7 @@ export function Layout({ children }: { children: ReactNode }) {
               </div>
               <button
                 type="button"
-                onClick={() => { void logout().then(() => navigate("/")); }}
+                onClick={() => { void logout(); }}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-xs font-semibold hover:bg-warmstone-50 transition-all shadow-xs"
               >
                 <span className="material-symbols-outlined text-[16px]">logout</span>
@@ -88,7 +88,7 @@ export function Layout({ children }: { children: ReactNode }) {
           )}
         </header>
         <main className="pt-16 min-h-screen">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
+          <div className="max-w-[1760px] mx-auto px-4 sm:px-6 lg:px-8 py-6">{children}</div>
         </main>
       </div>
     </div>

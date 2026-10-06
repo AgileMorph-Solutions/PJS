@@ -49,6 +49,10 @@ services:
       # every request. Set them in .env.prod; demo accounts are deliberately not enabled here.
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # "demo" seeds a small invented data set instead of the client's real workbooks (demoData.ts).
+      SEED_MODE: ${SEED_MODE:-}
+      SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

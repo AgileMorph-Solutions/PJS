@@ -49,6 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try { await api.logout(); } catch (e) { if (!(e instanceof ApiError)) throw e; }
     setMe(null);
     setStatus("anonymous");
+    // The session itself is revoked server-side and its cookie cleared by the logout call. What is
+    // left is this browser: remembered site, drafts, and every cached record in memory. A full
+    // reload drops the in-memory state in one go, so the next person to sign in on this machine
+    // starts from nothing of the previous user's.
+    try { localStorage.clear(); sessionStorage.clear(); } catch { /* storage blocked — nothing to clear */ }
+    window.location.replace("/");
   }, []);
 
   const value = useMemo(() => ({ status, me, login, logout }), [status, me, login, logout]);

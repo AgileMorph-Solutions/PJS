@@ -13,18 +13,13 @@ import { computeDerivedFields } from "../../domain/receiptMath";
 import { StageForm } from "../../components/StageForm";
 import { DecisionBranch } from "../../components/DecisionBranch";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
-import { StatBlock } from "../../components/ui/StatBlock";
+import { LotJourney } from "../../components/receipt/LotJourney";
+import { LotOverview } from "../../components/receipt/LotOverview";
+import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
+import { buildJourney } from "../../components/receipt/lotJourney";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
-
-/** Real fields only — no invented Crop Year/Harvest Batch/security-seal chrome. Pulled straight
- * out of the actual stage data the record already has, or left out if the record doesn't have it
- * yet (never a placeholder number). */
-function realStat(values: Record<string, string> | undefined, label: string): string | undefined {
-  const v = values?.[label];
-  return v && v.trim() ? v : undefined;
-}
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -44,6 +39,7 @@ export function ReceiptDetailPage() {
   const canEdit = useCanEditDirectly();
   const submissions = useSubmissions({ receiptId: id });
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState<"overview" | "stages" | "activity">("overview");
 
   const otherInSameBin = useMemo(
     () => (receipt?.binNo ? receipts.filter((r) => r.binNo === receipt.binNo && r.id !== receipt.id) : []),
@@ -61,18 +57,13 @@ export function ReceiptDetailPage() {
 
   const status = deriveStatus(receipt);
   const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
+  const journey = buildJourney(receipt, links);
 
   // Once a Lot exists, that's the record's real-world identity from here on — the receipt id
   // stays as the underlying record key, but the page leads with what a warehouse user actually
   // calls it.
   const primaryLabel = receipt.lotNo ? `Lot ${receipt.lotNo}` : receipt.id;
 
-  const netWt = realStat(receipt.stageData["n-netwt"], "NET WT KGS");
-  const sacs = realStat(receipt.stageData["n-unload"], "SACS (bags)");
-  const bonSacs = realStat(receipt.stageData["n-unload"], "BON SACS (good bags)");
-  const moisture = realStat(receipt.stageData["n-qfs"], "MOIS. (moisture)");
-  const kor = realStat(receipt.stageData["n-qfs"], "KOR");
-  const qfsBranch = receipt.branches["n-qfs"];
   // The three decision stages sit in their natural position within `stages` (n-qfs between
   // n-verify and n-gross, etc.), so "the record's current stage is a decision" is exactly "there's
   // an unmade decision waiting right here" — no separate lookahead needed.
@@ -82,6 +73,7 @@ export function ReceiptDetailPage() {
   // linked/cross-site view is by design (see this page's own header comment), so the breadcrumb
   // names whichever section this URL actually belongs to, not a guess from the record itself.
   const backHref = `/${site.slug}/receipts`;
+
 
   return (
     <div className="space-y-5">
@@ -157,39 +149,54 @@ export function ReceiptDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
-          <StatBlock icon="scale" label="Net weight" value={netWt ? `${netWt} kg` : "—"} sub={netWt ? "Weighed" : "Not yet weighed"} />
-          <StatBlock
-            icon="inventory_2"
-            label="Bag count"
-            value={sacs ?? "—"}
-            sub={bonSacs ? `${bonSacs} good bags` : sacs ? "Bags unloaded" : "Not yet unloaded"}
-          />
-          <StatBlock
-            icon="science"
-            label="Quality inspection"
-            value={qfsBranch === "pass" ? "Passed" : qfsBranch === "fail" ? "Failed" : "Pending"}
-            sub={moisture ? `${moisture}% moisture${kor ? ` · KOR ${kor}` : ""}` : "No QFS result yet"}
-            tone={qfsBranch === "pass" ? "success" : qfsBranch === "fail" ? "danger" : "default"}
-          />
-          <StatBlock icon="local_shipping" label="Vehicle" value={receipt.vehicleNo || "—"} sub={receipt.warehouse || "No warehouse yet"} />
+        <div className="pt-6">
+          <LotJourney steps={journey} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: the real ~16-stage process, one card per stage */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h2 className="text-base font-bold text-warmstone-900 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[19px] text-brand-700">fact_check</span>
-              Delivery stages
-            </h2>
-            <span className="text-xs font-medium text-warmstone-500">
-              {RECEPTION_STEPS.map((st) => st.title).join(" → ")}
-            </span>
-          </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-warmstone-200 overflow-x-auto">
+        {([
+          ["overview", "Overview", "dashboard"],
+          ["stages", "Stages & entry", "fact_check"],
+          ["activity", `Activity (${receipt.timeline.length})`, "history"],
+        ] as const).map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              tab === id ? "border-brand-700 text-brand-700" : "border-transparent text-warmstone-500 hover:text-warmstone-800 hover:border-warmstone-200"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[17px]">{icon}</span>
+            {label}
+          </button>
+        ))}
+      </div>
 
+      {tab === "overview" && (
+        <div className="space-y-6">
+          <LotOverview receipt={receipt} links={links} othersInBin={otherInSameBin} siteSlug={site.slug} />
+          <div>
+            <h2 className="text-base font-bold text-warmstone-900 flex items-center gap-2 mb-3 px-1">
+              <span className="material-symbols-outlined text-[19px] text-brand-700">account_tree</span>
+              Everything recorded against {receipt.lotNo ? `Lot ${receipt.lotNo}` : "this receipt"}
+            </h2>
+            <DownstreamRecords links={links} loading={linksLoading} />
+          </div>
+        </div>
+      )}
+
+      {tab === "stages" && (
+        <div className="space-y-4 max-w-4xl">
           {!canEdit && <SubmissionCard receipt={receipt} role={me.role} />}
+          {pendingDecision && canEdit && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-ambernut-50 border border-ambernut-200 text-[13px] text-ambernut-900">
+              <span className="material-symbols-outlined text-[18px]">flag</span>
+              <span><strong>Decision needed:</strong> {pendingDecision.title} — open it below to record it.</span>
+            </div>
+          )}
 
           {stages.map((stage, stageIndex) => {
             // The reception stages are grouped into the seven steps the team works through
@@ -309,10 +316,6 @@ export function ReceiptDetailPage() {
             </details>
           )}
 
-        </div>
-
-        {/* Right: real cross-references only */}
-        <div className="lg:col-span-4 space-y-5 lg:sticky lg:top-20">
           {canEdit && submissions.rows.length > 0 && (
             <CollapsibleCard
               title="Submissions"
@@ -328,385 +331,26 @@ export function ReceiptDetailPage() {
               </div>
             </CollapsibleCard>
           )}
-
-          {pendingDecision && canEdit && (
-            <div className="bg-white rounded-2xl border border-warmstone-200 p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Next action</span>
-                <span className="px-2 py-0.5 rounded-full bg-ambernut-100 text-ambernut-800 text-[11px] font-bold border border-ambernut-200">
-                  Decision needed
-                </span>
-              </div>
-              <p className="text-xs text-warmstone-500 leading-relaxed">Open the stage below to record it.</p>
-            </div>
-          )}
-
-          {(linksLoading || links) && (
-            <LinkedRecordsCard links={links} loading={linksLoading} siteSlug={site.slug} />
-          )}
-
-          {receipt.binNo && (
-            <CollapsibleCard title="Also in this Bin" meta={otherInSameBin.length}>
-              <div className="mb-3">
-                <Link
-                  to={`/masters/bins/${receipt.binNo}`}
-                  className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-md hover:bg-brand-100 transition-colors"
-                >
-                  View Bin {receipt.binNo}
-                </Link>
-              </div>
-              {otherInSameBin.length === 0 ? (
-                <p className="text-[12.5px] text-warmstone-500">No other receipts share this Bin right now.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {otherInSameBin.slice(0, 6).map((r) => (
-                    <li key={r.id}>
-                      <Link
-                        to={`/${site.slug}/receipts/${r.id}`}
-                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 hover:bg-warmstone-100 text-xs font-medium text-warmstone-700 transition-colors"
-                      >
-                        <span>{r.lotNo ? `Lot ${r.lotNo}` : r.id}</span>
-                        <ReceiptStatusPill status={deriveStatus(r)} />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CollapsibleCard>
-          )}
-
-          <CollapsibleCard title="Activity timeline" meta={receipt.timeline.length}>
-            {receipt.timeline.length === 0 && <p className="text-[12.5px] text-warmstone-400">Nothing recorded yet.</p>}
-            <ul className="space-y-3">
-              {timelinePage.pageRows.map((e, i) => (
-                <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
-                  <ReceiptStatusPill status={e.status} />
-                  <span className="text-[11px] text-warmstone-400">
-                    {new Date(e.at).toLocaleString()}{e.actor ? ` · ${e.actor}` : ""}
-                  </span>
-                  {e.note && <p className="text-[12px] text-warmstone-500">{e.note}</p>}
-                </li>
-              ))}
-            </ul>
-            <Pagination state={timelinePage} />
-          </CollapsibleCard>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Cross-references this receipt to drying jobs / transfer receipts about the same physical batch,
- * joined server-side on Lot Number (see backend/src/services/receiptLinks.ts's header for the
- * accuracy tradeoff this accepts: each warehouse assigns its own independent 1..N Lot sequence, so
- * most Lot matches below are a coincidental collision with an unrelated batch, not a confirmed
- * link — measured at only 5 of 365 lot-matched transfers and 0 of 40 lot-matched drying rows also
- * sharing this receipt's FICHE). Every row's `ficheAgrees` flags the rare genuinely-confirmed case;
- * everything else is shown with a standing warning rather than presented as verified.
- */
-function LinkedRecordsCard({
-  links,
-  loading,
-  siteSlug,
-}: {
-  links: import("../../repository/api").ReceiptLinks | null;
-  loading: boolean;
-  siteSlug: import("../../config/sites").SiteSlug;
-}) {
-  return (
-    <CollapsibleCard
-      title="Linked records"
-      meta={loading ? "checking…" : links?.lotNo ? `Lot ${links.lotNo}` : "no Lot"}
-      defaultOpen={!loading && Boolean(links?.lotNo)}
-    >
-      {loading || !links ? (
-        <p className="text-[12.5px] text-warmstone-400 animate-pulse">Checking linked records…</p>
-      ) : !links.lotNo && links.dispatches.length === 0 ? (
-        <p className="text-[12.5px] text-warmstone-500">
-          No Lot Number recorded on this receipt yet (assigned at the unit-warehouse discharge stage)
-          and no dispatch line matches this receipt's FICHE either — nothing to cross-reference yet.
-        </p>
-      ) : !links.lotNo ? (
-        <DispatchesSection dispatches={links.dispatches} siteSlug={siteSlug} />
-      ) : links.dryingJobs.length === 0 && links.transfers.length === 0 && links.dispatches.length === 0
-          && links.warehouseReceiving.length === 0 && links.dryingBatches.length === 0
-          && links.btmIntakes.length === 0 ? (
-        <p className="text-[12.5px] text-warmstone-500">
-          Lot {links.lotNo} is recorded, but nothing downstream shares that Lot Number or this
-          receipt's FICHE yet — this batch likely hasn't moved past this stage.
-        </p>
-      ) : (
-        <div className="space-y-3.5">
-          <div className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-ambernut-50 border border-ambernut-200">
-            <span className="material-symbols-outlined text-[16px] text-ambernut-700 mt-0.5">warning</span>
-            <p className="text-[11.5px] text-ambernut-800 leading-relaxed">
-              Lot numbers restart at every warehouse, so most matches below are a different truck
-              that happens to share this number — not the same batch. Only rows tagged{" "}
-              <span className="font-bold">"confirmed — same FICHE"</span> are verified.
-            </p>
-          </div>
-          {links.fiche && (
-            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-brand-50 border border-brand-200">
-              <span className="material-symbols-outlined text-[15px] text-brand-700">description</span>
-              <span className="text-[12.5px] font-semibold text-brand-800">
-                This receipt's own FICHE: {links.fiche}
-              </span>
-            </div>
-          )}
-          <DispatchesSection dispatches={links.dispatches} siteSlug={siteSlug} />
-          <div className="space-y-1">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
-              Bin observed elsewhere, matched on Lot {links.lotNo}
-            </p>
-            {/* Per-source, deliberately never merged into one "the bin" — the same batch is
-                genuinely in a different bin at each stage (received vs. drying), and here most
-                rows aren't even confirmed to be the same batch at all (see the warning above). */}
-            <ul className="space-y-1">
-              {links.transfers.map((t) => (
-                <li key={`t-${t.sn}`} className="text-[12.5px] text-warmstone-700">
-                  Bin {t.binNo || "—"}{" "}
-                  <span className="text-warmstone-400">— transfer SN {t.sn}</span>
-                  <span
-                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                      t.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                    }`}
-                  >
-                    {t.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed — different FICHE"}
-                  </span>
-                </li>
-              ))}
-              {links.dryingJobs.map((d) => (
-                <li key={`d-${d.id}`} className="text-[12.5px] text-warmstone-700">
-                  Bin {d.bin || "—"}{" "}
-                  <span className="text-warmstone-400">— drying {d.id}</span>
-                  <span
-                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                      d.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                    }`}
-                  >
-                    {d.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed — different FICHE"}
-                  </span>
-                </li>
-              ))}
-              {links.dryingBatches.map((b) => (
-                <li key={`b-${b.id}`} className="text-[12.5px] text-warmstone-700">
-                  Bin {b.destinationBinNo || b.sourceBinNo || "—"}
-                  {b.sourceBinNo && b.destinationBinNo && b.sourceBinNo !== b.destinationBinNo && (
-                    <span className="text-warmstone-400"> (from {b.sourceBinNo})</span>
-                  )}{" "}
-                  <span className="text-warmstone-400">— drying batch SN {b.sn}</span>
-                  <span
-                    className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                      b.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                    }`}
-                  >
-                    {b.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed — different FICHE"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {links.transfers.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">Warehouse transfers</p>
-                <Link to="/jute/transfers" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
-                  View all
-                </Link>
-              </div>
-              <ul className="space-y-1.5">
-                {links.transfers.map((t) => (
-                  <li
-                    key={t.sn}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-                  >
-                    <span>
-                      SN {t.sn} · {t.sourceWarehouse} · Bin {t.binNo || "—"}
-                      {t.truckRegistration && <> · truck {t.truckRegistration}</>}
-                      {t.bagsReceived != null && <> · {t.bagsReceived} bags</>}
-                    </span>
-                    <span className="text-warmstone-400">{t.receivedDate || "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {links.dryingJobs.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">Drying jobs</p>
-                <Link to={`/${siteSlug}/drying`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
-                  View all
-                </Link>
-              </div>
-              <ul className="space-y-1.5">
-                {links.dryingJobs.map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-                  >
-                    <span>
-                      {d.id} · {d.status} · Bin {d.bin || "—"}
-                      {d.dryType && <> · {d.dryType}</>}
-                      {d.destination && <> → {d.destination}</>}
-                    </span>
-                    <span className="text-warmstone-400">{d.date || "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {links.warehouseReceiving.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
-                  Warehouse receiving (same Lot, either site)
-                </p>
-                <Link to={`/${siteSlug}/stock`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
-                  View all
-                </Link>
-              </div>
-              <ul className="space-y-1.5">
-                {links.warehouseReceiving.map((w) => (
-                  <li
-                    key={w.id}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-                  >
-                    <span>
-                      SN {w.sn} · {w.warehouseSite}
-                      {w.totalRecd != null && <> · {w.totalRecd} recd</>}
-                      <span
-                        className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          w.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                        }`}
-                      >
-                        {w.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed"}
-                      </span>
-                    </span>
-                    <span className="text-warmstone-400">{w.arrivalDate || "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {links.dryingBatches.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
-                  Drying batches (same Lot)
-                </p>
-                <Link to={`/${siteSlug}/drying`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
-                  View all
-                </Link>
-              </div>
-              <ul className="space-y-1.5">
-                {links.dryingBatches.map((b) => (
-                  <li
-                    key={b.id}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-                  >
-                    <span>
-                      SN {b.sn} · {b.status || "—"} · Bin {b.sourceBinNo || "—"} → {b.destinationBinNo || "—"}
-                      {b.dryType && <> · {b.dryType}</>}
-                      <span
-                        className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                          b.ficheAgrees ? "bg-success-100 text-success-800" : "bg-ambernut-100 text-ambernut-800"
-                        }`}
-                      >
-                        {b.ficheAgrees ? "confirmed — same FICHE" : "unconfirmed"}
-                      </span>
-                    </span>
-                    <span className="text-warmstone-400">{b.dryingDate || "—"}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {links.btmIntakes.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
-                  Production (via linked transfer's BTM)
-                </p>
-                {links.issuedToProduction.length > 0 && (
-                  <Link to="/issued-to-production" className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
-                    View all
-                  </Link>
-                )}
-              </div>
-              <ul className="space-y-1.5">
-                {links.btmIntakes.map((b) => (
-                  <li
-                    key={b.btmNo}
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-                  >
-                    <span>BTM {b.btmNo}</span>
-                    <Link to={`/production/btm/${encodeURIComponent(b.btmNo)}`} className="text-brand-700 font-semibold hover:text-brand-800">
-                      Bin {b.binNo || "—"}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-              {links.issuedToProduction.length > 0 && (
-                <ul className="space-y-1.5 mt-1.5">
-                  {links.issuedToProduction.map((p) => (
-                    <li
-                      key={p.id}
-                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-                    >
-                      <span>Issued to production · {p.sourceBin || "—"} → {p.dryBin || "—"}</span>
-                      <span className="text-warmstone-400">{p.date || "—"}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
         </div>
       )}
-    </CollapsibleCard>
-  );
-}
 
-/** CHARGEMENT dispatch lines matched on this receipt's own FICHE directly — no Lot Number
- * required (WarehouseDispatchLine has no Lot column at all), so this can render even when
- * `links.lotNo` is null. Every row here is a confirmed match (no coincidental-collision caveat),
- * unlike the Lot-joined sections above. */
-function DispatchesSection({
-  dispatches,
-  siteSlug,
-}: {
-  dispatches: import("../../repository/api").LinkedDispatch[];
-  siteSlug: import("../../config/sites").SiteSlug;
-}) {
-  if (dispatches.length === 0) return null;
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-warmstone-400">
-          Dispatches (CHARGEMENT, matched on this receipt's FICHE)
-        </p>
-        <Link to={`/${siteSlug}/dispatches`} className="text-[11px] font-semibold text-brand-700 hover:text-brand-800">
-          View all
-        </Link>
-      </div>
-      <ul className="space-y-1.5">
-        {dispatches.map((d) => (
-          <li
-            key={d.id}
-            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-warmstone-50 text-xs font-medium text-warmstone-700"
-          >
-            <span>{d.warehouseSite || "—"} · Bin {d.bin || "—"} · truck {d.truckNo || "—"}</span>
-            <span className="text-warmstone-400">{d.chargeDate || "—"}</span>
-          </li>
-        ))}
-      </ul>
+      {tab === "activity" && (
+        <div className="max-w-2xl bg-white border border-warmstone-200 rounded-2xl shadow-xs p-5">
+          {receipt.timeline.length === 0 && <p className="text-[12.5px] text-warmstone-400">Nothing recorded yet.</p>}
+          <ul className="space-y-3">
+            {timelinePage.pageRows.map((e, i) => (
+              <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
+                <ReceiptStatusPill status={e.status} />
+                <span className="text-[11px] text-warmstone-400">
+                  {new Date(e.at).toLocaleString()}{e.actor ? ` · ${e.actor}` : ""}
+                </span>
+                {e.note && <p className="text-[12px] text-warmstone-500">{e.note}</p>}
+              </li>
+            ))}
+          </ul>
+          <Pagination state={timelinePage} />
+        </div>
+      )}
     </div>
   );
 }

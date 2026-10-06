@@ -8,6 +8,9 @@ export interface Column<T> {
   label: string;
   render: (row: T) => ReactNode;
   width?: string;
+  /** Keep this column's cells on one line (IDs, codes) so a narrow table squeezes the free-text
+   * columns instead of breaking a value mid-way. */
+  nowrap?: boolean;
 }
 
 interface Props<T> {
@@ -45,7 +48,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
               <th
                 key={c.label}
                 style={c.width ? { width: c.width } : undefined}
-                className="text-left px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap"
+                className="text-left px-3 py-3 text-[11px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap"
               >
                 {c.label}
               </th>
@@ -67,7 +70,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, emptyTitle, emptyH
                 onKeyDown={href ? (e) => onKeyDown(e, href) : undefined}
               >
                 {columns.map((c) => (
-                  <td key={c.label} className="px-4 py-3 text-warmstone-800 align-middle">
+                  <td key={c.label} className={`px-3 py-3 text-warmstone-800 align-middle ${c.nowrap ? "whitespace-nowrap" : ""}`}>
                     {c.render(row)}
                   </td>
                 ))}

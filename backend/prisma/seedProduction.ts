@@ -35,6 +35,10 @@ interface Headers {
 }
 
 async function main() {
+  if (process.env.SEED_MODE === "demo") {
+    console.log("SEED_MODE=demo — real production data skipped.");
+    return;
+  }
   if ((await prisma.btmIntake.count()) > 0) {
     console.log("Production already seeded — skipping.");
     return;

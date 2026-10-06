@@ -14,13 +14,13 @@ import type { Role } from "@anagroci/contract/data/roles";
 import { hashPassword } from "../src/auth/password.js";
 
 export const DEMO_USERS: { username: string; displayName: string; role: Role; warehouse: string | null }[] = [
-  { username: "admin", displayName: "Demo Admin", role: "admin", warehouse: null },
-  { username: "incharge.bouake", displayName: "Demo Warehouse Incharge (Bouaké)", role: "warehouse_incharge", warehouse: "BOUAKE" },
-  { username: "manager.bouake", displayName: "Demo Branch Manager (Bouaké)", role: "branch_manager", warehouse: "BOUAKE" },
-  { username: "qfs.bouake", displayName: "Demo QFS Officer (Bouaké)", role: "qfs_officer", warehouse: "BOUAKE" },
-  { username: "incharge.yakro", displayName: "Demo Warehouse Incharge (Yakro Factory)", role: "warehouse_incharge", warehouse: "YAKRO FACTORY" },
-  { username: "manager.yakro", displayName: "Demo Branch Manager (Yakro Factory)", role: "branch_manager", warehouse: "YAKRO FACTORY" },
-  { username: "qfs.yakro", displayName: "Demo QFS Officer (Yakro Factory)", role: "qfs_officer", warehouse: "YAKRO FACTORY" },
+  { username: "admin", displayName: "Administrator", role: "admin", warehouse: null },
+  { username: "incharge.bouake", displayName: "Kouadio Yao (Warehouse Incharge, Bouaké)", role: "warehouse_incharge", warehouse: "BOUAKE" },
+  { username: "manager.bouake", displayName: "Traoré Mariam (Branch Manager, Bouaké)", role: "branch_manager", warehouse: "BOUAKE" },
+  { username: "qfs.bouake", displayName: "Koné Seydou (QFS Officer, Bouaké)", role: "qfs_officer", warehouse: "BOUAKE" },
+  { username: "incharge.yakro", displayName: "N'Guessan Aya (Warehouse Incharge, Yakro Factory)", role: "warehouse_incharge", warehouse: "YAKRO FACTORY" },
+  { username: "manager.yakro", displayName: "Bamba Lassina (Branch Manager, Yakro Factory)", role: "branch_manager", warehouse: "YAKRO FACTORY" },
+  { username: "qfs.yakro", displayName: "Diallo Fatou (QFS Officer, Yakro Factory)", role: "qfs_officer", warehouse: "YAKRO FACTORY" },
 ];
 
 export async function ensureDemoUsers(prisma: PrismaClient, env: NodeJS.ProcessEnv = process.env): Promise<string[]> {

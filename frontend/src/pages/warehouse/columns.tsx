@@ -18,16 +18,29 @@ export const fiche = (r: ReceiptRecord) => verifyField(r, "FICHE");
  * "WH NO."). */
 export const storeCode = (r: ReceiptRecord) => gateField(r, "WH NO.");
 
-const baseColumns: Column<ReceiptRecord>[] = [
-  { label: "Receipt ID", render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> },
-  { label: "Arrival date", render: (r) => r.arrivalDate || "—" },
-  { label: "Supplier", render: (r) => r.supplierName || "—" },
-  { label: "LBA code", render: (r) => <span className="font-mono text-[12.5px]">{r.lbaCode || "—"}</span> },
-  { label: "Fiche", render: (r) => <span className="font-mono text-[12.5px]">{fiche(r) || "—"}</span> },
-  { label: "Fiche code", render: (r) => <span className="font-mono text-[12.5px]">{verifyField(r, "FICHE CODE") || "—"}</span> },
-  { label: "Ref.", render: (r) => <span className="font-mono text-[12.5px]">{verifyField(r, "REF.") || "—"}</span> },
-  { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
-];
+/** Two lines in one cell — the value, and a quieter companion under it. Merging related columns
+ * (supplier + its LBA code, fiche + fiche code, vehicle + store, lot + bin) is what lets the whole
+ * register fit a normal screen without sideways scrolling. */
+const Stack = ({ main, sub, mono }: { main: string; sub?: string; mono?: boolean }) => (
+  <div className="leading-snug">
+    <div className={mono ? "font-mono text-[12.5px]" : "font-medium"}>{main || "—"}</div>
+    {sub && <div className="font-mono text-[11px] text-warmstone-400">{sub}</div>}
+  </div>
+);
+
+const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
+const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", nowrap: true, render: (r) => r.arrivalDate || "—" };
+const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", render: (r) => <Stack main={r.supplierName} sub={r.lbaCode} /> };
+const ficheColumn: Column<ReceiptRecord> = {
+  label: "Fiche",
+  nowrap: true,
+  render: (r) => <Stack mono main={fiche(r)} sub={[verifyField(r, "FICHE CODE"), verifyField(r, "REF.")].filter(Boolean).join(" · ")} />,
+};
+const vehicleColumn = (withStore: boolean): Column<ReceiptRecord> => ({
+  label: withStore ? "Vehicle / Store" : "Vehicle",
+  nowrap: true,
+  render: (r) => <Stack main={r.vehicleNo} sub={withStore ? storeCode(r) : undefined} />,
+});
 
 /** One column per site, built with the current downstream-status map — everything that used to be
  * its own sidebar page (Dispatch to Central, Receiving from Unit, Issue to Production) is visible
@@ -52,8 +65,8 @@ const sourceColumn: Column<ReceiptRecord> = {
 };
 
 const tailColumns: Column<ReceiptRecord>[] = [
-  { label: "Lot / Bin", render: (r) => `${r.lotNo || "—"} / ${r.binNo || "—"}` },
-  { label: "Status", render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
+  { label: "Lot / Bin", nowrap: true, render: (r) => <Stack mono main={r.lotNo ?? ""} sub={r.binNo} /> },
+  { label: "Status", nowrap: true, render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
 ];
 
 /**
@@ -69,18 +82,16 @@ const tailColumns: Column<ReceiptRecord>[] = [
  * table doesn't get it.
  */
 export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string, DownstreamStatus>): Column<ReceiptRecord>[] {
-  // Downstream comes right after Status, ahead of the lower-value Source column — it's the reason
-  // this column exists at all (everything Dispatch to Central/Receiving from Unit/Issue to
-  // Production used to show on their own pages), so it shouldn't be the last thing scrolled to on
-  // an already-wide table.
-  const dl = downstreamColumn(downstreamStatus);
-  return siteSlug === "unit"
-    ? [
-        ...baseColumns,
-        { label: "Store", render: (r) => <span className="font-mono text-[12.5px]">{storeCode(r) || "—"}</span> },
-        ...tailColumns,
-        dl,
-        sourceColumn,
-      ]
-    : [...baseColumns, ...tailColumns, dl, sourceColumn];
+  // Downstream comes right after Status — it is the reason that column exists (everything Dispatch
+  // to Central / Receiving from Unit / Issue to Production used to show on their own pages).
+  return [
+    idColumn,
+    arrivalColumn,
+    supplierColumn,
+    ficheColumn,
+    vehicleColumn(siteSlug === "unit"),
+    ...tailColumns,
+    downstreamColumn(downstreamStatus),
+    sourceColumn,
+  ];
 }

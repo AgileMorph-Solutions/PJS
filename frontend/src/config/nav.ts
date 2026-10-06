@@ -39,13 +39,14 @@ export const NAV: NavSection[] = [
     // Reception instead (a status column plus upload panels for each of those workbooks — see
     // ReceiptsListPage.tsx) so they no longer need their own sidebar entries. Delivery plans and
     // Transfers (Oct 2026) are the two new ones: planning before a truck arrives, and moving Lots on.
+    //
+    // Lots & Bins, Drying and Transfers (/:site/stock, /drying, /transfers) are deliberately not
+    // linked any more (Oct 2026): a Lot's bin, drying and movement are all on its Reception detail
+    // page. The routes and pages still exist — to bring one back, add its leaf here again.
     label: "Warehouse",
     items: [
       { label: "Delivery plans", sitePath: "delivery-plans", icon: "event_upcoming", roles: ["admin", "warehouse_incharge"] },
       { label: "Reception", sitePath: "receipts", icon: "receipt_long" },
-      { label: "Lots & Bins", sitePath: "stock", icon: "grid_view", roles: ["admin", "warehouse_incharge"] },
-      { label: "Drying", sitePath: "drying", icon: "wb_sunny", roles: ["admin", "warehouse_incharge"] },
-      { label: "Transfers", sitePath: "transfers", icon: "swap_horiz", roles: ["admin", "warehouse_incharge"] },
     ],
   },
   {

@@ -24,6 +24,7 @@ import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../src/stageStore.js";
 import { hashPassword } from "../src/auth/password.js";
 import { ensureDemoUsers } from "./demoUsers.js";
+import { seedDemoData } from "./demoData.js";
 import { applyRenumber, planRenumber } from "../src/services/renumber.js";
 
 const prisma = new PrismaClient();
@@ -143,6 +144,13 @@ async function main() {
   await ensureBootstrapAdmin();
   const demo = await ensureDemoUsers(prisma);
   if (demo.length) console.log(`Created demo users: ${demo.join(", ")}.`);
+
+  // SEED_MODE=demo swaps the client's real workbooks for a small invented set (see demoData.ts);
+  // unset, nothing here changes.
+  if (process.env.SEED_MODE === "demo") {
+    await seedDemoData(prisma);
+    return;
+  }
 
   if ((await prisma.receipt.count()) > 0) {
     console.log("Database already seeded — skipping.");

@@ -58,7 +58,12 @@ export interface LinkedTransfer {
   binNo: string | null;
   truckRegistration: string | null;
   bagsReceived: number | null;
+  bagsDispatched: number | null;
+  netWeightDispatched: number | null;
+  /** The production BTM number this transfer feeds, when it has one. */
+  idTransfer: string | null;
   sourceWarehouse: string;
+  destinationWarehouse: string | null;
   ficheAgrees: boolean;
 }
 
@@ -77,6 +82,10 @@ export interface LinkedDispatch {
   bin: string | null;
   truckNo: string | null;
   totalBags: number | null;
+  vyogeNumber: string | null;
+  transporter: string | null;
+  driver: string | null;
+  netWeight: number | null;
 }
 
 /** WarehouseDischarge rows sharing this receipt's Lot Number — the DISCHARGEMENT sheet's own row
@@ -90,6 +99,8 @@ export interface LinkedWarehouseReceiving {
   lotNo: string;
   arrivalDate: string | null;
   totalRecd: number | null;
+  truckNo: string | null;
+  netWeight: number | null;
   ficheAgrees: boolean;
 }
 
@@ -109,6 +120,16 @@ export interface LinkedDryingBatchRow {
   sourceBinNo: string | null;
   destinationBinNo: string | null;
   destinationRaw: string | null;
+  inputBags: number | null;
+  outputBags: number | null;
+  inputMoisturePct: number | null;
+  outputMoisturePct: number | null;
+  inputKor: number | null;
+  outputKor: number | null;
+  issuedNetWeightKg: number | null;
+  receivedNetWeightKg: number | null;
+  dryingLossKg: number | null;
+  remarks: string | null;
   ficheAgrees: boolean;
 }
 
@@ -139,6 +160,8 @@ export interface ReceiptLinks {
   dryingBatches: LinkedDryingBatchRow[];
   issuedToProduction: LinkedIssuedToProduction[];
 }
+
+const num = (v: { toString(): string } | null | undefined) => (v === null || v === undefined ? null : Number(v.toString()));
 
 /** DATE -> "YYYY-MM-DD"; falls back to the hand-typed original text when the source cell wasn't a
  * real date (11 real transfer rows are like this) — mirrors services/ledgers.ts's RAW_FALLBACK for
@@ -173,11 +196,15 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
   const dispatches = fiche
     ? (await prisma.warehouseDispatchLine.findMany({
         where: { ficheCca: fiche },
-        select: { id: true, chargeDate: true, chargeDateRaw: true, warehouseSite: true, bin: true, truckNo: true, totalBags: true },
+        select: {
+          id: true, chargeDate: true, chargeDateRaw: true, warehouseSite: true, bin: true, truckNo: true, totalBags: true,
+          vyogeNumber: true, transporter: true, driver: true, netWeight: true,
+        },
         orderBy: { chargeDate: "asc" },
       })).map((d) => ({
         id: d.id, chargeDate: formatReceivedDate(d.chargeDate, d.chargeDateRaw),
         warehouseSite: d.warehouseSite, bin: d.bin, truckNo: d.truckNo, totalBags: d.totalBags,
+        vyogeNumber: d.vyogeNumber, transporter: d.transporter, driver: d.driver, netWeight: num(d.netWeight),
       }))
     : [];
 
@@ -198,13 +225,17 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       where: byLotOrFiche("lotNo", lotNo, "noFiche", fiche),
       select: {
         sn: true, receivedDate: true, rawDate: true, lotNo: true, binNo: true,
-        truckRegistration: true, bagsReceived: true, sourceWarehouse: true, idTransfer: true, noFiche: true,
+        truckRegistration: true, bagsReceived: true, bagsDispatched: true, netWeightDispatched: true,
+        sourceWarehouse: true, destinationWarehouse: true, idTransfer: true, noFiche: true,
       },
       orderBy: { sn: "asc" },
     }),
     prisma.warehouseDischarge.findMany({
       where: byLotOrFiche("lotNo", lotNo, "ficheCca", fiche),
-      select: { id: true, sn: true, warehouseSite: true, lotNo: true, arrivalDate: true, arrivalDateRaw: true, totalRecd: true, ficheCca: true },
+      select: {
+        id: true, sn: true, warehouseSite: true, lotNo: true, arrivalDate: true, arrivalDateRaw: true, totalRecd: true,
+        ficheCca: true, truckNo: true, netWeight: true,
+      },
       orderBy: { warehouseSite: "asc" },
     }),
     prisma.dryingBatch.findMany({
@@ -212,6 +243,8 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       select: {
         id: true, sn: true, dryingDate: true, dryingDateRaw: true, warehouseSite: true, status: true,
         dryType: true, sourceBinNo: true, destinationBinNo: true, destinationRaw: true, ficheNoRaw: true,
+        inputBagsForDrying: true, outputBagsAfterDrying: true, inputMoisturePct: true, outputMoisturePct: true,
+        inputKor: true, outputKor: true, issuedNetWeightKg: true, receivedNetWeightKg: true, dryingLossKg: true, remarks: true,
       },
       orderBy: { sn: "asc" },
     }),
@@ -252,20 +285,29 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       binNo: r.binNo,
       truckRegistration: r.truckRegistration,
       bagsReceived: r.bagsReceived,
+      bagsDispatched: r.bagsDispatched,
+      netWeightDispatched: r.netWeightDispatched,
+      idTransfer: r.idTransfer,
       sourceWarehouse: r.sourceWarehouse,
+      destinationWarehouse: r.destinationWarehouse,
       ficheAgrees: ficheAgrees(r.noFiche),
     })),
     btmIntakes,
     dispatches,
     warehouseReceiving: warehouseReceivingRows.map((w) => ({
       id: w.id, sn: w.sn, warehouseSite: w.warehouseSite, lotNo: w.lotNo,
-      arrivalDate: formatReceivedDate(w.arrivalDate, w.arrivalDateRaw), totalRecd: w.totalRecd,
+      arrivalDate: formatReceivedDate(w.arrivalDate, w.arrivalDateRaw), totalRecd: w.totalRecd, truckNo: w.truckNo, netWeight: num(w.netWeight),
       ficheAgrees: ficheAgrees(w.ficheCca),
     })),
     dryingBatches: dryingBatchRows.map((b) => ({
       id: b.id, sn: b.sn, dryingDate: formatReceivedDate(b.dryingDate, b.dryingDateRaw),
       warehouseSite: b.warehouseSite, status: b.status, dryType: b.dryType,
       sourceBinNo: b.sourceBinNo, destinationBinNo: b.destinationBinNo, destinationRaw: b.destinationRaw,
+      inputBags: b.inputBagsForDrying, outputBags: b.outputBagsAfterDrying,
+      inputMoisturePct: num(b.inputMoisturePct), outputMoisturePct: num(b.outputMoisturePct),
+      inputKor: num(b.inputKor), outputKor: num(b.outputKor),
+      issuedNetWeightKg: num(b.issuedNetWeightKg), receivedNetWeightKg: num(b.receivedNetWeightKg),
+      dryingLossKg: num(b.dryingLossKg), remarks: b.remarks,
       ficheAgrees: ficheAgrees(b.ficheNoRaw),
     })),
     issuedToProduction: issuedToProductionRows.map((p) => ({

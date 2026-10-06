@@ -37,7 +37,7 @@ export function DeliveryPlansPage() {
   const canEdit = useCanEditDirectly();
   const { masters, createReceipt } = useTracking();
   const { plans, refetch } = useDeliveryPlans(site.warehouseName);
-  const search = useTableSearch(plans, (p) => [p.id, p.supplierName, p.supplierCode, p.truckNo, p.expectedTruckType]);
+  const search = useTableSearch(plans, (p) => [p.id, p.supplierName, p.supplierCode, p.truckNo, p.expectedTruckType, p.remarks]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -95,12 +95,15 @@ export function DeliveryPlansPage() {
   const columns: Column<DeliveryPlan>[] = [
     { label: "Plan", render: (p) => <span className="font-mono text-[12.5px]">{p.id}</span> },
     { label: "Supplier", render: (p) => <span>{p.supplierName}{p.supplierCode ? <span className="text-warmstone-400"> · {p.supplierCode}</span> : null}</span> },
-    { label: "Expected", render: (p) => p.expectedArrivalDate },
+    { label: "Planned delivery", render: (p) => p.plannedDeliveryDate ?? "—" },
+    { label: "Expected arrival", render: (p) => p.expectedArrivalDate },
     { label: "Quantity (kg)", render: (p) => (p.expectedQuantityKg === null ? "—" : p.expectedQuantityKg.toLocaleString()) },
     { label: "Truck type", render: (p) => p.expectedTruckType || "—" },
+    { label: "Destination", render: (p) => p.destinationWarehouse },
     { label: "Status", render: (p) => <Pill tone={STATUS[p.deliveryStatus].tone} label={STATUS[p.deliveryStatus].label} /> },
     { label: "Arrived", render: (p) => p.actualArrivalDate ?? "—" },
     { label: "Truck no.", render: (p) => p.truckNo ?? "—" },
+    { label: "Remarks", render: (p) => p.remarks || "—" },
     {
       label: "",
       render: (p) =>
@@ -167,7 +170,7 @@ export function DeliveryPlansPage() {
       {error && <p role="alert" className="px-1 text-[13px] text-danger-700">{error}</p>}
 
       <FilterBar>
-        <input placeholder="Search plan, supplier, truck…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-64" />
+        <input placeholder="Search plan, supplier, truck, remarks…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-64" />
       </FilterBar>
       <DataTable
         columns={columns}
