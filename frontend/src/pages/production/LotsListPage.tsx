@@ -36,7 +36,7 @@ export function LotsListPage() {
   const columns: Column<ProductionLot>[] = [
     { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.lotNo}</span> },
     { label: "Bin", render: (r) => r.binNo },
-    { label: "Source", render: (r) => r.source ?? "—" },
+    { label: "Source", render: (r) => r.source ?? "-" },
     { label: "Created", render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
 
@@ -48,7 +48,7 @@ export function LotsListPage() {
       <PageHeader
         kicker="Production · Phase 3–8"
         title="Lots"
-        lede="A Lot is created at Cooking and carries through Shelling, Borma, and Packing — always belonging to exactly one Bin."
+        lede="A Lot is created at Cooking and carries through Shelling, Borma, and Packing - always belonging to exactly one Bin."
       />
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">

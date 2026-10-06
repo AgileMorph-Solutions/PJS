@@ -29,7 +29,7 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen bg-warmstone-50">
       <AppNav open={navOpen} onClose={() => setNavOpen(false)} />
-      {/* min-w-0 overrides a flex item's default min-width: auto — without it, any wide
+      {/* min-w-0 overrides a flex item's default min-width: auto - without it, any wide
           descendant (a nowrap table, a long badge) stops this column from ever shrinking below
           its content's intrinsic width, blowing the whole page out past the viewport instead of
           letting that one element scroll internally (which overflow-x-auto wrappers already do). */}

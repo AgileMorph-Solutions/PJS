@@ -78,7 +78,7 @@ export function ReceiptsListPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Reception"
-        lede="Every RCN receipt at this site — open one to fill in or review its stages. Dispatch,
+        lede="Every RCN receipt at this site - open one to fill in or review its stages. Dispatch,
           receiving and production status for each receipt shows in the Downstream column below."
         actions={
           <div className="flex items-center gap-3">

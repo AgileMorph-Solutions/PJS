@@ -96,7 +96,7 @@ export function DashboardPage() {
       <PageHeader
         kicker="ANAGROCI · TRACKING"
         title="Dashboard"
-        lede="Receipt status counts — click a tile to see the filtered list."
+        lede="Receipt status counts - click a tile to see the filtered list."
       />
 
       <DateRangeFilter value={range} onChange={setRange} />
@@ -147,7 +147,7 @@ export function DashboardPage() {
         {recent.map((r) => (
           <div key={r.id} className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px]">
             <span className="text-warmstone-600">
-              {r.lotNo ? `Lot ${r.lotNo}` : r.id} · {r.supplierName || "—"} · {r.vehicleNo || "—"}
+              {r.lotNo ? `Lot ${r.lotNo}` : r.id} · {r.supplierName || "-"} · {r.vehicleNo || "-"}
               {r.lotNo && <span className="opacity-60"> · receipt {r.id}</span>}
             </span>
             <ReceiptStatusPill status={deriveStatus(r)} />

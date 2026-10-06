@@ -23,7 +23,7 @@ const TABS: (TabItem & { lede: string })[] = [
     to: "/jute/production",
     label: "Production Issue/Return",
     icon: "sync_alt",
-    lede: "Bags issued to Production, and what's recovered — good, damaged, or repairable.",
+    lede: "Bags issued to Production, and what's recovered - good, damaged, or repairable.",
   },
   {
     to: "/jute/transfers",
@@ -35,7 +35,7 @@ const TABS: (TabItem & { lede: string })[] = [
     to: "/jute/warehouse-activity-ledger",
     label: "Warehouse Activity Ledger",
     icon: "receipt_long",
-    lede: "Every logged warehouse activity — no site column in the source, so this list is unscoped.",
+    lede: "Every logged warehouse activity - no site column in the source, so this list is unscoped.",
   },
 ];
 

@@ -194,7 +194,7 @@ export function ReceiptDetailPage() {
           {pendingDecision && canEdit && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-ambernut-50 border border-ambernut-200 text-[13px] text-ambernut-900">
               <span className="material-symbols-outlined text-[18px]">flag</span>
-              <span><strong>Decision needed:</strong> {pendingDecision.title} — open it below to record it.</span>
+              <span><strong>Decision needed:</strong> {pendingDecision.title} - open it below to record it.</span>
             </div>
           )}
 

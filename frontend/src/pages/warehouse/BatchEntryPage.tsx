@@ -143,7 +143,7 @@ export function BatchEntryPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Add entries"
-        lede="One row per truck. Save creates all of them together — if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
+        lede="One row per truck. Save creates all of them together - if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
         actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
 
@@ -177,7 +177,7 @@ export function BatchEntryPage() {
                           value={r.v["LBA CODE"] ?? ""} onChange={(e) => setValue(r.key, SUPPLIER, e.target.value)}
                           onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
                         >
-                          <option value="">—</option>
+                          <option value="">-</option>
                           {masters.suppliers.map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
                         </select>
                       ) : (

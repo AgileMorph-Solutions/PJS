@@ -57,7 +57,7 @@ export function SubmissionReview({
           {rows.map((r) => (
             <tr key={r.key} className="border-t border-warmstone-100">
               <td className="py-1.5 pr-3 text-warmstone-700">{r.label}</td>
-              {receipt && <td className="py-1.5 pr-3 text-warmstone-400">{r.current || "—"}</td>}
+              {receipt && <td className="py-1.5 pr-3 text-warmstone-400">{r.current || "-"}</td>}
               <td className={`py-1.5 font-semibold ${receipt && r.current !== r.value ? "text-brand-800" : "text-warmstone-900"}`}>{r.value}</td>
             </tr>
           ))}
@@ -66,7 +66,7 @@ export function SubmissionReview({
       {!pending && (
         <p className="text-[12.5px] text-warmstone-500">
           {submission.status === "approved" ? "Approved" : "Rejected"} by {submission.reviewedBy}
-          {submission.rejectReason ? ` — ${submission.rejectReason}` : ""}
+          {submission.rejectReason ? ` - ${submission.rejectReason}` : ""}
         </p>
       )}
       {error && <p role="alert" className="text-[12.5px] text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
@@ -105,7 +105,7 @@ export function SubmissionReview({
               Cancel
             </button>
           </div>
-          <p className="text-[11.5px] text-warmstone-500">Rejection is final — the submitter can't resubmit. You can correct the receipt directly afterwards.</p>
+          <p className="text-[11.5px] text-warmstone-500">Rejection is final - the submitter can't resubmit. You can correct the receipt directly afterwards.</p>
         </div>
       )}
     </div>

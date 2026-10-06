@@ -88,12 +88,12 @@ export function ProductionBinDetailPage() {
         <span className="font-mono">{row.binNo}</span>
       </div>
 
-      <PageHeader kicker="Production · Bin" title={row.binNo} lede="The unique identity a physical set of cashews is tracked by — every BTM lands in exactly one Bin, and every Lot is cooked from exactly one." />
+      <PageHeader kicker="Production · Bin" title={row.binNo} lede="The unique identity a physical set of cashews is tracked by - every BTM lands in exactly one Bin, and every Lot is cooked from exactly one." />
 
       <div className="grid sm:grid-cols-3 gap-4">
         <StatBlock icon="local_shipping" label="BTMs in" value={String(row.btmIntakes.length)} />
         <StatBlock icon="science" label="Lots out" value={String(row.lots.length)} />
-        <StatBlock icon="scale" label="Running balance (kg)" value={latestBalance ?? "—"} tone={latestBalance ? "success" : "default"} />
+        <StatBlock icon="scale" label="Running balance (kg)" value={latestBalance ?? "-"} tone={latestBalance ? "success" : "default"} />
       </div>
 
       <div className="flex items-center justify-between px-1">
@@ -111,7 +111,7 @@ export function ProductionBinDetailPage() {
       </div>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
-        <h3 className="text-[15px] font-bold text-warmstone-900 mb-3">Lots cooked from this Bin — each opens its own Phase 3-8 tracker</h3>
+        <h3 className="text-[15px] font-bold text-warmstone-900 mb-3">Lots cooked from this Bin - each opens its own Phase 3-8 tracker</h3>
         <DataTable columns={lotColumns} rows={row.lots} keyFn={(r) => r.lotNo} rowHref={(r) => `/production/lots/${encodeURIComponent(r.lotNo)}`} emptyTitle="No Lots cooked from this Bin yet" />
       </div>
 

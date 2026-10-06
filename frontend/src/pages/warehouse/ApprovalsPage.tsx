@@ -19,7 +19,7 @@ export function ApprovalsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader kicker="Approvals" title="Waiting for your decision" lede="Nothing here has touched the receipts yet — approving applies it, rejecting closes it for good." />
+      <PageHeader kicker="Approvals" title="Waiting for your decision" lede="Nothing here has touched the receipts yet - approving applies it, rejecting closes it for good." />
 
       <section className="space-y-3">
         <h2 className="text-[11px] font-bold text-warmstone-400 uppercase tracking-wider px-1">Form submissions · {pending.rows.length}</h2>

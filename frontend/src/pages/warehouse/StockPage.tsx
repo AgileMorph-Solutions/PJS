@@ -35,9 +35,9 @@ export function StockPage() {
     { label: "Lot No", render: (d) => <span className="font-mono text-[12.5px]">{d.lotNo}</span> },
     { label: "Warehouse", render: (d) => d.warehouseSite },
     { label: "Fiche CCA", render: (d) => <span className="font-mono text-[12.5px]">{d.ficheCca}</span> },
-    { label: "Arrival date", render: (d) => d.arrivalDate || d.arrivalDateRaw || "—" },
-    { label: "Discharge date", render: (d) => d.dischargeDate || d.dischargeDateRaw || "—" },
-    { label: "Total recd", render: (d) => d.totalRecd ?? "—" },
+    { label: "Arrival date", render: (d) => d.arrivalDate || d.arrivalDateRaw || "-" },
+    { label: "Discharge date", render: (d) => d.dischargeDate || d.dischargeDateRaw || "-" },
+    { label: "Total recd", render: (d) => d.totalRecd ?? "-" },
     {
       label: "",
       render: (d) => (
@@ -53,12 +53,12 @@ export function StockPage() {
   ];
 
   const columns: Column<ReceiptRecord>[] = [
-    { label: "Lot Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "—"}</span> },
-    { label: "Bin Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "—"}</span> },
-    { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
-    { label: "Supplier", render: (r) => r.supplierName || "—" },
-    { label: "Basis for Bin allocation", render: (r) => r.stageData["n-bin"]?.["Basis for allocation (moisture / quality / KOR / space)"] || "—" },
-    { label: "Finalised", render: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] || "—" },
+    { label: "Lot Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "-"}</span> },
+    { label: "Bin Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "-"}</span> },
+    { label: "Vehicle", render: (r) => r.vehicleNo || "-" },
+    { label: "Supplier", render: (r) => r.supplierName || "-" },
+    { label: "Basis for Bin allocation", render: (r) => r.stageData["n-bin"]?.["Basis for allocation (moisture / quality / KOR / space)"] || "-" },
+    { label: "Finalised", render: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] || "-" },
   ];
 
   const lotsSearch = useTableSearch(withLot, (r) => [
@@ -128,7 +128,7 @@ export function StockPage() {
         <h2 className="text-base font-bold text-warmstone-900 mb-1">Raw discharge / receiving rows</h2>
         <p className="text-[12.5px] text-warmstone-500 mb-3">
           Every real column DISCHARGEMENT/Warehouse Receiving stores, not just what's already
-          written onto a receipt above — including the two quality-inspection panels.
+          written onto a receipt above - including the two quality-inspection panels.
         </p>
         <FilterBar>
           <input
@@ -148,7 +148,7 @@ export function StockPage() {
       </div>
 
       {detail && (
-        <RecordDetailModal title={`Discharge — Lot ${detail.lotNo}`} record={detail} onClose={() => setDetail(null)} />
+        <RecordDetailModal title={`Discharge - Lot ${detail.lotNo}`} record={detail} onClose={() => setDetail(null)} />
       )}
     </>
   );

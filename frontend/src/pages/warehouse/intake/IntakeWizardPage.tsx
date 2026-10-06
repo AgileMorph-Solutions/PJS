@@ -124,7 +124,7 @@ export function IntakeWizardPage() {
           <span />
         )}
         <button className={btnPrimary} onClick={handleNext} disabled={nextDisabled}>
-          {stageId === "n-xferdec" ? "Finish — open record" : "Continue"}
+          {stageId === "n-xferdec" ? "Finish - open record" : "Continue"}
           <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
         </button>
       </div>

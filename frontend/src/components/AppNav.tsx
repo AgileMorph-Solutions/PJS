@@ -72,7 +72,7 @@ export function AppNav({ open, onClose }: Props) {
 
   return (
     <>
-      {/* Backdrop — mobile/tablet only, and only while the drawer is open. */}
+      {/* Backdrop - mobile/tablet only, and only while the drawer is open. */}
       {open && (
         <div
           className="fixed inset-0 bg-warmstone-900/40 z-40 lg:hidden"

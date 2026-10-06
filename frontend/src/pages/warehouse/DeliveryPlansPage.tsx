@@ -95,15 +95,15 @@ export function DeliveryPlansPage() {
   const columns: Column<DeliveryPlan>[] = [
     { label: "Plan", render: (p) => <span className="font-mono text-[12.5px]">{p.id}</span> },
     { label: "Supplier", render: (p) => <span>{p.supplierName}{p.supplierCode ? <span className="text-warmstone-400"> · {p.supplierCode}</span> : null}</span> },
-    { label: "Planned delivery", render: (p) => p.plannedDeliveryDate ?? "—" },
+    { label: "Planned delivery", render: (p) => p.plannedDeliveryDate ?? "-" },
     { label: "Expected arrival", render: (p) => p.expectedArrivalDate },
-    { label: "Quantity (kg)", render: (p) => (p.expectedQuantityKg === null ? "—" : p.expectedQuantityKg.toLocaleString()) },
-    { label: "Truck type", render: (p) => p.expectedTruckType || "—" },
+    { label: "Quantity (kg)", render: (p) => (p.expectedQuantityKg === null ? "-" : p.expectedQuantityKg.toLocaleString()) },
+    { label: "Truck type", render: (p) => p.expectedTruckType || "-" },
     { label: "Destination", render: (p) => p.destinationWarehouse },
     { label: "Status", render: (p) => <Pill tone={STATUS[p.deliveryStatus].tone} label={STATUS[p.deliveryStatus].label} /> },
-    { label: "Arrived", render: (p) => p.actualArrivalDate ?? "—" },
-    { label: "Truck no.", render: (p) => p.truckNo ?? "—" },
-    { label: "Remarks", render: (p) => p.remarks || "—" },
+    { label: "Arrived", render: (p) => p.actualArrivalDate ?? "-" },
+    { label: "Truck no.", render: (p) => p.truckNo ?? "-" },
+    { label: "Remarks", render: (p) => p.remarks || "-" },
     {
       label: "",
       render: (p) =>
@@ -124,7 +124,7 @@ export function DeliveryPlansPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Delivery plans"
-        lede="What is expected to arrive, planned before the truck comes. A truck can also arrive with no plan — it is never turned away for lacking one."
+        lede="What is expected to arrive, planned before the truck comes. A truck can also arrive with no plan - it is never turned away for lacking one."
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
 

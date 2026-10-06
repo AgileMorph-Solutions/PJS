@@ -37,7 +37,7 @@ export function InfoRow({ label, value, strong }: { label: string; value?: React
     <div className="flex items-baseline justify-between gap-4 text-[13px]">
       <dt className="text-warmstone-500 shrink-0">{label}</dt>
       <dd className={`text-right tabular-nums ${empty ? "text-warmstone-300" : strong ? "font-bold text-warmstone-900" : "font-medium text-warmstone-800"}`}>
-        {empty ? "—" : value}
+        {empty ? "-" : value}
       </dd>
     </div>
   );

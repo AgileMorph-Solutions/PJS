@@ -97,7 +97,7 @@ function CodeInput({ warehouse, editable }: { warehouse: WarehouseMaster; editab
     return warehouse.code ? (
       <span className="text-[12px] font-mono font-semibold text-warmstone-600">ID code {warehouse.code}</span>
     ) : (
-      <span className="text-[12px] font-semibold text-ambernut-800">No ID code yet — no IDs can be issued here</span>
+      <span className="text-[12px] font-semibold text-ambernut-800">No ID code yet - no IDs can be issued here</span>
     );
   }
   return (
@@ -250,7 +250,7 @@ export function WarehousesPage() {
             Unclassified
           </h3>
           <p className="px-1 mb-2 text-[12px] text-warmstone-400">
-            Not yet assigned to a site or store — see Warehouses master data.
+            Not yet assigned to a site or store - see Warehouses master data.
           </p>
           <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
             {(groups.get("unclassified") ?? []).map((w) => (

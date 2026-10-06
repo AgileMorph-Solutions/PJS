@@ -10,7 +10,7 @@ import type { DownstreamStatus } from "../repository/api";
  */
 export function DownstreamStatusChips({ status }: { status: DownstreamStatus | undefined }) {
   if (!status || (!status.dispatched && !status.received && !status.dried && !status.issued)) {
-    return <span className="text-[11px] text-warmstone-400">—</span>;
+    return <span className="text-[11px] text-warmstone-400">-</span>;
   }
   return (
     <div className="flex flex-wrap gap-1">

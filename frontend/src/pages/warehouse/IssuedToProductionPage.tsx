@@ -28,13 +28,13 @@ export function IssuedToProductionPage() {
   );
 
   const columns: Column<IssuedToProductionRow>[] = [
-    { label: "BTM No.", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "—"}</span> },
-    { label: "Date", render: (r) => r.date || "—" },
-    { label: "Source Bin", render: (r) => r.sourceBin || "—" },
-    { label: "Dry Bin", render: (r) => r.dryBin || "—" },
-    { label: "Bin Status", render: (r) => r.binStatus || "—" },
-    { label: "Bags issued", render: (r) => r.noOfBagIssuedToProduction || "—" },
-    { label: "Moisture", render: (r) => r.moisture || "—" },
+    { label: "BTM No.", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "-"}</span> },
+    { label: "Date", render: (r) => r.date || "-" },
+    { label: "Source Bin", render: (r) => r.sourceBin || "-" },
+    { label: "Dry Bin", render: (r) => r.dryBin || "-" },
+    { label: "Bin Status", render: (r) => r.binStatus || "-" },
+    { label: "Bags issued", render: (r) => r.noOfBagIssuedToProduction || "-" },
+    { label: "Moisture", render: (r) => r.moisture || "-" },
     {
       label: "",
       render: (r) => (
@@ -85,7 +85,7 @@ export function IssuedToProductionPage() {
         emptyTitle="Nothing issued to production yet"
       />
       {detail && (
-        <RecordDetailModal title={`Issued to Production — BTM ${detail.btmNo || "—"}`} record={detail} onClose={() => setDetail(null)} />
+        <RecordDetailModal title={`Issued to Production - BTM ${detail.btmNo || "-"}`} record={detail} onClose={() => setDetail(null)} />
       )}
     </>
   );

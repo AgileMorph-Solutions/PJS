@@ -180,7 +180,7 @@ export function TransfersPage() {
                 <input placeholder="Filter Lot, supplier, truck…" value={lotFilter} onChange={(e) => setLotFilter(e.target.value)} className={`${inputClass} sm:w-64`} />
               </div>
               <div className="border border-warmstone-200 rounded-xl divide-y divide-warmstone-100 max-h-72 overflow-y-auto">
-                {candidates.length === 0 && <p className="px-4 py-3 text-[13px] text-warmstone-400">No Lot here can be transferred — a truck needs a Lot (it passed quality) and must not already be on a transfer.</p>}
+                {candidates.length === 0 && <p className="px-4 py-3 text-[13px] text-warmstone-400">No Lot here can be transferred - a truck needs a Lot (it passed quality) and must not already be on a transfer.</p>}
                 {candidates.map((r) => {
                   const p = picked[r.id];
                   return (
@@ -188,7 +188,7 @@ export function TransfersPage() {
                       <label className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
                         <input type="checkbox" checked={Boolean(p)} onChange={() => toggle(r)} />
                         <span className="font-mono text-[12px]">{r.lotNo}</span>
-                        <span className="text-warmstone-500 truncate">{r.supplierName || "—"} · {r.vehicleNo || "no truck"}</span>
+                        <span className="text-warmstone-500 truncate">{r.supplierName || "-"} · {r.vehicleNo || "no truck"}</span>
                       </label>
                       {p && (
                         <span className="flex items-center gap-2">

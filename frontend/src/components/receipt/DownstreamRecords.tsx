@@ -2,8 +2,8 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { ReceiptLinks } from "../../repository/api";
 
-const n = (x: number | null | undefined, unit = "") => (x === null || x === undefined ? "—" : `${x.toLocaleString()}${unit}`);
-const t = (x: string | null | undefined) => (x && String(x).trim() ? x : "—");
+const n = (x: number | null | undefined, unit = "") => (x === null || x === undefined ? "-" : `${x.toLocaleString()}${unit}`);
+const t = (x: string | null | undefined) => (x && String(x).trim() ? x : "-");
 
 function Section({
   icon,
@@ -68,7 +68,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
     <div className="space-y-4">
       <Section icon="light_mode" title="Drying" source="Drying Batch sheet" count={links.dryingBatches.length + links.dryingJobs.length} emptyText="This Lot has not been issued to drying.">
         {links.dryingBatches.map((b) => (
-          <Row key={b.id} title={`Batch ${b.sn} · ${b.status ?? "—"}`} sub={b.dryingDate}>
+          <Row key={b.id} title={`Batch ${b.sn} · ${b.status ?? "-"}`} sub={b.dryingDate}>
             <Fact label="Method" value={t(b.dryType)} />
             <Fact label="Bin in → out" value={`${t(b.sourceBinNo)} → ${t(b.destinationBinNo)}`} />
             <Fact label="Bags in → out" value={`${n(b.inputBags)} → ${n(b.outputBags)}`} />

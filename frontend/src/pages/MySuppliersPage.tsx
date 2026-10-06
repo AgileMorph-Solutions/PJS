@@ -39,7 +39,7 @@ export function MySuppliersPage() {
   ];
   const requestCols: Column<SupplierRequestView>[] = [
     { label: "Supplier", render: (r) => r.name },
-    { label: "LBA Code", render: (r) => r.code ?? "—" },
+    { label: "LBA Code", render: (r) => r.code ?? "-" },
     { label: "Status", render: (r) => <Pill tone={TONE[r.status]} label={r.status} /> },
     { label: "Note", render: (r) => r.reason ?? "" },
   ];

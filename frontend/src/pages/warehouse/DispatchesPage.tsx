@@ -32,14 +32,14 @@ export function DispatchesPage() {
   );
 
   const columns: Column<WarehouseDispatchLine>[] = [
-    { label: "SN", render: (l) => <span className="font-mono text-[12.5px]">{l.sn ?? "—"}</span> },
-    { label: "Charge date", render: (l) => l.chargeDate || l.chargeDateRaw || "—" },
-    { label: "Voyage no.", render: (l) => l.vyogeNumber || "—" },
-    { label: "Bin", render: (l) => l.bin || "—" },
-    { label: "Truck no.", render: (l) => l.truckNo || "—" },
-    { label: "Fiche CCA", render: (l) => <span className="font-mono text-[12.5px]">{l.ficheCca || "—"}</span> },
-    { label: "Total bags", render: (l) => l.totalBags ?? "—" },
-    { label: "Status", render: (l) => l.status || "—" },
+    { label: "SN", render: (l) => <span className="font-mono text-[12.5px]">{l.sn ?? "-"}</span> },
+    { label: "Charge date", render: (l) => l.chargeDate || l.chargeDateRaw || "-" },
+    { label: "Voyage no.", render: (l) => l.vyogeNumber || "-" },
+    { label: "Bin", render: (l) => l.bin || "-" },
+    { label: "Truck no.", render: (l) => l.truckNo || "-" },
+    { label: "Fiche CCA", render: (l) => <span className="font-mono text-[12.5px]">{l.ficheCca || "-"}</span> },
+    { label: "Total bags", render: (l) => l.totalBags ?? "-" },
+    { label: "Status", render: (l) => l.status || "-" },
     {
       label: "",
       render: (l) => (
@@ -63,7 +63,7 @@ export function DispatchesPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Dispatches"
-        lede="CHARGEMENT — every unit-warehouse dispatch line, one row per sheet line."
+        lede="CHARGEMENT - every unit-warehouse dispatch line, one row per sheet line."
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
       <FilterBar>
@@ -90,10 +90,10 @@ export function DispatchesPage() {
         rows={rows}
         keyFn={(l) => l.id}
         emptyTitle="No dispatch lines at this site"
-        emptyHint="CHARGEMENT is a unit-warehouse (Bouaké) sheet — the central section has none."
+        emptyHint="CHARGEMENT is a unit-warehouse (Bouaké) sheet - the central section has none."
       />
       {detail && (
-        <RecordDetailModal title={`Dispatch — SN ${detail.sn ?? "—"}`} record={detail} onClose={() => setDetail(null)} />
+        <RecordDetailModal title={`Dispatch - SN ${detail.sn ?? "-"}`} record={detail} onClose={() => setDetail(null)} />
       )}
     </>
   );

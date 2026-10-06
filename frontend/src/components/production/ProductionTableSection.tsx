@@ -42,7 +42,7 @@ export function ProductionTableBody({ fields, idPrefix, load, onSubmit, submitLa
     label: f.n,
     render: (row) => {
       const v = row[f.col];
-      return v === null || v === undefined || v === "" ? "—" : String(v);
+      return v === null || v === undefined || v === "" ? "-" : String(v);
     },
   }));
 

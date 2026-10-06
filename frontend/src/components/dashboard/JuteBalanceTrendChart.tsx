@@ -77,9 +77,9 @@ export function JuteBalanceTrendChart({ rows }: Props) {
         {minBalance < 0 && (
           <>
             {/* The below-zero band, washed in the reserved danger tone the KPI tile above already
-                flips to when this balance goes negative — a secondary encoding, not a series. */}
+                flips to when this balance goes negative - a secondary encoding, not a series. */}
             {/* recharts 3.10's public ReferenceArea prop type omits `fill`/`style` (an upstream
-                type-surface gap — the prop works fine at runtime, just not through its own JSX
+                type-surface gap - the prop works fine at runtime, just not through its own JSX
                 props), so the fill is applied via `shape`, its documented custom-render escape
                 hatch, instead. */}
             <ReferenceArea

@@ -38,7 +38,7 @@ export function BtmListPage() {
   const columns: Column<BtmIntake>[] = [
     { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.btmNo}</span> },
     { label: "Destination Bin", render: (r) => r.binNo },
-    { label: "Source", render: (r) => r.source ?? "—" },
+    { label: "Source", render: (r) => r.source ?? "-" },
     { label: "Recorded", render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
 

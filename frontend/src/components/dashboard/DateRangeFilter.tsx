@@ -63,7 +63,7 @@ export function DateRangeFilter({ value, onChange }: Props) {
       </button>
       {isFiltered && (
         <span className="text-[12px] text-warmstone-500 ml-auto self-center">
-          Showing {value.from || "the start"} to {value.to || "now"} — every figure below is scoped to this range.
+          Showing {value.from || "the start"} to {value.to || "now"} - every figure below is scoped to this range.
         </span>
       )}
     </div>

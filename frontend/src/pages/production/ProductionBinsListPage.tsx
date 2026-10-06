@@ -16,7 +16,7 @@ export function ProductionBinsListPage() {
     { label: "Bin No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.binNo}</span> },
     { label: "BTMs in", render: (r) => r.btmCount },
     { label: "Lots out", render: (r) => r.lotCount },
-    { label: "Source", render: (r) => r.source ?? "—" },
+    { label: "Source", render: (r) => r.source ?? "-" },
   ];
 
   const search = useTableSearch(rows, (r) => [r.binNo, r.source]);
@@ -26,7 +26,7 @@ export function ProductionBinsListPage() {
       <PageHeader
         kicker="Production"
         title="Bins"
-        lede="The pivot every BTM lands in and every Lot is created from — a Bin accumulates many BTMs and many Lots, never the reverse."
+        lede="The pivot every BTM lands in and every Lot is created from - a Bin accumulates many BTMs and many Lots, never the reverse."
       />
       {!loading && (
         <>

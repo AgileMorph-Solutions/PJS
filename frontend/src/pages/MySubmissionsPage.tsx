@@ -22,7 +22,7 @@ export function MySubmissionsPage() {
   ];
   return (
     <div className="space-y-5">
-      <PageHeader kicker={`${site.label} · ${site.sublabel}`} title="My submissions" lede="A rejected submission is final — ask the Warehouse Incharge to correct the receipt." />
+      <PageHeader kicker={`${site.label} · ${site.sublabel}`} title="My submissions" lede="A rejected submission is final - ask the Warehouse Incharge to correct the receipt." />
       <DataTable columns={columns} rows={subs.rows} keyFn={(s) => s.id} rowHref={(s) => `/${site.slug}/receipts/${s.receiptId}`} emptyTitle={subs.loading ? "Loading…" : "Nothing submitted yet"} />
     </div>
   );

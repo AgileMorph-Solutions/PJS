@@ -49,7 +49,7 @@ export function WorkbookModal({ mode, warehouse, sectionLabel, onClose, onCommit
         <>
           <p className="text-[12.5px] text-warmstone-500 mb-4">
             The Excel file for <span className="font-semibold text-warmstone-800">{sectionLabel}</span>, with one sheet for each kind of
-            record. You can edit it and upload it again — the same file works both ways.
+            record. You can edit it and upload it again - the same file works both ways.
           </p>
           <ExportBody warehouse={warehouse} />
         </>
@@ -218,7 +218,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
     return (
       <div className="space-y-4">
         <div role="status" className="rounded-xl bg-success-100 text-success-800 px-4 py-3 text-[13px] space-y-1">
-          <div className="font-bold">Done — {plural(done.totalCreated, "row")} added, {plural(done.totalUpdated, "row")} updated.</div>
+          <div className="font-bold">Done - {plural(done.totalCreated, "row")} added, {plural(done.totalUpdated, "row")} updated.</div>
           {done.applied.map((a) => (
             <div key={a.name} className="text-[12.5px]"><span className="font-semibold">{a.name}</span>: {a.created} added, {a.updated} updated</div>
           ))}
@@ -236,7 +236,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
 
   return (
     <div className="space-y-5">
-      {/* Sample: a quiet link at the top right — the file chooser below is the point of this dialog. */}
+      {/* Sample: a quiet link at the top right - the file chooser below is the point of this dialog. */}
       <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] text-warmstone-500">{sectionLabel}</span>
         <button type="button" onClick={downloadBlank} className={ghostBtn} title="A blank workbook with every sheet and column, to fill in">
@@ -331,7 +331,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
 
           {preview.errorCount > 0 && (
             <div className="space-y-2">
-              <h3 className="text-[12.5px] font-bold text-danger-700">{plural(preview.errorCount, "problem")} to fix — nothing has been written</h3>
+              <h3 className="text-[12.5px] font-bold text-danger-700">{plural(preview.errorCount, "problem")} to fix - nothing has been written</h3>
               <ul className="space-y-1 text-[12.5px] max-h-56 overflow-y-auto">
                 {preview.sheets.filter((s) => s.errorCount > 0).flatMap((s) => [
                   ...s.errors.map((e, i) => (
@@ -364,7 +364,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
 
           <div className="flex flex-wrap items-center justify-end gap-3">
             {preview.errorCount > 0 && <span className="text-[12.5px] text-danger-700">Fix these in Excel and preview again.</span>}
-            {preview.errorCount === 0 && changes === 0 && <span className="text-[12.5px] text-warmstone-500">Nothing to change — this file matches the database.</span>}
+            {preview.errorCount === 0 && changes === 0 && <span className="text-[12.5px] text-warmstone-500">Nothing to change - this file matches the database.</span>}
             <button type="button" onClick={apply} disabled={applying || preview.errorCount > 0 || changes === 0} className={primaryBtn}>
               <span className="material-symbols-outlined text-[17px]">check</span>
               {applying ? "Applying…" : changes > 0 ? `Apply ${plural(changes, "change")}` : "Apply"}

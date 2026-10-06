@@ -102,7 +102,7 @@ export function SiteLayout() {
         </div>
         <h2 className="text-lg font-bold text-warmstone-900 mb-1.5">No such warehouse section</h2>
         <p className="text-sm text-warmstone-500 leading-relaxed mb-4">
-          "{site}" isn't a recognized warehouse section — it must be one of{" "}
+          "{site}" isn't a recognized warehouse section - it must be one of{" "}
           {Object.keys(SITES).map((s, i) => (
             <span key={s}>
               {i > 0 && " or "}

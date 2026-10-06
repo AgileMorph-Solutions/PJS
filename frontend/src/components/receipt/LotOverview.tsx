@@ -91,8 +91,8 @@ export function LotOverview({
         <InfoRow label="Method" value={dry.batch?.dryType} />
         <InfoRow label="Moisture before" value={pct(dry.batch?.inputMoisturePct ?? v(receipt, "n-drying", "Moisture % — before drying"))} />
         <InfoRow label="Moisture after" value={pct(dry.batch?.outputMoisturePct ?? v(receipt, "n-drying", "Moisture % — after drying"))} />
-        <InfoRow label="Bags in → out" value={dry.batch && (dry.batch.inputBags != null || dry.batch.outputBags != null) ? `${dry.batch.inputBags ?? "—"} → ${dry.batch.outputBags ?? "—"}` : undefined} />
-        <InfoRow label="Bin in → out" value={dry.batch && (dry.batch.sourceBinNo || dry.batch.destinationBinNo) ? `${dry.batch.sourceBinNo || "—"} → ${dry.batch.destinationBinNo || "—"}` : undefined} />
+        <InfoRow label="Bags in → out" value={dry.batch && (dry.batch.inputBags != null || dry.batch.outputBags != null) ? `${dry.batch.inputBags ?? "-"} → ${dry.batch.outputBags ?? "-"}` : undefined} />
+        <InfoRow label="Bin in → out" value={dry.batch && (dry.batch.sourceBinNo || dry.batch.destinationBinNo) ? `${dry.batch.sourceBinNo || "-"} → ${dry.batch.destinationBinNo || "-"}` : undefined} />
         <InfoRow label="Weight loss" value={kg(dry.batch?.dryingLossKg)} />
       </InfoCard>
 

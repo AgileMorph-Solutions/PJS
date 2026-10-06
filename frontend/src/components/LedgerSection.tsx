@@ -163,7 +163,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
             {dateFilter.filtered.length === 0 && (
               <tr>
                 <td colSpan={ledger.columns.length} className="px-3 py-4 text-warmstone-400 italic">
-                  {allRows.length === 0 ? "No entries yet — add one above." : "No entries in this date range."}
+                  {allRows.length === 0 ? "No entries yet - add one above." : "No entries in this date range."}
                 </td>
               </tr>
             )}
@@ -171,7 +171,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
               <tr key={i} className="border-b border-warmstone-100 last:border-0 hover:bg-warmstone-50">
                 {ledger.columns.map((c) => (
                   <td key={c.label} className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
-                    {row[c.label] || "—"}
+                    {row[c.label] || "-"}
                   </td>
                 ))}
               </tr>

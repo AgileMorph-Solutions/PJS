@@ -23,13 +23,13 @@ export const storeCode = (r: ReceiptRecord) => gateField(r, "WH NO.");
  * register fit a normal screen without sideways scrolling. */
 const Stack = ({ main, sub, mono }: { main: string; sub?: string; mono?: boolean }) => (
   <div className="leading-snug">
-    <div className={mono ? "font-mono text-[12.5px]" : "font-medium"}>{main || "—"}</div>
+    <div className={mono ? "font-mono text-[12.5px]" : "font-medium"}>{main || "-"}</div>
     {sub && <div className="font-mono text-[11px] text-warmstone-400">{sub}</div>}
   </div>
 );
 
 const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
-const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", nowrap: true, render: (r) => r.arrivalDate || "—" };
+const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", nowrap: true, render: (r) => r.arrivalDate || "-" };
 const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", render: (r) => <Stack main={r.supplierName} sub={r.lbaCode} /> };
 const ficheColumn: Column<ReceiptRecord> = {
   label: "Fiche",

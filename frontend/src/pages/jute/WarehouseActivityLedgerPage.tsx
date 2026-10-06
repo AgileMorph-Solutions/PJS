@@ -20,13 +20,13 @@ export function WarehouseActivityLedgerPage() {
   const [detail, setDetail] = useState<WarehouseActivityLedgerEntry | null>(null);
 
   const columns: Column<WarehouseActivityLedgerEntry>[] = [
-    { label: "Date", render: (r) => r.activityDate || r.activityDateRaw || "—" },
-    { label: "Activity type", render: (r) => r.activityType || "—" },
-    { label: "Particulars", render: (r) => r.particulars || "—" },
-    { label: "Fiche No.", render: (r) => r.ficheNo || "—" },
-    { label: "Lot No.", render: (r) => r.lotNo || "—" },
-    { label: "Bags", render: (r) => r.bags || "—" },
-    { label: "Vendor", render: (r) => r.vendor || "—" },
+    { label: "Date", render: (r) => r.activityDate || r.activityDateRaw || "-" },
+    { label: "Activity type", render: (r) => r.activityType || "-" },
+    { label: "Particulars", render: (r) => r.particulars || "-" },
+    { label: "Fiche No.", render: (r) => r.ficheNo || "-" },
+    { label: "Lot No.", render: (r) => r.lotNo || "-" },
+    { label: "Bags", render: (r) => r.bags || "-" },
+    { label: "Vendor", render: (r) => r.vendor || "-" },
     {
       label: "",
       render: (r) => (

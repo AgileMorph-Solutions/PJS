@@ -69,25 +69,25 @@ export function DryingJobsPage() {
 
   const batchColumns: Column<DryingBatch>[] = [
     { label: "Batch ID", render: (b) => <span className="font-mono text-[12.5px]">{b.sn}</span> },
-    { label: "Date", render: (b) => b.dryingDate || b.dryingDateRaw || "—" },
-    { label: "Warehouse", render: (b) => b.warehouse || b.warehouseSite || "—" },
-    { label: "Lot No", render: (b) => b.lotNo || b.lotNoRaw || "—" },
-    { label: "Fiche No", render: (b) => b.ficheNoRaw || "—" },
-    { label: "Dry type", render: (b) => b.dryType || "—" },
-    { label: "Destination", render: (b) => b.destinationRaw || "—" },
-    { label: "Status", render: (b) => b.status || "—" },
+    { label: "Date", render: (b) => b.dryingDate || b.dryingDateRaw || "-" },
+    { label: "Warehouse", render: (b) => b.warehouse || b.warehouseSite || "-" },
+    { label: "Lot No", render: (b) => b.lotNo || b.lotNoRaw || "-" },
+    { label: "Fiche No", render: (b) => b.ficheNoRaw || "-" },
+    { label: "Dry type", render: (b) => b.dryType || "-" },
+    { label: "Destination", render: (b) => b.destinationRaw || "-" },
+    { label: "Status", render: (b) => b.status || "-" },
     { label: "", render: (b) => <ViewAllFieldsButton onClick={() => setDetailBatch(b)} /> },
   ];
 
   const reportColumns: Column<DryingSortingReport>[] = [
-    { label: "S.No.", render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "—"}</span> },
-    { label: "Date", render: (r) => r.dryingDate || r.dryingDateRaw || "—" },
-    { label: "Lot No", render: (r) => r.lotNo || r.lotNoRaw || "—" },
-    { label: "Supplier", render: (r) => r.supplierName || "—" },
-    { label: "Issued net wt (GRN)", render: (r) => r.issuedNetWeightGrn ?? "—" },
-    { label: "Received net wt", render: (r) => r.receivedNetWeightAfterDrying ?? "—" },
-    { label: "Input moisture", render: (r) => r.inputMoisture ?? "—" },
-    { label: "Output moisture", render: (r) => r.outputMoisture ?? "—" },
+    { label: "S.No.", render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "-"}</span> },
+    { label: "Date", render: (r) => r.dryingDate || r.dryingDateRaw || "-" },
+    { label: "Lot No", render: (r) => r.lotNo || r.lotNoRaw || "-" },
+    { label: "Supplier", render: (r) => r.supplierName || "-" },
+    { label: "Issued net wt (GRN)", render: (r) => r.issuedNetWeightGrn ?? "-" },
+    { label: "Received net wt", render: (r) => r.receivedNetWeightAfterDrying ?? "-" },
+    { label: "Input moisture", render: (r) => r.inputMoisture ?? "-" },
+    { label: "Output moisture", render: (r) => r.outputMoisture ?? "-" },
     { label: "", render: (r) => <ViewAllFieldsButton onClick={() => setDetailReport(r)} /> },
   ];
 
@@ -147,7 +147,7 @@ export function DryingJobsPage() {
             className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px] hover:bg-warmstone-50 -mx-1 px-1 rounded-lg transition-colors"
           >
             <span className="text-warmstone-600">
-              Lot {r.lotNo || "—"} · Bin {r.binNo || "—"} · {r.supplierName} · vehicle {r.vehicleNo || "—"}
+              Lot {r.lotNo || "-"} · Bin {r.binNo || "-"} · {r.supplierName} · vehicle {r.vehicleNo || "-"}
             </span>
             <ReceiptStatusPill status={deriveStatus(r)} />
           </Link>
@@ -156,7 +156,7 @@ export function DryingJobsPage() {
       </div>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
-        {/* Two genuinely different sheets (different columns, different source workbooks — see
+        {/* Two genuinely different sheets (different columns, different source workbooks - see
            this file's header comment) tab-switched on one card, not two always-expanded cards
            each with its own duplicated import panel. Local state, not a route: both live at the
            same /:site/drying URL, unlike Jute Bag Management's tabs. */}
@@ -228,7 +228,7 @@ export function DryingJobsPage() {
               rows={reportSearch.filtered}
               keyFn={(r) => r.id}
               emptyTitle="No drying/sorting detail recorded"
-              emptyHint="Upload a Drying & Sorting Report workbook to populate this table. Unit (Bouaké) only — this sheet has no central-side rows."
+              emptyHint="Upload a Drying & Sorting Report workbook to populate this table. Unit (Bouaké) only - this sheet has no central-side rows."
             />
           </>
         )}
@@ -236,14 +236,14 @@ export function DryingJobsPage() {
 
       {detailBatch && (
         <RecordDetailModal
-          title={`Drying Batch — SN ${detailBatch.sn}`}
+          title={`Drying Batch - SN ${detailBatch.sn}`}
           record={detailBatch}
           onClose={() => setDetailBatch(null)}
         />
       )}
       {detailReport && (
         <RecordDetailModal
-          title={`Drying & Sorting Report — S.No. ${detailReport.sn ?? "—"}`}
+          title={`Drying & Sorting Report - S.No. ${detailReport.sn ?? "-"}`}
           record={detailReport}
           onClose={() => setDetailReport(null)}
         />

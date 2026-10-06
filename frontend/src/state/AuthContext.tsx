@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // left is this browser: remembered site, drafts, and every cached record in memory. A full
     // reload drops the in-memory state in one go, so the next person to sign in on this machine
     // starts from nothing of the previous user's.
-    try { localStorage.clear(); sessionStorage.clear(); } catch { /* storage blocked — nothing to clear */ }
+    try { localStorage.clear(); sessionStorage.clear(); } catch { /* storage blocked - nothing to clear */ }
     window.location.replace("/");
   }, []);
 

@@ -72,7 +72,7 @@ const day = (n: number) => new Date(Date.UTC(2026, 8, 1 + n)).toISOString().slic
 
 export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   if ((await prisma.receipt.count()) > 0) {
-    console.log("Database already has receipts — demo data skipped.");
+    console.log("Database already has receipts - demo data skipped.");
     return;
   }
 
@@ -165,7 +165,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     }
     if (reached >= 5) {
       await setStageFields(id, "n-stock", {
-        "Warehouse stock ledger entry": `Stock in — ${lot ?? "no Lot"}`, "Warehouse type (Village/Regional/Factory)": o.stockType,
+        "Warehouse stock ledger entry": `Stock in - ${lot ?? "no Lot"}`, "Warehouse type (Village/Regional/Factory)": o.stockType,
       });
     }
     if (spec.drying) {

@@ -105,7 +105,7 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
         {existing?.status === "rejected" && (
           <p role="status" className="text-[13px] text-danger-700 bg-danger-100 rounded-lg px-3 py-2">
             Rejected{existing.reviewedBy ? ` by ${existing.reviewedBy}` : ""}: {existing.rejectReason}. This can't be
-            resubmitted — ask the Warehouse Incharge to correct the receipt.
+            resubmitted - ask the Warehouse Incharge to correct the receipt.
           </p>
         )}
         {error && <p role="alert" className="text-[13px] text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}

@@ -29,8 +29,8 @@ export function BinDetailPage() {
 
   const columns: Column<ReceiptRecord>[] = [
     { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo || r.id}</span> },
-    { label: "Supplier", render: (r) => r.supplierName || "—" },
-    { label: "Vehicle", render: (r) => r.vehicleNo || "—" },
+    { label: "Supplier", render: (r) => r.supplierName || "-" },
+    { label: "Vehicle", render: (r) => r.vehicleNo || "-" },
     { label: "Status", render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
   ];
 

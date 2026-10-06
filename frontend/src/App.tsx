@@ -95,26 +95,26 @@ function AppRoutes() {
           <Routes>
             <Route path="/" element={<HomeRoute />} />
 
-            {/* One /:site/* tree for both sections (see state/SiteContext.tsx) — "/unit/receipts"
+            {/* One /:site/* tree for both sections (see state/SiteContext.tsx) - "/unit/receipts"
                 and "/central/receipts" render the exact same components, scoped by useSite(), not
                 two literal duplicated route trees. SiteLayout 404s on an unrecognized :site rather
                 than silently rendering garbage. */}
             <Route path="/:site" element={<SiteLayout />}>
               <Route path="receipts" element={<ReceiptsListPage />} />
-              {/* NOT forked per site — one receipt record, one page; a receipt detail page can
+              {/* NOT forked per site - one receipt record, one page; a receipt detail page can
                   legitimately show cross-site linked records by design (see ReceiptDetailPage's own
                   header comment and receiptLinks.ts, whose /links route deliberately never accepts
                   ?warehouse=). Only the breadcrumb reads useSite(). */}
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
               <Route element={<RequireRole roles={REVIEWERS} />}>
-                {/* Static, so it wins over the open `receipts/:id` above — "batch" is never an id. */}
+                {/* Static, so it wins over the open `receipts/:id` above - "batch" is never an id. */}
                 <Route path="receipts/batch" element={<BatchEntryPage />} />
                 <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="drying" element={<DryingJobsPage />} />
                 <Route path="delivery-plans" element={<DeliveryPlansPage />} />
                 <Route path="transfers" element={<TransfersPage />} />
-              {/* Not in nav.ts (see its own comment) — reached from Reception's Downstream chips
+              {/* Not in nav.ts (see its own comment) - reached from Reception's Downstream chips
                   and a receipt's "Linked records" card, same as the legacy /procurement/* URLs
                   below are reachable without a sidebar entry. */}
                 <Route path="dispatches" element={<DispatchesPage />} />
@@ -123,10 +123,10 @@ function AppRoutes() {
 
             <Route element={<RequireRole roles={REVIEWERS} />}>
               {/* No site dimension on this table at all (see IssuedToProductionPage's own header
-                  comment) — deliberately outside the /:site/* tree, unlike dispatches above. */}
+                  comment) - deliberately outside the /:site/* tree, unlike dispatches above. */}
               <Route path="/issued-to-production" element={<IssuedToProductionPage />} />
 
-              {/* Legacy /procurement/* URLs — see pages/LegacyRedirects.tsx for exactly how each one
+              {/* Legacy /procurement/* URLs - see pages/LegacyRedirects.tsx for exactly how each one
                   resolves a site to redirect into. No "Receiving"/"Warehouse Receiving" legacy route
                   existed pre-split (that page didn't exist yet), so there's nothing to redirect for
                   it. */}
@@ -136,7 +136,7 @@ function AppRoutes() {
               <Route path="/procurement/stock" element={<LegacyListRedirect leaf="stock" />} />
               <Route path="/procurement/drying" element={<LegacyListRedirect leaf="drying" />} />
 
-              {/* One "Jute Bag Management" section (was five separate sidebar entries/pages) — shared
+              {/* One "Jute Bag Management" section (was five separate sidebar entries/pages) - shared
                   header + tab bar in JuteBagManagementLayout, each former page rendered via
                   <Outlet/>. Leaf paths are unchanged, so existing deep links elsewhere in the app
                   (ReceiptDetailPage, DashboardPage, WarehouseTransfersPage's own ?warehouse=) still
@@ -157,7 +157,7 @@ function AppRoutes() {
               <Route path="/production/lots" element={<LotsListPage />} />
               <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
               <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
-              {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) — every
+              {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) - every
                   route above still works if visited directly; only the sidebar entry point changed. */}
               <Route path="/production" element={<ProductionPage />} />
 
