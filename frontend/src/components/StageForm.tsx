@@ -15,12 +15,16 @@ interface Props {
   readOnly?: boolean;
   /** Limit the grid to these field labels (a role's form covers only part of a stage). */
   only?: string[];
+  /** What could be filled in from elsewhere, per empty field label — offered, never written. */
+  suggestions?: Record<string, { value: string; from: string }>;
+  /** Known values per field label to choose from. */
+  options?: Record<string, string[]>;
 }
 
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only }: Props) {
+export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only, suggestions, options }: Props) {
   return (
     <div className="space-y-4">
       {stage.file && (
@@ -32,10 +36,13 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
       )}
       <div className="grid sm:grid-cols-2 gap-4">
         {stage.fields.filter((f) => !only || only.includes(f.n)).map((f) => {
+          // A calculation with a typed fallback (KOR) locks the field only once it has a value to show:
+          // `derived` holds a value for it exactly when every input is recorded.
           const rule = derivedRuleFor(stage.id, f.n);
+          const inForce = rule && (!rule.fallbackToTyped || derived?.[f.n] !== undefined);
           // The whole Lot stage is the system's (the server refuses any write to it), and calculated
           // fields follow their formula. Nobody types either.
-          const system = rule
+          const system = rule && inForce
             ? { kind: "calculated" as const, hint: rule.formula }
             : stage.id === "n-lot"
               ? {
@@ -47,7 +54,9 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
             <FieldInput
               key={f.n}
               field={f}
-              value={rule ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
+              value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
+              suggestion={suggestions?.[f.n]}
+              options={options?.[f.n]}
               onChange={(v) => onFieldChange(f.n, v)}
               onBlur={onFieldBlur}
               idPrefix={stage.id}

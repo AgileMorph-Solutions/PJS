@@ -1,8 +1,15 @@
 /**
- * Transfer Requests — moving Lots from one warehouse to another, numbered BKT-<year>-NNN (Oct 2026
- * team feedback: "Transfer Request → BKT Transfer ID"). Deliberately minimal: which Lots, from
- * where, to where, and whether they have left / arrived. The Lot, supplier and fiche of each line
- * are read from its receipt, never retyped.
+ * Transfer Requests — moving Lots from one warehouse to another on ONE truck, numbered BKT-<year>-NNN
+ * (Oct 2026 team feedback: "Transfer Request → BKT Transfer ID", then the client's workbook: "one BKT
+ * should represent one truck/voyage"). The Lot, supplier and fiche of each line are read from its
+ * receipt, never retyped.
+ *
+ * Two warehouses write two halves of the record and neither writes the other's:
+ *   - dispatch (the SENDING site): the truck, who drives it, and the loaded weight at its scale;
+ *   - receive (the DESTINATION site): bags, gross weight, KOR, moisture and nut count at ITS scale.
+ * The receiving fields stay blank until the truck arrives, so a bag count can never be "received"
+ * at dispatch; the variance and the in-transit / closed / discrepancy state are derived from the two
+ * halves (contract domain/transfers.ts), never stored.
  *
  * Putting a Lot on a transfer is the transfer decision for that truck, so it records the n-xferdec
  * branch as "transfer" in the same transaction — the receipt's status then derives to
@@ -11,7 +18,8 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import type { ReceiptRecord, TransferRequest, TransferStatus } from "@anagroci/contract/types/receipt";
-import { TRANSFER_STATUSES } from "@anagroci/contract/data/transfers";
+import { transferState, transferVariance } from "@anagroci/contract/domain/transfers";
+import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
@@ -25,6 +33,8 @@ export interface TransferLineInput {
   receiptId: string;
   bags?: number | null;
   netWeightKg?: number | string | null;
+  /** Defaults to the Lot's Bin(s) at the moment it is added. */
+  binCode?: string | null;
 }
 
 export interface TransferInput {
@@ -35,7 +45,28 @@ export interface TransferInput {
   lines?: TransferLineInput[];
 }
 
+export interface DispatchInput {
+  truckNo?: string;
+  transporter?: string | null;
+  driver?: string | null;
+  driverPhone?: string | null;
+  dispatchedGrossKg?: number | string | null;
+}
+
+export interface ReceiveInput {
+  bagsReceived?: number | string;
+  damagedBags?: number | string | null;
+  receivedGrossKg?: number | string;
+  korReceived?: number | string | null;
+  moistureReceived?: number | string | null;
+  nutCountReceived?: number | string | null;
+  receivedComment?: string | null;
+  receivedLotNoRaw?: string | null;
+}
+
 const INCLUDE = {
+  dispatcher: { select: { displayName: true } },
+  receiver: { select: { displayName: true } },
   lines: {
     orderBy: { id: "asc" },
     include: {
@@ -52,23 +83,53 @@ const INCLUDE = {
 
 type TransferRow = Prisma.TransferRequestGetPayload<{ include: typeof INCLUDE }>;
 
+const num = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
+
 function toWire(t: TransferRow): TransferRequest {
+  const lines = t.lines.map((l) => ({
+    receiptId: l.receiptId,
+    lotNumber: l.receipt.lot?.lotNumber ?? null,
+    supplierName: l.receipt.supplierName,
+    vehicleNo: l.receipt.vehicleNo,
+    fiche: l.receipt.verify?.fiche ?? null,
+    bags: l.bags,
+    netWeightKg: num(l.netWeightKg),
+    binCode: l.binCode,
+  }));
+  const facts = {
+    status: t.status as TransferStatus,
+    lines,
+    dispatchedGrossKg: num(t.dispatchedGrossKg),
+    bagsReceived: t.bagsReceived,
+    receivedGrossKg: num(t.receivedGrossKg),
+  };
   return {
     id: t.id,
     transferDate: t.transferDate,
     fromWarehouse: t.fromWarehouse,
     toWarehouse: t.toWarehouse,
-    status: t.status as TransferStatus,
+    status: facts.status,
     remarks: t.remarks,
-    lines: t.lines.map((l) => ({
-      receiptId: l.receiptId,
-      lotNumber: l.receipt.lot?.lotNumber ?? null,
-      supplierName: l.receipt.supplierName,
-      vehicleNo: l.receipt.vehicleNo,
-      fiche: l.receipt.verify?.fiche ?? null,
-      bags: l.bags,
-      netWeightKg: l.netWeightKg === null ? null : Number(l.netWeightKg),
-    })),
+    lines,
+    truckNo: t.truckNo,
+    transporter: t.transporter,
+    driver: t.driver,
+    driverPhone: t.driverPhone,
+    dispatchedGrossKg: facts.dispatchedGrossKg,
+    dispatchedAt: t.dispatchedAt?.toISOString() ?? null,
+    dispatchedBy: t.dispatcher?.displayName ?? null,
+    bagsReceived: t.bagsReceived,
+    damagedBags: t.damagedBags,
+    receivedGrossKg: facts.receivedGrossKg,
+    korReceived: num(t.korReceived),
+    moistureReceived: num(t.moistureReceived),
+    nutCountReceived: t.nutCountReceived,
+    receivedComment: t.receivedComment,
+    receivedLotNoRaw: t.receivedLotNoRaw,
+    receivedAt: t.receivedAt?.toISOString() ?? null,
+    receivedBy: t.receiver?.displayName ?? null,
+    state: transferState(facts),
+    variance: transferVariance(facts),
   };
 }
 
@@ -87,12 +148,21 @@ export async function getTransfer(id: string) {
   return row ? toWire(row) : null;
 }
 
-function netWeight(v: TransferLineInput["netWeightKg"]): Prisma.Decimal | null {
+function decimal(v: string | number | null | undefined, what: string): Prisma.Decimal | null {
   if (v === null || v === undefined || String(v).trim() === "") return null;
-  const n = Number(String(v).replace(",", "."));
-  if (!Number.isFinite(n) || n < 0) throw new ValidationError(`Net weight "${v}" isn't a number of kg.`);
+  const n = parseQty(v);
+  if (n === undefined || n < 0) throw new ValidationError(`${what} "${v}" isn't a number.`);
   return new Prisma.Decimal(n);
 }
+
+function whole(v: string | number | null | undefined, what: string): number | null {
+  if (v === null || v === undefined || String(v).trim() === "") return null;
+  const n = Number(String(v).trim());
+  if (!Number.isInteger(n) || n < 0) throw new ValidationError(`${what} "${v}" isn't a whole number.`);
+  return n;
+}
+
+const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 
 /**
  * Each Lot must be at the sending warehouse, actually have a Lot (passed quality), not be rejected,
@@ -104,7 +174,10 @@ async function addLines(tx: Tx, transferId: string, from: string, lines: Transfe
   for (const line of lines) {
     const receipt = await tx.receipt.findUnique({
       where: { id: line.receiptId },
-      select: { warehouse: true, lot: { select: { lotNumber: true } }, branches: { select: { stageId: true, branchId: true } } },
+      select: {
+        warehouse: true, lot: { select: { lotNumber: true } }, bin: { select: { binNumber: true } },
+        branches: { select: { stageId: true, branchId: true } },
+      },
     });
     if (!receipt) throw new ValidationError(`Receipt ${line.receiptId} doesn't exist.`);
     if ((await siteOf(tx, receipt.warehouse)) !== from) throw new ValidationError(`${line.receiptId} is at ${receipt.warehouse}, not ${from}.`);
@@ -117,17 +190,21 @@ async function addLines(tx: Tx, transferId: string, from: string, lines: Transfe
     }
 
     await tx.transferRequestLine.create({
-      data: { transferId, receiptId: line.receiptId, bags: line.bags ?? null, netWeightKg: netWeight(line.netWeightKg) },
-    });
-    await applyBranch(tx, line.receiptId, "n-xferdec", "transfer", undefined, opts);
-    const fresh = await loadReceiptRow(line.receiptId, tx);
-    await tx.timelineEntry.create({
       data: {
-        receiptId: line.receiptId, status: deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord),
-        at: new Date().toISOString(), actorId: opts.actor?.id, note: `Added to transfer ${transferId}`,
+        transferId, receiptId: line.receiptId, bags: line.bags ?? null, netWeightKg: decimal(line.netWeightKg, "Net weight"),
+        binCode: text(line.binCode) ?? text(receipt.bin?.binNumber),
       },
     });
+    await applyBranch(tx, line.receiptId, "n-xferdec", "transfer", undefined, opts);
+    await timeline(tx, line.receiptId, `Added to transfer ${transferId}`, opts);
   }
+}
+
+async function timeline(tx: Tx, receiptId: string, note: string, opts: WriteOpts) {
+  const fresh = await loadReceiptRow(receiptId, tx);
+  await tx.timelineEntry.create({
+    data: { receiptId, status: deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord), at: new Date().toISOString(), actorId: opts.actor?.id, note },
+  });
 }
 
 export async function createTransfer(input: TransferInput, opts: WriteOpts = {}) {
@@ -166,16 +243,71 @@ export async function addTransferLines(id: string, lines: TransferLineInput[], o
   return toWire(row);
 }
 
-/** requested → dispatched → received, one step at a time and never backwards. */
-export async function setTransferStatus(id: string, status: string) {
-  if (!TRANSFER_STATUSES.includes(status as TransferStatus)) {
-    throw new ValidationError(`Unknown transfer status "${status}" (use ${TRANSFER_STATUSES.join(", ")}).`);
-  }
-  const t = await prisma.transferRequest.findUnique({ where: { id } });
-  if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
-  const from = TRANSFER_STATUSES.indexOf(t.status as TransferStatus);
-  const to = TRANSFER_STATUSES.indexOf(status as TransferStatus);
-  if (to !== from + 1) throw new ValidationError(`Transfer ${id} is ${t.status}; it can only move to ${TRANSFER_STATUSES[from + 1] ?? "nothing further"}.`);
-  const row = await prisma.transferRequest.update({ where: { id }, data: { status }, include: INCLUDE });
+/** "1796 GC 01 / 3922-BB-04" and "1796GC01/3922BB04" are the same rig. */
+const rig = (truck: string) => truck.toUpperCase().replace(/[\s-]+/g, "");
+
+/**
+ * The sending warehouse sends the truck. One BKT is one truck / voyage, so the truck is required and
+ * can't already be out on another BKT that hasn't arrived yet.
+ */
+export async function dispatchTransfer(id: string, input: DispatchInput, opts: WriteOpts = {}) {
+  const truckNo = text(input.truckNo);
+  if (!truckNo) throw new ValidationError("A transfer needs its truck number to be dispatched — one BKT is one truck.");
+  const gross = decimal(input.dispatchedGrossKg, "Loaded weight");
+
+  const row = await prisma.$transaction(async (tx) => {
+    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { receiptId: true } } } });
+    if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
+    if (t.status !== "requested") throw new ValidationError(`Transfer ${id} is already ${t.status}.`);
+    if (!t.lines.length) throw new ValidationError(`Transfer ${id} has no Lots to send.`);
+
+    const out = await tx.transferRequest.findMany({ where: { status: "dispatched", id: { not: id } }, select: { id: true, truckNo: true } });
+    const clash = out.find((o) => o.truckNo && rig(o.truckNo) === rig(truckNo));
+    if (clash) throw new ValidationError(`Truck ${truckNo} is still on ${clash.id}, which hasn't arrived — one BKT is one voyage.`);
+
+    await tx.transferRequest.update({
+      where: { id },
+      data: {
+        status: "dispatched", truckNo, transporter: text(input.transporter), driver: text(input.driver), driverPhone: text(input.driverPhone),
+        dispatchedGrossKg: gross, dispatchedAt: new Date(), dispatchedBy: opts.actor?.id ?? null,
+      },
+    });
+    for (const l of t.lines) await timeline(tx, l.receiptId, `Dispatched on ${id} (truck ${truckNo})`, opts);
+    return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  return toWire(row);
+}
+
+/**
+ * The receiving warehouse records what actually arrived — bags and gross weight are required, since
+ * they are what the variance is. Only a dispatched truck can be received, and only once.
+ */
+export async function receiveTransfer(id: string, input: ReceiveInput, opts: WriteOpts = {}) {
+  const bags = whole(input.bagsReceived, "Bags received");
+  if (bags === null) throw new ValidationError("Enter the bags received — it is what the transfer is checked against.");
+  const gross = decimal(input.receivedGrossKg, "Gross weight received");
+  if (gross === null) throw new ValidationError("Enter the gross weight received at your scale — it is what the transfer is checked against.");
+  const damaged = whole(input.damagedBags, "Damaged bags");
+  const nutCount = whole(input.nutCountReceived, "Nut count");
+
+  const row = await prisma.$transaction(async (tx) => {
+    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { receiptId: true } } } });
+    if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
+    if (t.status === "requested") throw new ValidationError(`Transfer ${id} hasn't been dispatched yet — there is nothing to receive.`);
+    if (t.status === "received") throw new ValidationError(`Transfer ${id} was already received.`);
+    if (damaged !== null && damaged > bags) throw new ValidationError("More damaged bags than bags received.");
+
+    await tx.transferRequest.update({
+      where: { id },
+      data: {
+        status: "received", bagsReceived: bags, damagedBags: damaged, receivedGrossKg: gross,
+        korReceived: decimal(input.korReceived, "KOR"), moistureReceived: decimal(input.moistureReceived, "Moisture"),
+        nutCountReceived: nutCount, receivedComment: text(input.receivedComment), receivedLotNoRaw: text(input.receivedLotNoRaw),
+        receivedAt: new Date(), receivedBy: opts.actor?.id ?? null,
+      },
+    });
+    for (const l of t.lines) await timeline(tx, l.receiptId, `Received at ${t.toWarehouse} on ${id}`, opts);
+    return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return toWire(row);
 }

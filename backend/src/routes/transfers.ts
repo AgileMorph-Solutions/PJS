@@ -1,14 +1,14 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
-  listTransfers, getTransfer, createTransfer, addTransferLines, setTransferStatus,
-  type TransferInput, type TransferLineInput,
+  listTransfers, getTransfer, createTransfer, addTransferLines, dispatchTransfer, receiveTransfer,
+  type TransferInput, type TransferLineInput, type DispatchInput, type ReceiveInput,
 } from "../services/transfers.js";
 import { scopedSite, scopedWarehouse } from "../auth/scope.js";
 import { currentUser } from "../auth/plugin.js";
 import { ForbiddenError } from "../domain/validation.js";
 import { resolveSite } from "../domain/site.js";
 
-/** A Warehouse Incharge sees and acts on transfers that leave from or arrive at their own warehouse. */
+/** A Warehouse Incharge sees transfers that leave from or arrive at their own warehouse. */
 async function assertTransferAccess(req: FastifyRequest, t: { fromWarehouse: string; toWarehouse: string }) {
   const user = currentUser(req);
   if (user.role === "admin") return;
@@ -49,12 +49,21 @@ export async function transferRoutes(app: FastifyInstance) {
     return addTransferLines(id, lines ?? [], actorOf(req));
   });
 
-  app.patch("/api/transfers/:id", async (req, reply) => {
+  // The two halves of a BKT, each written only by its own warehouse. The sending side says what left;
+  // the destination says what arrived — neither can fill in the other's.
+  app.post("/api/transfers/:id/dispatch", async (req, reply) => {
     const { id } = req.params as { id: string };
     const t = await getTransfer(id);
     if (!t) return reply.code(404).send({ error: "Transfer not found" });
-    await assertTransferAccess(req, t);
-    const { status } = (req.body ?? {}) as { status?: string };
-    return setTransferStatus(id, status ?? "");
+    if (currentUser(req).role !== "admin") scopedWarehouse(req, t.fromWarehouse);
+    return dispatchTransfer(id, (req.body ?? {}) as DispatchInput, actorOf(req));
+  });
+
+  app.post("/api/transfers/:id/receive", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const t = await getTransfer(id);
+    if (!t) return reply.code(404).send({ error: "Transfer not found" });
+    if (currentUser(req).role !== "admin") scopedWarehouse(req, t.toWarehouse);
+    return receiveTransfer(id, (req.body ?? {}) as ReceiveInput, actorOf(req));
   });
 }

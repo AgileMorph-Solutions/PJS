@@ -12,7 +12,9 @@ import { Prisma } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
-import { DERIVED_RULES, computeDerivedFields, derivedRuleFor } from "@anagroci/contract/domain/receiptMath";
+import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
+import { RECEIPT_STAGE_MIRRORS, STAGE_TO_RECEIPT_COLUMNS } from "@anagroci/contract/domain/receiptMirror";
+import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
@@ -32,14 +34,20 @@ export async function loadReceiptRow(id: string, tx: Tx | typeof prisma = prisma
 }
 
 export async function getReceipt(id: string) {
-  // An old REC-2026-NNNN id (a bookmark, an export, a printed form) resolves to the renumbered receipt.
-  const row = (await loadReceiptRow(id)) ?? (await loadByLegacyId(id));
+  // An old REC-2026-NNNN id (a bookmark, an export, a printed form) resolves to the renumbered receipt,
+  // and so does one issued under a since-replaced warehouse code (REC-BKE01-… → REC-BKE-…).
+  const row = (await loadReceiptRow(id)) ?? (await loadByLegacyId(id)) ?? (await loadBySupersededCode(id));
   return row ? toReceiptRecord(row) : null;
 }
 
 async function loadByLegacyId(legacyId: string) {
   const hit = await prisma.receipt.findUnique({ where: { legacyId }, select: { id: true } });
   return hit ? loadReceiptRow(hit.id) : null;
+}
+
+async function loadBySupersededCode(id: string) {
+  const current = currentFormOfSiteId(id);
+  return current ? loadReceiptRow(current) : null;
 }
 
 export interface ReceiptActivities {
@@ -175,18 +183,39 @@ export async function applyStageFields(
   fields: Record<string, string>,
   opts: WriteOpts = {}
 ) {
-  if (!opts.bypassValidation) assertCallerMayWrite(stageId, fields);
+  if (!opts.bypassValidation) await assertCallerMayWrite(tx, id, stageId, fields);
   await writeStageFields(tx, id, stageId, fields, opts);
+  if (!opts.bypassValidation) await syncReceiptColumns(tx, id, stageId, fields);
   if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts);
+}
+
+/**
+ * The receipt's supplier, LBA code and truck number are each stored twice — on the receipt (what the
+ * list shows) and on the gate/verify stage (the record of the step). Typing one on the stage form
+ * moves the other in the same transaction, so the list can't show a supplier the stage doesn't have.
+ * Imports and the seeder (bypassValidation) keep what the workbook recorded.
+ */
+async function syncReceiptColumns(tx: Tx, id: string, stageId: string, fields: Record<string, string>) {
+  const data: Record<string, string> = {};
+  for (const col of STAGE_TO_RECEIPT_COLUMNS) {
+    const [mirrorStage, label] = RECEIPT_STAGE_MIRRORS[col]!;
+    if (mirrorStage === stageId && label in fields) data[col] = fields[label]!.trim();
+  }
+  if (Object.keys(data).length) await tx.receipt.update({ where: { id }, data });
 }
 
 export const SYSTEM_LOT_MESSAGE =
   "The Lot Number is issued by the system when the truck passes quality — it can't be typed or changed.";
 
-function assertCallerMayWrite(stageId: string, fields: Record<string, string>) {
+async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>) {
   if (stageId === "n-lot") throw new ValidationError(SYSTEM_LOT_MESSAGE);
+  // A value that is typed until its inputs exist (KOR, before the cut-test grams) is the system's only
+  // once they do — judged on the stage as it will stand after this write, so grams and KOR sent
+  // together are refused rather than leaving a typed number the next recalculation would overwrite.
+  const current = assembleStageData((await loadReceiptRow(id, tx)) as Record<string, unknown>);
+  const after = { ...current, [stageId]: { ...current[stageId], ...fields } };
   for (const label of Object.keys(fields)) {
-    const rule = derivedRuleFor(stageId, label);
+    const rule = derivedRuleInForce(after, stageId, label);
     if (rule) throw new ValidationError(`${label} is calculated (${rule.formula}) — change the values it is calculated from instead.`);
   }
 }
@@ -225,6 +254,7 @@ async function writeStageFields(
   if (!opts.bypassValidation && stageId === "n-bin" && "Bin Number" in fields) {
     const existing = await tx.stageLotAssignment.findUnique({ where: { receiptId: id } });
     assertLotBeforeBin(existing?.lotNumber, fields["Bin Number"]);
+    await assertBinIsAPhysicalBin(tx, fields["Bin Number"]);
   }
 
   if (stageId === "n-lot") {
@@ -336,6 +366,26 @@ export async function applyBranch(
 }
 
 /**
+ * A Bin is a physical location INSIDE a store (BKE-002-BIN-012), not the store itself (BKE-002) —
+ * the client's point 3. New allocations must name a Bin the master holds and must not name a store.
+ * Several Bins for one Lot may be written "BKE-002-BIN-004 / BKE-002-BIN-006", as their sheet does.
+ * Only NEW writes are held to this: Bin values already stored are never rewritten, and the ones
+ * that are really store codes are reported by the data-quality audit instead.
+ */
+async function assertBinIsAPhysicalBin(tx: Tx, value: string | undefined) {
+  const bins = (value ?? "").split(/\s*[\/,]\s*/).map((b) => b.trim()).filter(Boolean);
+  for (const code of bins) {
+    const store = await tx.warehouse.findFirst({ where: { name: code, site: { not: null } }, select: { name: true } });
+    if (store) {
+      throw new ValidationError(`${code} is a store (a warehouse code), not a Bin. Choose the Bin inside it, e.g. ${code}-BIN-012.`);
+    }
+    if (!(await tx.bin.findUnique({ where: { code }, select: { code: true } }))) {
+      throw new ValidationError(`Bin "${code}" isn't in the Bin master — add it in Masters › Bins first, so the same place is never spelled two ways.`);
+    }
+  }
+}
+
+/**
  * Passing quality is the "accepted reception" moment — one accepted truck creates one original Lot
  * (Oct 2026 team feedback). Issued at most once: switching the decision to fail and back to pass
  * keeps the Lot it already has, and a Lot is never taken back or reused.
@@ -349,8 +399,12 @@ async function issueLotIfMissing(tx: Tx, id: string, opts: WriteOpts): Promise<s
   const by = opts.actor
     ? (await tx.user.findUnique({ where: { id: opts.actor.id }, select: { displayName: true } }))?.displayName ?? "System"
     : "System";
+  // The truck the Lot belongs to is already on the receipt (typed at the gate) — carried here, not retyped.
+  const truck = (await tx.stageGateEntry.findUnique({ where: { receiptId: id }, select: { vehicleNo: true } }))?.vehicleNo?.trim()
+    || (await tx.receipt.findUniqueOrThrow({ where: { id }, select: { vehicleNo: true } })).vehicleNo.trim();
   await writeStageFields(tx, id, "n-lot", {
     "Lot Number": lotNumber,
+    ...(truck ? { "Truck reference": truck } : {}),
     "Assigned by (Warehouse Team)": by,
     "Date/time assigned": new Date().toISOString(),
   }, opts);

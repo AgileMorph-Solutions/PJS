@@ -136,7 +136,7 @@ describe("POST /api/receipts/batch", () => {
     const made = await prisma.receipt.findUnique({ where: { id: ok.json().ids[0] } });
     expect(made!.warehouse).toBe(TEST_SITE);
     // Numbered with the code the master holds for that warehouse, and the year of the arrival date.
-    expect(made!.id).toBe(`REC-${TEST_CODE}-2026-001`);
+    expect(made!.id).toBe(`REC-${TEST_CODE}-2026-0001`);
   });
 
   it("refuses a warehouse that has no code yet, rather than inventing one", async () => {
@@ -155,7 +155,7 @@ describe("POST /api/receipts/batch", () => {
     const a = (await post("wi", { rows: [truck(50), truck(51)] })).json().ids as string[];
     const b = (await post("wi", { rows: [truck(52)] })).json().ids as string[];
     const n = (id: string) => Number(id.split("-")[3]);
-    expect(a.every((id) => /^REC-BKE01-2026-\d{3,}$/.test(id))).toBe(true);
+    expect(a.every((id) => /^REC-BKE-2026-\d{4,}$/.test(id))).toBe(true);
     expect(n(a[1])).toBe(n(a[0]) + 1);
     expect(n(b[0])).toBe(n(a[1]) + 1);
   });

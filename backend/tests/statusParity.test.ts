@@ -28,11 +28,13 @@ describe("status parity with the pre-normalization data", () => {
     const rows = await prisma.receipt.findMany({ where: SEED_ONLY, include: RECEIPT_INCLUDE });
     const drift: string[] = [];
     for (const row of rows) {
+      const source = row.source as "imported" | "entered";
       const before = deriveStatus({
         stageData: JSON.parse(row.stageDataShadow!),
         branches: assembleBranches(row),
+        source,
       });
-      const after = deriveStatus({ stageData: assembleStageData(row), branches: assembleBranches(row) });
+      const after = deriveStatus({ stageData: assembleStageData(row), branches: assembleBranches(row), source });
       if (before !== after) drift.push(`${row.id}: ${before} -> ${after}`);
     }
     expect(drift).toEqual([]);
@@ -41,10 +43,10 @@ describe("status parity with the pre-normalization data", () => {
   it("the dashboard counts are unchanged (self-consistency only — see below for why the six\n     hardcoded figures this used to assert were removed)", async () => {
     const rows = await prisma.receipt.findMany({ where: SEED_ONLY, include: RECEIPT_INCLUDE });
     const after = computeDashboardCounts(
-      rows.map((r) => ({ stageData: assembleStageData(r), branches: assembleBranches(r) }))
+      rows.map((r) => ({ stageData: assembleStageData(r), branches: assembleBranches(r), source: r.source as "imported" | "entered" }))
     );
     const before = computeDashboardCounts(
-      rows.map((r) => ({ stageData: JSON.parse(r.stageDataShadow!), branches: assembleBranches(r) }))
+      rows.map((r) => ({ stageData: JSON.parse(r.stageDataShadow!), branches: assembleBranches(r), source: r.source as "imported" | "entered" }))
     );
     expect(after).toEqual(before);
     // The six hardcoded figures this test used to assert (totalReceived: 50, acceptedUnloaded: 35,
@@ -55,6 +57,19 @@ describe("status parity with the pre-normalization data", () => {
     // self-consistency check above (after === before) is the real invariant this test protects —
     // that a receipt's derived status is unaffected by normalization — and it needs no fixed
     // baseline to stay meaningful.
+  });
+
+  it("the GRN-quantity rule leaves every imported receipt where its workbook put it", async () => {
+    // Oct 2026: a receipt is GRN-completed only once its GRN quantity is recorded. The real 2026 Truck
+    // Reception sheet has no such column, so most imported receipts have a price and no quantity —
+    // applying the rule to them would silently demote them all. They are reported (data quality), not changed.
+    const rows = await prisma.receipt.findMany({ where: { ...SEED_ONLY, stageEntries: { some: { stageId: "n-grn" } } }, include: RECEIPT_INCLUDE });
+    const withoutQuantity = rows.filter((r) => !(((r as { grn?: { grnWeight: string | null } | null }).grn?.grnWeight) ?? "").trim());
+    expect(withoutQuantity.length).toBeGreaterThan(500); // the gap is real and large — keep it visible
+    for (const r of withoutQuantity) {
+      const status = deriveStatus({ stageData: assembleStageData(r), branches: assembleBranches(r), source: r.source as "imported" | "entered" });
+      expect(["grn_completed", "in_stock", "in_drying", "transferred_out", "rejected"], `${r.id} is ${status}`).toContain(status);
+    }
   });
 
   it("n-stock is never auto-created — real data confirms zero stock postings today", async () => {
@@ -121,7 +136,7 @@ describe("status parity with the pre-normalization data", () => {
       if (!dEntries || dEntries.length !== 1) continue;
       compared++;
       const r = dEntries[0];
-      const now = deriveStatus({ stageData: assembleStageData(r), branches: assembleBranches(r) });
+      const now = deriveStatus({ stageData: assembleStageData(r), branches: assembleBranches(r), source: r.source as "imported" | "entered" });
       if (now === oEntries[0].status) { matched++; continue; }
       if (now !== "grn_completed") unexpectedMismatches.push(`${k}: oracle=${oEntries[0].status} now=${now}`);
     }

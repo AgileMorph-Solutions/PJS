@@ -401,6 +401,34 @@ export function useDownstreamStatus(warehouse?: string) {
 }
 
 /**
+ * Reception Type / exception flags / approval per receipt (backend's services/receiptPlanInfo.ts).
+ * Warehouse Incharge and admin only — the endpoint is closed to the narrower roles — so `enabled`
+ * keeps everyone else from firing a request that can only be refused.
+ */
+export function useReceiptPlanInfo(warehouse: string | undefined, enabled: boolean) {
+  const [info, setInfo] = useState<Map<string, import("@anagroci/contract/types/receipt").ReceiptPlanInfo>>(new Map());
+  const refetch = useCallback(() => {
+    if (!enabled) return Promise.resolve();
+    return api.listReceiptPlanInfo(warehouse)
+      .then((rows) => setInfo(new Map(rows.map((r) => [r.receiptId, r]))))
+      .catch(() => {});
+  }, [warehouse, enabled]);
+  useEffect(() => { void refetch(); }, [refetch]);
+  return { info, refetch };
+}
+
+/** The same plan info for one receipt — the receipt page's card. */
+export function useOneReceiptPlanInfo(receiptId: string | undefined, enabled: boolean) {
+  const [info, setInfo] = useState<import("@anagroci/contract/types/receipt").ReceiptPlanInfo | undefined>();
+  const refetch = useCallback(() => {
+    if (!enabled || !receiptId) return Promise.resolve();
+    return api.getReceiptPlanInfo(receiptId).then(setInfo).catch(() => setInfo(undefined));
+  }, [receiptId, enabled]);
+  useEffect(() => { void refetch(); }, [refetch]);
+  return { info, refetch };
+}
+
+/**
  * One ledger's rows, scoped to a site — deliberately NOT a replacement for TrackingApi's
  * `ledgerEntries` (the unfiltered, globally-loaded set stays the zero-latency "All sites" default);
  * this is only reached when a jute page's own site filter is active. Ledger 4 rows can match on

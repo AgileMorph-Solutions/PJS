@@ -3,6 +3,7 @@ import {
   listDeliveryPlans, getDeliveryPlan, createDeliveryPlan, updateDeliveryPlan, type DeliveryPlanInput,
 } from "../services/deliveryPlans.js";
 import { scopedSite, scopedWarehouse, assertWarehouseAccess } from "../auth/scope.js";
+import { currentUser } from "../auth/plugin.js";
 
 export async function deliveryPlanRoutes(app: FastifyInstance) {
   app.get("/api/delivery-plans", async (req) => {
@@ -30,6 +31,6 @@ export async function deliveryPlanRoutes(app: FastifyInstance) {
     const plan = await getDeliveryPlan(id);
     if (!plan) return reply.code(404).send({ error: "Delivery plan not found" });
     await assertWarehouseAccess(req, plan.destinationWarehouse);
-    return updateDeliveryPlan(id, (req.body ?? {}) as DeliveryPlanInput);
+    return updateDeliveryPlan(id, (req.body ?? {}) as DeliveryPlanInput, currentUser(req).id);
   });
 }

@@ -8,7 +8,7 @@ about **how to work in this repo**, not what it does.
 ## Layout
 
 ```
-packages/contract/   Shared source of truth: types, the 17-stage/4-ledger field dictionaries,
+packages/contract/   Shared source of truth: types, the 16-stage/4-ledger field dictionaries,
                       deriveStatus(), decision branches, jute math. Both frontend and backend
                       depend on this — see packages/contract/CLAUDE.md.
 backend/              Fastify + Prisma + PostgreSQL API. See backend/CLAUDE.md.
@@ -48,7 +48,11 @@ a check — don't patch the importer to make it disappear.
 
 ## Precedence when sources conflict
 
-The Sept 2026 clarification (quoted in `stages.ts`'s `note` fields, search "Confirmed") > `stages.ts`
+The client's Oct 2026 APPLICATION VIEW workbook and its covering email
+(`docs/Procurement/new sheets/ANAGROCI - Unit Warehouse - 2026 APPLICATION VIEW - SATVIK STRUCTURE.xlsx`:
+Delivery Plan, unplanned/exception receipts, KOR from the cut test, Net ≠ GRN ≠ Paid, one BKT = one
+truck, dispatch vs receive) > the Sept 2026 clarification (quoted in `stages.ts`'s `note` fields, search
+"Confirmed") > `stages.ts`
 / `juteBags.ts` (already reconciled with it) > the original process docs in `../flow-xl-map/` >
 `PG_Project_Data_Model_Overview.md` (broadest, oldest, background only).
 

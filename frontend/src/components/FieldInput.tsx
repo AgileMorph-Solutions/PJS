@@ -13,6 +13,10 @@ interface Props {
   /** The system, not a person, produces this value. Always read-only, with the reason shown under it
    * ("Good + damp + torn bags", "Issued by the system when the truck passes quality"). */
   system?: { kind: "calculated" | "issued"; hint: string };
+  /** Offered while the field is empty and never written on its own: taking it is the person confirming it. */
+  suggestion?: { value: string; from: string };
+  /** Known values to pick from (a Bin from the master); typing something else is still allowed — the server decides. */
+  options?: string[];
 }
 
 /** One field row: label + an optional "new" badge + a controlled input. `field.v` only ever
@@ -20,7 +24,7 @@ interface Props {
  * displayed value always comes from the record itself via `value`, never from the generic sample
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system }: Props) {
+export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, suggestion, options }: Props) {
   const isNew = field.v === "";
   const locked = readOnly || Boolean(system);
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
@@ -48,13 +52,29 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         onBlur={onBlur}
         readOnly={locked}
         aria-describedby={system ? `${id}-hint` : undefined}
+        list={options && !locked ? `${id}-options` : undefined}
         placeholder={value ? "" : system ? (system.kind === "calculated" ? "Calculated automatically" : "Issued automatically") : "Not recorded yet"}
         className={`w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${locked ? "cursor-default text-warmstone-600" : ""}`}
       />
+      {options && !locked && (
+        <datalist id={`${id}-options`}>
+          {options.map((o) => <option key={o} value={o} />)}
+        </datalist>
+      )}
       {system && (
         <p id={`${id}-hint`} className="mt-1 text-[11.5px] text-warmstone-500">
           {system.hint}
         </p>
+      )}
+      {suggestion && !locked && !value.trim() && (
+        <button
+          type="button"
+          onClick={() => { onChange(suggestion.value); onBlur?.(); }}
+          className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-brand-700 hover:text-brand-800"
+        >
+          <span className="material-symbols-outlined text-[14px]">auto_fix_high</span>
+          Use {suggestion.value} <span className="font-normal text-warmstone-500">(from {suggestion.from})</span>
+        </button>
       )}
     </div>
   );

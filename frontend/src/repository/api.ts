@@ -5,7 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -167,10 +167,18 @@ export const api = {
     request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ code }) }),
 
   listDeliveryPlans: (warehouse?: string) => request<DeliveryPlan[]>(withWarehouse("/delivery-plans", warehouse)),
-  createDeliveryPlan: (plan: Partial<Omit<DeliveryPlan, "id" | "deliveryStatus" | "actualArrivalDate" | "truckNo" | "receiptIds">>) =>
+  createDeliveryPlan: (plan: DeliveryPlanPayload) =>
     request<DeliveryPlan>("/delivery-plans", { method: "POST", body: JSON.stringify(plan) }),
-  updateDeliveryPlan: (id: string, patch: Partial<DeliveryPlan>) =>
+  updateDeliveryPlan: (id: string, patch: DeliveryPlanPayload) =>
     request<DeliveryPlan>(`/delivery-plans/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+
+  /** Reception Type, exception flags, plan link and approval for every receipt at a site. Warehouse Incharge / admin only. */
+  listReceiptPlanInfo: (warehouse?: string) => request<ReceiptPlanInfo[]>(withWarehouse("/receipts/plan-info", warehouse)),
+  getReceiptPlanInfo: (receiptId: string) => request<ReceiptPlanInfo>(`/receipts/${encodeURIComponent(receiptId)}/plan-info`),
+  approveReceiptException: (receiptId: string, note?: string) =>
+    request<ReceiptPlanInfo>(`/receipts/${encodeURIComponent(receiptId)}/exception-approval`, { method: "POST", body: JSON.stringify({ note }) }),
+  linkReceiptToPlan: (receiptId: string, deliveryPlanId: string) =>
+    request<ReceiptPlanInfo>(`/receipts/${encodeURIComponent(receiptId)}/delivery-plan`, { method: "POST", body: JSON.stringify({ deliveryPlanId }) }),
 
   listTransfers: (warehouse?: string) => request<TransferRequest[]>(withWarehouse("/transfers", warehouse)),
   createTransfer: (t: {
@@ -179,8 +187,12 @@ export const api = {
   }) => request<TransferRequest>("/transfers", { method: "POST", body: JSON.stringify(t) }),
   addTransferLines: (id: string, lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[]) =>
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/lines`, { method: "POST", body: JSON.stringify({ lines }) }),
-  setTransferStatus: (id: string, status: string) =>
-    request<TransferRequest>(`/transfers/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  /** The SENDING warehouse sends the truck: one BKT is one truck, so the truck number is required. */
+  dispatchTransfer: (id: string, p: DispatchPayload) =>
+    request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/dispatch`, { method: "POST", body: JSON.stringify(p) }),
+  /** The DESTINATION warehouse records what actually arrived; the variance is worked out from it. */
+  receiveTransfer: (id: string, p: ReceivePayload) =>
+    request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/receive`, { method: "POST", body: JSON.stringify(p) }),
   addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
@@ -539,6 +551,24 @@ export interface ReceiptLinks {
   warehouseReceiving: LinkedWarehouseReceiving[];
   dryingBatches: LinkedDryingBatchRow[];
   issuedToProduction: LinkedIssuedToProduction[];
+}
+
+export interface DispatchPayload {
+  truckNo: string; transporter?: string | null; driver?: string | null; driverPhone?: string | null; dispatchedGrossKg?: number | string | null;
+}
+export interface ReceivePayload {
+  bagsReceived: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
+  korReceived?: number | string | null; moistureReceived?: number | string | null; nutCountReceived?: number | string | null;
+  receivedComment?: string | null; receivedLotNoRaw?: string | null;
+}
+
+/** What a plan can be created or corrected with — the writable subset of DeliveryPlan; everything else is derived. */
+export interface DeliveryPlanPayload {
+  supplierName?: string; supplierCode?: string | null;
+  expectedQuantityKg?: number | string | null; expectedTruckType?: string | null; expectedTrucks?: number | string | null;
+  expectedOrigin?: string | null; expectedArrivalDate?: string; expectedDeliveryEnd?: string | null; plannedDeliveryDate?: string | null;
+  destinationWarehouse?: string; destinationStore?: string | null; fundingReference?: string | null; planningBasis?: string | null;
+  remarks?: string | null; cancelled?: boolean; cancelReason?: string | null;
 }
 
 /** Per-receipt downstream flags for Reception's status column (backend's

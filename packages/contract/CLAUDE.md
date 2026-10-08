@@ -11,7 +11,7 @@ comments admitted they'd drift, and eventually they would have.
 src/types/{stage,receipt}.ts     The wire-format types. ReceiptRecord.stageData is
                                   Record<stageId, Record<fieldLabel, string>> — every value is a
                                   string on the wire, always, even numbers and dates.
-src/data/stages.ts               The 16 stage records, 72 fields. THE SPEC — transcribed from real
+src/data/stages.ts               The 16 stage records, 86 fields. THE SPEC — transcribed from real
                                   workbooks, not invented. Each field has {n, v, col}: n is the
                                   display label (exact workbook column name), v is a sample value
                                   (or "" if new), col is the storage column name.
@@ -23,7 +23,10 @@ src/domain/ids.ts                The system ID formats (REC-/LOT-/DP-/BKT-) and 
 src/domain/receiptMath.ts        The calculated fields (total bags, gross, net, paid, amount) as data-driven
                                   rules, plus drying loss. The server writes them; the UI previews them with
                                   the same function. A rule fires only when ALL its inputs are present.
-src/data/transfers.ts            The transfer status steps (requested → dispatched → received).
+src/domain/transfers.ts          BKT variance (bags, net at arrival) and the in-transit / closed / discrepancy
+                                  state, derived from what the sending and receiving warehouses each recorded.
+src/domain/deliveryPlan.ts       Delivery Plan progress/status, per-truck planned / exception / unplanned flags,
+                                  approval and link status — all derived from the plan and its linked receipts.
 src/domain/receiptStatus.ts      deriveStatus() — the ONLY place status is computed. Never let
                                   either side set status directly.
 src/domain/decisions.ts          The 3 decision stages' branch options (n-qfs, n-drying, n-xferdec).
@@ -66,7 +69,7 @@ internally consistent. It does **not** by itself guarantee the database agrees; 
 `backend/tests/roundTrip.test.ts`'s job (every `(model, col)` pair exists in the live Prisma schema).
 
 `packages/contract/tests/stageMap.test.ts` covers the parts that don't need a database: field/label
-counts (16 stages, 72 fields), the 63-byte limit, uniqueness, the cross-stage reused-label case, and
+counts (16 stages, 86 fields), the 63-byte limit, uniqueness, the cross-stage reused-label case, and
 that `deriveStatus()` keys off stage *presence*, not stage *content* (see next section) — write new
 cases here for any new rule in `stages.ts`, before wiring up the database side.
 

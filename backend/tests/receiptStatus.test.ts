@@ -4,9 +4,12 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 
 // Real fixtures — lifted from frontend/src/data/seed/receipts.json (REC-2026-0038, -0019,
 // -0005) rather than invented, so this test exercises the same real records the app ships with.
-function receipt(overrides: Partial<Pick<ReceiptRecord, "stageData" | "branches">>): Pick<ReceiptRecord, "stageData" | "branches"> {
-  return { stageData: {}, branches: {}, ...overrides };
+type Inputs = Pick<ReceiptRecord, "stageData" | "branches" | "source">;
+// `entered` unless a test says otherwise: that is the strict GRN rule, the one every new receipt gets.
+function receipt(overrides: Partial<Inputs>): Inputs {
+  return { stageData: {}, branches: {}, source: "entered", ...overrides };
 }
+const GRN_QTY = "GRN Weight (kept separate from Gross/Net/Paid)";
 
 describe("deriveStatus", () => {
   it("a brand-new receipt with nothing filled in is planned", () => {
@@ -49,17 +52,43 @@ describe("deriveStatus", () => {
   it("walks forward through unload -> grn -> stock -> drying in order", () => {
     const base = { "n-gate": {}, "n-verify": {} };
     expect(deriveStatus(receipt({ stageData: { ...base, "n-unload": {} }, branches: { "n-qfs": "pass" } }))).toBe("unloaded");
-    expect(deriveStatus(receipt({ stageData: { ...base, "n-unload": {}, "n-grn": {} }, branches: { "n-qfs": "pass" } }))).toBe(
+    const grn = { [GRN_QTY]: "40822" };
+    expect(deriveStatus(receipt({ stageData: { ...base, "n-unload": {}, "n-grn": grn }, branches: { "n-qfs": "pass" } }))).toBe(
       "grn_completed"
     );
     expect(
-      deriveStatus(receipt({ stageData: { ...base, "n-unload": {}, "n-grn": {}, "n-stock": {} }, branches: { "n-qfs": "pass" } }))
+      deriveStatus(receipt({ stageData: { ...base, "n-unload": {}, "n-grn": grn, "n-stock": {} }, branches: { "n-qfs": "pass" } }))
     ).toBe("in_stock");
     expect(
       deriveStatus(
-        receipt({ stageData: { ...base, "n-unload": {}, "n-grn": {}, "n-stock": {}, "n-drying": {} }, branches: { "n-qfs": "pass" } })
+        receipt({ stageData: { ...base, "n-unload": {}, "n-grn": grn, "n-stock": {}, "n-drying": {} }, branches: { "n-qfs": "pass" } })
       )
     ).toBe("in_drying");
+  });
+
+  // The client: "make sure the GRN step is completed before the transaction is considered fully received."
+  describe("GRN completed needs the GRN quantity", () => {
+    const base = { "n-gate": {}, "n-verify": {}, "n-unload": {} };
+    const pass = { "n-qfs": "pass" };
+
+    it("a price alone is not enough for an entered receipt — it stays unloaded until the quantity is recorded", () => {
+      expect(deriveStatus(receipt({ stageData: { ...base, "n-grn": { PRICE: "470", AMOUNT: "19158140" } }, branches: pass }))).toBe("unloaded");
+      expect(deriveStatus(receipt({ stageData: { ...base, "n-grn": { [GRN_QTY]: "   " } }, branches: pass }))).toBe("unloaded"); // blank isn't recorded
+      expect(deriveStatus(receipt({ stageData: { ...base, "n-grn": { PRICE: "470", [GRN_QTY]: "40822" } }, branches: pass }))).toBe("grn_completed");
+    });
+
+    it("an imported receipt keeps the status its workbook supports — the 2026 sheet has no GRN quantity column", () => {
+      const price = { PRICE: "470", AMOUNT: "19158140" };
+      expect(deriveStatus(receipt({ source: "imported", stageData: { ...base, "n-grn": price }, branches: pass }))).toBe("grn_completed");
+    });
+
+    it("a caller that doesn't say where a receipt came from gets the strict rule", () => {
+      expect(deriveStatus({ stageData: { ...base, "n-grn": { PRICE: "470" } }, branches: pass })).toBe("unloaded");
+    });
+
+    it("a zero is a recorded quantity", () => {
+      expect(deriveStatus(receipt({ stageData: { ...base, "n-grn": { [GRN_QTY]: "0" } }, branches: pass }))).toBe("grn_completed");
+    });
   });
 });
 
@@ -69,7 +98,7 @@ describe("computeDashboardCounts", () => {
       receipt({ stageData: { "n-gate": {}, "n-verify": {} } }), // pending_qa
       receipt({ stageData: { "n-gate": {}, "n-verify": {} }, branches: { "n-qfs": "fail" } }), // rejected
       receipt({ stageData: { "n-verify": {} }, branches: { "n-qfs": "pass" } }), // pending_unload
-      receipt({ stageData: { "n-gate": {}, "n-verify": {}, "n-unload": {}, "n-grn": {} }, branches: { "n-qfs": "pass" } }), // grn_completed
+      receipt({ stageData: { "n-gate": {}, "n-verify": {}, "n-unload": {}, "n-grn": { [GRN_QTY]: "40822" } }, branches: { "n-qfs": "pass" } }), // grn_completed
       receipt({}), // planned — excluded from totalReceived
     ];
     const counts = computeDashboardCounts(receipts);

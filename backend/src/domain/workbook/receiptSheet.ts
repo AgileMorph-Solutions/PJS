@@ -11,9 +11,14 @@
  */
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { DECISION_BRANCHES } from "@anagroci/contract/domain/decisions";
-import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
-import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
-import { derivedRuleFor } from "@anagroci/contract/domain/receiptMath";
+import { deriveStatus, STATUS_LABELS } from "@anagroci/contract/domain/receiptStatus";
+import type { ReceiptPlanInfo, ReceiptRecord, ReceiptStatus } from "@anagroci/contract/types/receipt";
+import {
+  EXCEPTION_APPROVAL_LABELS, PLAN_FLAG_LABELS, PLAN_LINK_LABELS, RECEPTION_TYPE_LABELS,
+} from "@anagroci/contract/domain/deliveryPlan";
+import { listReceiptPlanInfo } from "../../services/receiptPlanInfo.js";
+import { derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
+import { RECEIPT_STAGE_MIRRORS } from "@anagroci/contract/domain/receiptMirror";
 import {
   applyBranch, applyStageFields, listReceipts, loadReceiptRow, SYSTEM_LOT_MESSAGE,
 } from "../../services/receipts.js";
@@ -30,6 +35,12 @@ export const RECEIPT_KEY = "Receipt.id";
 const TOP = ["id", "source", "arrivalDate", "supplierName", "lbaCode", "vehicleNo", "warehouse", "origin"] as const;
 const DECISION_STAGES = Object.keys(DECISION_BRANCHES);
 const DERIVED_STATUS = "status (derived)";
+/**
+ * Columns the file SHOWS about a truck that the app works out. An upload never writes one: the status is in
+ * RECEIPT_COLUMNS but filtered out where an upload is read (planReceipts), and the plan columns aren't in
+ * RECEIPT_COLUMNS at all.
+ */
+export const RECEIPT_DERIVED_COLUMNS = [DERIVED_STATUS, "plan.deliveryPlanId", "plan.receptionType", "plan.flags", "plan.linkStatus", "plan.approval"];
 const STAGES = Object.values(STAGE_FIELD_MAP);
 
 export const RECEIPT_COLUMNS: string[] = [
@@ -54,24 +65,37 @@ function flatten(r: ReceiptRecord & { status: string }): Flat {
     for (const f of s.fields) row[`${s.model}.${f.col}`] = values?.[f.label];
   }
   for (const id of DECISION_STAGES) row[`ReceiptBranch.${id}`] = r.branches[id];
-  row[DERIVED_STATUS] = r.status;
+  // The label a person reads ("GRN completed"), not the internal id ("grn_completed") — it is a column the client asked for.
+  row[DERIVED_STATUS] = STATUS_LABELS[r.status as ReceiptStatus] ?? r.status;
   return row;
 }
 
+/**
+ * What the app works out about each truck's plan — shown beside the truck, never read back (none of these keys is
+ * in RECEIPT_COLUMNS, so an upload can't write them).
+ */
+function planColumns(i: ReceiptPlanInfo | undefined): Flat {
+  if (!i) return {};
+  return {
+    "plan.deliveryPlanId": i.deliveryPlanId,
+    "plan.receptionType": RECEPTION_TYPE_LABELS[i.type],
+    "plan.flags": i.flags.map((f) => PLAN_FLAG_LABELS[f]).join("; ") || null,
+    "plan.linkStatus": PLAN_LINK_LABELS[i.planLinkStatus],
+    "plan.approval": EXCEPTION_APPROVAL_LABELS[i.approval],
+  };
+}
+
 export async function receiptRows(site?: string[]): Promise<Flat[]> {
-  return (await listReceipts(site)).map(flatten);
+  const [receipts, info] = await Promise.all([listReceipts(site), listReceiptPlanInfo(site)]);
+  const byId = new Map(info.map((i) => [i.receiptId, i]));
+  return receipts.map((r) => ({ ...flatten(r), ...planColumns(byId.get(r.id)) }));
 }
 
 const str = (v: unknown): string | null => (v === null || v === undefined || v === "" ? null : String(v));
 
-/** The receipt's own columns each have a twin on a stage (the list shows the receipt's, the stage is
- * the record of the step). The file shows the receipt's; a change is written to both so they can't drift. */
-const MIRROR: Record<string, [stageId: string, label: string]> = {
-  arrivalDate: ["n-gate", "DATE OF ARRIVAL"],
-  supplierName: ["n-verify", "SUPPLIERS NAME"],
-  lbaCode: ["n-verify", "LBA CODE"],
-  vehicleNo: ["n-gate", "VEHICLE NO."],
-};
+/** The file shows the receipt's columns; a change is written to their stage twins too so they can't
+ * drift (the pairs are the contract's, shared with the stage write path). */
+const MIRROR = RECEIPT_STAGE_MIRRORS;
 
 export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: FileKeys): Promise<SheetResult> {
   const result: SheetResult = { name: sheet.name, rows: sheet.rows.length, created: 0, changed: 0, unchanged: 0, errors: [], samples: [], ops: [] };
@@ -110,6 +134,15 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
     // What changes, by where it lives. A new receipt writes only what was filled in; an existing one
     // writes any cell that differs from what's stored (including one cleared to blank).
     const changes: Change[] = [];
+    // The stage values as they will stand once this row is applied: what the receipt holds, overlaid with
+    // what the row gives — so a typed-until-calculated field is judged against the grams in the same row.
+    const inputsAfterRow: Record<string, Record<string, string>> = {};
+    for (const [stageId, fields] of Object.entries(existing?.record.stageData ?? {})) inputsAfterRow[stageId] = { ...fields };
+    for (const h of present) {
+      if (!STAGE_HEADER.has(h)) continue;
+      const { stageId, label } = STAGE_HEADER.get(h)!;
+      (inputsAfterRow[stageId] ??= {})[label] = given.get(h) ?? "";
+    }
     const top: Record<string, unknown> = {};
     const stages: Record<string, Record<string, string>> = {};
     const branches: Record<string, string> = {};
@@ -125,8 +158,9 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
         else top[col] = col === "origin" ? next : next ?? "";
       } else if (STAGE_HEADER.has(h)) {
         const { stageId, label } = STAGE_HEADER.get(h)!;
-        // Only a CHANGED cell gets here, so an exported file re-uploaded untouched still passes.
-        const rule = derivedRuleFor(stageId, label);
+        // Only a CHANGED cell gets here, so an exported file re-uploaded untouched still passes. A field
+        // that is typed until its inputs exist (KOR) is locked only when they are in the file or on the receipt.
+        const rule = derivedRuleInForce(inputsAfterRow, stageId, label);
         if (stageId === "n-lot") err(SYSTEM_LOT_MESSAGE, h);
         else if (rule) err(`is calculated (${rule.formula}) — change the values it is calculated from instead`, h);
         else (stages[stageId] ??= {})[label] = next ?? "";

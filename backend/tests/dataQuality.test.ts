@@ -105,6 +105,25 @@ describe("data-quality audit", () => {
     expect(by["production_issue_btm_not_in_production_master"]?.affectedCount).toBe(8);
   });
 
+  it("reports what the client's Oct 2026 feedback found in the real data, with measured counts", async () => {
+    const { checks } = await scanAll();
+    const by = Object.fromEntries(checks.map((c) => [c.id, c]));
+    // The 3 stores BKE-001/002/003 that seed/bins.json built the Bin master from — "BKE-001" isn't a place in a store.
+    expect(by["bin_code_is_store_code"]?.affectedCount).toBe(3);
+    // One voyage number is on two different trucks in the dispatch report.
+    expect(by["transfer_voyage_multiple_trucks"]?.affectedCount).toBe(1);
+    // 347 of ledger 4's 415 transfer rows carry a bare number (or another prefix), not a BKT number.
+    expect(by["transfer_id_not_bkt"]?.affectedCount).toBe(347);
+    // Two receiving-warehouse Lot numbers each sit on two different transfers.
+    expect(by["received_lot_on_multiple_voyages"]?.affectedCount).toBe(2);
+    // 935 imported receipts have a GRN stage (a price) and no GRN quantity: the 2026 sheet has no such column.
+    expect(by["grn_quantity_not_recorded"]?.affectedCount).toBe(935);
+    // Nothing was applied from the client's workbook here (the parity test applies it inside a rolled-back
+    // transaction), so no placeholder reasons and no plan without a store exist yet.
+    expect(by["rejection_reason_is_placeholder"]).toBeUndefined();
+    expect(by["delivery_plan_missing_store"]).toBeUndefined();
+  });
+
   it("findings are aggregate, never one per row", async () => {
     const { checks } = await scanAll();
     for (const c of checks) expect(c.sampleIds.length).toBeLessThanOrEqual(5);

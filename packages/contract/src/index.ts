@@ -13,4 +13,6 @@ export * from "./data/warehouseKinds.js";
 export * from "./data/warehouseTypes.js";
 export * from "./data/roles.js";
 export * from "./data/batchEntry.js";
-export * from "./data/transfers.js";
+export * from "./domain/deliveryPlan.js";
+export * from "./domain/receiptMirror.js";
+export * from "./domain/transfers.js";

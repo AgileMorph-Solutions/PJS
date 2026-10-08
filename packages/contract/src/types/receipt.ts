@@ -1,3 +1,5 @@
+import type { PlanStatus, PlanProgress, ReceptionType, PlanFlag, PlanLinkStatus, ExceptionApproval } from "../domain/deliveryPlan.js";
+import type { TransferState, TransferVariance } from "../domain/transfers.js";
 export type ReceiptStatus =
   | "planned"
   | "arrived"
@@ -65,25 +67,55 @@ export interface DryingJob {
   lotNo: string; ficheNo: string; status: string; dryType: string; destination: string;
 }
 
-/** Read from the receipt(s) that arrived against a plan, never stored on the plan itself. */
-export type DeliveryStatus = "planned" | "overdue" | "arrived";
-
 /** Expected arrivals, recorded before the truck comes — the client's own "Delivery Plan" sheet. */
 export interface DeliveryPlan {
   /** DP-<warehouse code>-<expected arrival year>-NNN */
   id: string;
+  /** The sheet's "Planning Date". */
   plannedDeliveryDate: string | null;
   supplierName: string;
   supplierCode: string | null;
   expectedQuantityKg: number | null;
   expectedTruckType: string | null;
+  expectedTrucks: number | null;
+  expectedOrigin: string | null;
+  /** The sheet's "Expected Delivery Start"; the end of the window follows. */
   expectedArrivalDate: string;
+  expectedDeliveryEnd: string | null;
+  /** The site the goods come to, and — when the plan names one — the store inside it. */
   destinationWarehouse: string;
+  destinationStore: string | null;
+  /** Null when the client has none; the 2026 source has no funding reference at all. */
+  fundingReference: string | null;
   remarks: string | null;
-  deliveryStatus: DeliveryStatus;
+  /** Where a reconstructed plan came from, verbatim; null for a real pre-alert. */
+  planningBasis: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+
+  // Everything below is derived from the linked receipts (domain/deliveryPlan.ts), never stored.
+  status: PlanStatus;
+  /** Past its window and not delivered or cancelled — reported beside `status`, not instead of it. */
+  overdue: boolean;
+  progress: PlanProgress;
+  /** First truck's arrival date. */
   actualArrivalDate: string | null;
-  truckNo: string | null;
+  truckNos: string[];
   receiptIds: string[];
+}
+
+/** One receipt's place against its plan — what Reception Type, flags and approval the list and detail show. */
+export interface ReceiptPlanInfo {
+  receiptId: string;
+  deliveryPlanId: string | null;
+  type: ReceptionType;
+  flags: PlanFlag[];
+  planLinkStatus: PlanLinkStatus;
+  approval: ExceptionApproval;
+  approvedAt: string | null;
+  /** Display name of whoever approved. */
+  approvedBy: string | null;
+  approvalNote: string | null;
 }
 
 export type TransferStatus = "requested" | "dispatched" | "received";
@@ -96,16 +128,46 @@ export interface TransferLine {
   fiche: string | null;
   bags: number | null;
   netWeightKg: number | null;
+  /** Where the Lot was loaded from; a truck loading from several Bins shows them all. */
+  binCode: string | null;
 }
 
-/** A request to move Lots between warehouses. */
+/**
+ * A request to move Lots between warehouses. One BKT is one truck / voyage: the truck is on the
+ * header, and what leaves (dispatch) and what arrives (receive) are separate sets of fields written
+ * by the two warehouses, with the receiving side blank until the truck actually arrives.
+ */
 export interface TransferRequest {
   /** BKT-<transfer year>-NNN */
   id: string;
   transferDate: string;
   fromWarehouse: string;
   toWarehouse: string;
+  /** The step: requested → dispatched → received. `state` is what a person reads. */
   status: TransferStatus;
   remarks: string | null;
   lines: TransferLine[];
+
+  truckNo: string | null;
+  transporter: string | null;
+  driver: string | null;
+  driverPhone: string | null;
+  dispatchedGrossKg: number | null;
+  dispatchedAt: string | null;
+  dispatchedBy: string | null;
+
+  bagsReceived: number | null;
+  damagedBags: number | null;
+  receivedGrossKg: number | null;
+  korReceived: number | null;
+  moistureReceived: number | null;
+  nutCountReceived: number | null;
+  receivedComment: string | null;
+  receivedLotNoRaw: string | null;
+  receivedAt: string | null;
+  receivedBy: string | null;
+
+  // Derived (domain/transfers.ts), never stored.
+  state: TransferState;
+  variance: TransferVariance;
 }

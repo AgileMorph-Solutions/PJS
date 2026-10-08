@@ -26,6 +26,7 @@ import { hashPassword } from "../src/auth/password.js";
 import { ensureDemoUsers } from "./demoUsers.js";
 import { seedDemoData } from "./demoData.js";
 import { applyRenumber, planRenumber } from "../src/services/renumber.js";
+import { applyApplicationView, describeReport, type ApplicationViewSeed } from "../src/services/applicationView.js";
 
 const prisma = new PrismaClient();
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -98,11 +99,12 @@ async function backfillWarehouseTypology() {
   await prisma.warehouse.updateMany({ where: { name: "BOUAKE", type: null }, data: { type: "UNIT" } });
   await prisma.warehouse.updateMany({ where: { name: "YAKRO FACTORY", type: null }, data: { type: "CENTRAL" } });
 
-  // The one warehouse code the client has given (Oct 2026: "REC-BKE01-2027-001") — the same value
-  // the system_ids migration sets on an existing database; on a fresh one BOUAKE doesn't exist yet
-  // when that migration runs. Only fills a NULL, like the type above. Every other warehouse gets
-  // its code from an admin, never from here.
-  await prisma.warehouse.updateMany({ where: { name: "BOUAKE", code: null }, data: { code: "BKE01" } });
+  // The two warehouse codes the client has given — BKE and YAK, as printed in their APPLICATION VIEW
+  // workbook (REC-BKE-2026-0001, LOT-YAK-2026-0002). The same values the warehouse_codes migration
+  // sets on an existing database; on a fresh one the warehouses don't exist yet when it runs. Only
+  // fills a NULL, like the type above. Every other warehouse gets its code from an admin, never from here.
+  await prisma.warehouse.updateMany({ where: { name: "BOUAKE", code: null }, data: { code: "BKE" } });
+  await prisma.warehouse.updateMany({ where: { name: "YAKRO FACTORY", code: null }, data: { code: "YAK" } });
 }
 
 /**
@@ -345,6 +347,11 @@ async function main() {
   // with exactly the system IDs an existing one gets from scripts/renumberIds.ts.
   const renumbered = await applyRenumber(await planRenumber());
   console.log(`Renumbered onto system IDs: ${renumbered.receipts} receipts, ${renumbered.values} lot/voyage values.`);
+
+  // The client's APPLICATION VIEW workbook (Oct 2026): its delivery plans, and per truck the plan, rejection, GRN
+  // quantity and Bin it records. Fills blanks only, reports every conflict, never invents — see the service's header.
+  const view = read<ApplicationViewSeed | null>("applicationView.json", null);
+  if (view) for (const line of describeReport(await applyApplicationView(view), view)) console.log(line);
 
   const counts = {
     suppliers: await prisma.supplier.count(), warehouses: await prisma.warehouse.count(),

@@ -17,6 +17,7 @@ import {
 import { createReceiptsBatch } from "../services/receiptBatch.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
 import { getDownstreamStatus } from "../services/receiptsDownstream.js";
+import { approveException, getReceiptPlanInfo, linkReceiptToPlan, listReceiptPlanInfo } from "../services/receiptPlanInfo.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
 import { scopedSite, scopedWarehouse, assertWarehouseAccess } from "../auth/scope.js";
 import { currentUser } from "../auth/plugin.js";
@@ -61,6 +62,37 @@ export async function receiptRoutes(app: FastifyInstance) {
     const { warehouse } = req.query as { warehouse?: string };
     const status = await getDownstreamStatus(await scopedSite(req, warehouse));
     return [...status.values()];
+  });
+
+  /**
+   * Reception Type, exception flags, plan link and approval for every receipt — Reception's list
+   * and the receipt page read these instead of recomputing them (services/receiptPlanInfo.ts).
+   * Warehouse Incharge / admin only: auth/policy.ts keeps the narrow roles off it.
+   */
+  app.get("/api/receipts/plan-info", async (req) => {
+    const { warehouse } = req.query as { warehouse?: string };
+    return listReceiptPlanInfo(await scopedSite(req, warehouse));
+  });
+
+  app.get("/api/receipts/:id/plan-info", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    return getReceiptPlanInfo(id);
+  });
+
+  app.post("/api/receipts/:id/exception-approval", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { note } = (req.body ?? {}) as { note?: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    try { return await approveException(id, currentUser(req).id, note); } catch (e) { return sendError(reply, e); }
+  });
+
+  app.post("/api/receipts/:id/delivery-plan", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { deliveryPlanId } = (req.body ?? {}) as { deliveryPlanId?: string };
+    if (!deliveryPlanId) return reply.code(400).send({ error: "deliveryPlanId is required" });
+    if (!(await requireReceipt(id, reply, req))) return;
+    try { return await linkReceiptToPlan(id, deliveryPlanId); } catch (e) { return sendError(reply, e); }
   });
 
   app.get("/api/receipts/:id", async (req, reply) => {

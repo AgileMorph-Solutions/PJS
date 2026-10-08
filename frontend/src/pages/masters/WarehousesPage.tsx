@@ -108,7 +108,7 @@ function CodeInput({ warehouse, editable }: { warehouse: WarehouseMaster; editab
         onChange={(e) => setValue(e.target.value.toUpperCase())}
         onBlur={() => void save()}
         onKeyDown={(e) => e.key === "Enter" && (e.currentTarget.blur())}
-        placeholder="ID code, e.g. BKE01"
+        placeholder="ID code, e.g. BKE"
         maxLength={12}
         className="w-36 px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-mono font-semibold text-warmstone-800 outline-none focus:border-brand-700"
       />

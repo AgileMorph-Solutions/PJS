@@ -92,9 +92,10 @@ import impossible. That is the point: **surface problems, don't silently normali
 
 Fifteen findings ship against the real data, including:
 
-- `net_uses_bag_count_not_tare` — `stages.ts` documents `Net = Gross − Tare`, but on all 19 receipts
-  with the values present, `NET = GROSS − SACS` (bag count) exactly. Net is therefore **not**
-  computed server-side; doing so would overwrite real imported numbers with a contradicted formula.
+- `net_uses_bag_count_not_tare` — the sheet's first reading was `Net = Gross − Tare`, but on every
+  receipt with the values present `NET = GROSS − SACS` (bag count) exactly; the client's workbook
+  confirms it (Oct 2026). New receipts calculate it that way; imported values keep what their
+  workbook recorded.
 - `rejected_without_reason` — 6 imported receipts are rejected with no reason. The API refuses new
   ones (422); these are reported rather than given an invented reason.
 - `transfer_out_undercounted` — ledger 1 records 3 transfers out against ledger 4's 367 inbound.
@@ -110,13 +111,16 @@ Fifteen findings ship against the real data, including:
 |---|---|---|
 | GET | `/api/health` | |
 | GET | `/api/receipts`, `/api/receipts/:id` | Full `ReceiptRecord` with derived `status`. List accepts `?warehouse=` (a site name — see below) |
-| POST | `/api/receipts` | `{warehouse?, arrivalDate?, deliveryPlanId?}` — issues `REC-<warehouse code>-<arrival year>-NNN` (serializable). A warehouse with no code is refused; a plan copies its supplier onto the receipt |
+| POST | `/api/receipts` | `{warehouse?, arrivalDate?, deliveryPlanId?}` — issues `REC-<warehouse code>-<arrival year>-NNNN` (serializable). A warehouse with no code is refused; a plan copies its supplier onto the receipt |
+| GET | `/api/receipts/plan-info`, `/api/receipts/:id/plan-info` | Reception Type (planned / planned with exception / unplanned), exception flags, plan link and approval for each truck — all derived. Warehouse Incharge / admin only |
+| POST | `/api/receipts/:id/exception-approval`, `/api/receipts/:id/delivery-plan` | Record that an off-plan truck was accepted (once; never blocks the truck), and attach a plan to a truck that arrived without one (same site and supplier; never moved between plans) |
 | POST | `/api/receipts/batch` | `{warehouse, rows}` — several trucks (gate + supplier-document fields) in one transaction, all or nothing; a bad row is a 422 naming it and creates none. Warehouse Incharge / admin |
 | PATCH | `/api/receipts/:id` | Top-level fields; `binNo` routes to its stage row. `lotNo` is refused — the system issues the Lot (see `docs/system-ids-and-reception-flow.md`) |
 | PATCH | `/api/receipts/:id/stages/:stageId` | **Batched** — the client coalesces per stage |
 | POST | `/api/receipts/:id/branch` | Recomputes status + appends a timeline entry. `n-qfs` = `pass` issues the truck's Lot (once, never reissued) |
-| GET/POST/PATCH | `/api/delivery-plans[/:id]` | Expected arrivals, `DP-<code>-<year>-NNN`; actual arrival/truck/status are read from the linked receipt |
-| GET/POST/PATCH | `/api/transfers[/:id]`, POST `/api/transfers/:id/lines` | Transfer requests, `BKT-<year>-NNN`; adding a Lot sets that receipt's transfer decision. Status steps requested → dispatched → received |
+| GET/POST/PATCH | `/api/delivery-plans[/:id]` | Pre-alerts, `DP-<code>-<year>-NNN`: supplier, origin, store, delivery window, expected kg and trucks. Received kg, arrivals, remaining, variance and status are **derived** from the linked trucks' GRN quantity; the only stored state is cancelling (`{cancelled: true, cancelReason}`) |
+| GET/POST | `/api/transfers[/:id]`, POST `/api/transfers/:id/lines` | Transfer requests, `BKT-<year>-NNN` — one BKT is one truck. Adding a Lot sets that receipt's transfer decision |
+| POST | `/api/transfers/:id/dispatch`, `/api/transfers/:id/receive` | The two halves, each written only by its own warehouse: the **sending** site dispatches (truck required, loaded weight), the **destination** records what arrived (bags and gross weight required). Nothing about arrival exists before then; bag/weight variance and the requested → in transit → closed / discrepancy state are derived (`packages/contract/src/domain/transfers.ts`) |
 | GET | `/api/receipts/:id/activities` | Full 1:N history for `n-otheract` / `n-ledger` |
 | GET | `/api/receipts/:id/links` | Cross-site by design — deliberately does **not** accept `?warehouse=` (see below) |
 | GET/POST | `/api/jute-ledgers[/:id/entries]` | Server assigns `S N` and the running balance. GET accepts `?warehouse=` |
@@ -127,7 +131,7 @@ Fifteen findings ship against the real data, including:
 | GET | `/api/warehouse-dispatches` | Unit-warehouse dispatch out (CHARGEMENT), one row per line. Accepts `?warehouse=` |
 | GET | `/api/warehouse-activity-ledger` | Its own table — the source sheet has no site column, so this one can't be scoped |
 | GET | `/api/data-quality` | |
-| GET | `/api/workbook?warehouse=&from=&to=` | **The ANAGROCI workbook**: ONE .xlsx in plain words, used for both Export and Upload — sheet titles like `Truck Reception` / `Warehouse Receiving` and headers like `Arrival Date` (defined in `domain/workbook/fields.ts`), not table or column names. Which sheets it carries and whose rows it holds depends on the section (the warehouse's Unit/Central type). `?from=&to=` (inclusive, `YYYY-MM-DD`, either optional) filters each dated sheet on its own date; Suppliers is never filtered. Rows with no usable date are left out under a range and counted in `X-Rows-Without-Date`. Warehouse Incharge (own warehouse) / admin (names a warehouse) |
+| GET | `/api/workbook?warehouse=&from=&to=` | **The ANAGROCI workbook**: ONE .xlsx in plain words, used for both Export and Upload — sheet titles like `Truck Reception` / `Warehouse Receiving` and headers like `Arrival Date` (defined in `domain/workbook/fields.ts`), not table or column names. `Delivery Plan` and `BKT Transfers` are **for reading** (derived from other records): an upload that changes them is told so and nothing is written; Truck Reception also shows Receipt Status and the plan columns, which an upload never writes. Which sheets it carries and whose rows it holds depends on the section (the warehouse's Unit/Central type). `?from=&to=` (inclusive, `YYYY-MM-DD`, either optional) filters each dated sheet on its own date; Suppliers is never filtered. Rows with no usable date are left out under a range and counted in `X-Rows-Without-Date`. Warehouse Incharge (own warehouse) / admin (names a warehouse) |
 | GET | `/api/workbook/template`, `/api/workbook/info` | The same workbook with headers only (the Upload dialog's sample); the section's sheet list |
 | POST | `/api/workbook/preview` | Multipart `file` (+ `warehouse` for an admin). **Writes nothing**: returns, per sheet, new / changed / unchanged counts, sample changes and every problem (sheet, row, column, message), under a token |
 | POST | `/api/workbook/:token/commit` | Re-checks and writes in **one transaction**, all or nothing. Upsert, never delete: a blank id adds a row, a known id is updated (only cells that differ), a missing row is left alone. Receipts go through the same stage-write code as every other edit |

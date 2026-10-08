@@ -27,11 +27,18 @@ const CODE = "RNT01";
 // Old-format ids, as the 2026 seed produced them (trailing number = the order they were first made).
 const R = ["REC-RNTEST-0001", "REC-RNTEST-0002", "REC-RNTEST-0003"] as const;
 const R_NOCODE = "REC-RNTEST-0004";
+// Already a system id, but under a code the client has since replaced (BKE01 → BKE): same number,
+// new code. legacyId holds the ORIGINAL id and must survive the second move.
+const R_OLD = "REC-OLDC-2028-0003";
+const R_OLD_ORIGINAL = "REC-RNTEST-0090";
+const R_NEXT = "REC-RNTEST-0005"; // a still-unmoved 2028 receipt: must continue AFTER the old-code one
+const DP_OLD = "DP-OLDC-2028-001";
 
 async function cleanup() {
   await prisma.warehouseDispatchLine.deleteMany({ where: { warehouseSite: SITE } });
   await prisma.warehouseDischarge.deleteMany({ where: { warehouseSite: SITE } });
-  await prisma.receipt.deleteMany({ where: { OR: [{ warehouse: { in: [SITE, NOCODE] } }, { legacyId: { in: [...R, R_NOCODE] } }] } });
+  await prisma.receipt.deleteMany({ where: { OR: [{ warehouse: { in: [SITE, NOCODE] } }, { legacyId: { in: [...R, R_NOCODE, R_OLD_ORIGINAL] } }] } });
+  await prisma.deliveryPlan.deleteMany({ where: { destinationWarehouse: SITE } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [SITE, NOCODE] } } });
 }
 
@@ -42,10 +49,10 @@ beforeAll(async () => {
 
   // Two 2026 receipts and one 2027 one, each with a gate, a fiche and a bare lot — plus one at a
   // warehouse that has no code.
-  const make = async (id: string, warehouse: string, arrival: string, lot: string | null, fiche: string) => {
+  const make = async (id: string, warehouse: string, arrival: string, lot: string | null, fiche: string, legacyId?: string) => {
     await prisma.receipt.create({
       data: {
-        id, source: "imported", arrivalDate: arrival, supplierName: "Fixture", lbaCode: "LBA-FX", vehicleNo: `TRUCK-${id.slice(-1)}`, warehouse,
+        id, legacyId, source: "imported", arrivalDate: arrival, supplierName: "Fixture", lbaCode: "LBA-FX", vehicleNo: `TRUCK-${id.slice(-1)}`, warehouse,
         timeline: { create: [{ status: "arrived", at: arrival }] },
         stageEntries: { create: [{ stageId: "n-gate" }, { stageId: "n-verify" }, ...(lot ? [{ stageId: "n-lot" }] : [])] },
         gate: { create: { vehicleNo: `TRUCK-${id.slice(-1)}` } },
@@ -58,6 +65,11 @@ beforeAll(async () => {
   await make(R[1], SITE, "2026-03-11", "6", "FX-2");
   await make(R[2], SITE, "2027-01-12", "7", "FX-3");
   await make(R_NOCODE, NOCODE, "2026-04-01", "9", "FX-4");
+  await make(R_OLD, SITE, "2028-02-01", "LOT-OLDC-2028-0003", "FX-5", R_OLD_ORIGINAL);
+  await make(R_NEXT, SITE, "2028-03-01", null, "FX-6");
+  await prisma.deliveryPlan.create({
+    data: { id: DP_OLD, supplierName: "Fixture", expectedArrivalDate: "2028-02-01", destinationWarehouse: SITE },
+  });
 
   // The imported rows that hold the same lot / voyage as text.
   await prisma.warehouseDischarge.create({
@@ -97,7 +109,7 @@ describe("renumber plan", () => {
   it("lists every change with the old and new value, and writes nothing", async () => {
     const plan = await planRenumber();
     expect(renumberCsv(plan).split("\n")[0]).toBe("table,key,column,from,to");
-    expect(renumberCsv(plan)).toContain(`${R[0]},id,${R[0]},REC-${CODE}-2026-001`);
+    expect(renumberCsv(plan)).toContain(`${R[0]},id,${R[0]},REC-${CODE}-2026-0001`);
     expect(await prisma.receipt.count({ where: { id: { in: [...R] } } })).toBe(3); // still there, still old
     expect(await prisma.receipt.count({ where: { legacyId: { in: [...R] } } })).toBe(0);
   });
@@ -105,10 +117,20 @@ describe("renumber plan", () => {
   it("numbers receipts per warehouse code and arrival year, in their old order", async () => {
     const receipts = (await planRenumber()).changes.filter((c) => c.table === "Receipt" && (R as readonly string[]).includes(c.from!));
     expect(receipts.map((c) => [c.from, c.to])).toEqual([
-      [R[0], `REC-${CODE}-2026-001`],
-      [R[1], `REC-${CODE}-2026-002`],
-      [R[2], `REC-${CODE}-2027-001`], // a new year restarts the count
+      [R[0], `REC-${CODE}-2026-0001`],
+      [R[1], `REC-${CODE}-2026-0002`],
+      [R[2], `REC-${CODE}-2027-0001`], // a new year restarts the count
     ]);
+  });
+
+  it("moves an id under a replaced code to the current code with the SAME number, and continues after it", async () => {
+    const plan = await planRenumber();
+    const byFrom = new Map(plan.changes.filter((c) => c.table === "Receipt").map((c) => [c.from, c.to]));
+    expect(byFrom.get(R_OLD)).toBe(`REC-${CODE}-2028-0003`); // number kept, not renumbered from 1
+    // The unmoved 2028 receipt takes the next number after the old-code one — never a number already in use.
+    expect(byFrom.get(R_NEXT)).toBe(`REC-${CODE}-2028-0004`);
+    expect(plan.changes).toContainEqual(expect.objectContaining({ table: "StageLotAssignment", key: R_OLD, to: `LOT-${CODE}-2028-0003`, rawColumn: undefined }));
+    expect(plan.changes).toContainEqual(expect.objectContaining({ table: "DeliveryPlan", key: DP_OLD, to: `DP-${CODE}-2028-001` }));
   });
 
   it("leaves a warehouse with no code alone and says so, instead of inventing one", async () => {
@@ -134,13 +156,23 @@ describe("renumber applied (rolled back afterwards)", { timeout: 120_000 }, () =
     await withRenumberApplied(async (tx) => {
       const moved = await tx.receipt.findMany({ where: { legacyId: { in: [...R] } }, orderBy: { legacyId: "asc" }, select: { id: true, legacyId: true } });
       expect(moved.map((m) => [m.legacyId, m.id])).toEqual([
-        [R[0], `REC-${CODE}-2026-001`], [R[1], `REC-${CODE}-2026-002`], [R[2], `REC-${CODE}-2027-001`],
+        [R[0], `REC-${CODE}-2026-0001`], [R[1], `REC-${CODE}-2026-0002`], [R[2], `REC-${CODE}-2027-0001`],
       ]);
       const ids = moved.map((m) => m.id);
       expect(await tx.stageEntry.count({ where: { receiptId: { in: ids } } })).toBe(before); // the cascade carried them
       expect(await tx.timelineEntry.count({ where: { receiptId: { in: ids } } })).toBe(3);
       expect((await tx.stageVerifyDocs.findMany({ where: { receiptId: { in: ids } }, orderBy: { fiche: "asc" } })).map((v) => v.fiche)).toEqual(["FX-1", "FX-2", "FX-3"]);
       expect(await tx.receipt.count({ where: { id: { in: [...R] } } })).toBe(0); // old ids are gone, not duplicated
+    });
+  });
+
+  it("keeps the ORIGINAL legacy id when an id is moved a second time, and carries the plan link and lot with it", async () => {
+    await withRenumberApplied(async (tx) => {
+      const moved = await tx.receipt.findUniqueOrThrow({ where: { id: `REC-${CODE}-2028-0003` }, select: { legacyId: true } });
+      expect(moved.legacyId).toBe(R_OLD_ORIGINAL); // not overwritten with REC-OLDC-2028-0003
+      expect((await tx.receipt.findUniqueOrThrow({ where: { id: `REC-${CODE}-2028-0004` } })).legacyId).toBe(R_NEXT);
+      expect(await tx.deliveryPlan.count({ where: { id: `DP-${CODE}-2028-001` } })).toBe(1);
+      expect(await tx.receipt.count({ where: { id: R_OLD } })).toBe(0);
     });
   });
 
@@ -156,12 +188,12 @@ describe("renumber applied (rolled back afterwards)", { timeout: 120_000 }, () =
   it("converts each lot to the same number in the new format, everywhere it appears", async () => {
     await withRenumberApplied(async (tx) => {
       const lots = await tx.stageLotAssignment.findMany({ where: { receiptId: { startsWith: `REC-${CODE}-` } }, orderBy: { lotNumber: "asc" } });
-      expect(lots.map((l) => l.lotNumber)).toEqual([`LOT-${CODE}-2026-005`, `LOT-${CODE}-2026-006`, `LOT-${CODE}-2027-007`]); // "5" → 005, same number
+      expect(lots.map((l) => l.lotNumber)).toEqual([`LOT-${CODE}-2026-0005`, `LOT-${CODE}-2026-0006`, `LOT-${CODE}-2027-0007`, `LOT-${CODE}-2028-0003`]); // "5" → 0005, same number
       expect(lots.every((l) => l.warehouseName === SITE)).toBe(true);
 
       // The discharge sheet row for the same lot and fiche agrees with the receipt, and keeps the workbook's text.
       const row = await tx.warehouseDischarge.findFirstOrThrow({ where: { warehouseSite: SITE, ficheCca: "FX-1" } });
-      expect(row).toMatchObject({ lotNo: `LOT-${CODE}-2026-005`, lotNoRaw: "5" });
+      expect(row).toMatchObject({ lotNo: `LOT-${CODE}-2026-0005`, lotNoRaw: "5" });
       expect(row.lotNo).toBe(lots[0]!.lotNumber);
 
       // Two lots in one cell can't be given one number: untouched.

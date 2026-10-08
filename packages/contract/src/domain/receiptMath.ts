@@ -49,7 +49,17 @@ export interface DerivedRule {
   compute: (values: number[]) => number;
   /** Shown beside the read-only field so nobody wonders where the number came from. */
   formula: string;
+  /**
+   * The field is the system's ONLY while every input is recorded; until then a person may type it.
+   * For values the real 2026 sheets held as typed numbers with nothing behind them — KOR is the
+   * case: Truck Reception has the final KOR but never the cut-test grams it comes from, so locking
+   * it would make every truck without grams impossible to record.
+   */
+  fallbackToTyped?: boolean;
 }
+
+/** 80 lb of kernels per 1000 g sample, as a factor — the client's own constant in their Warehouse Receiving sheet. */
+export const KOR_FACTOR = 0.17637;
 
 const LOADED: FieldRef = ["n-gross", "Loaded truck weight (kg)"];
 const TARE: FieldRef = ["n-tare", "Tare / empty truck weight (kg)"];
@@ -61,8 +71,20 @@ const SACS: FieldRef = ["n-unload", "SACS (bags)"];
 const REFRACTION: FieldRef = ["n-unload", "Refraction"];
 const NET: FieldRef = ["n-netwt", "NET WT KGS"];
 const PAID: FieldRef = ["n-netwt", "PAID WT"];
+const GRN_WEIGHT: FieldRef = ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"];
 const PRICE: FieldRef = ["n-grn", "PRICE"];
 const AMOUNT: FieldRef = ["n-grn", "AMOUNT"];
+const KOR: FieldRef = ["n-qfs", "KOR"];
+const FINAL_KOR: FieldRef = ["n-qfs", "FINAL KOR"];
+const panel = (name: "Sample" | "Final"): FieldRef[] =>
+  (["Good Kernel", "Immature", "Spotted"] as const).map((g) => ["n-qfs", `${name} – ${g} (g)`] as const);
+const korRule = (target: FieldRef, name: "Sample" | "Final"): DerivedRule => ({
+  target,
+  inputs: panel(name),
+  compute: ([good, immature, spotted]) => (good! + 0.5 * (immature! + spotted!)) * KOR_FACTOR,
+  formula: `(Good kernel + ½ × (immature + spotted)) × ${KOR_FACTOR} — ${name.toLowerCase()} cut test`,
+  fallbackToTyped: true,
+});
 
 /** In dependency order: each rule may read the targets of the rules above it. */
 export const DERIVED_RULES: readonly DerivedRule[] = [
@@ -71,7 +93,37 @@ export const DERIVED_RULES: readonly DerivedRule[] = [
   { target: NET, inputs: [GROSS, SACS], compute: ([g, b]) => g! - b! * BAG_WEIGHT_KG, formula: "Gross − 1 kg per bag" },
   { target: PAID, inputs: [NET, REFRACTION], compute: ([n, r]) => n! - r!, formula: "Net − refraction" },
   { target: AMOUNT, inputs: [PRICE, PAID], compute: ([p, w]) => p! * w!, formula: "Price × paid weight" },
+  korRule(KOR, "Sample"),
+  korRule(FINAL_KOR, "Final"),
 ];
+
+/**
+ * A suggestion for an empty field, offered next to it and never written on its own. GRN Quantity is
+ * the quantity officially recognised into stock — usually the net weight, but a different VALUE the
+ * warehouse confirms (the client: "Net Weight, GRN Quantity and Paid Weight are different values"),
+ * so it is proposed from Net rather than locked to it.
+ */
+export interface PrefillRule {
+  target: FieldRef;
+  source: FieldRef;
+  /** Shown beside the suggestion so the person knows where it came from. */
+  from: string;
+}
+export const PREFILL_RULES: readonly PrefillRule[] = [
+  { target: GRN_WEIGHT, source: NET, from: "net weight" },
+];
+
+/** Suggestions for the empty fields of one stage, as {label: {value, from}}. A field that already has a value gets none. */
+export function prefillSuggestions(stageData: StageData, stageId: string): Record<string, { value: string; from: string }> {
+  const out: Record<string, { value: string; from: string }> = {};
+  for (const r of PREFILL_RULES) {
+    if (r.target[0] !== stageId) continue;
+    if ((stageData[stageId]?.[r.target[1]] ?? "").trim() !== "") continue; // already has a value, typed or imported
+    const value = parseQty(stageData[r.source[0]]?.[r.source[1]]);
+    if (value !== undefined) out[r.target[1]] = { value: formatQty(value), from: r.from };
+  }
+  return out;
+}
 
 const key = ([stageId, label]: FieldRef) => `${stageId}\u0000${label}`;
 const RULE_BY_TARGET = new Map(DERIVED_RULES.map((r) => [key(r.target), r]));
@@ -82,6 +134,17 @@ export function derivedRuleFor(stageId: string, label: string): DerivedRule | un
 
 export function isDerivedField(stageId: string, label: string): boolean {
   return RULE_BY_TARGET.has(key([stageId, label]));
+}
+
+/**
+ * The rule that is locking this field RIGHT NOW: any rule without a typed fallback, and a
+ * fallback rule only once every one of its inputs is recorded in `stageData`. This — not
+ * derivedRuleFor — is what decides whether a person may type the field.
+ */
+export function derivedRuleInForce(stageData: StageData, stageId: string, label: string): DerivedRule | undefined {
+  const rule = derivedRuleFor(stageId, label);
+  if (!rule || !rule.fallbackToTyped) return rule;
+  return rule.inputs.every(([s, l]) => parseQty(stageData[s]?.[l]) !== undefined) ? rule : undefined;
 }
 
 /**

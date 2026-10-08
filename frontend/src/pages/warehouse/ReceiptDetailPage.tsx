@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
-import { useTracking, useReceiptLinks } from "../../state/TrackingContext";
+import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
 import { useCanEditDirectly, useMe } from "../../state/AuthContext";
 import { useSubmissions } from "../../state/userManagement";
@@ -13,10 +13,13 @@ import { computeDerivedFields } from "../../domain/receiptMath";
 import { StageForm } from "../../components/StageForm";
 import { DecisionBranch } from "../../components/DecisionBranch";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
-import { LotJourney } from "../../components/receipt/LotJourney";
+import { LotJourney } from "../../components/receipt/LotJourney.tsx"; // explicit: LotJourney.tsx and lotJourney.ts differ only by case, which a case-insensitive filesystem (macOS) resolves to the wrong one
+import { prefillSuggestions } from "@anagroci/contract/domain/receiptMath";
+import { planPrefill } from "@anagroci/contract/domain/deliveryPlan";
 import { LotOverview } from "../../components/receipt/LotOverview";
+import { ReceiptPlanCard } from "../../components/receipt/ReceiptPlanCard";
 import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
-import { buildJourney } from "../../components/receipt/lotJourney";
+import { buildJourney } from "../../components/receipt/lotJourney.ts";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
@@ -31,13 +34,15 @@ import { Pagination } from "../../components/ui/Pagination";
 export function ReceiptDetailPage() {
   const { id = "" } = useParams();
   const site = useSite();
-  const { receipts, getReceipt, setStageField, setBranch, flushStage } = useTracking();
+  const { receipts, getReceipt, setStageField, setBranch, flushStage, masters } = useTracking();
   const receipt = getReceipt(id);
   const me = useMe();
   // Warehouse Incharge/admin edit stages directly; a Branch Manager / QFS Officer sees them
   // read-only and submits their own form (SubmissionCard) for approval instead.
   const canEdit = useCanEditDirectly();
   const submissions = useSubmissions({ receiptId: id });
+  const { info: planInfo, refetch: refetchPlanInfo } = useOneReceiptPlanInfo(id, canEdit);
+  const { plans } = useDeliveryPlans(site.warehouseName);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<"overview" | "stages" | "activity">("overview");
 
@@ -50,10 +55,29 @@ export function ReceiptDetailPage() {
   // follows the tare weight as it is typed rather than appearing after the server has saved it.
   const derived = useMemo(() => (receipt ? computeDerivedFields(receipt.stageData) : {}), [receipt]);
   const { links, loading: linksLoading } = useReceiptLinks(receipt?.id);
+  // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself: the store codes the master
+  // also holds are left out, and the bins of this truck's own store come first.
+  const store = receipt?.stageData["n-gate"]?.["WH NO."]?.trim();
+  const binOptions = useMemo(() => {
+    const stores = new Set(masters.warehouses.filter((w) => w.site).map((w) => w.name));
+    const bins = masters.bins.filter((b) => !stores.has(b)).sort();
+    return store ? [...bins.filter((b) => b.startsWith(`${store}-`)), ...bins.filter((b) => !b.startsWith(`${store}-`))] : bins;
+  }, [masters.bins, masters.warehouses, store]);
+  const plan = plans.find((p) => p.id === receipt?.deliveryPlanId);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
   // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
   if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
+
+  // What is already known elsewhere — the plan the truck arrived against, the net weight, the Lot — offered
+  // beside the empty field. Nothing is written until the person takes it.
+  const suggestionsFor = (stageId: string, values: Record<string, string>) => ({
+    ...prefillSuggestions(receipt.stageData, stageId),
+    ...planPrefill(plan, receipt.stageData, stageId),
+    ...(stageId === "n-bin" && receipt.lotNo && !(values["Linked Lot Number(s)"] ?? "").trim()
+      ? { "Linked Lot Number(s)": { value: receipt.lotNo, from: "this receipt's Lot" } }
+      : {}),
+  });
 
   const status = deriveStatus(receipt);
   const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
@@ -177,6 +201,11 @@ export function ReceiptDetailPage() {
 
       {tab === "overview" && (
         <div className="space-y-6">
+          {canEdit && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <ReceiptPlanCard receiptId={receipt.id} info={planInfo} plans={plans} siteSlug={site.slug} canEdit={canEdit} onChanged={() => void refetchPlanInfo()} />
+            </div>
+          )}
           <LotOverview receipt={receipt} links={links} othersInBin={otherInSameBin} siteSlug={site.slug} />
           <div>
             <h2 className="text-base font-bold text-warmstone-900 flex items-center gap-2 mb-3 px-1">
@@ -277,6 +306,8 @@ export function ReceiptDetailPage() {
                       stage={stage}
                       values={values}
                       derived={derived[stage.id]}
+                      suggestions={suggestionsFor(stage.id, values)}
+                      options={stage.id === "n-bin" ? { "Bin Number": binOptions } : undefined}
                       onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
                       onFieldBlur={() => flushStage(receipt.id, stage.id)}
                       readOnly={!canEdit}

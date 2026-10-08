@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ReceiptRecord } from "../types/receipt";
 import { formForRole, type Role } from "../data/roles";
+import { computeDerivedFields, derivedRuleFor } from "../domain/receiptMath";
 import { stages } from "../data/stages";
 import { api } from "../repository/api";
 import { FieldInput } from "./FieldInput";
@@ -41,7 +42,21 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
     [form]
   );
 
+  // The receipt as it will stand with this draft applied — so KOR follows the cut-test grams as they are typed.
+  const derived = useMemo(() => {
+    const merged: Record<string, Record<string, string>> = {};
+    for (const [stageId, fields] of Object.entries(receipt.stageData)) merged[stageId] = { ...fields };
+    for (const [stageId, fields] of Object.entries(draft)) merged[stageId] = { ...merged[stageId], ...fields };
+    return computeDerivedFields(merged);
+  }, [receipt.stageData, draft]);
+
   if (!form) return null;
+
+  /** The calculation locking this field right now (KOR only once its grams are in) — the value shows, and isn't submitted. */
+  const inForce = (stageId: string, label: string) => {
+    const rule = derivedRuleFor(stageId, label);
+    return rule && (!rule.fallbackToTyped || derived[stageId]?.[label] !== undefined) ? rule : undefined;
+  };
 
   const valueOf = (stageId: string, label: string) =>
     existing ? existing.values[stageId]?.[label] ?? "" : draft[stageId]?.[label] ?? receipt.stageData[stageId]?.[label] ?? "";
@@ -53,6 +68,7 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
       const values: Record<string, Record<string, string>> = {};
       for (const g of groups) {
         for (const field of g.fields) {
+          if (inForce(g.stageId, field.n)) continue; // calculated from what is being submitted — not itself submitted
           const v = valueOf(g.stageId, field.n).trim();
           if (v) (values[g.stageId] ??= {})[field.n] = v;
         }
@@ -93,7 +109,8 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
                 <FieldInput
                   key={`${g.stageId}/${field.n}`}
                   field={field}
-                  value={valueOf(g.stageId, field.n)}
+                  value={inForce(g.stageId, field.n) && !existing ? derived[g.stageId]?.[field.n] ?? "" : valueOf(g.stageId, field.n)}
+                  system={!existing && inForce(g.stageId, field.n) ? { kind: "calculated", hint: inForce(g.stageId, field.n)!.formula } : undefined}
                   onChange={(v) => setDraft((d) => ({ ...d, [g.stageId]: { ...d[g.stageId], [field.n]: v } }))}
                   idPrefix={`form-${g.stageId}`}
                   readOnly={Boolean(existing)}

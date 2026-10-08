@@ -21,6 +21,12 @@ describe("role access policy", () => {
       expect(isAllowed(role, "GET", "/api/jute-ledgers")).toBe(false);
       expect(isAllowed(role, "GET", "/api/data-quality")).toBe(false);
       expect(isAllowed(role, "POST", "/api/submissions/x/approve")).toBe(false);
+      // Plan-info covers every supplier's trucks and isn't filtered per reader; approving and linking are incharge actions.
+      expect(isAllowed(role, "GET", "/api/receipts/plan-info")).toBe(false);
+      expect(isAllowed(role, "GET", "/api/receipts/REC-BKE-2026-0001/plan-info")).toBe(false);
+      expect(isAllowed(role, "POST", "/api/receipts/REC-BKE-2026-0001/exception-approval")).toBe(false);
+      expect(isAllowed(role, "POST", "/api/receipts/REC-BKE-2026-0001/delivery-plan")).toBe(false);
+      expect(isAllowed(role, "POST", "/api/delivery-plans")).toBe(false);
     }
   });
 
@@ -29,6 +35,7 @@ describe("role access policy", () => {
       expect(isAllowed(role, "GET", "/api/receipts")).toBe(true);
       expect(isAllowed(role, "GET", "/api/receipts/REC-2026-0001")).toBe(true);
       expect(isAllowed(role, "POST", "/api/receipts/REC-2026-0001/submissions")).toBe(true);
+      expect(isAllowed(role, "GET", "/api/receipts/downstream")).toBe(true);
     }
   });
 

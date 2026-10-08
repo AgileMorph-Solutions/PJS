@@ -76,7 +76,7 @@ model Warehouse {
 
   /// The code embedded in every system ID issued at this warehouse (REC-/LOT-/DP-<code>-<year>-NNN,
   /// contract's domain/ids.ts). Set from the master by an admin, never derived from the name: the
-  /// team gave BOUAKE = BKE01; anything else is NULL until someone enters it, and a warehouse with
+  /// the client's workbook gives BOUAKE = BKE, YAKRO FACTORY = YAK; anything else is NULL until someone enters it, and a warehouse with
   /// no code refuses to issue an ID rather than issuing a guessed one.
   code String? @unique
 
@@ -86,7 +86,8 @@ model Warehouse {
   stores  Warehouse[] @relation("WarehouseSite")
 
   receipts      Receipt[]
-  deliveryPlans DeliveryPlan[]
+  deliveryPlans DeliveryPlan[]                 @relation("DeliveryPlanSite")
+  planStores    DeliveryPlan[]                 @relation("DeliveryPlanStore")
   transfersFrom TransferRequest[]              @relation("TransferRequestFrom")
   transfersTo   TransferRequest[]              @relation("TransferRequestTo")
   dryingJobs    DryingJob[]
@@ -138,7 +139,7 @@ model WarehouseAlias {
 // shape by the assembler. Keeping a second copy here is what forced the old stage-field sync block.
 
 model Receipt {
-  /// REC-<warehouse code>-<arrival year>-NNN (contract's domain/ids.ts), issued once and never changed.
+  /// REC-<warehouse code>-<arrival year>-NNNN (contract's domain/ids.ts), issued once and never changed.
   id     String @id
   source String /// "imported" | "entered"
 
@@ -148,8 +149,19 @@ model Receipt {
 
   /// The plan this truck arrived against, if any — unplanned trucks are allowed. The plan's actual
   /// arrival date, truck and delivery status are read from here, never stored on the plan.
-  deliveryPlanId String?
-  deliveryPlan   DeliveryPlan? @relation(fields: [deliveryPlanId], references: [id])
+  deliveryPlanId       String?
+  deliveryPlan         DeliveryPlan? @relation(fields: [deliveryPlanId], references: [id])
+  /// Set only when the plan was attached AFTER the receipt existed (a truck that arrived unplanned and
+  /// was regularised later). NULL on a truck that arrived against its plan — that is how the two differ.
+  deliveryPlanLinkedAt DateTime?
+
+  /// One recorded decision that an unplanned / off-plan truck is accepted as an exception. Whether a
+  /// truck NEEDS one is derived (contract's domain/deliveryPlan.ts), never stored. Approval never
+  /// blocks the reception itself.
+  exceptionApprovedAt DateTime?
+  exceptionApprovedBy String?
+  exceptionApprover   User?     @relation("ExceptionApprover", fields: [exceptionApprovedBy], references: [id])
+  exceptionNote       String?
 
   arrivalDate  String
   supplierName String
@@ -203,21 +215,42 @@ model Receipt {
 }
 
 /// Expected arrivals, captured before the truck comes (Oct 2026 team feedback). Columns are the
-/// client's own "Delivery Plan" sheet in ANAGROCI DATA PROCUREMENT 2026.xlsx, minus the three that
-/// describe what actually happened (actual arrival date, delivery status, truck no) — those come
-/// from the linked Receipt, so the plan can never disagree with the truck that arrived.
+/// client's own "Delivery Plan" sheet (APPLICATION VIEW workbook), minus everything that describes
+/// what actually happened (actual received, arrivals, accepted trucks, remaining, variance, status,
+/// truck no) — those are derived from the linked Receipts (contract's domain/deliveryPlan.ts), so a
+/// plan can never disagree with the trucks that arrived. Cancelling is the only stored state: it is a
+/// person's decision, not something the arrivals can tell.
+///
+/// plannedDeliveryDate = the sheet's "Planning Date"; expectedArrivalDate = "Expected Delivery Start".
 model DeliveryPlan {
   /// DP-<destination warehouse code>-<expected arrival year>-NNN
-  id                   String    @id
+  id                   String     @id
   plannedDeliveryDate  String?
   supplierName         String
   supplierCode         String?
   expectedQuantityKg   Decimal?
   expectedTruckType    String?
   expectedArrivalDate  String
+  expectedDeliveryEnd  String?
+  expectedTrucks       Int?
+  expectedOrigin       String?
+  /// Purchase / funding reference, when the client has one. The 2026 source has none ("Not available
+  /// in 2026 source"), so this is NULL rather than a placeholder.
+  fundingReference     String?
   destinationWarehouse String
-  warehouseRef         Warehouse @relation(fields: [destinationWarehouse], references: [name])
+  warehouseRef         Warehouse  @relation("DeliveryPlanSite", fields: [destinationWarehouse], references: [name])
+  /// The store inside the destination site where the goods are expected (BKE-003). A truck that goes
+  /// to a different store is a "warehouse change" exception, so this has to be able to be recorded.
+  destinationStore     String?
+  storeRef             Warehouse? @relation("DeliveryPlanStore", fields: [destinationStore], references: [name])
   remarks              String?
+  /// Where the plan came from when it was not a real pre-alert (the client's 2026 plans were rebuilt
+  /// from actual receipts). Kept verbatim so reconstructed data is never mistaken for real pre-alerts.
+  planningBasis        String?
+  cancelledAt          DateTime?
+  cancelledBy          String?
+  canceller            User?      @relation("PlanCanceller", fields: [cancelledBy], references: [id])
+  cancelReason         String?
   receipts             Receipt[]
 
   createdAt DateTime @default(now())
@@ -236,16 +269,47 @@ model TransferRequest {
   fromRef       Warehouse             @relation("TransferRequestFrom", fields: [fromWarehouse], references: [name])
   toWarehouse   String
   toRef         Warehouse             @relation("TransferRequestTo", fields: [toWarehouse], references: [name])
-  /// "requested" | "dispatched" | "received"
+  /// "requested" | "dispatched" | "received" — the STEP. What a person reads (in transit / closed /
+  /// discrepancy) is derived with the variance (contract's domain/transfers.ts), never stored.
   status        String                @default("requested")
   remarks       String?
   lines         TransferRequestLine[]
+
+  /// One BKT is one truck / voyage (client, Oct 2026): the truck is on the header, and a truck loading
+  /// from several Bins is several LINES under the one BKT. The workbook's own 2026 data breaks this in
+  /// places (one voyage on two trucks); that is reported by the audit, not corrected.
+  truckNo           String?
+  transporter       String?
+  driver            String?
+  driverPhone       String?
+  /// What leaves Bouaké: the loaded truck's weight at the dispatch scale (RCN + bags).
+  dispatchedGrossKg Decimal?
+  dispatchedAt      DateTime?
+  dispatchedBy      String?
+  dispatcher        User?     @relation("TransferDispatcher", fields: [dispatchedBy], references: [id])
+
+  /// What arrives — entered by the RECEIVING warehouse only, on arrival, and blank until then. Nothing
+  /// here is pre-filled at dispatch: the variance is the comparison between the two sides.
+  bagsReceived     Int?
+  damagedBags      Int?
+  receivedGrossKg  Decimal?
+  korReceived      Decimal?
+  moistureReceived Decimal?
+  nutCountReceived Int?
+  receivedComment  String?
+  /// The receiving warehouse's own Lot number for it, exactly as they wrote it. One lot number has been
+  /// seen on two different BKTs, so this is a record of what they said, not a key.
+  receivedLotNoRaw String?
+  receivedAt       DateTime?
+  receivedBy       String?
+  receiver         User?     @relation("TransferReceiver", fields: [receivedBy], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([fromWarehouse])
   @@index([toWarehouse])
+  @@index([truckNo])
 }
 
 /// One Lot on a transfer. The Lot, supplier and fiche are read from the receipt, not retyped; bags
@@ -258,6 +322,9 @@ model TransferRequestLine {
   receipt     Receipt         @relation(fields: [receiptId], references: [id])
   bags        Int?
   netWeightKg Decimal?
+  /// Where the Lot was loaded from — its Bin(s) when it was added. A record, so a BKT that loads one
+  /// truck from several Bins shows them all.
+  binCode     String?
 
   @@unique([transferId, receiptId])
   @@index([receiptId])
@@ -380,16 +447,30 @@ model StageVerifyDocs {
 /// Stage n-qfs (decision) — Quality analysis (QFS)
 /// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageQualityQfs {
-  receiptId   String   @id
-  moisture    String? /// MOIS. (moisture)
-  nutCount    String? /// NUT COUNT
-  kor         String? /// KOR
-  finalKor    String? /// FINAL KOR
-  moistureNum Decimal? /// typed shadow of moisture, for reporting/DQ only — never round-tripped
-  nutCountNum Decimal? /// typed shadow of nutCount, for reporting/DQ only — never round-tripped
-  korNum      Decimal? /// typed shadow of kor, for reporting/DQ only — never round-tripped
-  finalKorNum Decimal? /// typed shadow of finalKor, for reporting/DQ only — never round-tripped
-  receipt     Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  receiptId         String   @id
+  moisture          String? /// MOIS. (moisture)
+  nutCount          String? /// NUT COUNT
+  kor               String? /// KOR
+  finalKor          String? /// FINAL KOR
+  sampleGoodKernelG String? /// Sample – Good Kernel (g)
+  sampleImmatureG   String? /// Sample – Immature (g)
+  sampleSpottedG    String? /// Sample – Spotted (g)
+  sampleRejectionG  String? /// Sample – Rejection (g)
+  sampleVoidG       String? /// Sample – Void (g)
+  sampleOilG        String? /// Sample – Oil (g)
+  sampleShellG      String? /// Sample – Shell (g)
+  finalGoodKernelG  String? /// Final – Good Kernel (g)
+  finalImmatureG    String? /// Final – Immature (g)
+  finalSpottedG     String? /// Final – Spotted (g)
+  finalRejectionG   String? /// Final – Rejection (g)
+  finalVoidG        String? /// Final – Void (g)
+  finalOilG         String? /// Final – Oil (g)
+  finalShellG       String? /// Final – Shell (g)
+  moistureNum       Decimal? /// typed shadow of moisture, for reporting/DQ only — never round-tripped
+  nutCountNum       Decimal? /// typed shadow of nutCount, for reporting/DQ only — never round-tripped
+  korNum            Decimal? /// typed shadow of kor, for reporting/DQ only — never round-tripped
+  finalKorNum       Decimal? /// typed shadow of finalKor, for reporting/DQ only — never round-tripped
+  receipt           Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
 /// Stage n-gross (entry) — Weight truck (Gross weight)
@@ -2117,6 +2198,10 @@ model User {
   createdAt    DateTime   @default(now())
 
   sessions            Session[]
+  approvedExceptions  Receipt[]               @relation("ExceptionApprover")
+  dispatchedTransfers TransferRequest[]       @relation("TransferDispatcher")
+  receivedTransfers   TransferRequest[]       @relation("TransferReceiver")
+  cancelledPlans      DeliveryPlan[]          @relation("PlanCanceller")
   suppliers           BranchManagerSupplier[] @relation("BmSuppliers")
   assignedSuppliers   BranchManagerSupplier[] @relation("SupplierAssigner")
   supplierRequests    SupplierRequest[]       @relation("SupplierRequester")

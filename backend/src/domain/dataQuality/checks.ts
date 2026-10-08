@@ -10,7 +10,7 @@ import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { storedFormulaMismatches } from "@anagroci/contract/domain/receiptMath";
 import { legacyLotSeq, parseSiteId } from "@anagroci/contract/domain/ids";
 
-/** The number inside a lot, whether system-format (LOT-BKE01-2026-017) or still the workbook's bare 17. */
+/** The number inside a lot, whether system-format (LOT-BKE-2026-0017) or still the workbook's bare 17. */
 const lotSeq = (lot: string) => parseSiteId(lot)?.seq ?? legacyLotSeq(lot) ?? lot;
 import { RECEIPT_INCLUDE, assembleStageData } from "../../stageStore.js";
 
@@ -86,8 +86,8 @@ export const CHECKS: Check[] = [
         entity: "StageTareWeight", affectedCount: total - withTare, sampleIds: [],
         evidence:
           "The OFFLOADINGS sheet has no Tare column — only Gross and the resulting Net — so the tare " +
-          "reading is lost today. This matters because stages.ts documents Net = Gross − Tare, but " +
-          "see net_uses_bag_count_not_tare: the data says otherwise.",
+          "reading is lost today. The rule is now settled (see net_uses_bag_count_not_tare): Gross is " +
+          "loaded truck − empty truck when both are weighed, and Net = Gross − 1 kg per bag.",
       };
     },
   },
@@ -109,15 +109,16 @@ export const CHECKS: Check[] = [
       });
       if (!matches.length) return null;
       return {
-        id: "net_uses_bag_count_not_tare", severity: "critical",
+        id: "net_uses_bag_count_not_tare", severity: "info",
         title: "Net weight is Gross − bag count, not Gross − Tare",
         entity: "StageNetWeight", affectedCount: matches.length, sampleIds: matches.slice(0, 5).map((r) => r.id),
         evidence:
-          "stages.ts's n-netwt note says 'Net = Gross − Tare, less refraction'. On every receipt where " +
-          "all three values exist, NET WT KGS = GROSS WT KGS − SACS (the bag count), exactly. " +
-          "PAID WT = NET − Refraction likewise. Net is therefore NOT computed server-side: doing so " +
-          "would overwrite real imported values with a formula the data contradicts. Needs the client " +
-          "to confirm which rule is correct.",
+          "The first reading of the sheet was 'Net = Gross − Tare'. On every receipt where all three " +
+          "values exist, NET WT KGS = GROSS WT KGS − SACS (the bag count), exactly, and PAID WT = NET − " +
+          "Refraction likewise. The client's APPLICATION VIEW workbook (Oct 2026) confirms it on all 58 of " +
+          "its accepted trucks, and the app now calculates Net that way (domain/receiptMath.ts). What the " +
+          "client read as a wrong Net weight was Gross − Tare — which is Gross, not Net. Imported values " +
+          "keep what their workbook recorded; this lists the receipts where that is the rule in use.",
       };
     },
   },
@@ -920,6 +921,187 @@ export const CHECKS: Check[] = [
           "No Receipt ID, Lot or Delivery Plan can be issued at these warehouses, and their existing " +
           "records keep their old numbers, until an admin sets the code in Masters › Warehouses and " +
           "the renumber (backend/scripts/renumberIds.ts) is run again.",
+      };
+    },
+  },
+
+  // ── Oct 2026: the client's APPLICATION VIEW workbook and email (reception, BKT, Delivery Plan) ────────
+  {
+    // Measured: the 3 stores BKE-001/002/003, which seed/bins.json built the Bin master from (the gate's
+    // "WH NO." column is a store code, not a Bin).
+    id: "bin_code_is_store_code",
+    async run({ prisma }) {
+      const stores = new Set((await prisma.warehouse.findMany({ where: { site: { not: null } }, select: { name: true } })).map((w) => w.name));
+      const masters = (await prisma.bin.findMany({ select: { code: true } })).filter((b) => stores.has(b.code)).map((b) => b.code);
+      const allocated = (await prisma.stageBinAllocation.findMany({ where: { binNumber: { not: null } }, select: { receiptId: true, binNumber: true } }))
+        .filter((a) => a.binNumber!.split(/\s*[/,]\s*/).some((b) => stores.has(b.trim())))
+        .map((a) => `${a.receiptId} (${a.binNumber})`);
+      if (!masters.length && !allocated.length) return null;
+      return {
+        id: "bin_code_is_store_code", severity: "warning",
+        title: "A store code is being used as a Bin",
+        entity: "Bin", affectedCount: masters.length + allocated.length, sampleIds: [...masters, ...allocated].slice(0, 5),
+        evidence:
+          `${masters.length} Bin master row(s) and ${allocated.length} allocation(s) hold a store code (BKE-001, BKE-002…) — a ` +
+          "warehouse code, not a place inside it. The client's point: a Bin is the physical location, e.g. BKE-002-BIN-012. " +
+          "The Bin picker leaves store codes out and the API refuses a store as a new Bin; nothing already stored is rewritten.",
+      };
+    },
+  },
+  {
+    // Measured: 1 voyage on two different trucks in the dispatch report.
+    id: "transfer_voyage_multiple_trucks",
+    async run({ prisma }) {
+      const lines = await prisma.warehouseDispatchLine.findMany({
+        where: { vyogeNumber: { not: null }, truckNo: { not: null } }, select: { vyogeNumber: true, truckNo: true },
+      });
+      const rigs = new Map<string, Set<string>>();
+      for (const l of lines) {
+        const rig = l.truckNo!.toUpperCase().replace(/[\s-]+/g, "");
+        if (!rig) continue;
+        (rigs.get(l.vyogeNumber!) ?? rigs.set(l.vyogeNumber!, new Set()).get(l.vyogeNumber!)!).add(rig);
+      }
+      const many = [...rigs].filter(([, set]) => set.size > 1);
+      if (!many.length) return null;
+      return {
+        id: "transfer_voyage_multiple_trucks", severity: "warning",
+        title: "One BKT number on more than one truck",
+        entity: "WarehouseDispatchLine", affectedCount: many.length, sampleIds: many.slice(0, 5).map(([v, set]) => `${v}: ${[...set].join(" and ")}`),
+        evidence:
+          "The client's rule is one BKT = one truck / voyage (a truck loading from several Bins may use several lines, but the " +
+          "truck stays the same). These voyage numbers carry different trucks in the dispatch report. They are stored as " +
+          "written; new BKTs hold one truck by construction.",
+      };
+    },
+  },
+  {
+    // Measured: 347 of 415 transfer rows carry a bare number (153) or another prefix instead of a BKT number.
+    id: "transfer_id_not_bkt",
+    async run({ prisma }) {
+      const rows = await prisma.juteWarehouseTransferReceipt.findMany({
+        where: { idTransfer: { not: null }, NOT: { idTransfer: { startsWith: "BKT" } } }, select: { id: true, idTransfer: true },
+      });
+      if (!rows.length) return null;
+      return {
+        id: "transfer_id_not_bkt", severity: "info",
+        title: "Transfer ID isn't a BKT number",
+        entity: "JuteWarehouseTransferReceipt", affectedCount: rows.length, sampleIds: [...new Set(rows.map((r) => r.idTransfer!))].slice(0, 5),
+        evidence:
+          "The client wants one numbering logic, BKT, for every transfer (their sheets also show BTM-001). These rows carry a bare " +
+          "number or another prefix. Turning 153 into BKT-2026-153 would be a guess about the year and the series, so they are " +
+          "listed, not converted; every BKT created in the app is BKT-<year>-NNN.",
+      };
+    },
+  },
+  {
+    // Measured: 2 receiving-warehouse lot numbers reused across different transfers.
+    id: "received_lot_on_multiple_voyages",
+    async run({ prisma }) {
+      const rows = await prisma.juteWarehouseTransferReceipt.findMany({
+        where: { lotNo: { not: null }, idTransfer: { not: null } }, select: { lotNo: true, idTransfer: true },
+      });
+      const by = new Map<string, Set<string>>();
+      for (const r of rows) {
+        if (!r.lotNo!.trim()) continue;
+        (by.get(r.lotNo!) ?? by.set(r.lotNo!, new Set()).get(r.lotNo!)!).add(r.idTransfer!);
+      }
+      const shared = [...by].filter(([, set]) => set.size > 1);
+      const received = (await prisma.transferRequest.findMany({ where: { receivedLotNoRaw: { not: null } }, select: { id: true, receivedLotNoRaw: true } }));
+      const byRaw = new Map<string, string[]>();
+      for (const t of received) (byRaw.get(t.receivedLotNoRaw!) ?? byRaw.set(t.receivedLotNoRaw!, []).get(t.receivedLotNoRaw!)!).push(t.id);
+      const sharedRaw = [...byRaw].filter(([, ids]) => ids.length > 1);
+      const total = shared.length + sharedRaw.length;
+      if (!total) return null;
+      return {
+        id: "received_lot_on_multiple_voyages", severity: "warning",
+        title: "The same receiving Lot number on more than one transfer",
+        entity: "JuteWarehouseTransferReceipt", affectedCount: total,
+        sampleIds: [...shared.map(([lot, set]) => `${lot}: ${[...set].join(", ")}`), ...sharedRaw.map(([lot, ids]) => `${lot}: ${ids.join(", ")}`)].slice(0, 5),
+        evidence:
+          "One truck is one Lot, so one Lot number should be on one transfer. The receiving warehouse's Lot is kept exactly as " +
+          "they wrote it and never used as a key; this lists where it repeats so someone can say which transfer it really belongs to.",
+      };
+    },
+  },
+  {
+    // Measured on the client's workbook: plan DP-BKE-2026-004 names no store.
+    id: "delivery_plan_missing_store",
+    async run({ prisma }) {
+      const plans = await prisma.deliveryPlan.findMany({ where: { destinationStore: null, cancelledAt: null }, select: { id: true } });
+      if (!plans.length) return null;
+      return {
+        id: "delivery_plan_missing_store", severity: "info",
+        title: "Delivery plans with no destination store",
+        entity: "DeliveryPlan", affectedCount: plans.length, sampleIds: plans.slice(0, 5).map((p) => p.id),
+        evidence:
+          "A plan names the site the goods come to, and — when known — the store inside it. Without the store, a truck going to a " +
+          "different one can't be recognised as a warehouse change. The store is left blank, not assumed.",
+      };
+    },
+  },
+  {
+    // Measured: 935 imported receipts have a GRN stage (a price) and no GRN quantity — the 2026 Truck Reception
+    // sheet has no such column.
+    id: "grn_quantity_not_recorded",
+    async run({ prisma }) {
+      const rows = await prisma.receipt.findMany({
+        where: { source: "imported", stageEntries: { some: { stageId: "n-grn" } }, OR: [{ grn: null }, { grn: { grnWeight: null } }, { grn: { grnWeight: "" } }] },
+        select: { id: true },
+      });
+      if (!rows.length) return null;
+      return {
+        id: "grn_quantity_not_recorded", severity: "warning",
+        title: "GRN completed without a GRN quantity",
+        entity: "StageGrn", affectedCount: rows.length, sampleIds: rows.slice(0, 5).map((r) => r.id),
+        evidence:
+          "The client: a transaction is fully received only once the GRN step is completed, and GRN Quantity — the quantity " +
+          "officially recognised into stock — is a different value from Net and Paid. The 2026 Truck Reception sheet has no GRN " +
+          "quantity column, so these imported receipts have a price and no quantity. They keep the status their workbook " +
+          "supports; every receipt entered in the app needs the quantity before it reads GRN completed.",
+      };
+    },
+  },
+  {
+    // Measured: 275 of the 986 real receipts carry REMARKS = REJECT (233 of them with a zero gross weight), and none was
+    // marked rejected in the app — only the 18 the client's workbook confirms are applied.
+    id: "reject_remark_not_rejected",
+    async run({ prisma }) {
+      // The sheet's own spelling varies in case and padding ("REJECT", "Reject "), so match on the trimmed word.
+      const candidates = await prisma.receipt.findMany({
+        where: {
+          gate: { remarks: { contains: "reject", mode: "insensitive" } },
+          NOT: { branches: { some: { stageId: "n-qfs", branchId: "fail" } } },
+        },
+        select: { id: true, gate: { select: { remarks: true } } },
+      });
+      const rows = candidates.filter((r) => r.gate?.remarks?.trim().toUpperCase() === "REJECT");
+      if (!rows.length) return null;
+      return {
+        id: "reject_remark_not_rejected", severity: "critical",
+        title: "Remarks say REJECT, but the truck isn't marked rejected",
+        entity: "Receipt", affectedCount: rows.length, sampleIds: rows.slice(0, 5).map((r) => r.id),
+        evidence:
+          "In the real 2026 sheet a rejected truck is written as REMARKS = REJECT with zero weights, and the client wants every " +
+          "truck — rejected or not — to carry a Receipt ID and a status. These trucks are not marked rejected, so the dashboard " +
+          "counts them as received. Only the trucks the client's APPLICATION VIEW workbook marks REJECTED have been applied; " +
+          "the rest wait for the client to confirm that REMARKS = REJECT always means a rejection.",
+      };
+    },
+  },
+  {
+    id: "rejection_reason_is_placeholder",
+    async run({ prisma }) {
+      const rows = (await prisma.stageRejection.findMany({ where: { reason: { contains: "reject", mode: "insensitive" } }, select: { receiptId: true, reason: true } }))
+        .filter((r) => r.reason?.trim().toUpperCase() === "REJECT");
+      if (!rows.length) return null;
+      return {
+        id: "rejection_reason_is_placeholder", severity: "warning",
+        title: "Rejection reason is just the word REJECT",
+        entity: "StageRejection", affectedCount: rows.length, sampleIds: rows.slice(0, 5).map((r) => r.receiptId),
+        evidence:
+          "The workbook marks a rejected truck with the single word REJECT, in both its Remarks and its Rejection Reason. That says " +
+          "THAT it was rejected, not WHY. It is stored as written; a real reason (humid, mouldy, wrong origin…) has to come from whoever " +
+          "rejected the truck.",
       };
     },
   },

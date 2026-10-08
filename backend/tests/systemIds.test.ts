@@ -12,7 +12,8 @@ import { PrismaClient } from "@prisma/client";
 import { parseSiteId, parseTransferId } from "@anagroci/contract/domain/ids";
 import { createReceipt, setBranch, setStageFields, getReceipt, patchReceipt } from "../src/services/receipts.js";
 import { createDeliveryPlan, getDeliveryPlan, updateDeliveryPlan } from "../src/services/deliveryPlans.js";
-import { createTransfer, addTransferLines, setTransferStatus, getTransfer } from "../src/services/transfers.js";
+import { approveException, getReceiptPlanInfo, linkReceiptToPlan } from "../src/services/receiptPlanInfo.js";
+import { createTransfer, addTransferLines, dispatchTransfer, receiveTransfer, getTransfer } from "../src/services/transfers.js";
 import { nextLotNumber, nextTransferId } from "../src/services/ids.js";
 import { setWarehouseCode } from "../src/services/masters.js";
 import { ValidationError } from "../src/domain/validation.js";
@@ -21,20 +22,27 @@ const prisma = new PrismaClient();
 const SITE = "SYSIDTEST-SITE";
 const NOCODE = "SYSIDTEST-NOCODE";
 const CODE = "SIDT1";
-const YEAR = 2031; // far from any real data, so the sequences below start at 001
+const YEAR = 2031; // far from any real data, so the sequences below start at 1
 const D = `${YEAR}-03-04`;
+const STORE_A = "SIDT1-STORE-A";
+const STORE_B = "SIDT1-STORE-B";
+const GRN = "GRN Weight (kept separate from Gross/Net/Paid)";
 
 async function cleanup() {
   await prisma.transferRequest.deleteMany({ where: { id: { startsWith: `BKT-${YEAR}-` } } });
   await prisma.receipt.deleteMany({ where: { warehouse: { in: [SITE, NOCODE] } } });
   await prisma.deliveryPlan.deleteMany({ where: { destinationWarehouse: { in: [SITE, NOCODE] } } });
+  await prisma.warehouse.deleteMany({ where: { site: SITE } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [SITE, NOCODE] } } });
+  await prisma.user.deleteMany({ where: { username: "sidt-approver" } });
 }
 
 beforeAll(async () => {
   await cleanup();
   await prisma.warehouse.create({ data: { name: SITE, kind: "REGIONAL_CENTRAL", type: "UNIT", code: CODE } });
   await prisma.warehouse.create({ data: { name: NOCODE, kind: "REGIONAL_CENTRAL", type: "UNIT" } });
+  await prisma.warehouse.create({ data: { name: STORE_A, site: SITE } });
+  await prisma.warehouse.create({ data: { name: STORE_B, site: SITE } });
 });
 afterAll(async () => {
   await cleanup();
@@ -46,10 +54,29 @@ describe("Receipt ID — issued when the arrival is recorded", () => {
     const a = await createReceipt(SITE, D);
     const b = await createReceipt(SITE, D);
     const other = await createReceipt(SITE, `${YEAR + 1}-01-02`);
-    expect(a.id).toBe(`REC-${CODE}-${YEAR}-001`);
-    expect(b.id).toBe(`REC-${CODE}-${YEAR}-002`);
-    expect(other.id).toBe(`REC-${CODE}-${YEAR + 1}-001`); // a new year restarts the count
+    expect(a.id).toBe(`REC-${CODE}-${YEAR}-0001`);
+    expect(b.id).toBe(`REC-${CODE}-${YEAR}-0002`);
+    expect(other.id).toBe(`REC-${CODE}-${YEAR + 1}-0001`); // a new year restarts the count
     expect(a.arrivalDate).toBe(D);
+  });
+
+  it("continues after numbers still held under a replaced code, so renumbering can never collide with a new receipt", async () => {
+    // BKE01 → BKE: until renumberIds.ts has moved the old ids, the new prefix alone looks empty.
+    const y = YEAR + 2;
+    await prisma.receipt.create({
+      data: { id: `REC-OLDX-${y}-0007`, source: "imported", arrivalDate: `${y}-02-01`, supplierName: "Fixture", lbaCode: "LBA-FX", vehicleNo: "T1", warehouse: SITE },
+    });
+    expect((await createReceipt(SITE, `${y}-03-01`)).id).toBe(`REC-${CODE}-${y}-0008`);
+  });
+
+  it("still resolves an id printed under the superseded BKE01 code", async () => {
+    const y = YEAR + 3;
+    const made = await createReceipt(SITE, `${y}-03-01`);
+    // Only BKE01 → BKE is a known replacement; a made-up code must not resolve to somebody else's receipt.
+    expect(await getReceipt(made.id)).toMatchObject({ id: made.id });
+    await prisma.receipt.update({ where: { id: made.id }, data: { id: `REC-BKE-${y}-0001` } });
+    expect(await getReceipt(`REC-BKE01-${y}-0001`)).toMatchObject({ id: `REC-BKE-${y}-0001` });
+    expect(await getReceipt(`REC-OTHER-${y}-0001`)).toBeNull();
   });
 
   it("is refused at a warehouse with no code, instead of guessing one", async () => {
@@ -75,7 +102,7 @@ describe("Lot Number — issued when the truck passes quality", () => {
 
   it("issues LOT-<code>-<year>-NNN on Pass, once, and records it on the timeline", async () => {
     const r = await setBranch(id, "n-qfs", "pass");
-    expect(r.lotNo).toMatch(new RegExp(`^LOT-${CODE}-${YEAR}-\\d{3}$`));
+    expect(r.lotNo).toMatch(new RegExp(`^LOT-${CODE}-${YEAR}-\\d{4}$`));
     expect(r.timeline[r.timeline.length - 1].note).toBe(`Lot ${r.lotNo} issued`);
     const lot = await prisma.stageLotAssignment.findUniqueOrThrow({ where: { receiptId: id } });
     expect(lot).toMatchObject({ lotNumber: r.lotNo, warehouseName: SITE, assignedBy: "System" });
@@ -111,7 +138,7 @@ describe("Lot Number — issued when the truck passes quality", () => {
 
   it("continues after the 2026 workbook's own lots, so it can't collide with legacy Lot 1…454", async () => {
     // Real data: Bouaké's discharge sheet holds Lot 1..454 for 2026, as bare integers until the
-    // renumber has run and as LOT-BKE01-2026-NNN after it. Either way the next one must be past them.
+    // renumber has run and as LOT-BKE-2026-NNNN after it. Either way the next one must be past them.
     const next = await nextLotNumber(prisma, "BOUAKE", "2026-06-01");
     expect(parseSiteId(next)!.seq).toBeGreaterThanOrEqual(455);
   });
@@ -166,22 +193,23 @@ describe("Delivery Plan", () => {
     });
     planId = plan.id;
     expect(plan.id).toBe(`DP-${CODE}-${YEAR}-001`);
-    expect(plan).toMatchObject({ expectedQuantityKg: 20000, deliveryStatus: "planned", actualArrivalDate: null, truckNo: null });
+    expect(plan).toMatchObject({ expectedQuantityKg: 20000, status: "planned", overdue: false, actualArrivalDate: null, truckNos: [] });
+    expect(plan.progress).toEqual({ actualKg: 0, arrivals: 0, acceptedTrucks: 0, remainingKg: 20000, varianceKg: -20000 });
   });
 
   it("reads as overdue once its expected date has passed with no truck", async () => {
     const late = await createDeliveryPlan({ supplierName: "Late Supplier", expectedArrivalDate: "2025-01-10", destinationWarehouse: SITE });
     expect(late.id).toBe(`DP-${CODE}-2025-001`);
-    expect(late.deliveryStatus).toBe("overdue");
+    expect(late).toMatchObject({ status: "planned", overdue: true }); // late and still nothing: both facts, not one label
   });
 
-  it("a truck that arrives against it copies its supplier, and the plan then reads as arrived", async () => {
+  it("a truck that arrives against it copies its supplier, and the plan then reads as partially received", async () => {
     const r = await createReceipt(undefined, `${YEAR}-07-12`, planId);
     expect(r).toMatchObject({ warehouse: SITE, supplierName: "Plan Supplier", lbaCode: "LBA-PLAN" });
     // Typed on the Gate stage, which is where the form puts it — the receipt's own column stays blank.
     await setStageFields(r.id, "n-gate", { "VEHICLE NO.": "PLAN-TRUCK" });
     expect(await getDeliveryPlan(planId)).toMatchObject({
-      deliveryStatus: "arrived", actualArrivalDate: `${YEAR}-07-12`, truckNo: "PLAN-TRUCK", receiptIds: [r.id],
+      status: "partially_received", actualArrivalDate: `${YEAR}-07-12`, truckNos: ["PLAN-TRUCK"], receiptIds: [r.id],
     });
   });
 
@@ -199,6 +227,123 @@ describe("Delivery Plan", () => {
     await expect(createDeliveryPlan({ expectedArrivalDate: D, destinationWarehouse: SITE })).rejects.toThrow(/supplier/);
     await expect(createDeliveryPlan({ supplierName: "S", expectedArrivalDate: "soon", destinationWarehouse: SITE })).rejects.toThrow(/date/);
     await expect(createDeliveryPlan({ supplierName: "S", expectedArrivalDate: D, destinationWarehouse: NOCODE })).rejects.toThrow(/no code yet/);
+  });
+});
+
+
+describe("Delivery Plan against its trucks", () => {
+  const Y = `${YEAR}-09`;
+  let approver: string;
+  let planId: string;
+  let first: string;
+  let second: string;
+
+  const plan = (over: Record<string, unknown> = {}) => createDeliveryPlan({
+    supplierName: "Window Supplier", supplierCode: "LBA-WIN", expectedQuantityKg: 50000, expectedTrucks: 2, expectedOrigin: "VAVOUA",
+    expectedArrivalDate: `${Y}-01`, expectedDeliveryEnd: `${Y}-30`, destinationWarehouse: SITE, destinationStore: STORE_A, ...over,
+  });
+  const arrive = async (planId: string | undefined, date: string, o: { origin?: string; store?: string; grn?: string }) => {
+    const r = await createReceipt(SITE, date, planId);
+    await setStageFields(r.id, "n-gate", { "WH NO.": o.store ?? STORE_A, "VEHICLE NO.": `T-${r.id.slice(-4)}` });
+    await setStageFields(r.id, "n-verify", { ORIGIN: o.origin ?? "VAVOUA" });
+    if (o.grn) await setStageFields(r.id, "n-grn", { [GRN]: o.grn });
+    return r.id;
+  };
+
+  beforeAll(async () => {
+    approver = (await prisma.user.create({ data: { username: "sidt-approver", passwordHash: "x", displayName: "Ama Incharge", role: "warehouse_incharge" } })).id;
+    planId = (await plan()).id;
+    first = await arrive(planId, `${Y}-05`, { grn: "30000" });
+    second = await arrive(planId, `${Y}-20`, { grn: "25000" });
+  });
+
+  it("derives received kg, arrivals, remaining and variance from the trucks' GRN quantity", async () => {
+    expect(await getDeliveryPlan(planId)).toMatchObject({
+      status: "delivered", // the two trucks it expected have arrived
+      progress: { actualKg: 55000, arrivals: 2, acceptedTrucks: 2, remainingKg: -5000, varianceKg: 5000 },
+      expectedTrucks: 2, expectedOrigin: "VAVOUA", destinationStore: STORE_A,
+    });
+  });
+
+  it("a truck with no GRN yet is an arrival that adds no quantity", async () => {
+    const p = await plan({ expectedTrucks: 3 });
+    await arrive(p.id, `${Y}-06`, {});
+    expect(await getDeliveryPlan(p.id)).toMatchObject({ status: "partially_received", progress: { actualKg: 0, arrivals: 1, remainingKg: 50000 } });
+  });
+
+  it("a truck that matches its plan is simply planned and needs no approval", async () => {
+    expect(await getReceiptPlanInfo(first)).toMatchObject({ type: "planned", flags: [], planLinkStatus: "planned_from_start", approval: "not_required", deliveryPlanId: planId });
+  });
+
+  it("flags the truck that departed from the plan, and lands 'over the quantity' on the one that crossed it", async () => {
+    const odd = await arrive(planId, `${Y}-21`, { origin: "MANKONO", store: STORE_B, grn: "1000" });
+    const info = await getReceiptPlanInfo(odd);
+    expect(info!.flags).toEqual(["origin_mismatch", "warehouse_change"]);
+    expect(info).toMatchObject({ type: "planned_with_exception", approval: "pending" });
+    // The second truck (30,000 + 25,000 = 55,000 against 50,000) crossed the line; the trucks after it did not "cross" it again.
+    expect((await getReceiptPlanInfo(second))!.flags).toEqual(["plan_excess"]);
+    expect((await getReceiptPlanInfo(first))!.flags).toEqual([]);
+  });
+
+  it("approving records who, when and why — and never blocks the truck", async () => {
+    const odd = await arrive(planId, `${Y}-22`, { origin: "MANKONO", grn: "10" });
+    const approved = await approveException(odd, approver, "Supplier confirmed by phone");
+    expect(approved).toMatchObject({ approval: "approved", approvedBy: "Ama Incharge", approvalNote: "Supplier confirmed by phone" });
+    expect(approved.approvedAt).not.toBeNull();
+    expect((await approveException(odd, approver, "again")).approvalNote).toBe("Supplier confirmed by phone"); // once only
+  });
+
+  it("refuses to approve a truck that needs no approval, or was rejected", async () => {
+    await expect(approveException(first, approver)).rejects.toThrow(/arrived as planned/);
+    const bad = await arrive(undefined, `${Y}-23`, {});
+    await setBranch(bad, "n-qfs", "fail", "Too humid");
+    expect((await getReceiptPlanInfo(bad))).toMatchObject({ type: "unplanned", approval: "not_applicable_rejected", flags: ["unplanned", "quality_rejected"] });
+    await expect(approveException(bad, approver)).rejects.toThrow(/rejected truck/);
+  });
+
+  it("an unplanned truck is allowed, flagged, and can be linked to its plan afterwards", async () => {
+    const p = await plan({ supplierCode: "LBA-WIN", expectedTrucks: 5 });
+    const late = await arrive(undefined, `${Y}-10`, {});
+    await patchReceipt(late, { lbaCode: "LBA-WIN" });
+    expect(await getReceiptPlanInfo(late)).toMatchObject({ type: "unplanned", planLinkStatus: "not_planned", approval: "pending" });
+
+    const linked = await linkReceiptToPlan(late, p.id);
+    expect(linked).toMatchObject({ deliveryPlanId: p.id, planLinkStatus: "linked_later", type: "planned" });
+    expect((await getDeliveryPlan(p.id))!.receiptIds).toContain(late);
+    await expect(linkReceiptToPlan(late, planId)).rejects.toThrow(/already linked/); // never moved between plans
+  });
+
+  it("refuses to link a truck to a plan for another supplier or another site", async () => {
+    const other = await plan({ supplierCode: "LBA-OTHER" });
+    const t = await arrive(undefined, `${Y}-11`, {});
+    await patchReceipt(t, { lbaCode: "LBA-WIN" });
+    await expect(linkReceiptToPlan(t, other.id)).rejects.toThrow(/supplier LBA-OTHER/);
+    await expect(linkReceiptToPlan(t, "DP-NOPE-2031-001")).rejects.toThrow(/doesn't exist/);
+  });
+
+  it("cancelling needs a reason, keeps the arrivals, flags them, and can be reversed", async () => {
+    const p = await plan();
+    const t = await arrive(p.id, `${Y}-12`, { grn: "100" });
+    await expect(updateDeliveryPlan(p.id, { cancelled: true })).rejects.toThrow(/why/);
+    const cancelled = await updateDeliveryPlan(p.id, { cancelled: true, cancelReason: "Supplier withdrew" }, approver);
+    expect(cancelled).toMatchObject({ status: "cancelled", cancelReason: "Supplier withdrew", progress: { arrivals: 1 } });
+    expect((await getReceiptPlanInfo(t))!.flags).toContain("plan_cancelled");
+    expect(await updateDeliveryPlan(p.id, { cancelled: false })).toMatchObject({ status: "partially_received", cancelledAt: null, cancelReason: null });
+  });
+
+  it("checks the window, the truck count and that the store belongs to the destination site", async () => {
+    await expect(plan({ expectedDeliveryEnd: "soon" })).rejects.toThrow(/YYYY-MM-DD/);
+    await expect(plan({ expectedArrivalDate: `${Y}-10`, expectedDeliveryEnd: `${Y}-05` })).rejects.toThrow(/ends before it starts/);
+    await expect(plan({ expectedTrucks: "2.5" })).rejects.toThrow(/whole number/);
+    await expect(plan({ destinationStore: "BKE-002" })).rejects.toThrow(/isn't a store of/);
+    await expect(updateDeliveryPlan(planId, { expectedDeliveryEnd: `${Y}-01`.replace("-01", "-00") })).rejects.toThrow(/ends before it starts/);
+  });
+
+  it("an overdue plan past its window reads as overdue only while undelivered", async () => {
+    const p = await createDeliveryPlan({ supplierName: "Old", expectedArrivalDate: "2024-01-01", expectedDeliveryEnd: "2024-02-01", expectedTrucks: 1, destinationWarehouse: SITE });
+    expect(p).toMatchObject({ status: "planned", overdue: true });
+    await arrive(p.id, "2024-01-15", {});
+    expect(await getDeliveryPlan(p.id)).toMatchObject({ status: "delivered", overdue: false });
   });
 });
 
@@ -240,10 +385,11 @@ describe("Transfer Request", () => {
 
   it("steps requested → dispatched → received, never skipping or going back", async () => {
     const id = `BKT-${YEAR}-001`;
-    await expect(setTransferStatus(id, "received")).rejects.toThrow(/can only move to dispatched/);
-    expect((await setTransferStatus(id, "dispatched")).status).toBe("dispatched");
-    await expect(setTransferStatus(id, "requested")).rejects.toThrow(ValidationError);
-    expect((await setTransferStatus(id, "received")).status).toBe("received");
+    await expect(receiveTransfer(id, { bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
+    expect((await dispatchTransfer(id, { truckNo: "STEP-1", dispatchedGrossKg: 41300 })).status).toBe("dispatched");
+    await expect(dispatchTransfer(id, { truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
+    expect((await receiveTransfer(id, { bagsReceived: 478, receivedGrossKg: 41300 })).status).toBe("received");
+    await expect(receiveTransfer(id, { bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/already received/);
     await expect(addTransferLines(id, [{ receiptId: lotted }])).rejects.toThrow(/already received/);
     expect((await getTransfer(id))!.status).toBe("received");
   });

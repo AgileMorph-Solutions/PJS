@@ -86,6 +86,11 @@ instead; the vehicle/truck is kept only as provenance on the record.
 - `tools/extract-jute.py` — the same, for the two jute ledgers that have real row-level source data
   (298 warehouse movements, 367 transfer receipts). Mixed-type cells are kept verbatim in a `*Raw`
   twin rather than coerced.
+- `tools/extract-application-view.py` — the client's APPLICATION VIEW workbook (Oct 2026): their 10
+  Delivery Plans and, per truck, the plan, rejection, GRN quantity, Bin and approval it records, written
+  to `applicationView.json` and applied on top of the receipts by `backend/scripts/applyApplicationView.ts`
+  (fill blanks only, report every conflict). It also writes the test fixture of what that workbook shows,
+  which `backend/tests/applicationViewParity.test.ts` holds the app's derived values against.
 
 ## Running it
 
@@ -149,6 +154,10 @@ create real accounts (first admin via `ADMIN_USERNAME`/`ADMIN_PASSWORD`). See `d
 `tools/extract-jute.py` from the real workbooks under `docs/Procurement/new sheets/` — not
 fabricated, and not a demo sample:
 
+- `applicationView.json` — what the client's APPLICATION VIEW workbook adds (see
+  `docs/system-ids-and-reception-flow.md`): 10 Delivery Plans that the workbook itself says were
+  *reconstructed from 2026 receipts*, so each keeps that as its planning basis; nothing in it replaces a
+  value the app already holds.
 - All 986 real RCN receipt rows from `ANAGROCI DATA PROCUREMENT 2026.xlsx`'s "Truck Reception"
   sheet — every stage a receipt gets is one its own row actually supports (see
   `docs/UPLOAD_GUIDE.md`'s "per-stage presence rule"); no branch/decision is ever fabricated, so the

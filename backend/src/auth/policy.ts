@@ -12,7 +12,9 @@ import type { Role } from "@anagroci/contract/data/roles";
 type Rule = { method: string; path: RegExp };
 
 const READ_RECEIPTS: Rule[] = [
-  { method: "GET", path: /^\/api\/receipts(\/[^/]+)?$/ },
+  // `plan-info` is the whole warehouse's plan/exception view, not a receipt id: it isn't filtered by the
+  // reader's suppliers, so it stays with Warehouse Incharge / admin.
+  { method: "GET", path: /^\/api\/receipts(\/(?!plan-info$)[^/]+)?$/ },
   { method: "GET", path: /^\/api\/receipts\/downstream$/ },
   { method: "GET", path: /^\/api\/masters$/ },
 ];

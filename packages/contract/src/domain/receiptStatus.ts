@@ -6,7 +6,20 @@ import { stages } from "../data/stages.js";
  * The status inputs. Narrowed to what deriveStatus actually reads, so the backend can derive a
  * status mid-transaction without materialising a whole ReceiptRecord.
  */
-export type StatusInputs = Pick<ReceiptRecord, "branches" | "stageData">;
+export type StatusInputs = Pick<ReceiptRecord, "branches" | "stageData"> & { source?: ReceiptRecord["source"] };
+
+const GRN_QUANTITY_LABEL = "GRN Weight (kept separate from Gross/Net/Paid)";
+
+/**
+ * Oct 2026 client feedback: "make sure the GRN step is completed before the transaction is considered
+ * fully received" — a receipt with a price but no GRN quantity is not yet GRN-completed. That holds
+ * for every receipt entered in the app. It does NOT hold for `imported` ones: the real 2026 Truck
+ * Reception sheet has no GRN quantity column at all, so applying it there would drop ~900 receipts
+ * back to "unloaded" for a gap in the SOURCE, not in the work. Those keep the status their workbook
+ * supports, and the audit lists them (grn_quantity_not_recorded) instead of quietly changing them.
+ * A caller that doesn't say where a receipt came from gets the strict rule.
+ */
+const grnQuantityRecorded = (r: StatusInputs) => (r.stageData["n-grn"]?.[GRN_QUANTITY_LABEL] ?? "").trim() !== "";
 
 // Status is always derived from the record, never hand-set, so it can't drift from what's
 // actually been filled in. Order matters: check terminal branches first, then walk backwards
@@ -20,7 +33,7 @@ export function deriveStatus(r: StatusInputs): ReceiptStatus {
   if (r.branches["n-xferdec"] === "transfer") return "transferred_out";
   if (r.stageData["n-drying"]) return "in_drying";
   if (r.stageData["n-stock"]) return "in_stock";
-  if (r.stageData["n-grn"]) return "grn_completed";
+  if (r.stageData["n-grn"] && (r.source === "imported" || grnQuantityRecorded(r))) return "grn_completed";
   if (r.stageData["n-unload"]) return "unloaded";
   if (r.branches["n-qfs"] === "pass") return "pending_unload";
   if (r.stageData["n-verify"]) return "pending_qa";

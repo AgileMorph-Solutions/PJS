@@ -8,8 +8,9 @@
  * a P2002 (409) rather than a duplicate. Gaps are allowed: a number is never handed out twice.
  */
 import { Prisma } from "@prisma/client";
+import type { SiteIdKind } from "@anagroci/contract/domain/ids";
 import {
-  formatDeliveryPlanId, formatLotNumber, formatReceiptId, formatTransferId, legacyLotSeq, legacyTransferSeq, normalizeLotNumber, normalizeTransferId,
+  formatDeliveryPlanId, formatLotNumber, formatReceiptId, formatTransferId, legacyLotSeq, legacyTransferSeq, normalizeLotNumber, normalizeTransferId, recodeSiteId,
   parseSiteId, parseTransferId, siteIdPrefix, transferIdPrefix, yearOf,
 } from "@anagroci/contract/domain/ids";
 import { ValidationError } from "../domain/validation.js";
@@ -58,11 +59,23 @@ function highestSeq(values: (string | null)[], parse: (v: string) => number | un
   return max;
 }
 
-const siteSeq = (prefix: string) => (v: string) => (v.startsWith(prefix) ? parseSiteId(v)?.seq : undefined);
+/**
+ * Highest number issued for one kind and year at a site, under ANY code. A warehouse's code can
+ * change (BKE01 → BKE, Oct 2026), and until renumberIds.ts has moved the old IDs, the new prefix
+ * alone would show an empty history and hand out a number that renumbering later gives to an old
+ * record. So the scan is by the site's own records, matched on kind + year, not on the prefix.
+ */
+function sameKindYear(kind: SiteIdKind, year: number) {
+  return (v: string) => {
+    const p = parseSiteId(v);
+    return p && p.kind === kind && p.year === year ? p.seq : undefined;
+  };
+}
 
-async function highestReceiptSeq(tx: Tx, prefix: string) {
-  const rows = await tx.receipt.findMany({ where: { id: { startsWith: prefix } }, select: { id: true } });
-  return highestSeq(rows.map((r) => r.id), siteSeq(prefix));
+async function highestReceiptSeq(tx: Tx, site: string, year: number) {
+  const names = await namesOfSite(tx, site);
+  const rows = await tx.receipt.findMany({ where: { warehouse: { in: names } }, select: { id: true } });
+  return highestSeq(rows.map((r) => r.id), sameKindYear("REC", year));
 }
 
 /** Every name a site's records may carry: the site itself, its stores and its aliases (domain/site.ts, but inside the caller's transaction). */
@@ -94,9 +107,13 @@ async function highestLotSeq(tx: Tx, site: string, prefix: string, year: number)
     }),
   ]);
   const inYear = (d: Date | string | null | undefined) => yearOf(typeof d === "string" ? d : d?.toISOString()) === year;
+  const lotInYear = sameKindYear("LOT", year);
   const seqOf = (lot: string | null | undefined, sameYear: boolean) => {
     if (!lot) return undefined;
     if (lot.startsWith(prefix)) return parseSiteId(lot)?.seq;
+    // A system-format lot under a superseded code still holds its number.
+    const old = lotInYear(lot);
+    if (old !== undefined) return old;
     return sameYear ? legacyLotSeq(lot) : undefined;
   };
   return Math.max(
@@ -106,9 +123,10 @@ async function highestLotSeq(tx: Tx, site: string, prefix: string, year: number)
   );
 }
 
-async function highestDeliveryPlanSeq(tx: Tx, prefix: string) {
-  const rows = await tx.deliveryPlan.findMany({ where: { id: { startsWith: prefix } }, select: { id: true } });
-  return highestSeq(rows.map((r) => r.id), siteSeq(prefix));
+async function highestDeliveryPlanSeq(tx: Tx, site: string, year: number) {
+  const names = await namesOfSite(tx, site);
+  const rows = await tx.deliveryPlan.findMany({ where: { destinationWarehouse: { in: names } }, select: { id: true } });
+  return highestSeq(rows.map((r) => r.id), sameKindYear("DP", year));
 }
 
 /**
@@ -143,8 +161,9 @@ function allocator(start: number, format: (seq: number) => string): IdAllocator 
 
 export async function receiptIdAllocator(tx: Tx, warehouse: string, arrivalDate: string): Promise<IdAllocator> {
   const code = await warehouseCodeFor(tx, warehouse);
+  const site = (await siteOf(tx, warehouse))!;
   const year = requireYear(arrivalDate, "The arrival date");
-  return allocator(await highestReceiptSeq(tx, siteIdPrefix("REC", code, year)), (s) => formatReceiptId(code, year, s));
+  return allocator(await highestReceiptSeq(tx, site, year), (s) => formatReceiptId(code, year, s));
 }
 
 export async function nextReceiptId(tx: Tx, warehouse: string, arrivalDate: string): Promise<string> {
@@ -160,8 +179,9 @@ export async function nextLotNumber(tx: Tx, warehouse: string, arrivalDate: stri
 
 export async function nextDeliveryPlanId(tx: Tx, warehouse: string, expectedArrivalDate: string): Promise<string> {
   const code = await warehouseCodeFor(tx, warehouse);
+  const site = (await siteOf(tx, warehouse))!;
   const year = requireYear(expectedArrivalDate, "The expected arrival date");
-  return formatDeliveryPlanId(code, year, (await highestDeliveryPlanSeq(tx, siteIdPrefix("DP", code, year))) + 1);
+  return formatDeliveryPlanId(code, year, (await highestDeliveryPlanSeq(tx, site, year)) + 1);
 }
 
 export async function nextTransferId(tx: Tx, transferDate: string): Promise<string> {
@@ -202,9 +222,12 @@ export async function lotNormalizer(tx: Tx) {
     const original = raw === null || raw === undefined ? null : String(raw);
     const keep = { value: original, raw: original, normalized: false };
     if (original === null || !original.trim()) return keep;
-    if (parseSiteId(original)?.kind === "LOT") return { value: original.trim(), raw: original, normalized: true };
     const year = yearOf(date);
     const code = site?.trim() ? await codeOf(site.trim()) : null;
+    if (parseSiteId(original)?.kind === "LOT") {
+      // Already a system lot: keep its number, bring the code up to date when the site has one.
+      return { value: (code ? recodeSiteId(original, code) : undefined) ?? original.trim(), raw: original, normalized: true };
+    }
     if (!code || year === undefined) return keep;
     const value = normalizeLotNumber(original, code, year);
     return value ? { value, raw: original, normalized: true } : keep;

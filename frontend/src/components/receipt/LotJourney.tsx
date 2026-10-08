@@ -1,4 +1,4 @@
-import type { JourneyStep } from "./lotJourney";
+import type { JourneyStep } from "./lotJourney.ts";
 
 const DOT: Record<JourneyStep["state"], string> = {
   done: "bg-success-600 text-white",

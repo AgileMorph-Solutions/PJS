@@ -62,9 +62,33 @@ export const ROLE_FORMS: RoleForm[] = [
     title: "QFS Officer — quality analysis & jute bag check",
     role: "qfs_officer",
     stages: [
-      // The four measurements only. The Pass/Fail decision (n-qfs's branch) is NOT part of this
-      // form — the Warehouse Incharge still records it, since a Fail rejects the truck.
-      { stageId: "n-qfs", labels: ["MOIS. (moisture)", "NUT COUNT", "KOR", "FINAL KOR"] },
+      // The measurements only. The Pass/Fail decision (n-qfs's branch) is NOT part of this form — the
+      // Warehouse Incharge still records it, since a Fail rejects the truck. The cut-test grams come
+      // first in each panel because KOR / FINAL KOR follow from them (domain/receiptMath.ts): record the
+      // grams and KOR is calculated; leave them out and KOR is typed, as every 2026 truck was.
+      {
+        stageId: "n-qfs",
+        labels: [
+          "MOIS. (moisture)",
+          "NUT COUNT",
+          "Sample – Good Kernel (g)",
+          "Sample – Immature (g)",
+          "Sample – Spotted (g)",
+          "Sample – Rejection (g)",
+          "Sample – Void (g)",
+          "Sample – Oil (g)",
+          "Sample – Shell (g)",
+          "KOR",
+          "Final – Good Kernel (g)",
+          "Final – Immature (g)",
+          "Final – Spotted (g)",
+          "Final – Rejection (g)",
+          "Final – Void (g)",
+          "Final – Oil (g)",
+          "Final – Shell (g)",
+          "FINAL KOR",
+        ],
+      },
       // SACS (total) is not here: it is calculated as good + damp + torn (domain/receiptMath.ts).
       {
         stageId: "n-unload",

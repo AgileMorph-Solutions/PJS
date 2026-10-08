@@ -201,7 +201,10 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect(r.stageData["n-verify"]["FICHE"]).toBe("F-100");
     // Approving the Branch Manager's form never hands out a Lot — that happens on quality pass.
     expect(r.lotNo ?? "").toBe("");
-    expect(r).toMatchObject({ lbaCode: SUPPLIER, supplierName: "UM Test Supplier", vehicleNo: "TRUCK-42", status: "grn_completed" });
+    expect(r).toMatchObject({ lbaCode: SUPPLIER, supplierName: "UM Test Supplier", vehicleNo: "TRUCK-42",
+      // A price alone no longer makes a truck GRN-completed (Oct 2026: the GRN quantity must be recorded), so the
+      // approved price leaves it where its other stages put it — it never unloaded or passed quality in this test.
+      status: "pending_qa" });
 
     const changes = await prisma.stageFieldChange.findMany({ where: { receiptId: receiptA } });
     expect(changes.length).toBeGreaterThanOrEqual(5);
@@ -290,6 +293,38 @@ describe("QFS Officer quality analysis", () => {
     expect(after.stageData["n-unload"]["SACS (bags)"]).toBe("478");
     // The decision is the Warehouse Incharge's: nothing here sets it.
     expect(after.branches["n-qfs"]).toBeUndefined();
+  });
+
+  it("records the cut-test grams, and KOR then follows them when the Incharge approves", async () => {
+    const id = (await createReceipt("BOUAKE")).id;
+    createdReceipts.push(id);
+    await setStageFields(id, "n-gate", { "VEHICLE NO.": "QFS-2" });
+    await setStageFields(id, "n-verify", { "LBA CODE": SUPPLIER });
+    const grams = { "Sample – Good Kernel (g)": "270", "Sample – Immature (g)": "30", "Sample – Spotted (g)": "20", "Sample – Void (g)": "12" };
+    const res = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { "MOIS. (moisture)": "10.3", ...grams } } });
+    expect(res.statusCode).toBe(201);
+    expect((await as(P + "wi", "POST", `/api/submissions/${res.json().id}/approve`)).statusCode).toBe(200);
+    const after = (await as(P + "wi", "GET", `/api/receipts/${id}`)).json();
+    expect(after.stageData["n-qfs"]).toMatchObject({ ...grams, KOR: "52.03" }); // (270 + ½ × 50) × 0.17637
+  });
+
+  it("refuses a typed KOR sent with the grams that decide it — at submit, where the submitter can fix it", async () => {
+    const id = (await createReceipt("BOUAKE")).id;
+    createdReceipts.push(id);
+    await setStageFields(id, "n-verify", { "LBA CODE": SUPPLIER });
+    const grams = { "Sample – Good Kernel (g)": "270", "Sample – Immature (g)": "30", "Sample – Spotted (g)": "20" };
+    const res = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { ...grams, KOR: "40" } } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/KOR is calculated/);
+    // Grams already on the receipt count too: KOR typed alone afterwards is refused the same way.
+    await setStageFields(id, "n-qfs", grams);
+    const alone = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { KOR: "40" } } });
+    expect(alone.statusCode).toBe(422);
+    // …and without grams a typed KOR is exactly what a 2026 truck has, and is accepted.
+    const bare = (await createReceipt("BOUAKE")).id;
+    createdReceipts.push(bare);
+    await setStageFields(bare, "n-verify", { "LBA CODE": SUPPLIER });
+    expect((await as(P + "qfs", "POST", `/api/receipts/${bare}/submissions`, { values: { "n-qfs": { KOR: "47.69" } } })).statusCode).toBe(201);
   });
 
   it("still refuses QFS a field outside its form, and the Pass/Fail decision itself", async () => {

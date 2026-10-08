@@ -7,11 +7,11 @@ import { describe, it, expect } from "vitest";
 import { SHEET_FIELDS, normalizeHeader } from "../src/domain/workbook/fields.js";
 import { SHEETS, sheetsFor, sheetByTitle } from "../src/domain/workbook/sheets.js";
 import { columnInfo } from "../src/domain/workbook/schemaInfo.js";
-import { RECEIPT_COLUMNS } from "../src/domain/workbook/receiptSheet.js";
+import { RECEIPT_COLUMNS, RECEIPT_DERIVED_COLUMNS } from "../src/domain/workbook/receiptSheet.js";
 
 const SECTIONS = ["UNIT", "CENTRAL"] as const;
 const internal = ["source", "sheetRow", "createdAt", "updatedAt", "seq", "activityCategory", "destinationProvenance",
-  "status (derived)", "computed_balance", "balance_delta", "reportedBalance", "weightDifference", "reportedDifference", "diff"];
+  "computed_balance", "balance_delta", "reportedBalance", "weightDifference", "reportedDifference", "diff"];
 
 describe("every sheet and column", () => {
   for (const type of SECTIONS) {
@@ -21,7 +21,11 @@ describe("every sheet and column", () => {
         expect(fields[0].key).toBe(spec.key);
         expect(new Set(fields.map((f) => f.key)).size).toBe(fields.length);
         if (spec.kind === "receipt") {
-          for (const f of fields) expect(RECEIPT_COLUMNS, f.key).toContain(f.key);
+          // Either a real column the file reads and writes, or one the app works out and the file only shows.
+          for (const f of fields) expect([...RECEIPT_COLUMNS, ...RECEIPT_DERIVED_COLUMNS], f.key).toContain(f.key);
+        } else if (spec.exportOnly) {
+          // Built from other records (a plan's progress, a BKT's variance), so its keys are the sheet's own, not a table's.
+          expect(spec.readOnly).toEqual([]);
         } else {
           const info = columnInfo(spec.model!);
           for (const f of fields) expect(info.has(f.key), `${spec.model}.${f.key}`).toBe(true);
@@ -42,7 +46,7 @@ describe("every sheet and column", () => {
       });
 
       it(`${type} · ${spec.title}: nothing a new row needs is hidden`, () => {
-        if (spec.kind === "receipt") return;
+        if (spec.kind === "receipt" || spec.exportOnly) return;
         const shown = new Set(spec.fields(type).map((f) => f.key));
         const filled = new Set(spec.defaultToSection(type));
         for (const [col, c] of columnInfo(spec.model!)) {
@@ -63,8 +67,8 @@ describe("titles", () => {
       expect(t).not.toMatch(/[\\/?*[\]:]/);
       expect(t).not.toMatch(/[a-z][A-Z]/); // WarehouseDischarge would fail this
     }
-    expect(titles).toEqual(["Truck Reception", "Warehouse Receiving", "Drying", "Drying & Sorting", "Dispatch", "Stock Transfers", "Jute Bags",
-      "Activity Ledger", "Issued to Production", "Suppliers"]);
+    expect(titles).toEqual(["Truck Reception", "Delivery Plan", "BKT Transfers", "Warehouse Receiving", "Drying", "Drying & Sorting", "Dispatch",
+      "Stock Transfers", "Jute Bags", "Activity Ledger", "Issued to Production", "Suppliers"]);
   });
 
   it("are found whatever the case or spacing", () => {
@@ -104,6 +108,33 @@ describe("what differs between Unit and Central", () => {
   it("only Central asks for the Yakro-only receiving details", () => {
     expect(receiving("CENTRAL").map((f) => f.label)).toEqual(expect.arrayContaining(["Delivery Note No", "CCAK Validated", "Storage Area"]));
     expect(receiving("UNIT").map((f) => f.label)).not.toContain("Storage Area");
+  });
+});
+
+describe("what the app works out is shown, never written", () => {
+  it("no plan column is one an upload can write (the status is filtered out where an upload is read)", () => {
+    for (const key of RECEIPT_DERIVED_COLUMNS.filter((k) => k !== "status (derived)")) expect(RECEIPT_COLUMNS, key).not.toContain(key);
+  });
+
+  it("Truck Reception shows Receipt Status and the plan columns the client asked for", () => {
+    const fields = SHEETS[0].fields("UNIT");
+    const byLabel = new Map(fields.map((f) => [f.label, f.key]));
+    for (const l of ["Receipt Status", "Delivery Plan ID", "Reception Type", "Planning / Exception Flag", "Plan Link Status", "Exception Approval Status"]) {
+      expect(RECEIPT_DERIVED_COLUMNS, l).toContain(byLabel.get(l));
+    }
+  });
+
+  it("the GRN column carries the client's wording, and an older export's header still finds it", () => {
+    const grn = SHEETS[0].fields("UNIT").find((f) => f.key === "StageGrn.grnWeight")!;
+    expect(grn.label).toBe("GRN Quantity (kg)");
+    expect(grn.aka).toEqual(["GRN Weight (kg)"]);
+  });
+
+  it("the cut-test grams and the loaded weight are columns, so KOR can be recorded from them", () => {
+    const labels = SHEETS[0].fields("UNIT").map((f) => f.label);
+    for (const l of ["Loaded Truck Weight (kg)", "Sample – Good Kernel (g)", "Sample – Immature (g)", "Sample – Spotted (g)", "Final – Good Kernel (g)", "Final – Shell (g)"]) {
+      expect(labels, l).toContain(l);
+    }
   });
 });
 

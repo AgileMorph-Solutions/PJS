@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES } from "../src/domain/receiptMath.js";
+import {
+  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, storedFormulaMismatches, KOR_FACTOR,
+} from "../src/domain/receiptMath.js";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap.js";
 
 describe("parseQty", () => {
@@ -71,6 +73,76 @@ describe("derived fields", () => {
     expect(isDerivedField("n-netwt", "NET WT KGS")).toBe(true);
     expect(isDerivedField("n-unload", "SACS (bags)")).toBe(true);
     expect(isDerivedField("n-unload", "BON SACS (good bags)")).toBe(false);
+  });
+});
+
+describe("KOR from the cut test", () => {
+  const sample = (good: string, immature: string, spotted: string) => ({
+    "n-qfs": { "Sample – Good Kernel (g)": good, "Sample – Immature (g)": immature, "Sample – Spotted (g)": spotted },
+  });
+
+  it("uses the client's own formula and constant", () => {
+    expect(KOR_FACTOR).toBe(0.17637);
+    // (270 + 0.5 × (30 + 20)) × 0.17637 = 295 × 0.17637 = 52.03 — rounded to the two decimals the sheets hold.
+    expect(computeDerivedFields(sample("270", "30", "20"))["n-qfs"]).toEqual({ KOR: "52.03" });
+  });
+
+  it("calculates the sample panel into KOR and the final panel into FINAL KOR, independently", () => {
+    const out = computeDerivedFields({
+      "n-qfs": {
+        ...sample("270", "30", "20")["n-qfs"],
+        "Final – Good Kernel (g)": "280", "Final – Immature (g)": "10", "Final – Spotted (g)": "10",
+      },
+    })["n-qfs"];
+    expect(out).toEqual({ KOR: "52.03", "FINAL KOR": "51.15" });
+  });
+
+  it("needs all three of good, immature and spotted — a zero counts, a blank does not", () => {
+    expect(computeDerivedFields(sample("270", "30", ""))["n-qfs"]).toBeUndefined();
+    expect(computeDerivedFields(sample("270", "0", "0"))["n-qfs"]).toEqual({ KOR: "47.62" });
+  });
+
+  it("is typed until the grams exist, then calculated — and never locks a truck that only has the final KOR", () => {
+    const typedOnly = { "n-qfs": { KOR: "47.69", "FINAL KOR": "48.4" } };
+    expect(derivedRuleInForce(typedOnly, "n-qfs", "KOR")).toBeUndefined();
+    expect(derivedRuleInForce(sample("270", "30", ""), "n-qfs", "KOR")).toBeUndefined();
+    expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "KOR")?.formula).toMatch(/0\.17637/);
+    // Final panel is separate: sample grams don't lock FINAL KOR.
+    expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "FINAL KOR")).toBeUndefined();
+    // A rule with no fallback is locked regardless of its inputs.
+    expect(derivedRuleInForce({}, "n-netwt", "NET WT KGS")).toBeDefined();
+  });
+
+  it("never blanks an imported typed KOR that has no grams behind it", () => {
+    expect(computeDerivedFields({ "n-qfs": { KOR: "47.69" } })["n-qfs"]).toBeUndefined();
+    expect(storedFormulaMismatches({ "n-qfs": { KOR: "47.69", "FINAL KOR": "48.4" } })).toEqual([]);
+  });
+
+  it("reports a stored KOR that disagrees with the grams recorded beside it", () => {
+    expect(storedFormulaMismatches({ "n-qfs": { KOR: "47.69", ...sample("270", "30", "20")["n-qfs"] } })).toEqual([
+      { stageId: "n-qfs", label: "KOR", stored: "47.69", expected: "52.03" },
+    ]);
+  });
+});
+
+describe("GRN quantity is suggested from net, never forced", () => {
+  const GRN = "GRN Weight (kept separate from Gross/Net/Paid)";
+
+  it("offers the net weight when GRN is empty", () => {
+    expect(prefillSuggestions({ "n-netwt": { "NET WT KGS": "40822" } }, "n-grn")).toEqual({ [GRN]: { value: "40822", from: "net weight" } });
+  });
+
+  it("offers nothing once GRN has a value — even one that differs from net", () => {
+    expect(prefillSuggestions({ "n-netwt": { "NET WT KGS": "40822" }, "n-grn": { [GRN]: "40700" } }, "n-grn")).toEqual({});
+  });
+
+  it("offers nothing without a net weight, or for another stage", () => {
+    expect(prefillSuggestions({}, "n-grn")).toEqual({});
+    expect(prefillSuggestions({ "n-netwt": { "NET WT KGS": "40822" } }, "n-lot")).toEqual({});
+  });
+
+  it("is not a calculation: GRN stays typeable", () => {
+    expect(isDerivedField("n-grn", GRN)).toBe(false);
   });
 });
 

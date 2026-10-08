@@ -19,7 +19,13 @@
  */
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 
-export interface FieldDef { key: string; label: string }
+export interface FieldDef {
+  key: string;
+  label: string;
+  /** Other headers an upload may still use for this column (a label the client had us rename), so an
+   * older export keeps working instead of the column silently dropping out. */
+  aka?: string[];
+}
 type Pair = [key: string, label: string];
 
 export interface SheetFields {
@@ -34,6 +40,7 @@ export interface SheetFields {
 }
 
 const defs = (pairs: Pair[]): FieldDef[] => pairs.map(([key, label]) => ({ key, label }));
+const withAka = (fields: FieldDef[], key: string, aka: string[]): FieldDef[] => fields.map((f) => (f.key === key ? { ...f, aka } : f));
 const zip = (keys: string[], labels: string[], prefix = ""): Pair[] => {
   if (keys.length !== labels.length) throw new Error(`fields.ts: ${keys.length} keys vs ${labels.length} labels`);
   return keys.map((k, i) => [k, `${prefix}${labels[i]}`]);
@@ -67,6 +74,14 @@ const centralPanels = (): Pair[] => [
 
 // ── Sheets ───────────────────────────────────────────────────────────────────────────────────────
 
+/** The cut test of the sample and the final panel — the grams KOR and Final KOR are calculated from. */
+const CUT_TEST_GRAMS: Pair[] = (["Sample", "Final"] as const).flatMap((panel) =>
+  (["GoodKernel", "Immature", "Spotted", "Rejection", "Void", "Oil", "Shell"] as const).map((g): Pair => [
+    `StageQualityQfs.${panel.toLowerCase()}${g}G`,
+    `${panel} – ${g.replace("GoodKernel", "Good Kernel")} (g)`,
+  ])
+);
+
 /** Truck Reception: one row per truck, in the order the client's own sheet reads. The first four
  * (arrival date, supplier name, supplier code, truck no) are the receipt's own columns; the app keeps
  * the matching stage fields in step with them on upload (receiptSheet.ts). */
@@ -87,8 +102,11 @@ const RECEIPT: Pair[] = [
   ["StageQualityQfs.nutCount", "Nut Count"],
   ["StageQualityQfs.kor", "KOR"],
   ["StageQualityQfs.finalKor", "Final KOR"],
+  // The cut test behind KOR (client, Oct 2026: the system calculates KOR when these are recorded).
+  ...CUT_TEST_GRAMS,
   ["ReceiptBranch.n-qfs", "Quality Result"],
   ["StageRejection.reason", "Rejection Reason"],
+  ["StageGrossWeight.loadedTruckWtKgs", "Loaded Truck Weight (kg)"],
   ["StageGrossWeight.grossWtKgs", "Gross Weight (kg)"],
   ["StageTareWeight.tareWtKgs", "Tare Weight (kg)"],
   ["StageNetWeight.netWtKgs", "Net Weight (kg)"],
@@ -100,11 +118,18 @@ const RECEIPT: Pair[] = [
   ["StageUnload.refraction", "Refraction (kg)"],
   ["StageGrn.price", "Price (CFA/kg)"],
   ["StageGrn.amount", "Amount (CFA)"],
-  ["StageGrn.grnWeight", "GRN Weight (kg)"],
+  ["StageGrn.grnWeight", "GRN Quantity (kg)"],
   ["StageLotAssignment.lotNumber", "Lot No"],
   ["StageBinAllocation.binNumber", "Bin No"],
   ["StageGateEntry.remarks", "Remarks"],
   ["StageGateEntry.week", "Week"],
+  // Worked out by the app — the file shows them, an upload never writes them.
+  ["status (derived)", "Receipt Status"],
+  ["plan.deliveryPlanId", "Delivery Plan ID"],
+  ["plan.receptionType", "Reception Type"],
+  ["plan.flags", "Planning / Exception Flag"],
+  ["plan.linkStatus", "Plan Link Status"],
+  ["plan.approval", "Exception Approval Status"],
 ];
 
 const DISCHARGE_COMMON: Pair[] = [
@@ -210,11 +235,37 @@ const ISSUED: Pair[] = [
   ["receivedByProductionNetWt", "Received by Production, Net Weight"], ["issuedFrom", "Issued From"], ["remarks", "Remarks"],
 ];
 
+/** The client's own Delivery Plan sheet (their column names), then what the app works out from the trucks. For reading. */
+const DELIVERY_PLAN: Pair[] = [
+  ["id", "Delivery Plan ID"], ["planningDate", "Planning Date"], ["supplierCode", "LBA Code"], ["supplierName", "Supplier Name"],
+  ["expectedOrigin", "Expected Origin"], ["destinationStore", "Destination Warehouse"], ["expectedStart", "Expected Delivery Start"],
+  ["expectedEnd", "Expected Delivery End"], ["expectedQuantityKg", "Expected Quantity (kg)"], ["expectedTrucks", "Expected Trucks"],
+  ["fundingReference", "Purchase / Funding Reference"], ["status", "Plan Status"], ["actualKg", "Actual Received Quantity (kg)"],
+  ["arrivals", "Actual Arrivals"], ["acceptedTrucks", "Accepted Trucks"], ["remainingKg", "Remaining Quantity (kg)"],
+  ["varianceKg", "Quantity Variance (kg)"], ["overdue", "Overdue"], ["remarks", "Remarks"], ["cancelReason", "Cancel Reason"],
+  ["planningBasis", "Planning Basis"],
+];
+
+/** One row per BKT = one truck / voyage: what left, what arrived, and the difference. For reading. */
+const BKT: Pair[] = [
+  ["id", "BKT"], ["transferDate", "Date"], ["fromWarehouse", "From Warehouse"], ["toWarehouse", "To Warehouse"], ["state", "Transfer Status"],
+  ["truckNo", "Truck Registration"], ["transporter", "Transporter"], ["driver", "Driver"], ["driverPhone", "Phone"],
+  ["lots", "Lot No"], ["bins", "Bin No"], ["bagsDispatched", "Bags Dispatched"], ["dispatchedGrossKg", "Loaded Truck Weight (kg)"],
+  ["netDispatchedKg", "Net Weight Dispatched (kg)"], ["dispatchedAt", "Dispatched At"],
+  ["bagsReceived", "Bags Received"], ["damagedBags", "Damaged Bags"], ["receivedGrossKg", "Gross Weight Received (kg)"],
+  ["netAtArrivalKg", "Net Weight at Arrival (kg)"], ["korReceived", "KOR Received"], ["moistureReceived", "Moisture Received (%)"],
+  ["nutCountReceived", "Nut Count at Arrival"], ["receivedLotNoRaw", "Receiving Lot No (as written)"], ["receivedAt", "Received At"],
+  ["bagVariance", "Bag Variance"], ["weightVarianceKg", "Weight Variance (kg)"], ["receivedComment", "Comment"], ["remarks", "Remarks"],
+];
+
 const same = (pairs: Pair[]) => () => defs(pairs);
 
 /** Keyed by the internal sheet id (the table name, or "Receipt"). Order = the order sheets appear in the file. */
 export const SHEET_FIELDS: Record<string, SheetFields> = {
-  Receipt: { title: "Truck Reception", idLabel: "Receipt ID", fields: same(RECEIPT) },
+  // "GRN Weight (kg)" is what this column was called before the client's wording ("GRN Quantity") replaced it.
+  Receipt: { title: "Truck Reception", idLabel: "Receipt ID", fields: () => withAka(defs(RECEIPT), "StageGrn.grnWeight", ["GRN Weight (kg)"]) },
+  DeliveryPlan: { title: "Delivery Plan", idLabel: "Delivery Plan ID", fields: same(DELIVERY_PLAN) },
+  TransferRequest: { title: "BKT Transfers", idLabel: "BKT", fields: same(BKT) },
   WarehouseDischarge: {
     title: "Warehouse Receiving", idLabel: "Row ID",
     fields: (type) => defs(type === "UNIT"

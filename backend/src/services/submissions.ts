@@ -13,7 +13,9 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { formById, formForRole, type Role } from "@anagroci/contract/data/roles";
 import { prisma } from "../db.js";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
+import { derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
 import { loadReceiptRow, applyStageFields } from "./receipts.js";
+import { assembleStageData } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
 import { assignedSupplierCodes } from "../auth/receiptAccess.js";
 
@@ -53,6 +55,18 @@ export async function submitForm(user: User & { role: Role }, receiptId: string,
     if (!lba) throw new ValidationError("LBA CODE is required so the supplier can be checked against your assignments.");
     if (!(await assignedSupplierCodes(user.id)).has(lba)) {
       throw new ForbiddenError(`Supplier ${lba} isn't assigned to you.`);
+    }
+  }
+
+  // A value the cut-test grams already decide (KOR) can't also be typed: refuse it here, where the
+  // submitter can fix it, rather than at approval where the Incharge can only see it fail. The form
+  // leaves it out whenever the grams are in; this is the same rule for anyone calling the API.
+  const current = assembleStageData((await loadReceiptRow(receiptId)) as Record<string, unknown>);
+  const after = { ...current, ...Object.fromEntries(Object.entries(values).map(([stage, f]) => [stage, { ...current[stage], ...f }])) };
+  for (const [stageId, fields] of Object.entries(values)) {
+    for (const label of Object.keys(fields)) {
+      const rule = derivedRuleInForce(after, stageId, label);
+      if (rule) throw new ValidationError(`${label} is calculated (${rule.formula}) — leave it out; it follows the values it is calculated from.`);
     }
   }
 
@@ -118,13 +132,6 @@ export async function approveSubmission(reviewer: User, id: string) {
     for (const [stageId, fields] of Object.entries(values)) {
       await applyStageFields(tx, sub.receiptId, stageId, fields, { actor: { id: reviewer.id, via: "approval" } });
     }
-
-    // Receipt's own top-level columns mirror three stage fields (see PATCHABLE in receipts.ts).
-    const top: Record<string, string> = {};
-    if (values["n-verify"]?.["SUPPLIERS NAME"]) top.supplierName = values["n-verify"]["SUPPLIERS NAME"];
-    if (values["n-verify"]?.["LBA CODE"]) top.lbaCode = values["n-verify"]["LBA CODE"];
-    if (values["n-gate"]?.["VEHICLE NO."]) top.vehicleNo = values["n-gate"]["VEHICLE NO."];
-    if (Object.keys(top).length) await tx.receipt.update({ where: { id: sub.receiptId }, data: top });
 
     const fresh = await loadReceiptRow(sub.receiptId, tx);
     const status = deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord);

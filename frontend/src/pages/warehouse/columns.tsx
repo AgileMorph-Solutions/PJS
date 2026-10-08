@@ -1,9 +1,10 @@
 import type { Column } from "../../components/ui/DataTable";
-import type { ReceiptRecord } from "../../types/receipt";
+import type { ReceiptPlanInfo, ReceiptRecord } from "../../types/receipt";
 import type { SiteSlug } from "../../config/sites";
 import type { DownstreamStatus } from "../../repository/api";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { DownstreamStatusChips } from "../../components/DownstreamStatusChips";
+import { ReceptionTypePill } from "../../components/receipt/PlanBadges";
 import { deriveStatus } from "../../domain/receiptStatus";
 
 /** The real per-truck paperwork, straight from the OFFLOADINGS sheet's "Verify supplier documents"
@@ -51,6 +52,13 @@ const downstreamColumn = (status: Map<string, DownstreamStatus>): Column<Receipt
   render: (r) => <DownstreamStatusChips status={status.get(r.id)} />,
 });
 
+/** Planned / planned with exception / unplanned — only built when the viewer can read plan info (Incharge, admin). */
+const planColumn = (info: Map<string, ReceiptPlanInfo>): Column<ReceiptRecord> => ({
+  label: "Plan",
+  nowrap: true,
+  render: (r) => <ReceptionTypePill info={info.get(r.id)} />,
+});
+
 const sourceColumn: Column<ReceiptRecord> = {
   label: "Source",
   render: (r) => (
@@ -81,7 +89,7 @@ const tailColumns: Column<ReceiptRecord>[] = [
  * Factory has exactly one (ANAGROCI-01) — showing the same column would be a constant, so central's
  * table doesn't get it.
  */
-export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string, DownstreamStatus>): Column<ReceiptRecord>[] {
+export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string, DownstreamStatus>, planInfo?: Map<string, ReceiptPlanInfo>): Column<ReceiptRecord>[] {
   // Downstream comes right after Status — it is the reason that column exists (everything Dispatch
   // to Central / Receiving from Unit / Issue to Production used to show on their own pages).
   return [
@@ -90,6 +98,7 @@ export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string,
     supplierColumn,
     ficheColumn,
     vehicleColumn(siteSlug === "unit"),
+    ...(planInfo ? [planColumn(planInfo)] : []),
     ...tailColumns,
     downstreamColumn(downstreamStatus),
     sourceColumn,

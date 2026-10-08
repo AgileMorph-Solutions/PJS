@@ -89,7 +89,7 @@ export async function setWarehouseCode(name: string, code: string | null) {
   if (wh.site) throw new ValidationError(`"${name}" is a store of ${wh.site} — IDs there use ${wh.site}'s code.`);
   const next = code?.trim().toUpperCase() || null;
   if (next && !isValidWarehouseCode(next)) {
-    throw new ValidationError("A warehouse code is 2–12 capital letters or digits, no spaces or dashes (e.g. BKE01).");
+    throw new ValidationError("A warehouse code is 2–12 capital letters or digits, no spaces or dashes (e.g. BKE).");
   }
   if (wh.code && wh.code !== next && (await codeInUse(wh.code))) {
     throw new ValidationError(`${wh.code} is already printed in issued IDs, so it can't be changed or cleared.`);

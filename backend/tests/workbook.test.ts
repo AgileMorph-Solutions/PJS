@@ -280,12 +280,12 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
     const made = await prisma.receipt.findFirstOrThrow({ where: { vehicleNo: VEH + "NEW" } });
     expect(made).toMatchObject({ source: "entered", warehouse: "BOUAKE", supplierName: "WB New", origin: "WBTEST-ORIGIN" });
     // Numbered by the system: the warehouse's code, then the year of the arrival date.
-    expect(made.id).toMatch(/^REC-BKE01-\d{4}-\d{3,}$/);
+    expect(made.id).toMatch(/^REC-BKE-\d{4}-\d{4,}$/);
     const r = (await get("wi", `/api/receipts/${made.id}`)).json();
     expect(r.stageData["n-grn"]["PRICE"]).toBe("77");
     expect(r.stageData["n-gate"]["VEHICLE NO."]).toBe(VEH + "NEW"); // the stage got it too
     // The Pass in the same row issued the Lot — nobody typed it.
-    expect(r.lotNo).toMatch(/^LOT-BKE01-\d{4}-\d{3,}$/);
+    expect(r.lotNo).toMatch(/^LOT-BKE-\d{4}-\d{4,}$/);
     expect(r.branches["n-qfs"]).toBe("pass");
     expect(await prisma.stageFieldChange.count({ where: { receiptId: made.id, via: "import" } })).toBeGreaterThanOrEqual(4);
     expect(r.timeline[r.timeline.length - 1].note).toMatch(/Created from workbook/);

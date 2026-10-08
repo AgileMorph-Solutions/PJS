@@ -7,7 +7,7 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { WorkbookModal } from "../../components/WorkbookModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
-import { useTracking, useDownstreamStatus } from "../../state/TrackingContext";
+import { useTracking, useDownstreamStatus, useReceiptPlanInfo } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { siteSlugForSiteName } from "../../config/sites";
@@ -27,6 +27,7 @@ export function ReceiptsListPage() {
   const canEdit = useCanEditDirectly();
   const switchSite = useSwitchSite();
   const { status: downstreamStatus, refetch: refetchDownstream } = useDownstreamStatus(site.warehouseName);
+  const { info: planInfo } = useReceiptPlanInfo(site.warehouseName, canEdit);
   const [params, setParams] = useSearchParams();
   // Reads an initial ?q= from the global header search so a search there lands here pre-filled.
   const [q, setQ] = useState(() => params.get("q") ?? "");
@@ -173,7 +174,7 @@ export function ReceiptsListPage() {
       </FilterBar>
 
       <DataTable
-        columns={receiptColumns(site.slug, downstreamStatus)}
+        columns={receiptColumns(site.slug, downstreamStatus, canEdit ? planInfo : undefined)}
         rows={rows}
         keyFn={(r) => r.id}
         rowHref={(r) => `/${site.slug}/receipts/${r.id}`}

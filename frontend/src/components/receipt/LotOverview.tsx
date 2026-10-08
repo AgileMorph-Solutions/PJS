@@ -116,6 +116,7 @@ export function LotOverview({
         <InfoRow label="Gross" value={kg(v(receipt, "n-gross", "GROSS WT KGS"))} />
         <InfoRow label="Net" value={kg(v(receipt, "n-netwt", "NET WT KGS"))} strong />
         <InfoRow label="Paid weight" value={kg(v(receipt, "n-netwt", "PAID WT"))} />
+        <InfoRow label="GRN quantity" strong value={kg(v(receipt, "n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"))} />
         <InfoRow label="Bags (good / damp / torn)" value={v(receipt, "n-unload", "SACS (bags)") ? `${v(receipt, "n-unload", "SACS (bags)")} (${v(receipt, "n-unload", "BON SACS (good bags)") ?? 0} / ${v(receipt, "n-unload", "HUMID SACS (damp bags)") ?? 0} / ${v(receipt, "n-unload", "Sacs déchirés (torn bags)") ?? 0})` : undefined} />
         <InfoRow label="Price / kg" value={v(receipt, "n-grn", "PRICE")} />
         <InfoRow label="GRN amount" value={v(receipt, "n-grn", "AMOUNT") ? `${Number(v(receipt, "n-grn", "AMOUNT")).toLocaleString()} XOF` : undefined} strong />

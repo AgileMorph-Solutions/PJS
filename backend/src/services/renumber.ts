@@ -1,13 +1,19 @@
 /**
- * One-off move of existing records onto the system IDs (Oct 2026): receipts REC-2026-0001 →
- * REC-BKE01-2026-001, lots 17 → LOT-BKE01-2026-017, voyages BKT001 / BKT-414 → BKT-2026-001 /
+ * Move of existing records onto the system IDs (Oct 2026): receipts REC-2026-0001 →
+ * REC-BKE-2026-0001, lots 17 → LOT-BKE-2026-0017, voyages BKT001 / BKT-414 → BKT-2026-001 /
  * BKT-2026-414. The user asked for existing data to be updated, not just new records.
+ *
+ * It also brings IDs already in the system format up to the current code and padding (the client's
+ * workbook settled on BKE/YAK and four-digit receipts/lots after the first renumber used BKE01 and
+ * three): same kind, year and number, new code and width — never a fresh number.
  *
  * Plan first, apply second: planRenumber() writes nothing and returns every old → new value (the
  * CLI writes it to a CSV for review); applyRenumber() writes exactly that plan in one transaction.
  *
  * What is never lost:
- *   - the old receipt id goes into Receipt.legacyId (old links resolve; every child row follows the
+ *   - the old receipt id goes into Receipt.legacyId (old links resolve; when legacyId is already set it
+ *     keeps the ORIGINAL id, and ids under a replaced warehouse code resolve through the contract's
+ *     SUPERSEDED_WAREHOUSE_CODES; every child row follows the
  *     id through ON UPDATE CASCADE — all 21 foreign keys into Receipt are declared that way);
  *   - the lot/voyage number stays the same number, and imported rows keep the workbook's own text
  *     in their *Raw twin.
@@ -20,7 +26,7 @@
  * dischargeLotDate), so re-uploading a 2026 workbook afterwards reproduces these exact values.
  */
 import { Prisma } from "@prisma/client";
-import { formatReceiptId, legacyLotSeq, parseSiteId, siteIdPrefix, yearOf } from "@anagroci/contract/domain/ids";
+import { formatReceiptId, legacyLotSeq, parseSiteId, recodeSiteId, yearOf } from "@anagroci/contract/domain/ids";
 import { prisma } from "../db.js";
 import { lotNormalizer, normalizeVoyage, siteOf } from "./ids.js";
 import { dischargeLotDate } from "./imports.js";
@@ -74,28 +80,48 @@ function legacyOrder(id: string): number {
 
 async function planReceipts(tx: Tx, skips: SkipLog): Promise<RenumberChange[]> {
   const receipts = await tx.receipt.findMany({ select: { id: true, warehouse: true, arrivalDate: true } });
+  const codeOf = new Map<string, string | null>();
+  const siteName = new Map<string, string>();
+  async function codeFor(warehouse: string) {
+    const site = siteName.get(warehouse) ?? (await siteOf(tx, warehouse)) ?? warehouse;
+    siteName.set(warehouse, site);
+    if (!codeOf.has(site)) codeOf.set(site, (await tx.warehouse.findUnique({ where: { name: site }, select: { code: true } }))?.code ?? null);
+    return { site, code: codeOf.get(site)! };
+  }
+
+  const out: RenumberChange[] = [];
+  const taken = new Set(receipts.map((r) => r.id));
+
+  // Already system ids: same number, current code and padding.
+  // Highest number per site and year, over every code — what the legacy ids continue after.
+  const highest = new Map<string, number>();
+  for (const r of receipts) {
+    const p = parseSiteId(r.id);
+    if (p?.kind !== "REC") continue;
+    const { site } = await codeFor(r.warehouse);
+    const k = `${site}\u0000${p.year}`;
+    highest.set(k, Math.max(highest.get(k) ?? 0, p.seq));
+    const { code } = await codeFor(r.warehouse);
+    if (!code) { skips.add("Receipt", `warehouse ${site} has no code yet`, r.id); continue; }
+    const to = recodeSiteId(r.id, code)!;
+    if (to === r.id) continue;
+    if (taken.has(to)) { skips.add("Receipt", `would duplicate ${to}`, r.id); continue; }
+    taken.add(to);
+    out.push({ table: "Receipt", key: r.id, column: "id", from: r.id, to });
+  }
+
+  // Receipts still on the pre-system REC-2026-NNNN ids: numbered in their original order.
   const pending = receipts.filter((r) => parseSiteId(r.id)?.kind !== "REC");
   pending.sort((a, b) => legacyOrder(a.id) - legacyOrder(b.id) || a.id.localeCompare(b.id));
-
-  const codeOf = new Map<string, string | null>();
-  const nextSeq = new Map<string, number>();
-  const out: RenumberChange[] = [];
   for (const r of pending) {
-    const site = (await siteOf(tx, r.warehouse)) ?? r.warehouse;
-    if (!codeOf.has(site)) codeOf.set(site, (await tx.warehouse.findUnique({ where: { name: site }, select: { code: true } }))?.code ?? null);
-    const code = codeOf.get(site);
+    const { site, code } = await codeFor(r.warehouse);
     const year = yearOf(r.arrivalDate);
     if (!code) { skips.add("Receipt", `warehouse ${site} has no code yet`, r.id); continue; }
     if (year === undefined) { skips.add("Receipt", "arrival date isn't a YYYY-MM-DD date", r.id); continue; }
 
-    const prefix = siteIdPrefix("REC", code, year);
-    if (!nextSeq.has(prefix)) {
-      // Continue after any receipt already issued in the new format for this warehouse and year.
-      const issued = receipts.map((x) => (x.id.startsWith(prefix) ? parseSiteId(x.id)?.seq ?? 0 : 0));
-      nextSeq.set(prefix, Math.max(0, ...issued));
-    }
-    const seq = nextSeq.get(prefix)! + 1;
-    nextSeq.set(prefix, seq);
+    const k = `${site}\u0000${year}`;
+    const seq = (highest.get(k) ?? 0) + 1;
+    highest.set(k, seq);
     out.push({ table: "Receipt", key: r.id, column: "id", from: r.id, to: formatReceiptId(code, year, seq) });
   }
   return out;
@@ -114,10 +140,13 @@ async function planLots(
 ): Promise<RenumberChange[]> {
   const out: RenumberChange[] = [];
   for (const r of rows) {
-    if (r.lot === null || !r.lot.trim() || parseSiteId(r.lot)?.kind === "LOT") continue;
+    if (r.lot === null || !r.lot.trim()) continue;
     const n = await normalize(r.lot, r.site, r.date);
     if (n.normalized && n.value) {
-      out.push({ table, key: r.key, column, from: r.lot, to: n.value, rawColumn: rawColumn && !r.raw ? rawColumn : undefined });
+      if (n.value === r.lot) continue; // already current
+      // The *Raw twin carries the WORKBOOK's text; a lot that was already a system lot has none to preserve.
+      const original = parseSiteId(r.lot) === undefined;
+      out.push({ table, key: r.key, column, from: r.lot, to: n.value, rawColumn: original && rawColumn && !r.raw ? rawColumn : undefined });
     } else {
       const reason = legacyLotSeq(r.lot) === undefined ? "not a single lot number" : !r.site ? "row names no warehouse" : !yearOf(r.date) ? "row has no readable date" : "its warehouse has no code yet";
       skips.add(table, reason, r.key);
@@ -222,6 +251,16 @@ export async function planRenumber(db: Tx = prisma): Promise<RenumberPlan> {
     if (legacyLotSeq(l.lotNo) !== undefined) skips.add("WarehouseActivityLedgerEntry", "sheet names no warehouse — re-upload it choosing the warehouse", String(l.id));
   }
 
+  // ── Delivery plans: DP-<code>-<year>-NNN, moved to the destination site's current code ──
+  const plans = await db.deliveryPlan.findMany({ select: { id: true, destinationWarehouse: true } });
+  for (const p of plans) {
+    const site = (await siteOf(db, p.destinationWarehouse)) ?? p.destinationWarehouse;
+    const code = (await db.warehouse.findUnique({ where: { name: site }, select: { code: true } }))?.code;
+    if (!code) { skips.add("DeliveryPlan", `warehouse ${site} has no code yet`, p.id); continue; }
+    const to = recodeSiteId(p.id, code);
+    if (to && to !== p.id) changes.push({ table: "DeliveryPlan", key: p.id, column: "id", from: p.id, to });
+  }
+
   // ── Voyages (BKT) on dispatch lines ──
   const lines = await db.warehouseDispatchLine.findMany({
     where: { vyogeNumber: { not: null } },
@@ -249,6 +288,8 @@ const DELEGATE: Record<string, { model: string; pk: string }> = {
   DryingJob: { model: "dryingJob", pk: "id" },
   JuteSupplierMovement: { model: "juteSupplierMovement", pk: "id" },
   WarehouseDispatchLine: { model: "warehouseDispatchLine", pk: "id" },
+  // Receipt.deliveryPlanId follows through ON UPDATE CASCADE.
+  DeliveryPlan: { model: "deliveryPlan", pk: "id" },
 };
 
 export interface RenumberResult {
@@ -278,7 +319,9 @@ export async function writeRenumber(tx: Tx, plan: RenumberPlan): Promise<Renumbe
   }
   for (const c of plan.changes) {
     if (c.table !== "Receipt") continue;
-    await tx.receipt.update({ where: { id: c.from! }, data: { id: c.to, legacyId: c.from } });
+    // legacyId is the ORIGINAL REC-2026-NNNN id: a second move (new code, wider padding) must not overwrite it.
+    const current = await tx.receipt.findUnique({ where: { id: c.from! }, select: { legacyId: true } });
+    await tx.receipt.update({ where: { id: c.from! }, data: { id: c.to, legacyId: current?.legacyId ?? (parseSiteId(c.from) ? null : c.from) } });
     // The two soft (non-FK) receipt references follow by hand; every hard FK cascades.
     await tx.juteWarehouseMovement.updateMany({ where: { receiptId: c.from }, data: { receiptId: c.to } });
     await tx.juteSupplierMovement.updateMany({ where: { receiptId: c.from }, data: { receiptId: c.to } });

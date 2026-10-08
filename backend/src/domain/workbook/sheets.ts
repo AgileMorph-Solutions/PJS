@@ -12,6 +12,10 @@ import { prisma } from "../../db.js";
 import { warehouseBalanceRows } from "../juteBalance.js";
 import { columnInfo, delegateOf, tableColumns } from "./schemaInfo.js";
 import { RECEIPT_KEY, receiptRows } from "./receiptSheet.js";
+import { listDeliveryPlans } from "../../services/deliveryPlans.js";
+import { listTransfers } from "../../services/transfers.js";
+import { PLAN_STATUS_LABELS } from "@anagroci/contract/domain/deliveryPlan";
+import { TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
 import { SHEET_FIELDS, normalizeHeader, type FieldDef } from "./fields.js";
 
 export type Row = Record<string, unknown>;
@@ -45,6 +49,13 @@ export interface SheetSpec {
   siteColumns: string[];
   /** `seq` on this table is assigned by the server on create (max + 1). */
   assignsSeq?: boolean;
+  /**
+   * The sheet is for READING: everything on it is worked out from other records (a plan's progress, a BKT's
+   * variance), and those records are changed in the app, where the rules live — an ID is issued, a store is
+   * checked, a truck is held to one voyage. An upload that carries it back is compared with what the app
+   * holds and any difference is reported, never written.
+   */
+  exportOnly?: boolean;
   rows(site?: string[]): Promise<Row[]>;
 }
 
@@ -97,10 +108,60 @@ export const SHEETS: SheetSpec[] = [
     kind: "receipt",
     key: RECEIPT_KEY,
     sections: BOTH,
-    readOnly: ["Receipt.source", "status (derived)"],
+    readOnly: ["Receipt.source", "status (derived)", "plan.deliveryPlanId", "plan.receptionType", "plan.flags", "plan.linkStatus", "plan.approval"],
     dateField: { column: "Receipt.arrivalDate", label: "Arrival date" },
     siteColumns: ["Receipt.warehouse"],
     rows: receiptRows,
+  },
+  // Planned before the truck comes. Planning is done in the app, so the sheet is for reading (see exportOnly).
+  {
+    name: "DeliveryPlan",
+    title: SHEET_FIELDS.DeliveryPlan.title,
+    idLabel: SHEET_FIELDS.DeliveryPlan.idLabel,
+    fields: SHEET_FIELDS.DeliveryPlan.fields,
+    defaultToSection: () => [],
+    kind: "table",
+    key: "id",
+    sections: BOTH,
+    readOnly: [],
+    exportOnly: true,
+    dateField: { column: "expectedStart", label: "Expected delivery start" },
+    siteColumns: ["destinationWarehouse"],
+    rows: async (site) =>
+      (await listDeliveryPlans(site)).map((p) => ({
+        id: p.id, planningDate: p.plannedDeliveryDate, supplierCode: p.supplierCode, supplierName: p.supplierName, expectedOrigin: p.expectedOrigin,
+        destinationStore: p.destinationStore, expectedStart: p.expectedArrivalDate, expectedEnd: p.expectedDeliveryEnd,
+        expectedQuantityKg: p.expectedQuantityKg, expectedTrucks: p.expectedTrucks, fundingReference: p.fundingReference,
+        status: PLAN_STATUS_LABELS[p.status], actualKg: p.progress.actualKg, arrivals: p.progress.arrivals, acceptedTrucks: p.progress.acceptedTrucks,
+        remainingKg: p.progress.remainingKg, varianceKg: p.progress.varianceKg, overdue: p.overdue ? "Yes" : "", remarks: p.remarks,
+        cancelReason: p.cancelReason, planningBasis: p.planningBasis,
+      })),
+  },
+  // One row per BKT — one truck, one voyage — with what left, what arrived and the difference.
+  {
+    name: "TransferRequest",
+    title: SHEET_FIELDS.TransferRequest.title,
+    idLabel: SHEET_FIELDS.TransferRequest.idLabel,
+    fields: SHEET_FIELDS.TransferRequest.fields,
+    defaultToSection: () => [],
+    kind: "table",
+    key: "id",
+    sections: BOTH,
+    readOnly: [],
+    exportOnly: true,
+    dateField: { column: "transferDate", label: "Transfer date" },
+    siteColumns: ["fromWarehouse", "toWarehouse"],
+    rows: async (site) =>
+      (await listTransfers(site)).map((t) => ({
+        id: t.id, transferDate: t.transferDate, fromWarehouse: t.fromWarehouse, toWarehouse: t.toWarehouse, state: TRANSFER_STATE_LABELS[t.state],
+        truckNo: t.truckNo, transporter: t.transporter, driver: t.driver, driverPhone: t.driverPhone,
+        lots: t.lines.map((l) => l.lotNumber ?? l.receiptId).join(" / "), bins: [...new Set(t.lines.map((l) => l.binCode).filter(Boolean))].join(" / "),
+        bagsDispatched: t.variance.bagsDispatched, dispatchedGrossKg: t.dispatchedGrossKg, netDispatchedKg: t.variance.netDispatchedKg,
+        dispatchedAt: t.dispatchedAt, bagsReceived: t.variance.bagsReceived, damagedBags: t.damagedBags, receivedGrossKg: t.receivedGrossKg,
+        netAtArrivalKg: t.variance.netAtArrivalKg, korReceived: t.korReceived, moistureReceived: t.moistureReceived, nutCountReceived: t.nutCountReceived,
+        receivedLotNoRaw: t.receivedLotNoRaw, receivedAt: t.receivedAt, bagVariance: t.variance.bagVariance, weightVarianceKg: t.variance.weightVarianceKg,
+        receivedComment: t.receivedComment, remarks: t.remarks,
+      })),
   },
   tableSheet("WarehouseDischarge", { sections: BOTH, siteColumns: ["warehouseSite"], dateField: { column: "arrivalDate", label: "Arrival date" } }),
   tableSheet("DryingBatch", { sections: BOTH, siteColumns: ["warehouseSite"], dateField: { column: "dryingDate", label: "Drying date" } }),

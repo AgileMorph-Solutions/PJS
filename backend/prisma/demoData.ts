@@ -9,7 +9,7 @@
  * SEED_MODE=demo is set. The real-data seed is untouched.
  *
  * Receipts, Lots, plans and transfers go through the same services the API uses, so their IDs are
- * the system-issued ones (REC-BKE01-2026-001, LOT-…, DP-…, BKT-…) and the derived weights are
+ * the system-issued ones (REC-BKE-2026-0001, LOT-…, DP-…, BKT-…) and the derived weights are
  * computed, not typed. Only the downstream sheets (drying, dispatch, receiving, transfer receipt,
  * production issue) are written directly, because the app has no screen that creates them — they
  * arrive by workbook upload — and they join back to a receipt on its FICHE and Lot, exactly as the
@@ -18,7 +18,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { createReceipt, patchReceipt, setStageFields, setBranch } from "../src/services/receipts.js";
 import { createDeliveryPlan } from "../src/services/deliveryPlans.js";
-import { createTransfer, setTransferStatus } from "../src/services/transfers.js";
+import { createTransfer, dispatchTransfer, receiveTransfer } from "../src/services/transfers.js";
 
 const SITE = "BOUAKE";
 const CENTRAL = "YAKRO FACTORY";
@@ -231,8 +231,12 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       transferDate: date, fromWarehouse: SITE, toWarehouse: CENTRAL, remarks: "Regular weekly transfer to the factory",
       lines: group.map((m) => ({ receiptId: m.id, bags: m.bags, netWeightKg: m.net })),
     });
-    await setTransferStatus(t.id, "dispatched");
-    if (n === 0) await setTransferStatus(t.id, "received");
+    // One BKT is one truck: the trip's truck is the first Lot's, and what arrives is recorded separately by the
+    // factory — the arrived trip comes in a few bags and kilos short, so the demo shows a real discrepancy.
+    const bagsSent = group.reduce((sum, m) => sum + m.bags, 0);
+    const grossSent = group.reduce((sum, m) => sum + m.net, 0) + bagsSent;
+    await dispatchTransfer(t.id, { truckNo: truckOf(group[0]!.i), transporter: "TRANSPORT KONE & FILS", driver: DRIVERS[group[0]!.i % DRIVERS.length], dispatchedGrossKg: grossSent });
+    if (n === 0) await receiveTransfer(t.id, { bagsReceived: bagsSent - 2, receivedGrossKg: grossSent - 160, receivedComment: "2 bags short at unloading" });
 
     for (const m of group) {
       await prisma.warehouseDispatchLine.create({
