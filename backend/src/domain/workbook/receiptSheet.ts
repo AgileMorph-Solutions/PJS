@@ -26,8 +26,9 @@ import { nextReceiptId, warehouseCodeFor } from "../../services/ids.js";
 import { toReceiptRecord } from "../../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ValidationError } from "../validation.js";
 import { canonical, parseCell } from "./cells.js";
+import { checkUploadRow, type UploadCheckInput } from "@anagroci/contract/domain/uploadChecks";
 import type { FileKeys } from "./tableSheet.js";
-import { SAMPLE_LIMIT, type Change, type Ctx, type ParsedSheet, type ReceiptOp, type RowError, type SheetResult } from "./types.js";
+import { SAMPLE_LIMIT, type Change, type Ctx, type ParsedSheet, type ReceiptOp, type RowError, type RowWarning, type SheetResult } from "./types.js";
 
 export const RECEIPT_KEY = "Receipt.id";
 /** Receipt's own columns that ReceiptRecord carries (lotNo / binNo are projections of the n-lot /
@@ -107,6 +108,7 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
   const all = await listReceipts();
   const byId = new Map(all.map((r) => [r.id, { record: r, flat: flatten(r) }]));
   const seenIds = new Set<string>();
+  const toCheck: { op: ReceiptOp; ownId?: string; input: Pick<UploadCheckInput, "arrivalDate" | "supplierName" | "lbaCode" | "stageData"> }[] = [];
 
   for (const { rowNumber, cells } of sheet.rows) {
     const errs: RowError[] = [];
@@ -217,18 +219,49 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
     else if (!existing && !changes.length) result.unchanged++; // a fully blank row — nothing to add
     else {
       ops.push({ kind: existing ? "update" : "create", row: rowNumber, id: id ?? undefined, top, stages, branches, reason: finalOf(REASON_HEADER) ?? undefined });
+      // The row as it will stand once applied, kept for the soft checks that run after every row is planned.
+      toCheck.push({
+        op: ops[ops.length - 1]!, ownId: existing?.record.id,
+        input: {
+          arrivalDate: String(top.arrivalDate ?? existing?.record.arrivalDate ?? ""), supplierName: String(top.supplierName ?? existing?.record.supplierName ?? ""),
+          lbaCode: String(top.lbaCode ?? existing?.record.lbaCode ?? ""), stageData: inputsAfterRow,
+        },
+      });
       if (existing) result.changed++; else result.created++;
       if (result.samples.length < SAMPLE_LIMIT) result.samples.push({ row: rowNumber, key: id ?? "(new)", changes: changes.slice(0, 6) });
     }
   }
 
   result.ops = ops;
+  result.warnings = await softChecks(ctx, toCheck);
   return result;
+}
+
+/**
+ * Soft checks on the rows that will be written (never on untouched rows, so re-uploading an export
+ * doesn't re-report old problems). The two lookups are done once for the whole sheet, not per row.
+ */
+async function softChecks(
+  ctx: Ctx, rows: { op: ReceiptOp; ownId?: string; input: Pick<UploadCheckInput, "arrivalDate" | "supplierName" | "lbaCode" | "stageData"> }[]
+): Promise<RowWarning[]> {
+  if (!rows.length) return [];
+  const suppliers = new Map((await ctx.db.supplier.findMany({ select: { code: true, name: true } })).map((s) => [s.code, s.name]));
+  const fiches = [...new Set(rows.map((r) => (r.input.stageData["n-verify"]?.["FICHE"] ?? "").trim()).filter(Boolean))];
+  const used = fiches.length ? await ctx.db.stageVerifyDocs.findMany({ where: { fiche: { in: fiches } }, select: { receiptId: true, fiche: true } }) : [];
+  const out: RowWarning[] = [];
+  for (const { op, ownId, input } of rows) {
+    const fiche = (input.stageData["n-verify"]?.["FICHE"] ?? "").trim();
+    const ficheUsedBy = fiche ? used.filter((u) => u.fiche === fiche && u.receiptId !== ownId).map((u) => u.receiptId) : [];
+    const found = checkUploadRow({ ...input, today: ctx.today, suppliers, ficheUsedBy });
+    op.warnings = found.map((w) => ({ row: op.row, column: w.column, message: w.message, severity: w.severity }));
+    out.push(...op.warnings);
+  }
+  return out;
 }
 
 /** Writes one planned receipt, through the same stage-write code as every other edit; the whole
  * upload is ONE timeline entry per receipt. */
-export async function applyReceipt(ctx: Ctx, op: ReceiptOp): Promise<void> {
+export async function applyReceipt(ctx: Ctx, op: ReceiptOp, sheetName: string): Promise<void> {
   const tx = ctx.db;
   const actor = { id: ctx.userId, via: "import" as const };
   let id = op.id;
@@ -269,4 +302,12 @@ export async function applyReceipt(ctx: Ctx, op: ReceiptOp): Promise<void> {
   await tx.timelineEntry.create({
     data: { receiptId: id!, status, at: new Date().toISOString(), actorId: ctx.userId, note: `${op.kind === "create" ? "Created" : "Updated"} from workbook (${ctx.filename})` },
   });
+  // Kept against the truck so they show on its details page; the upload already went through.
+  if (op.warnings?.length) {
+    await tx.uploadIssue.createMany({
+      data: op.warnings.map((w) => ({
+        receiptId: id!, filename: ctx.filename, sheet: sheetName, row: w.row, column: w.column ?? null, severity: w.severity, message: w.message, uploadedById: ctx.userId,
+      })),
+    });
+  }
 }

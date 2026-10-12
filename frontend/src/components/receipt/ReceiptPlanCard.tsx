@@ -5,6 +5,7 @@ import { api } from "../../repository/api";
 import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { APPROVAL, LINK_STATUS, PlanFlagList, RECEPTION_TYPE } from "./PlanBadges";
 import { Pill } from "../ui/Pill";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 const inputClass =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -75,7 +76,7 @@ export function ReceiptPlanCard({
           <label htmlFor="link-plan" className="block text-[12.5px] font-semibold text-warmstone-700">Link to a delivery plan</label>
           <select id="link-plan" value={pick} onChange={(e) => setPick(e.target.value)} className={inputClass}>
             <option value="">Choose a plan…</option>
-            {open.map((p) => <option key={p.id} value={p.id}>{p.id} · {p.supplierName}</option>)}
+            {open.map((p) => <option key={p.id} value={p.id}>{p.id} · {normalizeSupplierName(p.supplierName)}</option>)}
           </select>
           <button type="button" disabled={busy || !pick} onClick={() => void run(() => api.linkReceiptToPlan(receiptId, pick))}
             className="px-3.5 py-1.5 rounded-xl bg-white border border-warmstone-200 text-warmstone-800 text-[12.5px] font-bold hover:bg-warmstone-50 disabled:opacity-50">

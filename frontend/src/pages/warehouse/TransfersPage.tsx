@@ -16,6 +16,7 @@ import { SITE_LIST } from "../../config/sites";
 import { api } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
 import type { ReceiptRecord, TransferRequest } from "../../types/receipt";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 const TONE: Record<TransferState, string> = { requested: "decision", in_transit: "term", closed: "entry", discrepancy: "gap" };
 
@@ -182,7 +183,7 @@ export function TransfersPage() {
                       <label className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
                         <input type="checkbox" checked={Boolean(p)} onChange={() => toggle(r)} />
                         <span className="font-mono text-[12px]">{r.lotNo}</span>
-                        <span className="text-warmstone-500 truncate">{r.supplierName || "-"} · {r.binNo || "no bin"}</span>
+                        <span className="text-warmstone-500 truncate">{normalizeSupplierName(r.supplierName) || "-"} · {r.binNo || "no bin"}</span>
                       </label>
                       {p && (
                         <span className="flex items-center gap-2">
@@ -272,7 +273,7 @@ function TransferPanel({
       <InfoCard icon="inventory" title={`Lots on the truck (${t.lines.length})`}>
         {t.lines.map((l) => (
           <div key={l.receiptId} className="flex items-baseline justify-between gap-3 text-[13px]">
-            <span className="min-w-0">{lotLink(l)} <span className="text-warmstone-500">{l.supplierName}</span></span>
+            <span className="min-w-0">{lotLink(l)} <span className="text-warmstone-500">{normalizeSupplierName(l.supplierName)}</span></span>
             <span className="text-right tabular-nums text-warmstone-700 shrink-0">{n(l.bags)} bags{l.binCode ? <span className="block text-[11px] text-warmstone-400">{l.binCode}</span> : null}</span>
           </div>
         ))}

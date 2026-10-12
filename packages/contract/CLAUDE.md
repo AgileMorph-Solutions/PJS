@@ -27,6 +27,11 @@ src/domain/transfers.ts          BKT variance (bags, net at arrival) and the in-
                                   state, derived from what the sending and receiving warehouses each recorded.
 src/domain/deliveryPlan.ts       Delivery Plan progress/status, per-truck planned / exception / unplanned flags,
                                   approval and link status — all derived from the plan and its linked receipts.
+src/domain/truckTimeline.ts      A truck's journey (arrived, quality, unloaded, Lot, GRN, stock...) with dates, derived from the
+                                  receipt. A date the warehouse typed is "entered"; one the system only noted is "recorded".
+src/domain/uploadChecks.ts       Soft checks on an uploaded truck row (impossible values, disagreement with the supplier master
+                                  or another truck's fiche). They never block an upload; the backend saves them as UploadIssue.
+src/domain/supplierCode.ts       normalizeSupplierName() (drops the leading "RCN") and suggestLbaCode() (next free LBA-NNN-XXX).
 src/domain/receiptStatus.ts      deriveStatus() — the ONLY place status is computed. Never let
                                   either side set status directly.
 src/domain/decisions.ts          The 3 decision stages' branch options (n-qfs, n-drying, n-xferdec).

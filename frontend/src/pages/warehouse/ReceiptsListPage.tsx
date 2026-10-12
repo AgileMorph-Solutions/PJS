@@ -119,7 +119,7 @@ export function ReceiptsListPage() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
-        <KpiTile icon={icon("local_shipping")} label="Total received" value={counts.totalReceived} to={`/${site.slug}/receipts`} />
+        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={`/${site.slug}/receipts`} />
         <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={`/${site.slug}/receipts?status=unloaded`} />
         <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={`/${site.slug}/receipts?status=grn_completed`} />
         <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={`/${site.slug}/receipts?status=pending_qa`} />

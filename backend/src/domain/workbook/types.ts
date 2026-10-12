@@ -20,6 +20,8 @@ export interface Ctx {
 }
 
 export interface RowError { row: number; column?: string; message: string }
+/** A row-level problem that did not stop the upload (contract domain/uploadChecks.ts). */
+export interface RowWarning extends RowError { severity: "warning" | "info" }
 
 export interface Change { column: string; from: string; to: string }
 export interface Sample { row: number; key: string; changes: Change[] }
@@ -57,6 +59,8 @@ export interface ReceiptOp {
   branches: Record<string, string>;
   /** The rejection reason a QFS "fail" decision needs. */
   reason?: string;
+  /** Soft problems with this row, saved against the truck once it exists. */
+  warnings?: RowWarning[];
 }
 
 export interface SheetResult {
@@ -66,6 +70,8 @@ export interface SheetResult {
   changed: number;
   unchanged: number;
   errors: RowError[];
+  /** Soft problems that did not block the upload; only receipt sheets produce them. */
+  warnings?: RowWarning[];
   /** A handful of changed rows, for the preview. */
   samples: Sample[];
   ops: TableOp[] | ReceiptOp[];

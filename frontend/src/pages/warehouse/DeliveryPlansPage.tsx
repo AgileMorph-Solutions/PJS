@@ -6,6 +6,7 @@ import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { Pill } from "../../components/ui/Pill";
+import { KpiTile } from "../../components/ui/KpiTile";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { useTracking, useDeliveryPlans } from "../../state/TrackingContext";
@@ -13,6 +14,7 @@ import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { api, type DeliveryPlanPayload } from "../../repository/api";
 import type { DeliveryPlan } from "../../types/receipt";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 const STATUS_TONE: Record<PlanStatus, string> = { planned: "decision", partially_received: "term", delivered: "entry", cancelled: "gap" };
 
@@ -21,6 +23,15 @@ const inputClass =
 
 const today = () => new Date().toISOString().slice(0, 10);
 const kg = (n: number | null) => (n === null ? "-" : n.toLocaleString());
+/** "3 of 5 arrived · 2 accepted · 1 rejected" — only the parts that are non-zero, so a quiet plan reads short. */
+function truckCounts(p: DeliveryPlan): string {
+  const { arrivals, acceptedTrucks, rejectedTrucks, awaitingGrnTrucks } = p.progress;
+  const parts = [`${arrivals}${p.expectedTrucks === null ? "" : ` of ${p.expectedTrucks}`} arrived`];
+  if (arrivals > 0) parts.push(`${acceptedTrucks} accepted`);
+  if (rejectedTrucks > 0) parts.push(`${rejectedTrucks} rejected`);
+  if (awaitingGrnTrucks > 0) parts.push(`${awaitingGrnTrucks} awaiting GRN`);
+  return parts.join(" · ");
+}
 
 interface FormState {
   supplierName: string; supplierCode: string; origin: string; store: string;
@@ -47,6 +58,15 @@ export function DeliveryPlansPage() {
   const canEdit = useCanEditDirectly();
   const { masters, createReceipt } = useTracking();
   const { plans, refetch } = useDeliveryPlans(site.warehouseName);
+  // Cancelled plans are left out: their trucks are exceptions, not progress against an expectation.
+  const totals = useMemo(() => {
+    const live = plans.filter((p) => p.status !== "cancelled");
+    const sum = (f: (p: DeliveryPlan) => number) => live.reduce((n, p) => n + f(p), 0);
+    return {
+      plans: live.length, arrived: sum((p) => p.progress.arrivals), accepted: sum((p) => p.progress.acceptedTrucks),
+      rejected: sum((p) => p.progress.rejectedTrucks), expectedKg: sum((p) => p.expectedQuantityKg ?? 0), receivedKg: sum((p) => p.progress.actualKg),
+    };
+  }, [plans]);
   const search = useTableSearch(plans, (p) => [p.id, p.supplierName, p.supplierCode, p.expectedOrigin, p.fundingReference, p.truckNos.join(" "), p.remarks]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -108,8 +128,8 @@ export function DeliveryPlansPage() {
 
   const linkClass = "text-[11.5px] font-semibold text-brand-700 hover:text-brand-800 whitespace-nowrap";
   const columns: Column<DeliveryPlan>[] = [
-    { label: "Plan", nowrap: true, render: (p) => <span className="font-mono text-[12.5px]">{p.id}</span> },
-    { label: "Supplier", render: (p) => <span>{p.supplierName}{p.supplierCode ? <span className="text-warmstone-400"> · {p.supplierCode}</span> : null}</span> },
+    { label: "Plan", nowrap: true, render: (p) => <Link to={`/${site.slug}/delivery-plans/${p.id}`} className="font-mono text-[12.5px] text-brand-700 hover:text-brand-800 font-semibold">{p.id}</Link> },
+    { label: "Supplier", render: (p) => <span>{normalizeSupplierName(p.supplierName)}{p.supplierCode ? <span className="text-warmstone-400"> · {p.supplierCode}</span> : null}</span> },
     { label: "Origin", render: (p) => p.expectedOrigin || "-" },
     { label: "Destination", render: (p) => <span>{p.destinationWarehouse}{p.destinationStore ? <span className="text-warmstone-400"> · {p.destinationStore}</span> : null}</span> },
     { label: "Expected delivery", nowrap: true, render: (p) => (p.expectedDeliveryEnd ? `${p.expectedArrivalDate} → ${p.expectedDeliveryEnd}` : p.expectedArrivalDate) },
@@ -119,7 +139,7 @@ export function DeliveryPlansPage() {
     { label: "Variance (kg)", nowrap: true, render: (p) => (p.progress.varianceKg === null ? "-" : `${p.progress.varianceKg > 0 ? "+" : ""}${p.progress.varianceKg.toLocaleString()}`) },
     {
       label: "Trucks", nowrap: true,
-      render: (p) => `${p.progress.arrivals}${p.expectedTrucks === null ? "" : ` of ${p.expectedTrucks}`}${p.progress.arrivals !== p.progress.acceptedTrucks ? ` (${p.progress.acceptedTrucks} accepted)` : ""}`,
+      render: (p) => truckCounts(p),
     },
     {
       label: "Status", nowrap: true,
@@ -172,12 +192,21 @@ export function DeliveryPlansPage() {
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
 
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+        <KpiTile label="Active plans" value={totals.plans} />
+        <KpiTile label="Trucks arrived" value={totals.arrived} />
+        <KpiTile label="Accepted" value={totals.accepted} />
+        <KpiTile label="Rejected" value={totals.rejected} tone="gap" />
+        <KpiTile label="Expected (kg)" value={kg(totals.expectedKg)} />
+        <KpiTile label="Received (kg)" value={kg(totals.receivedKg)} />
+      </div>
+
       {canEdit && (
         <CollapsibleCard title={editing ? `Edit ${editing}` : "New delivery plan"} meta={`for ${site.warehouseName}`}>
           <form onSubmit={handleSubmit} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-3">
             {field("dp-supplier", "Supplier", <>
               <input id="dp-supplier" list="dp-suppliers" required value={form.supplierName} onChange={(e) => pickSupplier(e.target.value)} className={inputClass} placeholder="Start typing a supplier…" />
-              <datalist id="dp-suppliers">{masters.suppliers.map((s) => <option key={s.code} value={s.name} />)}</datalist>
+              <datalist id="dp-suppliers">{masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.name} />)}</datalist>
             </>)}
             {field("dp-code", "Supplier / LBA code", <input id="dp-code" value={form.supplierCode} onChange={(e) => set("supplierCode", e.target.value)} className={inputClass} />)}
             {field("dp-origin", "Expected origin", <>

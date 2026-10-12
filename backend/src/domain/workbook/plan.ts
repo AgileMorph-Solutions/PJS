@@ -127,7 +127,7 @@ export async function applyWorkbook(ctx: Ctx, plan: WorkbookPlan): Promise<Apply
   const todo = plan.sheets.map((sheet) => ({ sheet, spec: sheetByTitle(sheet.name)! })).sort((a, b) => rank(a.spec) - rank(b.spec));
   for (const { sheet, spec } of todo) {
     if (!sheet.ops.length) continue;
-    if (spec.kind === "receipt") for (const op of sheet.ops as ReceiptOp[]) await applyReceipt(ctx, op);
+    if (spec.kind === "receipt") for (const op of sheet.ops as ReceiptOp[]) await applyReceipt(ctx, op, spec.title);
     else await applyTable(ctx, spec, sheet.ops as TableOp[]);
     results.push({ name: spec.title, created: sheet.created, updated: sheet.changed });
   }

@@ -194,7 +194,7 @@ describe("Delivery Plan", () => {
     planId = plan.id;
     expect(plan.id).toBe(`DP-${CODE}-${YEAR}-001`);
     expect(plan).toMatchObject({ expectedQuantityKg: 20000, status: "planned", overdue: false, actualArrivalDate: null, truckNos: [] });
-    expect(plan.progress).toEqual({ actualKg: 0, arrivals: 0, acceptedTrucks: 0, remainingKg: 20000, varianceKg: -20000 });
+    expect(plan.progress).toEqual({ actualKg: 0, arrivals: 0, acceptedTrucks: 0, rejectedTrucks: 0, awaitingGrnTrucks: 0, remainingKg: 20000, varianceKg: -20000 });
   });
 
   it("reads as overdue once its expected date has passed with no truck", async () => {
@@ -260,7 +260,7 @@ describe("Delivery Plan against its trucks", () => {
   it("derives received kg, arrivals, remaining and variance from the trucks' GRN quantity", async () => {
     expect(await getDeliveryPlan(planId)).toMatchObject({
       status: "delivered", // the two trucks it expected have arrived
-      progress: { actualKg: 55000, arrivals: 2, acceptedTrucks: 2, remainingKg: -5000, varianceKg: 5000 },
+      progress: { actualKg: 55000, arrivals: 2, acceptedTrucks: 2, rejectedTrucks: 0, awaitingGrnTrucks: 0, remainingKg: -5000, varianceKg: 5000 },
       expectedTrucks: 2, expectedOrigin: "VAVOUA", destinationStore: STORE_A,
     });
   });

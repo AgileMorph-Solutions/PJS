@@ -43,6 +43,10 @@ export interface PlanProgress {
   /** Every truck recorded against the plan, accepted or rejected. */
   arrivals: number;
   acceptedTrucks: number;
+  /** Failed quality. Always arrivals − acceptedTrucks; carried so every screen says it the same way. */
+  rejectedTrucks: number;
+  /** Accepted but no GRN yet: on site, adding no kg. */
+  awaitingGrnTrucks: number;
   /** expected − actual; negative once the plan is over-delivered. Null when no quantity was planned. */
   remainingKg: number | null;
   /** actual − expected: positive means more arrived than planned. Null when no quantity was planned. */
@@ -68,6 +72,8 @@ export function planProgress(plan: Pick<PlanTerms, "expectedQuantityKg">, receip
     actualKg,
     arrivals: receipts.length,
     acceptedTrucks: receipts.filter((r) => !r.rejected).length,
+    rejectedTrucks: receipts.filter((r) => r.rejected).length,
+    awaitingGrnTrucks: receipts.filter((r) => !r.rejected && r.grnKg === undefined).length,
     remainingKg: expected === null ? null : expected - actualKg,
     varianceKg: expected === null ? null : actualKg - expected,
   };

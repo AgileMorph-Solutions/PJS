@@ -5,6 +5,7 @@ import { deriveStatus } from "../../domain/receiptStatus";
 import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { ReceiptStatusPill } from "../ReceiptStatusPill";
 import { Pill } from "../ui/Pill";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 const v = (r: ReceiptRecord, stage: string, label: string) => {
   const x = r.stageData[stage]?.[label];
@@ -123,7 +124,7 @@ export function LotOverview({
       </InfoCard>
 
       <InfoCard icon="local_shipping" title="Supplier & delivery">
-        <InfoRow label="Supplier" value={receipt.supplierName} strong />
+        <InfoRow label="Supplier" value={normalizeSupplierName(receipt.supplierName)} strong />
         <InfoRow label="Supplier code" value={receipt.lbaCode} />
         <InfoRow label="Origin" value={receipt.origin} />
         <InfoRow label="Vehicle" value={receipt.vehicleNo} />

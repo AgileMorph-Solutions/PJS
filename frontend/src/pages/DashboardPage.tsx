@@ -10,6 +10,7 @@ import { useTracking } from "../state/TrackingContext";
 import { computeDashboardCounts, deriveStatus } from "../domain/receiptStatus";
 import { lastBalance } from "../domain/jute";
 import type { LedgerRow } from "../repository/juteRepo";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 const WAREHOUSE_LEDGER_ID = "warehouse-stock";
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
@@ -102,7 +103,7 @@ export function DashboardPage() {
       <DateRangeFilter value={range} onChange={setRange} />
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <KpiTile icon={icon("local_shipping")} label="Total received" value={counts.totalReceived} to="/procurement/receipts" />
+        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to="/procurement/receipts" />
         <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to="/procurement/receipts?status=unloaded" />
         <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to="/procurement/receipts?status=grn_completed" />
         <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to="/procurement/receipts?status=pending_qa" />
@@ -147,7 +148,7 @@ export function DashboardPage() {
         {recent.map((r) => (
           <div key={r.id} className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px]">
             <span className="text-warmstone-600">
-              {r.lotNo ? `Lot ${r.lotNo}` : r.id} · {r.supplierName || "-"} · {r.vehicleNo || "-"}
+              {r.lotNo ? `Lot ${r.lotNo}` : r.id} · {normalizeSupplierName(r.supplierName) || "-"} · {r.vehicleNo || "-"}
               {r.lotNo && <span className="opacity-60"> · receipt {r.id}</span>}
             </span>
             <ReceiptStatusPill status={deriveStatus(r)} />

@@ -10,6 +10,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { StatBlock } from "../../components/ui/StatBlock";
 import type { ReceiptRecord } from "../../types/receipt";
 import type { ReceiptStatus } from "@anagroci/contract/types/receipt";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 export function BinDetailPage() {
   const { binNo = "" } = useParams();
@@ -29,7 +30,7 @@ export function BinDetailPage() {
 
   const columns: Column<ReceiptRecord>[] = [
     { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo || r.id}</span> },
-    { label: "Supplier", render: (r) => r.supplierName || "-" },
+    { label: "Supplier", render: (r) => normalizeSupplierName(r.supplierName) || "-" },
     { label: "Vehicle", render: (r) => r.vehicleNo || "-" },
     { label: "Status", render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
   ];

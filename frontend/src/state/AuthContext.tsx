@@ -46,7 +46,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    try { await api.logout(); } catch (e) { if (!(e instanceof ApiError)) throw e; }
+    try {
+      await api.logout();
+    } catch (e) {
+      // 401 means there is no live session left, which is what signing out wanted. Anything else means the server did
+      // NOT end the session, and reloading would reopen the same profile - so say so and stay where we are.
+      if (!(e instanceof ApiError && e.status === 401)) {
+        window.alert("Couldn't sign out - the server didn't respond. Check your connection and try again.");
+        return;
+      }
+    }
     setMe(null);
     setStatus("anonymous");
     // The session itself is revoked server-side and its cookie cleared by the logout call. What is

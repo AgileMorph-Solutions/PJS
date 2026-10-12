@@ -178,7 +178,7 @@ export function BatchEntryPage() {
                           onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
                         >
                           <option value="">-</option>
-                          {masters.suppliers.map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
+                          {masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
                         </select>
                       ) : (
                         <input

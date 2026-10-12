@@ -17,7 +17,9 @@ declare module "fastify" {
   }
 }
 
-const PUBLIC_PATHS = new Set(["/api/health", "/api/auth/login"]);
+// Sign out is public on purpose: it needs no identity (it only deletes the session of the token it is given),
+// and a person whose session already expired must still be able to clear the cookie.
+const PUBLIC_PATHS = new Set(["/api/health", "/api/auth/login", "/api/auth/logout"]);
 
 /**
  * Called directly (not app.register) so the hook lands on the root instance and covers every route

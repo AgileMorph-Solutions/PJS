@@ -16,6 +16,7 @@ import { useTracking, useDryingBatches, useDryingSortingReports } from "../../st
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { DryingBatch, DryingSortingReport } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 /** A "View all fields" cell — every DataTable row here may also be a link (rowHref), so this stops
  * the click from bubbling into the row's own navigation. */
@@ -83,7 +84,7 @@ export function DryingJobsPage() {
     { label: "S.No.", render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "-"}</span> },
     { label: "Date", render: (r) => r.dryingDate || r.dryingDateRaw || "-" },
     { label: "Lot No", render: (r) => r.lotNo || r.lotNoRaw || "-" },
-    { label: "Supplier", render: (r) => r.supplierName || "-" },
+    { label: "Supplier", render: (r) => normalizeSupplierName(r.supplierName) || "-" },
     { label: "Issued net wt (GRN)", render: (r) => r.issuedNetWeightGrn ?? "-" },
     { label: "Received net wt", render: (r) => r.receivedNetWeightAfterDrying ?? "-" },
     { label: "Input moisture", render: (r) => r.inputMoisture ?? "-" },
@@ -147,7 +148,7 @@ export function DryingJobsPage() {
             className="flex items-center justify-between gap-4 py-3 border-b border-warmstone-100 last:border-0 text-[13px] hover:bg-warmstone-50 -mx-1 px-1 rounded-lg transition-colors"
           >
             <span className="text-warmstone-600">
-              Lot {r.lotNo || "-"} · Bin {r.binNo || "-"} · {r.supplierName} · vehicle {r.vehicleNo || "-"}
+              Lot {r.lotNo || "-"} · Bin {r.binNo || "-"} · {normalizeSupplierName(r.supplierName)} · vehicle {r.vehicleNo || "-"}
             </span>
             <ReceiptStatusPill status={deriveStatus(r)} />
           </Link>

@@ -6,6 +6,7 @@
  * either of which silently reclassifies real trucks. (Auto-creating n-stock whenever n-grn exists,
  * for instance, moves four seeded receipts from grn_completed to in_stock.)
  */
+import { supplierNameKey } from "@anagroci/contract/domain/supplierCode";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect, afterAll } from "vitest";
@@ -111,7 +112,8 @@ describe("status parity with the pre-normalization data", () => {
     ) as { vehicleNo: string; arrivalDate: string; supplierName: string; status: string }[];
 
     const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
-    const key = (v: string, a: string, s: string) => `${v.trim()}|${a.trim()}|${s.trim()}`;
+    // The supplier compares without its old "RCN" prefix: the fixture predates dropping it, and the database may be either side of that change.
+    const key = (v: string, a: string, s: string) => `${v.trim()}|${a.trim()}|${supplierNameKey(s)}`;
 
     const dbByKey = new Map<string, typeof rows>();
     for (const r of rows) {

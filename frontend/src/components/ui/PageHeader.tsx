@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 interface Props {
-  kicker?: string;
+  kicker?: ReactNode;
   title: string;
   lede?: string;
   actions?: ReactNode;

@@ -347,6 +347,26 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
             </div>
           )}
 
+          {preview.warningCount > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-[12.5px] font-bold text-ambernut-700">
+                {plural(preview.warningCount, "thing")} to check - the upload still goes through, and each is saved on its truck
+              </h3>
+              <ul className="space-y-1 text-[12.5px] max-h-40 overflow-y-auto">
+                {preview.sheets.filter((s) => s.warningCount > 0).flatMap((s) => [
+                  ...s.warnings.map((w, i) => (
+                    <li key={`${s.name}-w${i}`} className="text-warmstone-700">
+                      <span className="font-semibold text-warmstone-900">{s.name}</span> · row {w.row}{w.column ? ` · ${w.column}` : ""}: {w.message}
+                    </li>
+                  )),
+                  ...(s.warningCount > s.warnings.length
+                    ? [<li key={`${s.name}-wmore`} className="text-warmstone-400">…and {s.warningCount - s.warnings.length} more in {s.name}</li>]
+                    : []),
+                ])}
+              </ul>
+            </div>
+          )}
+
           {changes > 0 && (
             <details className="text-[12.5px]">
               <summary className="cursor-pointer font-semibold text-warmstone-700">What changes ({plural(changes, "row")})</summary>

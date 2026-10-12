@@ -50,7 +50,12 @@ export interface ReceiptRecord {
 export type LedgerRow = Record<string, string>;
 export type LedgerEntries = Record<string, LedgerRow[]>;
 
-export interface Supplier { code: string; name: string }
+/** `active` is false for a supplier that is switched off (it still has history). Absent means active, so an
+ * older payload or a freshly typed one reads as active. `formerName` is the name with the old "RCN" prefix. */
+export interface Supplier { code: string; name: string; active?: boolean; formerName?: string | null }
+
+/** What a supplier is still used by, which decides whether it can be deleted or only switched off. */
+export interface SupplierReferences { receipts: number; plans: number; jute: number; assignments: number; total: number }
 /** `kind` (Village/Regional/Factory) is set only on SITE rows; `site` is null for a site row and
  * the parent site's name for a store row (e.g. "BKE-002" -> site "BOUAKE") — see
  * data/warehouseKinds.ts and Warehouse's self-relation in backend/prisma/schema.prisma. */
@@ -116,6 +121,44 @@ export interface ReceiptPlanInfo {
   /** Display name of whoever approved. */
   approvedBy: string | null;
   approvalNote: string | null;
+}
+
+/** One truck on a plan's detail page: how it arrived, how it was judged, what it added to stock. */
+export interface DeliveryPlanTruck {
+  receiptId: string;
+  arrivalDate: string;
+  vehicleNo: string;
+  supplierName: string;
+  status: ReceiptStatus;
+  rejected: boolean;
+  /** The "Reason for rejection" typed at the reject stage; null when none was recorded (6 real receipts have none). */
+  rejectionReason: string | null;
+  /** GRN quantity; null until the GRN is recorded, when the truck has arrived but added no kg. */
+  grnKg: number | null;
+  lotNo: string | null;
+  type: ReceptionType;
+  flags: PlanFlag[];
+  approval: ExceptionApproval;
+}
+
+/** A plan plus every truck recorded against it, in arrival order. */
+export interface DeliveryPlanDetail extends DeliveryPlan {
+  trucks: DeliveryPlanTruck[];
+}
+
+/** A soft problem found when this truck's row was uploaded; the upload went through regardless. */
+export interface UploadIssueRecord {
+  id: string;
+  filename: string;
+  sheet: string;
+  row: number;
+  column: string | null;
+  severity: "warning" | "info";
+  message: string;
+  uploadedAt: string;
+  uploadedBy: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
 }
 
 export type TransferStatus = "requested" | "dispatched" | "received";

@@ -5,7 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, ReceiptPlanInfo, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, SupplierReferences, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -60,7 +60,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // The session is an httpOnly cookie; same-origin sends it by default, this covers `vite dev`
     // against a backend on another port.
     credentials: "include",
-    headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+    // Only when there is a body: Fastify answers a body-less request that claims to be JSON with a 500
+    // (a DELETE, or a POST like "mark reviewed"), which is not an error the person caused.
+    headers: { ...(init?.body ? { "content-type": "application/json" } : {}), ...(init?.headers ?? {}) },
   });
   checkUnauthorized(res, path);
   if (!res.ok) throw await errorFromResponse(res);
@@ -157,6 +159,15 @@ export const api = {
 
   masters: () => request<Masters>("/masters"),
   addSupplier: (s: Supplier) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
+  suggestSupplierCode: (name: string) => request<{ code: string }>(`/masters/suppliers/suggest-code?name=${encodeURIComponent(name)}`),
+  createSupplier: (s: { code?: string; name: string }) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
+  updateSupplier: (code: string, patch: { name?: string; code?: string }) =>
+    request<Supplier>(`/masters/suppliers/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  setSupplierActive: (code: string, active: boolean) =>
+    request<Supplier>(`/masters/suppliers/${encodeURIComponent(code)}/active`, { method: "POST", body: JSON.stringify({ active }) }),
+  /** Deletes when nothing uses the supplier; otherwise switches it off. `deleted` says which happened. */
+  removeSupplier: (code: string) =>
+    request<{ deleted: boolean; deactivated: boolean; references: SupplierReferences }>(`/masters/suppliers/${encodeURIComponent(code)}`, { method: "DELETE" }),
   addWarehouse: (name: string, classification?: { kind?: string; site?: string; type?: string }) =>
     request<unknown>("/masters/warehouses", { method: "POST", body: JSON.stringify({ name, ...classification }) }),
   /** Admin only: assign (or clear, with null) a site's Unit/Central type. */
@@ -166,6 +177,10 @@ export const api = {
   setWarehouseCode: (name: string, code: string | null) =>
     request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ code }) }),
 
+  listUploadIssues: (receiptId: string) => request<UploadIssueRecord[]>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues`),
+  reviewUploadIssue: (receiptId: string, issueId: string) =>
+    request<UploadIssueRecord>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues/${encodeURIComponent(issueId)}/review`, { method: "POST" }),
+  getDeliveryPlan: (id: string) => request<DeliveryPlanDetail>(`/delivery-plans/${encodeURIComponent(id)}`),
   listDeliveryPlans: (warehouse?: string) => request<DeliveryPlan[]>(withWarehouse("/delivery-plans", warehouse)),
   createDeliveryPlan: (plan: DeliveryPlanPayload) =>
     request<DeliveryPlan>("/delivery-plans", { method: "POST", body: JSON.stringify(plan) }),
@@ -272,7 +287,7 @@ export const api = {
 
   /** Multipart upload — the one call in this file that isn't JSON, so it can't go through
    * request(): a FormData body needs the browser's own multipart Content-Type (with boundary),
-   * never the hardcoded "application/json" header every other call sends. Writes nothing. */
+   * never the "application/json" header the JSON calls send. Writes nothing. */
   previewWorkbook: async (file: File, warehouse: string): Promise<WorkbookPreview> => {
     const form = new FormData();
     form.append("warehouse", warehouse); // fields before the file, so the server has it when it reads the file
@@ -414,6 +429,9 @@ export interface WorkbookSheetPlan {
   errorCount: number;
   /** The first few only; `errorCount` is the full number. */
   errors: WorkbookRowError[];
+  /** Soft problems: the upload still goes through and they are saved on each truck. First few only. */
+  warningCount: number;
+  warnings: (WorkbookRowError & { severity: "warning" | "info" })[];
   samples: WorkbookSample[];
 }
 export interface WorkbookPreview {
@@ -424,6 +442,7 @@ export interface WorkbookPreview {
   sheets: WorkbookSheetPlan[];
   notices: string[];
   errorCount: number;
+  warningCount: number;
   totalCreated: number;
   totalChanged: number;
 }

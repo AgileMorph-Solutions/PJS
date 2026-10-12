@@ -6,6 +6,7 @@ import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { DownstreamStatusChips } from "../../components/DownstreamStatusChips";
 import { ReceptionTypePill } from "../../components/receipt/PlanBadges";
 import { deriveStatus } from "../../domain/receiptStatus";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 /** The real per-truck paperwork, straight from the OFFLOADINGS sheet's "Verify supplier documents"
  * / "Gate entry" stages — not top-level ReceiptRecord fields, so a small reader avoids repeating
@@ -31,7 +32,7 @@ const Stack = ({ main, sub, mono }: { main: string; sub?: string; mono?: boolean
 
 const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
 const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", nowrap: true, render: (r) => r.arrivalDate || "-" };
-const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", render: (r) => <Stack main={r.supplierName} sub={r.lbaCode} /> };
+const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", render: (r) => <Stack main={normalizeSupplierName(r.supplierName)} sub={r.lbaCode} /> };
 const ficheColumn: Column<ReceiptRecord> = {
   label: "Fiche",
   nowrap: true,

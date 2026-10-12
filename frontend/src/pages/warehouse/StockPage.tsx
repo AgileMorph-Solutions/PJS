@@ -12,6 +12,7 @@ import { useTracking, useWarehouseDischarges } from "../../state/TrackingContext
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { ReceiptRecord } from "../../types/receipt";
 import type { WarehouseDischargeRow } from "../../repository/api";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 /**
  * Lots & Bins is identical field-for-field at both sites (n-lot / n-bin are the same two stages in
@@ -56,7 +57,7 @@ export function StockPage() {
     { label: "Lot Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "-"}</span> },
     { label: "Bin Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "-"}</span> },
     { label: "Vehicle", render: (r) => r.vehicleNo || "-" },
-    { label: "Supplier", render: (r) => r.supplierName || "-" },
+    { label: "Supplier", render: (r) => normalizeSupplierName(r.supplierName) || "-" },
     { label: "Basis for Bin allocation", render: (r) => r.stageData["n-bin"]?.["Basis for allocation (moisture / quality / KOR / space)"] || "-" },
     { label: "Finalised", render: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] || "-" },
   ];

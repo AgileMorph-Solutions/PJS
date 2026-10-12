@@ -30,12 +30,12 @@ interface Made { id: string; lot: string | null; fiche: string; bin: string | nu
 
 
 const SUPPLIERS = [
-  { code: "LBA-101-AKI", name: "RCN SCOOP AKISSI" },
-  { code: "LBA-102-BAK", name: "RCN SCOOP BAKARY" },
-  { code: "LBA-103-COU", name: "RCN SCOOP COULIBALY" },
-  { code: "LBA-104-DIA", name: "RCN SCOOP DIABATE" },
-  { code: "LBA-105-KON", name: "RCN SCOOP KONE" },
-  { code: "LBA-106-OUA", name: "RCN SCOOP OUATTARA" },
+  { code: "LBA-101-AKI", name: "SCOOP AKISSI" },
+  { code: "LBA-102-BAK", name: "SCOOP BAKARY" },
+  { code: "LBA-103-COU", name: "SCOOP COULIBALY" },
+  { code: "LBA-104-DIA", name: "SCOOP DIABATE" },
+  { code: "LBA-105-KON", name: "SCOOP KONE" },
+  { code: "LBA-106-OUA", name: "SCOOP OUATTARA" },
 ];
 const ORIGINS = ["DIANRA", "KORHOGO", "BOUAKE", "SEGUELA"];
 const DRIVERS = ["KOUASSI YAO", "TRAORE ISSA", "SORO LASSINA", "KONAN BROU"];

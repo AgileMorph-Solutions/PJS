@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
+import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -112,5 +113,52 @@ describe("delivery plan routes", () => {
     const res = await as("wi", "PATCH", `/api/delivery-plans/${planId}`, { cancelled: true, cancelReason: "Supplier withdrew" });
     expect(res.json()).toMatchObject({ status: "cancelled", cancelReason: "Supplier withdrew" });
     expect((await prisma.deliveryPlan.findUniqueOrThrow({ where: { id: planId }, include: { canceller: true } })).canceller?.username).toBe(`${P}wi`);
+  });
+});
+
+describe("delivery plan detail", () => {
+  let planId: string;
+  let accepted: string;
+  let rejected: string;
+  let waiting: string;
+
+  beforeAll(async () => {
+    planId = (await as("wi", "POST", "/api/delivery-plans", {
+      supplierName: "Detail Supplier", supplierCode: "LBA-DT", expectedQuantityKg: 50000, expectedTrucks: 4, expectedArrivalDate: "2031-06-01", expectedDeliveryEnd: "2031-06-30",
+    })).json().id;
+    const truck = async (veh: string, date: string) => {
+      const r = await createReceipt(SITE, date, planId);
+      await setStageFields(r.id, "n-gate", { "VEHICLE NO.": veh });
+      await setStageFields(r.id, "n-verify", { "SUPPLIERS NAME": "Detail Supplier", "LBA CODE": "LBA-DT" });
+      return r.id;
+    };
+    accepted = await truck("DT-1", "2031-06-05");
+    await setBranch(accepted, "n-qfs", "pass");
+    await setStageFields(accepted, "n-unload", { "BON SACS (good bags)": "100" });
+    await setStageFields(accepted, "n-grn", { "GRN Weight (kept separate from Gross/Net/Paid)": "30000" });
+    rejected = await truck("DT-2", "2031-06-06");
+    await setBranch(rejected, "n-qfs", "fail", "Moisture too high");
+    waiting = await truck("DT-3", "2031-06-07"); // arrived, nothing decided yet
+  });
+
+  it("lists every truck with how it was judged: accepted with its GRN kg, rejected with its reason, and one still waiting", async () => {
+    const plan = (await as("wi", "GET", `/api/delivery-plans/${planId}`)).json();
+    expect(plan.trucks.map((t: any) => t.receiptId)).toEqual([accepted, rejected, waiting]); // arrival order
+    expect(plan.trucks[0]).toMatchObject({ vehicleNo: "DT-1", status: "grn_completed", rejected: false, rejectionReason: null, grnKg: 30000, type: "planned" });
+    expect(plan.trucks[1]).toMatchObject({ vehicleNo: "DT-2", status: "rejected", rejected: true, rejectionReason: "Moisture too high", grnKg: null, lotNo: null });
+    expect(plan.trucks[2]).toMatchObject({ vehicleNo: "DT-3", rejected: false, grnKg: null });
+  });
+
+  it("the counts add up to the same trucks the table shows: arrived = accepted + rejected, and the one without a GRN is awaiting it", async () => {
+    const { progress, trucks } = (await as("wi", "GET", `/api/delivery-plans/${planId}`)).json();
+    expect(progress).toMatchObject({ arrivals: 3, acceptedTrucks: 2, rejectedTrucks: 1, awaitingGrnTrucks: 1, actualKg: 30000 });
+    expect(progress.arrivals).toBe(progress.acceptedTrucks + progress.rejectedTrucks);
+    expect(trucks).toHaveLength(progress.arrivals);
+  });
+
+  it("the list stays lean: totals only, no per-truck records", async () => {
+    const row = (await as("wi", "GET", "/api/delivery-plans")).json().find((p: any) => p.id === planId);
+    expect(row.trucks).toBeUndefined();
+    expect(row.progress).toMatchObject({ arrivals: 3, rejectedTrucks: 1 });
   });
 });

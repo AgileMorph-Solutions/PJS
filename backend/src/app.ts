@@ -30,6 +30,16 @@ import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
 export function buildApp() {
   const app = Fastify({ logger: true });
 
+  // A request marked application/json with NO body (sign out, "mark reviewed", a DELETE) is a normal thing for a
+  // browser to send, but Fastify's own parser answers it with an error before the route runs. For sign out that
+  // meant the session was never revoked and the page reopened the same profile. An empty body is just "no body";
+  // anything else goes through Fastify's own parser, prototype-poisoning guards included.
+  const defaultJson = app.getDefaultJsonParser("error", "error");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
+    if (body === "") return done(null, undefined);
+    defaultJson(req, body as string, done);
+  });
+
   // In compose the browser reaches /api same-origin through nginx, so CORS is never exercised.
   // It matters for `vite dev` against a bare `npm run dev` backend, and for direct API calls.
   const origins = (process.env.CORS_ORIGIN ?? "http://localhost:5173,http://localhost:8080")

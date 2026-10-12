@@ -16,6 +16,7 @@ import {
 } from "../services/receipts.js";
 import { createReceiptsBatch } from "../services/receiptBatch.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
+import { listUploadIssues, reviewUploadIssue } from "../services/uploadIssues.js";
 import { getDownstreamStatus } from "../services/receiptsDownstream.js";
 import { approveException, getReceiptPlanInfo, linkReceiptToPlan, listReceiptPlanInfo } from "../services/receiptPlanInfo.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
@@ -78,6 +79,20 @@ export async function receiptRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     if (!(await requireReceipt(id, reply, req))) return;
     return getReceiptPlanInfo(id);
+  });
+
+  // Warehouse Incharge / admin only: not listed in auth/policy.ts, so the narrow roles are refused.
+  app.get("/api/receipts/:id/upload-issues", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    return listUploadIssues(id);
+  });
+
+  app.post("/api/receipts/:id/upload-issues/:issueId/review", async (req, reply) => {
+    const { id, issueId } = req.params as { id: string; issueId: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    const issue = await reviewUploadIssue(id, issueId, currentUser(req).id);
+    return issue ?? reply.code(404).send({ error: "Upload issue not found" });
   });
 
   app.post("/api/receipts/:id/exception-approval", async (req, reply) => {

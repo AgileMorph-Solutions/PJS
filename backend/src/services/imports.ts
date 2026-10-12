@@ -26,6 +26,8 @@ import type { IssuedToProductionRow } from "../domain/imports/issuedToProduction
 import type { WarehouseReceivingRow } from "../domain/imports/warehouseReceiving.js";
 import type { WarehouseActivityLedgerRow } from "../domain/imports/warehouseActivityLedger.js";
 import { prisma } from "../db.js";
+import { supplierNameFields } from "./masters.js";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { lotNormalizer, normalizeVoyage, receiptIdAllocator, siteOf, type IdAllocator } from "./ids.js";
 import { yearOf } from "@anagroci/contract/domain/ids";
@@ -323,7 +325,8 @@ async function findReceiptDuplicates(rows: ParsedRow<OffloadingRow>[]): Promise<
       where: {
         vehicleNo: { equals: vehicleNo.trim(), mode: "insensitive" },
         arrivalDate: arrivalDate.trim(),
-        supplierName: { equals: supplierName.trim(), mode: "insensitive" },
+        // Stored with or without the old "RCN" prefix depending on when the truck was recorded; both are the same supplier.
+        supplierName: { in: [...new Set([supplierName.trim(), normalizeSupplierName(supplierName), `RCN ${normalizeSupplierName(supplierName)}`])], mode: "insensitive" },
       },
       select: { id: true },
     });
@@ -480,7 +483,7 @@ async function upsertObservedMasters(warehouses: Set<string>, origins: Set<strin
 async function upsertObservedSuppliers(codeToName: Map<string, string>, filename: string) {
   if (!codeToName.size) return;
   await prisma.supplier.createMany({
-    data: [...codeToName].map(([code, name]) => ({ code, name, source: `upload: ${filename}` })),
+    data: [...codeToName].map(([code, name]) => ({ code, ...supplierNameFields(name, { lenient: true }), source: `upload: ${filename}` })),
     skipDuplicates: true,
   });
 }
@@ -586,8 +589,8 @@ async function commitSuppliersMaster(rows: ParsedRow<SupplierMasterRow>[]): Prom
     const existing = await prisma.supplier.findUnique({ where: { code } });
     await prisma.supplier.upsert({
       where: { code },
-      update: { name: r.data.name },
-      create: { code, name: r.data.name, source: "upload: ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Suppliers)" },
+      update: supplierNameFields(r.data.name, { lenient: true }),
+      create: { code, ...supplierNameFields(r.data.name, { lenient: true }), source: "upload: ANAGROCI DATA PROCUREMENT 2026.xlsx (sheet Suppliers)" },
     });
     if (!existing) created += 1;
   }

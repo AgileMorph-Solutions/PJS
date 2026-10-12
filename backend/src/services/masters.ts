@@ -7,6 +7,7 @@ import { prisma } from "../db.js";
 import { WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import { WAREHOUSE_TYPES, type WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { isValidWarehouseCode } from "@anagroci/contract/domain/ids";
+import { normalizeSupplierName, suggestLbaCode } from "@anagroci/contract/domain/supplierCode";
 import { ValidationError } from "../domain/validation.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
@@ -35,8 +36,86 @@ export async function listMasters() {
   };
 }
 
+/**
+ * Stored name, plus the original when "RCN" was dropped (so a workbook that still carries it can be
+ * matched, and the change undone). Every writer of a supplier goes through this.
+ */
+export function supplierNameFields(name: string, { lenient = false } = {}): { name: string; formerName?: string } {
+  // `lenient` is for importers: a name that is only "RCN" keeps its text rather than aborting a whole upload.
+  const clean = normalizeSupplierName(name) || (lenient ? name.trim() : "");
+  if (!clean) throw new ValidationError("A supplier needs a name.");
+  return clean === name.trim() ? { name: clean } : { name: clean, formerName: name.trim() };
+}
+
+/** Idempotent upsert, for callers that mean "make sure this supplier exists" (approving a supplier request). */
 export async function addSupplier(code: string, name: string) {
-  return prisma.supplier.upsert({ where: { code }, update: { name }, create: { code, name } });
+  const fields = supplierNameFields(name);
+  return prisma.supplier.upsert({ where: { code }, update: fields, create: { code, ...fields } });
+}
+
+/** The next free LBA code for a name; the person can overwrite it before saving. */
+export async function suggestSupplierCode(name: string) {
+  const codes = (await prisma.supplier.findMany({ select: { code: true } })).map((s) => s.code);
+  return suggestLbaCode(name, codes);
+}
+
+/** A new supplier from the Suppliers screen: refuses an existing code instead of silently overwriting it. */
+export async function createSupplier(input: { code?: string; name: string }) {
+  const fields = supplierNameFields(input.name);
+  const code = input.code?.trim() || (await suggestSupplierCode(fields.name));
+  if (await prisma.supplier.findUnique({ where: { code } })) throw new ValidationError(`Supplier code ${code} already exists.`);
+  return prisma.supplier.create({ data: { code, ...fields, source: "entered" } });
+}
+
+/** What still points at a supplier: the reason it can be switched off but not deleted. */
+export async function supplierReferences(code: string) {
+  const [receipts, plans, jute, assignments] = await Promise.all([
+    prisma.receipt.count({ where: { lbaCode: code } }),
+    prisma.deliveryPlan.count({ where: { supplierCode: code } }),
+    prisma.juteWarehouseMovement.count({ where: { supplierCode: code } }),
+    prisma.branchManagerSupplier.count({ where: { supplierCode: code } }),
+  ]);
+  return { receipts, plans, jute, assignments, total: receipts + plans + jute + assignments };
+}
+
+const notFound = () => Object.assign(new Error("Supplier not found"), { code: "P2025" });
+
+/** Rename, or change the code. A code other records already carry can't move: they would be left pointing at nothing. */
+export async function updateSupplier(code: string, patch: { name?: string; code?: string }) {
+  const existing = await prisma.supplier.findUnique({ where: { code } });
+  if (!existing) throw notFound();
+  const data: { name?: string; formerName?: string | null; code?: string } = {};
+  if (patch.name !== undefined) {
+    const fields = supplierNameFields(patch.name);
+    data.name = fields.name;
+    // The original is only ever the first one recorded; an edit made by hand has no "former" worth keeping.
+    if (fields.formerName && !existing.formerName) data.formerName = fields.formerName;
+  }
+  const newCode = patch.code?.trim();
+  if (newCode && newCode !== code) {
+    const refs = await supplierReferences(code);
+    if (refs.total) throw new ValidationError(`Code ${code} is already used by ${refs.total} record${refs.total > 1 ? "s" : ""}, so it can't be changed. Add a new supplier instead.`);
+    if (await prisma.supplier.findUnique({ where: { code: newCode } })) throw new ValidationError(`Supplier code ${newCode} already exists.`);
+    data.code = newCode;
+  }
+  return prisma.supplier.update({ where: { code }, data });
+}
+
+export async function setSupplierActive(code: string, active: boolean) {
+  if (!(await prisma.supplier.findUnique({ where: { code } }))) throw notFound();
+  return prisma.supplier.update({ where: { code }, data: { active } });
+}
+
+/** Deletes a supplier nothing refers to; otherwise switches it off and says why, so history stays whole. */
+export async function removeSupplier(code: string) {
+  if (!(await prisma.supplier.findUnique({ where: { code } }))) throw notFound();
+  const refs = await supplierReferences(code);
+  if (refs.total) {
+    await prisma.supplier.update({ where: { code }, data: { active: false } });
+    return { deleted: false as const, deactivated: true as const, references: refs };
+  }
+  await prisma.supplier.delete({ where: { code } });
+  return { deleted: true as const, deactivated: false as const, references: refs };
 }
 
 /**

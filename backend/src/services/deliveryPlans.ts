@@ -12,12 +12,15 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import { isOverdue, planProgress, planStatus } from "@anagroci/contract/domain/deliveryPlan";
-import type { DeliveryPlan } from "@anagroci/contract/types/receipt";
+import type { DeliveryPlan, DeliveryPlanDetail, DeliveryPlanTruck } from "@anagroci/contract/types/receipt";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 import { nextDeliveryPlanId, siteOf } from "./ids.js";
 import { PLAN_FACTS_SELECT, toFacts, toTerms } from "./planFacts.js";
+import { getReceiptPlanInfo } from "./receiptPlanInfo.js";
+import { loadReceiptRow } from "./receipts.js";
+import { toReceiptRecord } from "../serialize.js";
 
 export interface DeliveryPlanInput {
   plannedDeliveryDate?: string | null;
@@ -95,6 +98,33 @@ export async function listDeliveryPlans(site?: string[], db: Prisma.TransactionC
 export async function getDeliveryPlan(id: string, db: Prisma.TransactionClient | typeof prisma = prisma) {
   const row = await db.deliveryPlan.findUnique({ where: { id }, include: INCLUDE });
   return row ? toWire(row, today()) : null;
+}
+
+/**
+ * The plan plus its trucks, each judged the way the receipt's own page judges it (same status, same
+ * plan flags, same approval), so the two screens can't tell different stories. Kept apart from the
+ * list read on purpose: the table needs only the totals, not every truck's full record.
+ */
+export async function getDeliveryPlanDetail(id: string): Promise<DeliveryPlanDetail | null> {
+  const plan = await getDeliveryPlan(id);
+  if (!plan) return null;
+  const trucks: DeliveryPlanTruck[] = [];
+  for (const receiptId of plan.receiptIds) {
+    const [row, facts, info] = await Promise.all([
+      loadReceiptRow(receiptId), prisma.receipt.findUnique({ where: { id: receiptId }, select: PLAN_FACTS_SELECT }), getReceiptPlanInfo(receiptId),
+    ]);
+    if (!row || !facts || !info) continue;
+    const r = toReceiptRecord(row);
+    const grn = facts.grn?.grnWeightNum;
+    trucks.push({
+      receiptId, arrivalDate: r.arrivalDate, vehicleNo: facts.gate?.vehicleNo?.trim() || r.vehicleNo, supplierName: r.supplierName,
+      status: r.status, rejected: r.status === "rejected",
+      rejectionReason: r.status === "rejected" ? r.stageData["n-reject"]?.["Reason for rejection"]?.trim() || null : null,
+      grnKg: grn === null || grn === undefined ? null : Number(grn), lotNo: r.lotNo ?? null,
+      type: info.type, flags: info.flags, approval: info.approval,
+    });
+  }
+  return { ...plan, trucks };
 }
 
 function quantity(v: DeliveryPlanInput["expectedQuantityKg"]): Prisma.Decimal | null {

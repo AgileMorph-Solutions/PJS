@@ -26,6 +26,7 @@ import { hashPassword } from "../src/auth/password.js";
 import { ensureDemoUsers } from "./demoUsers.js";
 import { seedDemoData } from "./demoData.js";
 import { applyRenumber, planRenumber } from "../src/services/renumber.js";
+import { supplierNameFields } from "../src/services/masters.js";
 import { applyApplicationView, describeReport, type ApplicationViewSeed } from "../src/services/applicationView.js";
 
 const prisma = new PrismaClient();
@@ -197,7 +198,7 @@ async function main() {
 
   await prisma.supplier.createMany({
     data: [...supplierCodes].map(([code, source]) => ({
-      code, name: suppliers.find((s) => s.code === code)?.name ?? code, source,
+      code, ...supplierNameFields(suppliers.find((s) => s.code === code)?.name ?? code, { lenient: true }), source,
     })),
     skipDuplicates: true,
   });

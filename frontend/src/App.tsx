@@ -29,6 +29,7 @@ import { StockPage } from "./pages/warehouse/StockPage";
 import { DryingJobsPage } from "./pages/warehouse/DryingJobsPage";
 import { DispatchesPage } from "./pages/warehouse/DispatchesPage";
 import { DeliveryPlansPage } from "./pages/warehouse/DeliveryPlansPage";
+import { DeliveryPlanDetailPage } from "./pages/warehouse/DeliveryPlanDetailPage";
 import { TransfersPage } from "./pages/warehouse/TransfersPage";
 import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage";
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
@@ -113,6 +114,7 @@ function AppRoutes() {
                 <Route path="stock" element={<StockPage />} />
                 <Route path="drying" element={<DryingJobsPage />} />
                 <Route path="delivery-plans" element={<DeliveryPlansPage />} />
+                <Route path="delivery-plans/:id" element={<DeliveryPlanDetailPage />} />
                 <Route path="transfers" element={<TransfersPage />} />
               {/* Not in nav.ts (see its own comment) - reached from Reception's Downstream chips
                   and a receipt's "Linked records" card, same as the legacy /procurement/* URLs

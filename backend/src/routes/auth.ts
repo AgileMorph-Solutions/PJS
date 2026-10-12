@@ -28,7 +28,10 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/api/auth/logout", async (req, reply) => {
     const token = parseCookie(req.headers.cookie ?? "")[SESSION_COOKIE];
     if (token) await revokeSession(token);
-    reply.header("Set-Cookie", stringifySetCookie(SESSION_COOKIE, "", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 0 }));
+    // Same name and path as the cookie login set, expired both ways (Max-Age and Expires) so every browser drops it.
+    reply.header("Set-Cookie", stringifySetCookie(SESSION_COOKIE, "", {
+      httpOnly: true, sameSite: "lax", path: "/", maxAge: 0, expires: new Date(0), secure: process.env.COOKIE_SECURE === "true",
+    }));
     return { ok: true };
   });
 

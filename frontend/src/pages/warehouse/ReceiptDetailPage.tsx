@@ -18,11 +18,14 @@ import { prefillSuggestions } from "@anagroci/contract/domain/receiptMath";
 import { planPrefill } from "@anagroci/contract/domain/deliveryPlan";
 import { LotOverview } from "../../components/receipt/LotOverview";
 import { ReceiptPlanCard } from "../../components/receipt/ReceiptPlanCard";
+import { TruckSummaryCard } from "../../components/receipt/TruckSummaryCard";
+import { UploadIssuesCard } from "../../components/receipt/UploadIssuesCard";
 import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
 import { buildJourney } from "../../components/receipt/lotJourney.ts";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -109,7 +112,7 @@ export function ReceiptDetailPage() {
         <span className="font-bold text-warmstone-900 bg-warmstone-100 px-2.5 py-0.5 rounded-md border border-warmstone-200">
           {receipt.id}
         </span>
-        {receipt.supplierName && <span className="text-warmstone-500">· {receipt.supplierName}</span>}
+        {receipt.supplierName && <span className="text-warmstone-500">· {normalizeSupplierName(receipt.supplierName)}</span>}
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
@@ -147,7 +150,7 @@ export function ReceiptDetailPage() {
               <ReceiptStatusPill status={status} />
             </h1>
             <p className="text-sm text-warmstone-500">
-              {receipt.supplierName || "No supplier yet"} · {receipt.vehicleNo ? `vehicle ${receipt.vehicleNo}` : "no vehicle no."}
+              {normalizeSupplierName(receipt.supplierName) || "No supplier yet"} · {receipt.vehicleNo ? `vehicle ${receipt.vehicleNo}` : "no vehicle no."}
               {receipt.lotNo && ` · from receipt ${receipt.id}`}
               {receipt.binNo && ` · Bin ${receipt.binNo}`}
             </p>
@@ -201,6 +204,8 @@ export function ReceiptDetailPage() {
 
       {tab === "overview" && (
         <div className="space-y-6">
+          <TruckSummaryCard receipt={receipt} />
+          {canEdit && <UploadIssuesCard receiptId={receipt.id} />}
           {canEdit && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <ReceiptPlanCard receiptId={receipt.id} info={planInfo} plans={plans} siteSlug={site.slug} canEdit={canEdit} onChanged={() => void refetchPlanInfo()} />

@@ -18,12 +18,12 @@ describe("plan progress", () => {
     const p = planProgress({ expectedQuantityKg: 78_715 }, [
       truck("a", { grnKg: 30_000 }), truck("b", { grnKg: 31_000 }), truck("c", { grnKg: 31_606 }),
     ]);
-    expect(p).toEqual({ actualKg: 92_606, arrivals: 3, acceptedTrucks: 3, remainingKg: -13_891, varianceKg: 13_891 });
+    expect(p).toEqual({ actualKg: 92_606, arrivals: 3, acceptedTrucks: 3, rejectedTrucks: 0, awaitingGrnTrucks: 0, remainingKg: -13_891, varianceKg: 13_891 });
   });
 
   it("counts a rejected truck as an arrival but not an accepted one, and a truck without a GRN adds no kg", () => {
     const p = planProgress({ expectedQuantityKg: 100_000 }, [truck("a"), truck("b", { rejected: true, grnKg: undefined }), truck("c", { grnKg: undefined })]);
-    expect(p).toMatchObject({ actualKg: 30_000, arrivals: 3, acceptedTrucks: 2, remainingKg: 70_000 });
+    expect(p).toMatchObject({ actualKg: 30_000, arrivals: 3, acceptedTrucks: 2, rejectedTrucks: 1, awaitingGrnTrucks: 1, remainingKg: 70_000 });
   });
 
   it("has no remaining or variance when no quantity was planned — not 0", () => {

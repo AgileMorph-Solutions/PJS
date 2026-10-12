@@ -45,9 +45,18 @@ datasource db {
 
 model Supplier {
   code   String  @id
+  /// Stored without the leading "RCN" the workbooks carry (contract domain/supplierCode.ts).
   name   String
+  /// The name exactly as the source had it, kept only when "RCN" was dropped, so a workbook that still
+  /// says "RCN SCOOPS DIENE" can be matched and the change can be undone.
+  formerName String?
   /// Where this code was first observed, e.g. "seed/suppliers.json" or a workbook name.
   source String?
+  /// A supplier already used by trucks, plans or jute movements is switched off, never deleted: it
+  /// disappears from pickers and its history stays whole.
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   juteMovements JuteWarehouseMovement[]
 }
@@ -161,6 +170,7 @@ model Receipt {
   exceptionApprovedAt DateTime?
   exceptionApprovedBy String?
   exceptionApprover   User?     @relation("ExceptionApprover", fields: [exceptionApprovedBy], references: [id])
+  uploadIssues        UploadIssue[]
   exceptionNote       String?
 
   arrivalDate  String
@@ -2199,6 +2209,8 @@ model User {
 
   sessions            Session[]
   approvedExceptions  Receipt[]               @relation("ExceptionApprover")
+  uploadIssues        UploadIssue[]           @relation("UploadIssueUploader")
+  reviewedUploadIssues UploadIssue[]          @relation("UploadIssueReviewer")
   dispatchedTransfers TransferRequest[]       @relation("TransferDispatcher")
   receivedTransfers   TransferRequest[]       @relation("TransferReceiver")
   cancelledPlans      DeliveryPlan[]          @relation("PlanCanceller")
@@ -2297,4 +2309,29 @@ model StageFieldChange {
   via       String
 
   @@index([receiptId])
+}
+
+/// A soft problem found in a row of an uploaded workbook (contract domain/uploadChecks.ts). The upload
+/// went through anyway: these are reported against the truck, never used to refuse or to fix the row.
+/// `row` and `sheet` point back at the file the person uploaded; `reviewedAt` is someone saying "seen".
+model UploadIssue {
+  id           String    @id @default(cuid())
+  receiptId    String
+  receipt      Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  filename     String
+  sheet        String
+  row          Int
+  column       String?
+  /// "warning" | "info"
+  severity     String
+  message      String
+  uploadedAt   DateTime  @default(now())
+  uploadedById String?
+  uploadedBy   User?     @relation("UploadIssueUploader", fields: [uploadedById], references: [id])
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewedBy   User?     @relation("UploadIssueReviewer", fields: [reviewedById], references: [id])
+
+  @@index([receiptId])
+  @@index([reviewedAt])
 }

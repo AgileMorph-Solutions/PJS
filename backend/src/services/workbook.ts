@@ -46,9 +46,10 @@ export function summarize(plan: WorkbookPlan) {
   const sheets = plan.sheets.map((s) => ({
     name: s.name, rows: s.rows, created: s.created, changed: s.changed, unchanged: s.unchanged,
     errorCount: s.errors.length, errors: s.errors.slice(0, ERRORS_SHOWN_PER_SHEET) as RowError[], samples: s.samples,
+    warningCount: (s.warnings ?? []).length, warnings: (s.warnings ?? []).slice(0, ERRORS_SHOWN_PER_SHEET),
   }));
   return {
-    sheets, notices: plan.notices, errorCount: errorCount(plan),
+    sheets, notices: plan.notices, errorCount: errorCount(plan), warningCount: sheets.reduce((n, s) => n + s.warningCount, 0),
     totalCreated: sheets.reduce((n, s) => n + s.created, 0),
     totalChanged: sheets.reduce((n, s) => n + s.changed, 0),
   };

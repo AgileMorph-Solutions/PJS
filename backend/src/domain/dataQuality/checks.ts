@@ -1105,4 +1105,21 @@ export const CHECKS: Check[] = [
       };
     },
   },
-];
+  {
+    id: "upload_issues_unreviewed",
+    async run({ prisma }) {
+      const open = await prisma.uploadIssue.findMany({ where: { reviewedAt: null }, select: { receiptId: true } });
+      if (!open.length) return null;
+      const trucks = [...new Set(open.map((o) => o.receiptId))];
+      return {
+        id: "upload_issues_unreviewed", severity: "warning",
+        title: "Uploaded rows with problems nobody has looked at yet",
+        entity: "UploadIssue", affectedCount: open.length, sampleIds: trucks.slice(0, 5),
+        evidence:
+          `${open.length} problem${open.length > 1 ? "s" : ""} found in uploaded workbook rows, across ${trucks.length} truck${trucks.length > 1 ? "s" : ""} ` +
+          "(a value that cannot be true, or that disagrees with the supplier master or another truck's fiche). The uploads went through " +
+          "unchanged; each problem is shown on its truck's page and is cleared by marking it reviewed, not by editing it here.",
+      };
+    },
+  },
+]
