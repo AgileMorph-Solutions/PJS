@@ -68,6 +68,19 @@ const REACHED: Record<Stop, number> = {
   arrived: 0, pending_qa: 1, rejected: 1, pending_unload: 2, unloaded: 3, grn: 4, stock: 5, drying: 6, transferred: 7,
 };
 
+/** Which Bouaké plan each truck arrives against, and the GRN kg it was recognised at. Only trucks that
+ * got as far as GRN carry a quantity, so the plan view has real "planned vs received" to show. A plan
+ * only takes trucks of its own supplier (linkReceiptToPlan enforces that), hence trucks i and i+6.
+ * Plan 0 slightly over; plan 1 two trucks and short; plan 2 over, plus a rejected truck that adds
+ * 0 kg; plan 3 short, plus a rejected truck. Plans 4-5 have no arrivals yet. */
+const PLAN_SUPPLIER = [1, 2, 5, 0, 4, 5];
+const PLAN_WINDOW: [number, number][] = [[14, 14], [15, 21], [6, 19], [7, 20]]; // [start, end] as day offsets
+const BOUAKE_PLAN_TRUCKS: Record<number, { plan: number; grnKg?: number }> = {
+  13: { plan: 0, grnKg: 24350 }, 14: { plan: 1, grnKg: 14200 }, 20: { plan: 1, grnKg: 8900 },
+  5: { plan: 2 }, 17: { plan: 2, grnKg: 29100 }, 6: { plan: 3 }, 18: { plan: 3, grnKg: 26800 },
+};
+const CENTRAL_PLAN_TRUCKS: Record<number, { plan: number; grnKg: number }> = { 0: { plan: 0, grnKg: 29400 }, 1: { plan: 1, grnKg: 33200 } };
+
 const day = (n: number) => new Date(Date.UTC(2026, 8, 1 + n)).toISOString().slice(0, 10); // from 2026-09-01
 
 export async function seedDemoData(prisma: PrismaClient): Promise<void> {
@@ -87,10 +100,11 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   // central site has two of its own.
   const plans: string[] = [];
   for (let i = 0; i < 6; i++) {
-    const s = SUPPLIERS[i % SUPPLIERS.length];
+    const s = SUPPLIERS[PLAN_SUPPLIER[i]];
+    const [from, to] = PLAN_WINDOW[i] ?? [40 + i, 40 + i];
     const p = await createDeliveryPlan({
       supplierName: s.name, supplierCode: s.code, expectedQuantityKg: 24000 + i * 1500, expectedTruckType: "Semi-trailer",
-      expectedArrivalDate: i < 4 ? day(i * 2) : day(40 + i), plannedDeliveryDate: i < 4 ? day(i * 2) : day(40 + i),
+      expectedArrivalDate: day(from), expectedDeliveryEnd: to > from ? day(to) : null, plannedDeliveryDate: day(from),
       destinationWarehouse: SITE, remarks: i === 5 ? "Truck announced by the supplier, not yet arrived" : null,
     });
     plans.push(p.id);
@@ -110,7 +124,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
   /** One truck, taken as far as `spec` says, through the same services the app uses. */
   async function buildReceipt(o: {
     site: string; store: string; bins: string[]; i: number; spec: Spec; arrival: string; fiche: string; ficheCode: string;
-    supplier: (typeof SUPPLIERS)[number]; origin: string; vehicle: string; planId?: string; stockType: string;
+    supplier: (typeof SUPPLIERS)[number]; origin: string; vehicle: string; planId?: string; grnKg?: number; stockType: string;
   }): Promise<Made> {
     const { site, store, bins, i, spec, arrival, fiche, supplier, origin, vehicle } = o;
     const reached = REACHED[spec.stop];
@@ -152,7 +166,10 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
         "Sacs déchirés (torn bags)": String(torn), "Refraction": String(40 + (i % 4) * 10),
       });
     }
-    if (reached >= 4) await setStageFields(id, "n-grn", { "PRICE": String(450 + (i % 4) * 10) });
+    if (reached >= 4) await setStageFields(id, "n-grn", {
+      "PRICE": String(450 + (i % 4) * 10),
+      ...(o.grnKg ? { "GRN Weight (kept separate from Gross/Net/Paid)": String(o.grnKg) } : {}),
+    });
 
     const lot = (await prisma.stageLotAssignment.findUnique({ where: { receiptId: id }, select: { lotNumber: true } }))?.lotNumber ?? null;
     let bin: string | null = null;
@@ -208,7 +225,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     made.push(await buildReceipt({
       site: SITE, store: BOUAKE_BINS[i % 3], bins: BOUAKE_BINS, i, spec: PLAN[i], arrival: day(i + 1), fiche: String(88100 + i),
       ficheCode: `0401-${String(i + 1).padStart(4, "0")}`, supplier: SUPPLIERS[i % SUPPLIERS.length], origin: ORIGINS[i % ORIGINS.length],
-      vehicle: `${1200 + i * 37}KT0${1 + (i % 4)}`, planId: i < 4 ? plans[i] : undefined, stockType: "Regional",
+      vehicle: `${1200 + i * 37}KT0${1 + (i % 4)}`, planId: BOUAKE_PLAN_TRUCKS[i] ? plans[BOUAKE_PLAN_TRUCKS[i].plan] : undefined, grnKg: BOUAKE_PLAN_TRUCKS[i]?.grnKg, stockType: "Regional",
     }));
   }
   for (const m of made) await dryingBatch(m, BOUAKE_BINS);
@@ -297,7 +314,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
     central.push(await buildReceipt({
       site: CENTRAL, store: CENTRAL_STORE, bins: CENTRAL_BINS, i, spec, arrival: day(33 + k), fiche: String(99100 + k),
       ficheCode: `0501-${String(100 + k).padStart(4, "0")}`, supplier: SUPPLIERS[(k + 3) % SUPPLIERS.length], origin: ORIGINS[(k + 1) % ORIGINS.length],
-      vehicle: `${3100 + k * 41}AB0${1 + (k % 4)}`, planId: k < 2 ? centralPlans[k] : undefined, stockType: "Factory",
+      vehicle: `${3100 + k * 41}AB0${1 + (k % 4)}`, planId: CENTRAL_PLAN_TRUCKS[k] ? centralPlans[CENTRAL_PLAN_TRUCKS[k].plan] : undefined, grnKg: CENTRAL_PLAN_TRUCKS[k]?.grnKg, stockType: "Factory",
     }));
   }
   for (const m of central) await dryingBatch(m, CENTRAL_BINS);
