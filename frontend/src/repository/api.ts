@@ -131,8 +131,9 @@ export const api = {
 
   /** Several trucks at once — all or nothing; a rejected row's message names it ("Row 3: …") and
    * nothing is created. Returns the new receipt ids in row order. */
-  createReceiptsBatch: (warehouse: string, rows: BatchTruckRow[]) =>
-    request<{ ids: string[] }>("/receipts/batch", { method: "POST", body: JSON.stringify({ warehouse, rows }) }),
+  /** `deliveryPlanIds` lines up with `rows` (null = no plan); leave it out and every truck is unplanned. */
+  createReceiptsBatch: (warehouse: string, rows: BatchTruckRow[], deliveryPlanIds?: (string | null)[]) =>
+    request<{ ids: string[] }>("/receipts/batch", { method: "POST", body: JSON.stringify({ warehouse, rows, ...(deliveryPlanIds?.some(Boolean) ? { deliveryPlanIds } : {}) }) }),
 
   patchReceipt: async (id: string, patch: Partial<ReceiptRecord>) =>
     unwrap(await request<Written<ReceiptRecord>>(`/receipts/${encodeURIComponent(id)}`, {

@@ -88,6 +88,19 @@ export async function approveException(receiptId: string, actorId: string, note?
  * Attaches a plan to a truck that has already arrived — the "unplanned, regularise later" case.
  * Only a truck with no plan: moving one between plans would erase how it first arrived.
  */
+/**
+ * Why a plan can't take a truck, or null when it can: it has to be for the truck's own site, and for the
+ * same supplier. Both codes must be known to compare; a blank on either side is "not recorded", not a
+ * mismatch. One rule, shared by linking a truck afterwards and by the batch grid, so they can't disagree.
+ */
+export function planFitProblem(plan: { id: string; destinationWarehouse: string; supplierCode: string | null }, truck: { site: string; lbaCode: string }): string | null {
+  if (plan.destinationWarehouse !== truck.site) return `Delivery plan ${plan.id} is for ${plan.destinationWarehouse}, not ${truck.site}.`;
+  if (plan.supplierCode && truck.lbaCode.trim() && plan.supplierCode.trim() !== truck.lbaCode.trim()) {
+    return `Delivery plan ${plan.id} is for supplier ${plan.supplierCode}, not ${truck.lbaCode.trim()}.`;
+  }
+  return null;
+}
+
 export async function linkReceiptToPlan(receiptId: string, planId: string): Promise<ReceiptPlanInfo> {
   const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, select: { warehouse: true, lbaCode: true, deliveryPlanId: true } });
   if (!receipt) throw Object.assign(new Error("Receipt not found"), { code: "P2025" });
@@ -95,11 +108,8 @@ export async function linkReceiptToPlan(receiptId: string, planId: string): Prom
   const plan = await prisma.deliveryPlan.findUnique({ where: { id: planId } });
   if (!plan) throw new ValidationError(`Delivery plan ${planId} doesn't exist.`);
   const site = (await siteOf(prisma, receipt.warehouse)) ?? receipt.warehouse;
-  if (plan.destinationWarehouse !== site) throw new ValidationError(`Delivery plan ${plan.id} is for ${plan.destinationWarehouse}, not ${site}.`);
-  // Both codes must be known to compare; a blank on either side is "not recorded", not a mismatch.
-  if (plan.supplierCode && receipt.lbaCode.trim() && plan.supplierCode.trim() !== receipt.lbaCode.trim()) {
-    throw new ValidationError(`Delivery plan ${plan.id} is for supplier ${plan.supplierCode}, not ${receipt.lbaCode.trim()}.`);
-  }
+  const problem = planFitProblem(plan, { site, lbaCode: receipt.lbaCode });
+  if (problem) throw new ValidationError(problem);
   await prisma.receipt.update({ where: { id: receiptId }, data: { deliveryPlanId: plan.id, deliveryPlanLinkedAt: new Date() } });
   return (await getReceiptPlanInfo(receiptId))!;
 }

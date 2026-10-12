@@ -74,3 +74,40 @@ export function truckTimeline(r: ReceiptRecord): TruckTimelineStep[] {
   }
   return out;
 }
+
+// ── The short version: five steps, done or not, for a list of trucks ─────────────────────────────
+
+export type JourneyState = "done" | "rejected" | "next" | "todo" | "na";
+
+export interface JourneyStep {
+  id: "arrived" | "quality" | "unloaded" | "grn" | "stock";
+  label: string;
+  state: JourneyState;
+}
+
+/** The steps a truck goes through to become stock, with the level of REACHED at which each is done. */
+const JOURNEY: { id: JourneyStep["id"]; label: string; doneAt: number }[] = [
+  { id: "arrived", label: "Arrived", doneAt: 1 },
+  { id: "quality", label: "Quality", doneAt: 3 }, // passed: it is waiting to be unloaded
+  { id: "unloaded", label: "Unloaded", doneAt: 4 },
+  { id: "grn", label: "GRN", doneAt: 5 },
+  { id: "stock", label: "In stock", doneAt: 6 },
+];
+
+/**
+ * Which of the five steps a truck has done, from its status alone (so any list that has a status can show it).
+ * A rejected truck stops at Quality with a cross, and the steps after it are "na": they will never happen, which
+ * is not the same as "not yet". Everything else is done, then the one step it is waiting on, then the rest.
+ */
+export function journeyFromStatus(status: ReceiptStatus): JourneyStep[] {
+  const level = REACHED[status];
+  let nextGiven = false;
+  return JOURNEY.map(({ id, label, doneAt }) => {
+    if (status === "rejected") {
+      return { id, label, state: id === "arrived" ? "done" : id === "quality" ? "rejected" : "na" };
+    }
+    if (level >= doneAt) return { id, label, state: "done" };
+    if (!nextGiven) { nextGiven = true; return { id, label, state: "next" }; }
+    return { id, label, state: "todo" };
+  });
+}

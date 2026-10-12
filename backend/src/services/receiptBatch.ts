@@ -14,7 +14,8 @@ import {
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 import { applyStageFields } from "./receipts.js";
-import { nextReceiptId } from "./ids.js";
+import { nextReceiptId, siteOf } from "./ids.js";
+import { planFitProblem } from "./receiptPlanInfo.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -44,10 +45,21 @@ function cleanRow(raw: unknown, n: number): BatchTruckRow {
   return out;
 }
 
-export async function createReceiptsBatch(warehouse: string, rawRows: unknown, actorId: string): Promise<string[]> {
+/**
+ * The plan chosen for each row, aligned with the rows (blank or null = no plan). Sent beside the rows rather than inside
+ * them because a plan is not a stage field; omitting it entirely is the old behaviour, every truck unplanned.
+ */
+function cleanPlanIds(raw: unknown, count: number): (string | null)[] {
+  if (raw === undefined || raw === null) return Array(count).fill(null);
+  if (!Array.isArray(raw) || raw.length !== count) throw new ValidationError("deliveryPlanIds must list one entry per truck.");
+  return raw.map((v) => (typeof v === "string" && v.trim() ? v.trim() : null));
+}
+
+export async function createReceiptsBatch(warehouse: string, rawRows: unknown, actorId: string, rawPlanIds?: unknown): Promise<string[]> {
   if (!Array.isArray(rawRows) || rawRows.length === 0) throw new ValidationError("Add at least one truck.");
   if (rawRows.length > BATCH_MAX_ROWS) throw new ValidationError(`At most ${BATCH_MAX_ROWS} trucks per batch.`);
   const rows = rawRows.map((r, i) => cleanRow(r, i + 1));
+  const planIds = cleanPlanIds(rawPlanIds, rows.length);
 
   return prisma.$transaction(async (tx) => {
     // Receipt.warehouse is a hard FK, so name the problem rather than surface a bare P2003.
@@ -57,9 +69,18 @@ export async function createReceiptsBatch(warehouse: string, rawRows: unknown, a
     const today = new Date().toISOString().slice(0, 10);
     const ids: string[] = [];
 
-    for (const row of rows) {
+    const site = (await siteOf(tx, warehouse)) ?? warehouse;
+
+    for (const [n, row] of rows.entries()) {
       const gate = row["n-gate"];
       const verify = row["n-verify"];
+      // A row that names a plan is judged by the same rule as linking a truck afterwards, and says which row is wrong.
+      const plan = planIds[n] ? await tx.deliveryPlan.findUnique({ where: { id: planIds[n]! } }) : null;
+      if (planIds[n] && !plan) throw new ValidationError(`Row ${n + 1}: delivery plan ${planIds[n]} doesn't exist.`);
+      if (plan) {
+        const problem = planFitProblem(plan, { site, lbaCode: verify?.["LBA CODE"] ?? plan.supplierCode ?? "" });
+        if (problem) throw new ValidationError(`Row ${n + 1}: ${problem}`);
+      }
       // Sequential within the transaction, so each call sees the receipt the previous one created.
       const arrivalDate = gate["DATE OF ARRIVAL"] ?? today;
       const id = await nextReceiptId(tx, warehouse, arrivalDate);
@@ -69,10 +90,12 @@ export async function createReceiptsBatch(warehouse: string, rawRows: unknown, a
           source: "entered",
           arrivalDate,
           // The receipt's own columns mirror these stage fields (see PATCHABLE in receipts.ts).
-          supplierName: verify?.["SUPPLIERS NAME"] ?? "",
-          lbaCode: verify?.["LBA CODE"] ?? "",
+          supplierName: verify?.["SUPPLIERS NAME"] ?? plan?.supplierName ?? "",
+          lbaCode: verify?.["LBA CODE"] ?? plan?.supplierCode ?? "",
           vehicleNo: gate[BATCH_REQUIRED_LABEL],
           warehouse,
+          // Planned from the start (no deliveryPlanLinkedAt), as when a truck is opened from the plan itself.
+          deliveryPlanId: plan?.id ?? null,
           timeline: { create: [{ status: "planned", at: new Date().toISOString(), actorId }] },
         },
       });

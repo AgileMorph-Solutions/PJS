@@ -1,9 +1,10 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
-import { useTracking } from "../../state/TrackingContext";
+import { useTracking, useDeliveryPlans } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
 import { api } from "../../repository/api";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { BATCH_TRUCK_COLUMNS, BATCH_REQUIRED_LABEL, BATCH_MAX_ROWS, type BatchTruckRow } from "../../data/batchEntry";
 
 /** A grid row's values, keyed by the stage field label (so it maps straight onto the API payload). */
@@ -13,10 +14,13 @@ interface Row { key: number; v: Values }
 /** Grid layout. Supplier is one picker that fills both SUPPLIERS NAME and LBA CODE, so the two can
  * never disagree; every other column is one stage field, looked up by its label. */
 const SUPPLIER = "SUPPLIER";
+/** Which delivery plan the truck is for. Not a stage field: it travels beside the rows (see save()). */
+const PLAN = "DELIVERY PLAN";
 const COLUMNS: { key: string; label: string; type?: string; width: string }[] = [
   { key: "DATE OF ARRIVAL", label: "Date of arrival", type: "date", width: "w-40" },
   { key: BATCH_REQUIRED_LABEL, label: "Vehicle no.", width: "w-40" },
   { key: SUPPLIER, label: "Supplier", width: "w-64" },
+  { key: PLAN, label: "Delivery plan", width: "w-56" },
   { key: "FICHE", label: "Fiche no.", width: "w-32" },
   { key: "CREDIT/CASH", label: "Credit / cash", width: "w-32" },
   { key: "ORIGIN", label: "Origin", width: "w-40" },
@@ -54,6 +58,9 @@ function toPayload(v: Values): BatchTruckRow {
 export function BatchEntryPage() {
   const site = useSite();
   const { masters, refresh } = useTracking();
+  const { plans } = useDeliveryPlans(site.warehouseName);
+  // A truck can be linked to a plan that is still expecting trucks. Trucks with no plan are fine too.
+  const openPlans = plans.filter((p) => p.status === "planned" || p.status === "partially_received");
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: INITIAL_ROWS }, () => newRow(today())));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +78,24 @@ export function BatchEntryPage() {
       // Picking a supplier sets both stage fields; clearing it clears both.
       if (col === SUPPLIER) {
         const s = masters.suppliers.find((x) => x.code === value);
-        return { ...r, v: { ...r.v, "LBA CODE": s?.code ?? "", "SUPPLIERS NAME": s?.name ?? "" } };
+        // A plan is for one supplier, so a different supplier un-picks it rather than leave a pair the server would refuse.
+        const plan = openPlans.find((p) => p.id === r.v[PLAN]);
+        const keepPlan = plan && (!plan.supplierCode || plan.supplierCode === s?.code);
+        return { ...r, v: { ...r.v, "LBA CODE": s?.code ?? "", "SUPPLIERS NAME": s?.name ?? "", [PLAN]: keepPlan ? plan.id : "" } };
+      }
+      // Picking a plan brings along what it already knows (its supplier and origin) so they aren't typed again; the
+      // person still sees them in the row and can change them before saving.
+      if (col === PLAN) {
+        const plan = openPlans.find((p) => p.id === value);
+        const s = plan?.supplierCode ? masters.suppliers.find((x) => x.code === plan.supplierCode) : undefined;
+        return {
+          ...r,
+          v: {
+            ...r.v, [PLAN]: value,
+            ...(s ? { "LBA CODE": s.code, "SUPPLIERS NAME": s.name } : {}),
+            ...(plan?.expectedOrigin && !(r.v["ORIGIN"] ?? "").trim() ? { ORIGIN: plan.expectedOrigin } : {}),
+          },
+        };
       }
       return { ...r, v: { ...r.v, [col]: value } };
     }));
@@ -104,7 +128,7 @@ export function BatchEntryPage() {
     try {
       // The server numbers "Row N" over what we send, so blank rows are dropped first and the
       // message is mapped back to the row on screen below.
-      const { ids } = await api.createReceiptsBatch(site.warehouseName, filled.map((r) => toPayload(r.v)));
+      const { ids } = await api.createReceiptsBatch(site.warehouseName, filled.map((r) => toPayload(r.v)), filled.map((r) => r.v[PLAN] || null));
       await refresh();
       setCreated(ids);
     } catch (e) {
@@ -143,7 +167,7 @@ export function BatchEntryPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Add entries"
-        lede="One row per truck. Save creates all of them together - if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
+        lede="One row per truck. Pick a delivery plan if the truck was expected under one (it fills in the supplier and origin); leave it as 'No plan' otherwise. Save creates all of them together - if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
         actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
 
@@ -179,6 +203,18 @@ export function BatchEntryPage() {
                         >
                           <option value="">-</option>
                           {masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
+                        </select>
+                      ) : c.key === PLAN ? (
+                        <select
+                          aria-label={`Delivery plan, row ${i + 1}`} data-row={i} data-col={c.key}
+                          value={r.v[PLAN] ?? ""} onChange={(e) => setValue(r.key, PLAN, e.target.value)}
+                          onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
+                        >
+                          <option value="">No plan</option>
+                          {/* Once a supplier is picked only that supplier's plans are offered, as the server will only accept those. */}
+                          {openPlans
+                            .filter((p) => !r.v["LBA CODE"] || !p.supplierCode || p.supplierCode === r.v["LBA CODE"])
+                            .map((p) => <option key={p.id} value={p.id}>{p.id} · {normalizeSupplierName(p.supplierName)}</option>)}
                         </select>
                       ) : (
                         <input

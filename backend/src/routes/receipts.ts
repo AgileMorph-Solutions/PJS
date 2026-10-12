@@ -129,10 +129,10 @@ export async function receiptRoutes(app: FastifyInstance) {
    * (Branch Manager / QFS Officer never reach this: auth/policy.ts doesn't list it for them.)
    */
   app.post("/api/receipts/batch", async (req, reply) => {
-    const { warehouse, rows } = (req.body ?? {}) as { warehouse?: string; rows?: unknown };
+    const { warehouse, rows, deliveryPlanIds } = (req.body ?? {}) as { warehouse?: string; rows?: unknown; deliveryPlanIds?: unknown };
     const wh = scopedWarehouse(req, warehouse) ?? warehouse;
     if (!wh) return reply.code(400).send({ error: "warehouse is required" });
-    const ids = await createReceiptsBatch(wh, rows, currentUser(req).id);
+    const ids = await createReceiptsBatch(wh, rows, currentUser(req).id, deliveryPlanIds);
     return reply.code(201).send({ ids });
   });
 

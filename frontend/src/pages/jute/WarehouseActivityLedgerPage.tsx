@@ -55,7 +55,7 @@ export function WarehouseActivityLedgerPage() {
         />
         <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
       </FilterBar>
-      <DataTable columns={columns} rows={search.filtered} keyFn={(r) => r.id} emptyTitle="No activity ledger rows yet" />
+      <DataTable columns={columns} rows={search.filtered} keyFn={(r) => r.id} onRowClick={(r) => setDetail(r)} emptyTitle="No activity ledger rows yet" />
       {detail && (
         <RecordDetailModal title="Warehouse activity ledger entry" record={detail} onClose={() => setDetail(null)} />
       )}

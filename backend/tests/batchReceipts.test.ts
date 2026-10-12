@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { BATCH_MAX_ROWS } from "@anagroci/contract/data/batchEntry";
+import { createDeliveryPlan } from "../src/services/deliveryPlans.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -39,6 +40,7 @@ const batchReceipts = () => prisma.receipt.findMany({ where: { vehicleNo: { star
 
 async function cleanup() {
   await prisma.receipt.deleteMany({ where: { vehicleNo: { startsWith: VEHICLE } } });
+  await prisma.deliveryPlan.deleteMany({ where: { supplierName: { startsWith: "BATCHTEST" } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: P } } });
   await prisma.warehouse.deleteMany({ where: { name: TEST_SITE } });
 }
@@ -158,5 +160,60 @@ describe("POST /api/receipts/batch", () => {
     expect(a.every((id) => /^REC-BKE-2026-\d{4,}$/.test(id))).toBe(true);
     expect(n(a[1])).toBe(n(a[0]) + 1);
     expect(n(b[0])).toBe(n(a[1]) + 1);
+  });
+});
+
+describe("POST /api/receipts/batch with delivery plans", () => {
+  const plan = (over: Record<string, unknown> = {}) => createDeliveryPlan({
+    supplierName: "BATCHTEST Plan Supplier", supplierCode: "LBA-BATCH", expectedQuantityKg: 60000, expectedTrucks: 3,
+    expectedArrivalDate: "2026-09-30", destinationWarehouse: "BOUAKE", ...over,
+  });
+  const planned = (n: number, code = "LBA-BATCH") => truck(n, { "n-verify": { "SUPPLIERS NAME": "Batch Supplier", "LBA CODE": code, FICHE: `F-${n}` } });
+  let planId: string;
+
+  beforeAll(async () => { planId = (await plan()).id; });
+
+  it("opens the chosen rows already linked to the plan, planned from the start, and the plan counts them", async () => {
+    const res = await post("wi", { rows: [planned(40), planned(41), planned(42)], deliveryPlanIds: [planId, planId, null] });
+    expect(res.statusCode).toBe(201);
+    const [a, b, c] = res.json().ids as string[];
+    const get = async (id: string) => prisma.receipt.findUniqueOrThrow({ where: { id } });
+    expect(await get(a)).toMatchObject({ deliveryPlanId: planId, deliveryPlanLinkedAt: null });
+    expect((await get(b)).deliveryPlanId).toBe(planId);
+    expect((await get(c)).deliveryPlanId).toBeNull(); // a row with no plan stays unplanned: it can still arrive that way
+
+    const info = (await app.inject({ method: "GET", url: `/api/receipts/${a}/plan-info`, headers: { cookie: cookies.wi } })).json();
+    expect(info).toMatchObject({ deliveryPlanId: planId, planLinkStatus: "planned_from_start" });
+    expect((await app.inject({ method: "GET", url: `/api/delivery-plans/${planId}`, headers: { cookie: cookies.wi } })).json().progress.arrivals).toBe(2);
+  });
+
+  it("a plan alone fills in the supplier the row left blank, as opening a truck from the plan does", async () => {
+    const res = await post("wi", { rows: [{ "n-gate": { "VEHICLE NO.": `${VEHICLE}43` } }], deliveryPlanIds: [planId] });
+    expect(res.statusCode).toBe(201);
+    expect(await prisma.receipt.findUniqueOrThrow({ where: { id: res.json().ids[0] } })).toMatchObject({ deliveryPlanId: planId, lbaCode: "LBA-BATCH", supplierName: "BATCHTEST Plan Supplier" });
+  });
+
+  it("is still all-or-nothing: a row whose plan doesn't fit rejects the whole batch and names the row", async () => {
+    const before = (await batchReceipts()).length;
+    const wrongSupplier = await post("wi", { rows: [planned(50), planned(51, "LBA-OTHER")], deliveryPlanIds: [planId, planId] });
+    expect(wrongSupplier.statusCode).toBe(422);
+    expect(wrongSupplier.json().error).toMatch(/^Row 2: Delivery plan .* is for supplier LBA-BATCH, not LBA-OTHER/);
+
+    const otherSite = await plan({ destinationWarehouse: "YAKRO FACTORY" });
+    const wrongSite = await post("wi", { rows: [planned(52), planned(53)], deliveryPlanIds: [null, otherSite.id] });
+    expect(wrongSite.statusCode).toBe(422);
+    expect(wrongSite.json().error).toMatch(/^Row 2: Delivery plan .* is for YAKRO FACTORY, not BOUAKE/);
+
+    const missing = await post("wi", { rows: [planned(54)], deliveryPlanIds: ["DP-NOPE-2026-999"] });
+    expect(missing.statusCode).toBe(422);
+    expect(missing.json().error).toMatch(/Row 1: delivery plan DP-NOPE-2026-999 doesn't exist/);
+    expect((await batchReceipts()).length).toBe(before);
+  });
+
+  it("needs one plan entry per truck, and with none at all behaves as before", async () => {
+    expect((await post("wi", { rows: [planned(60), planned(61)], deliveryPlanIds: [planId] })).statusCode).toBe(422);
+    const res = await post("wi", { rows: [planned(62)] });
+    expect(res.statusCode).toBe(201);
+    expect((await prisma.receipt.findUniqueOrThrow({ where: { id: res.json().ids[0] } })).deliveryPlanId).toBeNull();
   });
 });

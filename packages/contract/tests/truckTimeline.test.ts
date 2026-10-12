@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { truckTimeline } from "../src/domain/truckTimeline";
+import { truckTimeline, journeyFromStatus } from "../src/domain/truckTimeline";
 import type { ReceiptRecord } from "../src/types/receipt";
 
 const base = (over: Partial<ReceiptRecord> = {}): ReceiptRecord => ({
@@ -44,5 +44,31 @@ describe("truck timeline", () => {
     expect(steps.find((s) => s.id === "unloaded")).toMatchObject({ at: "2026-09-03", atKind: "entered" });
     expect(steps.find((s) => s.id === "lot")).toMatchObject({ detail: "LOT-BKE-2026-0001", atKind: "recorded" });
     expect(steps.find((s) => s.id === "grn")?.detail).toMatch(/24.350 kg/);
+  });
+});
+
+describe("journey from status", () => {
+  const states = (status: Parameters<typeof journeyFromStatus>[0]) => journeyFromStatus(status).map((s) => s.state);
+
+  it("a truck not yet at the gate has done nothing and is waiting for its arrival", () => {
+    expect(states("planned")).toEqual(["next", "todo", "todo", "todo", "todo"]);
+  });
+
+  it("walks forward one step per status, always exactly one 'next' until the end", () => {
+    expect(states("arrived")).toEqual(["done", "next", "todo", "todo", "todo"]);
+    expect(states("pending_qa")).toEqual(["done", "next", "todo", "todo", "todo"]);
+    expect(states("pending_unload")).toEqual(["done", "done", "next", "todo", "todo"]);
+    expect(states("unloaded")).toEqual(["done", "done", "done", "next", "todo"]);
+    expect(states("grn_completed")).toEqual(["done", "done", "done", "done", "next"]);
+    expect(states("in_stock")).toEqual(["done", "done", "done", "done", "done"]);
+  });
+
+  it("a truck beyond stock (drying, transferred out) has every step done", () => {
+    expect(states("in_drying")).toEqual(["done", "done", "done", "done", "done"]);
+    expect(states("transferred_out")).toEqual(["done", "done", "done", "done", "done"]);
+  });
+
+  it("a rejected truck stops at Quality with a cross, and the steps after it are n/a, not 'next'", () => {
+    expect(states("rejected")).toEqual(["done", "rejected", "na", "na", "na"]);
   });
 });
