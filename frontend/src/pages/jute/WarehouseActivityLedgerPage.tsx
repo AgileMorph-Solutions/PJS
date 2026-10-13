@@ -20,13 +20,13 @@ export function WarehouseActivityLedgerPage() {
   const [detail, setDetail] = useState<WarehouseActivityLedgerEntry | null>(null);
 
   const columns: Column<WarehouseActivityLedgerEntry>[] = [
-    { label: "Date", render: (r) => r.activityDate || r.activityDateRaw || "-" },
-    { label: "Activity type", render: (r) => r.activityType || "-" },
-    { label: "Particulars", render: (r) => r.particulars || "-" },
-    { label: "Fiche No.", render: (r) => r.ficheNo || "-" },
-    { label: "Lot No.", render: (r) => r.lotNo || "-" },
-    { label: "Bags", render: (r) => r.bags || "-" },
-    { label: "Vendor", render: (r) => r.vendor || "-" },
+    { label: "Date", filter: { value: (r) => r.activityDate || r.activityDateRaw, kind: "date" }, render: (r) => r.activityDate || r.activityDateRaw || "-" },
+    { label: "Activity type", filter: { value: (r) => r.activityType }, render: (r) => r.activityType || "-" },
+    { label: "Particulars", filter: { value: (r) => r.particulars, kind: "text" }, render: (r) => r.particulars || "-" },
+    { label: "Fiche No.", filter: { value: (r) => r.ficheNo, kind: "text" }, render: (r) => r.ficheNo || "-" },
+    { label: "Lot No.", filter: { value: (r) => r.lotNo, kind: "text" }, render: (r) => r.lotNo || "-" },
+    { label: "Bags", filter: { value: (r) => r.bags, kind: "number" }, render: (r) => r.bags || "-" },
+    { label: "Vendor", filter: { value: (r) => r.vendor }, render: (r) => r.vendor || "-" },
     {
       label: "",
       render: (r) => (

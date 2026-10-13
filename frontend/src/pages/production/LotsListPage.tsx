@@ -34,10 +34,10 @@ export function LotsListPage() {
   }
 
   const columns: Column<ProductionLot>[] = [
-    { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.lotNo}</span> },
-    { label: "Bin", render: (r) => r.binNo },
-    { label: "Source", render: (r) => r.source ?? "-" },
-    { label: "Created", render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "Lot No", filter: { value: (r) => r.lotNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.lotNo}</span> },
+    { label: "Bin", filter: { value: (r) => r.binNo }, render: (r) => r.binNo },
+    { label: "Source", filter: { value: (r) => r.source }, render: (r) => r.source ?? "-" },
+    { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
 
   const dateFilter = useDateRangeFilter(rows, (r) => r.createdAt?.slice(0, 10));

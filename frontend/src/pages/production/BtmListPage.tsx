@@ -36,10 +36,10 @@ export function BtmListPage() {
   }
 
   const columns: Column<BtmIntake>[] = [
-    { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.btmNo}</span> },
-    { label: "Destination Bin", render: (r) => r.binNo },
-    { label: "Source", render: (r) => r.source ?? "-" },
-    { label: "Recorded", render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "BTM No", filter: { value: (r) => r.btmNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.btmNo}</span> },
+    { label: "Destination Bin", filter: { value: (r) => r.binNo }, render: (r) => r.binNo },
+    { label: "Source", filter: { value: (r) => r.source }, render: (r) => r.source ?? "-" },
+    { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
 
   const dateFilter = useDateRangeFilter(rows, (r) => r.createdAt?.slice(0, 10));

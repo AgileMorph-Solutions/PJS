@@ -76,18 +76,18 @@ export function SuppliersPage() {
 
   const columns: Column<Supplier>[] = [
     {
-      label: "LBA Code", nowrap: true,
+      label: "LBA Code", filter: { value: (s) => s.code, kind: "text" }, nowrap: true,
       render: (s) => editing === s.code
         ? <input aria-label="LBA code" value={editCode} onChange={(e) => setEditCode(e.target.value)} className={`${inputCls} font-mono`} />
         : <span className="font-mono text-[12.5px]">{s.code}</span>,
     },
     {
-      label: "Supplier name",
+      label: "Supplier name", filter: { value: (s) => s.name, kind: "text" },
       render: (s) => editing === s.code
         ? <input aria-label="Supplier name" autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} className={inputCls} />
         : <span>{s.name}</span>,
     },
-    { label: "Status", nowrap: true, render: (s) => (s.active === false ? <Pill tone="gap" label="Switched off" /> : <Pill tone="entry" label="Active" />) },
+    { label: "Status", filter: { value: (s) => s.active === false ? "Switched off" : "Active", kind: "select" }, nowrap: true, render: (s) => (s.active === false ? <Pill tone="gap" label="Switched off" /> : <Pill tone="entry" label="Active" />) },
     {
       label: "", nowrap: true,
       render: (s) => editing === s.code ? (

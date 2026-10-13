@@ -28,13 +28,13 @@ export function IssuedToProductionPage() {
   );
 
   const columns: Column<IssuedToProductionRow>[] = [
-    { label: "BTM No.", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "-"}</span> },
-    { label: "Date", render: (r) => r.date || "-" },
-    { label: "Source Bin", render: (r) => r.sourceBin || "-" },
-    { label: "Dry Bin", render: (r) => r.dryBin || "-" },
-    { label: "Bin Status", render: (r) => r.binStatus || "-" },
-    { label: "Bags issued", render: (r) => r.noOfBagIssuedToProduction || "-" },
-    { label: "Moisture", render: (r) => r.moisture || "-" },
+    { label: "BTM No.", filter: { value: (r) => r.btmNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "-"}</span> },
+    { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => r.date || "-" },
+    { label: "Source Bin", filter: { value: (r) => r.sourceBin }, render: (r) => r.sourceBin || "-" },
+    { label: "Dry Bin", filter: { value: (r) => r.dryBin }, render: (r) => r.dryBin || "-" },
+    { label: "Bin Status", filter: { value: (r) => r.binStatus }, render: (r) => r.binStatus || "-" },
+    { label: "Bags issued", filter: { value: (r) => r.noOfBagIssuedToProduction, kind: "number" }, render: (r) => r.noOfBagIssuedToProduction || "-" },
+    { label: "Moisture", filter: { value: (r) => r.moisture, kind: "number" }, render: (r) => r.moisture || "-" },
     {
       label: "",
       render: (r) => (

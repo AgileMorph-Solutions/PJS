@@ -6,6 +6,7 @@ import { KpiTile } from "../../components/ui/KpiTile";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { Pill } from "../../components/ui/Pill";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
+import { STATUS_LABELS } from "../../domain/receiptStatus";
 import { TruckStepTracker } from "../../components/receipt/TruckStepTracker";
 import { APPROVAL, PlanFlagList, RECEPTION_TYPE } from "../../components/receipt/PlanBadges";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
@@ -71,19 +72,19 @@ export function DeliveryPlanDetailPage() {
   const done = plan.trucks.filter((t) => DONE.has(t.status)).length;
   const inProgress = plan.trucks.filter((t) => !t.rejected && !DONE.has(t.status)).length;
   const columns: Column<DeliveryPlanTruck>[] = [
-    { label: "Receipt", nowrap: true, render: (t) => <Link to={`/${site.slug}/receipts/${t.receiptId}`} className="font-mono text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">{t.receiptId}</Link> },
-    { label: "Arrived", nowrap: true, render: (t) => t.arrivalDate },
-    { label: "Truck", nowrap: true, render: (t) => t.vehicleNo || "-" },
+    { label: "Receipt", filter: { value: (t) => t.receiptId, kind: "text" }, nowrap: true, render: (t) => <Link to={`/${site.slug}/receipts/${t.receiptId}`} className="font-mono text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">{t.receiptId}</Link> },
+    { label: "Arrived", filter: { value: (t) => t.arrivalDate, kind: "date" }, nowrap: true, render: (t) => t.arrivalDate },
+    { label: "Truck", filter: { value: (t) => t.vehicleNo, kind: "text" }, nowrap: true, render: (t) => t.vehicleNo || "-" },
     { label: "Steps", render: (t) => <TruckStepTracker status={t.status} /> },
-    { label: "Outcome", render: (t) => (
+    { label: "Outcome", filter: { value: (t) => STATUS_LABELS[t.status], kind: "select" }, render: (t) => (
       <span className="inline-flex flex-col items-start gap-1">
         <ReceiptStatusPill status={t.status} />
         {t.rejected && <span className="text-[11.5px] text-danger-700 whitespace-normal max-w-[16rem]">{t.rejectionReason ?? "No reason recorded"}</span>}
       </span>
     ) },
-    { label: "GRN (kg)", nowrap: true, render: (t) => (t.rejected ? "-" : t.grnKg === null ? <span className="text-warmstone-400">awaiting GRN</span> : kg(t.grnKg)) },
-    { label: "Lot", nowrap: true, render: (t) => t.lotNo ?? "-" },
-    { label: "Against the plan", render: (t) => (
+    { label: "GRN (kg)", filter: { value: (t) => t.grnKg, kind: "number" }, nowrap: true, render: (t) => (t.rejected ? "-" : t.grnKg === null ? <span className="text-warmstone-400">awaiting GRN</span> : kg(t.grnKg)) },
+    { label: "Lot", filter: { value: (t) => t.lotNo, kind: "text" }, nowrap: true, render: (t) => t.lotNo ?? "-" },
+    { label: "Against the plan", filter: { value: (t) => RECEPTION_TYPE[t.type].label, kind: "select" }, render: (t) => (
       <span className="inline-flex flex-col items-start gap-1">
         <Pill tone={RECEPTION_TYPE[t.type].tone} label={RECEPTION_TYPE[t.type].label} />
         <PlanFlagList flags={t.flags} />

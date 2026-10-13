@@ -40,6 +40,8 @@ export function ProductionTableBody({ fields, idPrefix, load, onSubmit, submitLa
 
   const columns: Column<Row>[] = fields.map((f) => ({
     label: f.n,
+    // Every column of a production table is filterable; few distinct values make a checklist, otherwise a text box.
+    filter: { value: (row) => { const v = row[f.col]; return v === null || v === undefined ? null : String(v); } },
     render: (row) => {
       const v = row[f.col];
       return v === null || v === undefined || v === "" ? "-" : String(v);

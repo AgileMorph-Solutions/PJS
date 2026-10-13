@@ -34,14 +34,14 @@ export function MySuppliersPage() {
   }
 
   const supplierCols: Column<Supplier>[] = [
-    { label: "LBA Code", render: (s) => <span className="font-mono text-[12.5px]">{s.code}</span> },
-    { label: "Supplier name", render: (s) => s.name },
+    { label: "LBA Code", filter: { value: (s) => s.code, kind: "text" }, render: (s) => <span className="font-mono text-[12.5px]">{s.code}</span> },
+    { label: "Supplier name", filter: { value: (s) => s.name, kind: "text" }, render: (s) => s.name },
   ];
   const requestCols: Column<SupplierRequestView>[] = [
-    { label: "Supplier", render: (r) => r.name },
-    { label: "LBA Code", render: (r) => r.code ?? "-" },
-    { label: "Status", render: (r) => <Pill tone={TONE[r.status]} label={r.status} /> },
-    { label: "Note", render: (r) => r.reason ?? "" },
+    { label: "Supplier", filter: { value: (r) => r.name, kind: "text" }, render: (r) => r.name },
+    { label: "LBA Code", filter: { value: (r) => r.code, kind: "text" }, render: (r) => r.code ?? "-" },
+    { label: "Status", filter: { value: (r) => r.status, kind: "select" }, render: (r) => <Pill tone={TONE[r.status]} label={r.status} /> },
+    { label: "Note", filter: { value: (r) => r.reason, kind: "text" }, render: (r) => r.reason ?? "" },
   ];
 
   return (

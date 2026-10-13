@@ -29,10 +29,10 @@ export function BinDetailPage() {
   const rows = status ? search.filtered.filter((r) => deriveStatus(r) === status) : search.filtered;
 
   const columns: Column<ReceiptRecord>[] = [
-    { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo || r.id}</span> },
-    { label: "Supplier", render: (r) => normalizeSupplierName(r.supplierName) || "-" },
-    { label: "Vehicle", render: (r) => r.vehicleNo || "-" },
-    { label: "Status", render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
+    { label: "Lot No", filter: { value: (r) => r.lotNo || r.id, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo || r.id}</span> },
+    { label: "Supplier", filter: { value: (r) => normalizeSupplierName(r.supplierName) }, render: (r) => normalizeSupplierName(r.supplierName) || "-" },
+    { label: "Vehicle", filter: { value: (r) => r.vehicleNo, kind: "text" }, render: (r) => r.vehicleNo || "-" },
+    { label: "Status", filter: { value: (r) => STATUS_LABELS[deriveStatus(r)], kind: "select" }, render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
   ];
 
   return (

@@ -4,8 +4,8 @@ import type { SiteSlug } from "../../config/sites";
 import type { DownstreamStatus } from "../../repository/api";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { DownstreamStatusChips } from "../../components/DownstreamStatusChips";
-import { ReceptionTypePill } from "../../components/receipt/PlanBadges";
-import { deriveStatus } from "../../domain/receiptStatus";
+import { ReceptionTypePill, RECEPTION_TYPE } from "../../components/receipt/PlanBadges";
+import { deriveStatus, STATUS_LABELS } from "../../domain/receiptStatus";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 
 /** The real per-truck paperwork, straight from the OFFLOADINGS sheet's "Verify supplier documents"
@@ -30,16 +30,16 @@ const Stack = ({ main, sub, mono }: { main: string; sub?: string; mono?: boolean
   </div>
 );
 
-const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
-const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", nowrap: true, render: (r) => r.arrivalDate || "-" };
-const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", render: (r) => <Stack main={normalizeSupplierName(r.supplierName)} sub={r.lbaCode} /> };
+const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", filter: { value: (r) => r.id, kind: "text" }, nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
+const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", filter: { value: (r) => r.arrivalDate, kind: "date" }, nowrap: true, render: (r) => r.arrivalDate || "-" };
+const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", filter: { value: (r) => `${normalizeSupplierName(r.supplierName)} ${r.lbaCode}`, kind: "text" }, render: (r) => <Stack main={normalizeSupplierName(r.supplierName)} sub={r.lbaCode} /> };
 const ficheColumn: Column<ReceiptRecord> = {
-  label: "Fiche",
+  label: "Fiche", filter: { value: (r) => `${fiche(r)} ${verifyField(r, "FICHE CODE")}`, kind: "text" },
   nowrap: true,
   render: (r) => <Stack mono main={fiche(r)} sub={[verifyField(r, "FICHE CODE"), verifyField(r, "REF.")].filter(Boolean).join(" · ")} />,
 };
 const vehicleColumn = (withStore: boolean): Column<ReceiptRecord> => ({
-  label: withStore ? "Vehicle / Store" : "Vehicle",
+  label: withStore ? "Vehicle / Store" : "Vehicle", filter: { value: (r) => `${r.vehicleNo} ${withStore ? storeCode(r) : ""}`, kind: "text" },
   nowrap: true,
   render: (r) => <Stack main={r.vehicleNo} sub={withStore ? storeCode(r) : undefined} />,
 });
@@ -49,19 +49,19 @@ const vehicleColumn = (withStore: boolean): Column<ReceiptRecord> => ({
  * here instead. A factory rather than a static column list because the map is only known at render
  * time (see DownstreamStatusChips's own header). */
 const downstreamColumn = (status: Map<string, DownstreamStatus>): Column<ReceiptRecord> => ({
-  label: "Downstream",
+  label: "Downstream", filter: { value: (r) => [status.get(r.id)?.dispatched && "Dispatched", status.get(r.id)?.received && "Received", status.get(r.id)?.dried && "Dried", status.get(r.id)?.issued && "Issued"].filter(Boolean).join(" "), kind: "text" },
   render: (r) => <DownstreamStatusChips status={status.get(r.id)} />,
 });
 
 /** Planned / planned with exception / unplanned — only built when the viewer can read plan info (Incharge, admin). */
 const planColumn = (info: Map<string, ReceiptPlanInfo>): Column<ReceiptRecord> => ({
-  label: "Plan",
+  label: "Plan", filter: { value: (r) => info.get(r.id) ? RECEPTION_TYPE[info.get(r.id)!.type].label : null, kind: "select" },
   nowrap: true,
   render: (r) => <ReceptionTypePill info={info.get(r.id)} />,
 });
 
 const sourceColumn: Column<ReceiptRecord> = {
-  label: "Source",
+  label: "Source", filter: { value: (r) => r.source, kind: "select" },
   render: (r) => (
     <span
       className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -74,8 +74,8 @@ const sourceColumn: Column<ReceiptRecord> = {
 };
 
 const tailColumns: Column<ReceiptRecord>[] = [
-  { label: "Lot / Bin", nowrap: true, render: (r) => <Stack mono main={r.lotNo ?? ""} sub={r.binNo} /> },
-  { label: "Status", nowrap: true, render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
+  { label: "Lot / Bin", filter: { value: (r) => `${r.lotNo ?? ""} ${r.binNo ?? ""}`, kind: "text" }, nowrap: true, render: (r) => <Stack mono main={r.lotNo ?? ""} sub={r.binNo} /> },
+  { label: "Status", filter: { value: (r) => STATUS_LABELS[deriveStatus(r)], kind: "select" }, nowrap: true, render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
 ];
 
 /**

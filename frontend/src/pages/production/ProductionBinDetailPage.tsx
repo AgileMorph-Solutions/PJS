@@ -65,19 +65,19 @@ export function ProductionBinDetailPage() {
   });
 
   const btmColumns: Column<BtmIntake>[] = [
-    { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo}</span> },
-    { label: "Recorded", render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "BTM No", filter: { value: (r) => r.btmNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo}</span> },
+    { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
   const lotColumns: Column<ProductionLot>[] = [
-    { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo}</span> },
-    { label: "Created", render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "Lot No", filter: { value: (r) => r.lotNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo}</span> },
+    { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
   const stockColumns: Column<BinStockRow>[] = [
-    { label: "Date", render: (r) => r.date },
-    { label: "Type", render: (r) => r.movement_type },
-    { label: "In", render: (r) => r.qty_in },
-    { label: "Out", render: (r) => r.qty_out },
-    { label: "Running balance", render: (r) => <span className="font-semibold tabular-nums">{r.running_balance}</span> },
+    { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => r.date },
+    { label: "Type", filter: { value: (r) => r.movement_type }, render: (r) => r.movement_type },
+    { label: "In", filter: { value: (r) => r.qty_in, kind: "number" }, render: (r) => r.qty_in },
+    { label: "Out", filter: { value: (r) => r.qty_out, kind: "number" }, render: (r) => r.qty_out },
+    { label: "Running balance", filter: { value: (r) => r.running_balance, kind: "number" }, render: (r) => <span className="font-semibold tabular-nums">{r.running_balance}</span> },
   ];
 
   return (

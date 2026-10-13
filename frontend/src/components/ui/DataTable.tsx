@@ -1,8 +1,10 @@
-import type { ReactNode, KeyboardEvent, MouseEvent } from "react";
+import { useMemo, useState, type ReactNode, type KeyboardEvent, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState } from "./EmptyState";
 import { usePagination } from "./usePagination";
 import { Pagination } from "./Pagination";
+import { ColumnFilterMenu } from "./ColumnFilterMenu";
+import { applyFilters, distinctValues, isActive, resolveKind, type ActiveFilter, type ColumnFilter, type FilterKind } from "./columnFilters";
 
 export interface Column<T> {
   label: string;
@@ -13,6 +15,9 @@ export interface Column<T> {
   nowrap?: boolean;
   /** Numbers and kg read best lined up on the right. */
   align?: "right";
+  /** Makes the column filterable (a funnel in its header). `render()` returns JSX that can't be read back as
+   * text, so say what to filter on: `{ value: (row) => row.status }`, and `kind: "number" | "date"` for ranges. */
+  filter?: ColumnFilter<T>;
 }
 
 interface Props<T> {
@@ -35,7 +40,24 @@ const fromControl = (e: MouseEvent | KeyboardEvent) =>
 
 export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyTitle, emptyHint }: Props<T>) {
   const navigate = useNavigate();
-  const page = usePagination(rows);
+  const [active, setActive] = useState<Record<string, ActiveFilter>>({});
+  // How each filterable column filters (a checklist, text, a range), decided once per set of rows rather than on every keystroke.
+  const kinds = useMemo(() => {
+    const out: Record<string, FilterKind> = {};
+    for (const c of columns) if (c.filter) out[c.label] = resolveKind(c.filter, rows);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, columns.map((c) => c.label).join("|")]);
+  const options = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const c of columns) if (c.filter && kinds[c.label] === "select") out[c.label] = distinctValues(c.filter, rows);
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, kinds]);
+  const shownRows = useMemo(() => applyFilters(rows, columns, active, kinds), [rows, columns, active, kinds]);
+  const page = usePagination(shownRows);
+  const activeCount = columns.filter((c) => c.filter && isActive(active[c.label])).length;
+  const hasFilters = columns.some((c) => c.filter);
 
   if (rows.length === 0) {
     return <EmptyState title={emptyTitle ?? "Nothing here yet"} hint={emptyHint} />;
@@ -52,6 +74,15 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
 
   return (
     <div className="overflow-x-auto bg-white border border-warmstone-200 rounded-2xl shadow-xs">
+      {activeCount > 0 && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-brand-50/60 border-b border-brand-100 text-[12.5px]">
+          <span className="text-warmstone-700">
+            Showing <b className="tabular-nums">{shownRows.length.toLocaleString()}</b> of <b className="tabular-nums">{rows.length.toLocaleString()}</b>
+            {" "}· {activeCount} filter{activeCount === 1 ? "" : "s"} on
+          </span>
+          <button type="button" onClick={() => setActive({})} className="font-semibold text-brand-700 hover:text-brand-800">Clear filters</button>
+        </div>
+      )}
       <table className="w-full text-[13px] border-collapse">
         <thead className="sticky top-0 z-10">
           <tr className="bg-warmstone-50 border-b border-warmstone-200">
@@ -61,13 +92,29 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
                 style={c.width ? { width: c.width } : undefined}
                 className={`${align(c)} px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap`}
               >
-                {c.label}
+                <span className={`inline-flex items-center gap-1 ${c.align === "right" ? "flex-row-reverse" : ""}`}>
+                  {c.label}
+                  {c.filter && (
+                    <ColumnFilterMenu
+                      label={c.label} kind={kinds[c.label] ?? "text"} options={options[c.label] ?? []}
+                      value={active[c.label]} onChange={(next) => setActive((prev) => ({ ...prev, [c.label]: next }))}
+                    />
+                  )}
+                </span>
               </th>
             ))}
             {anyClickable && <th aria-hidden className="w-8" />}
           </tr>
         </thead>
         <tbody>
+          {hasFilters && shownRows.length === 0 && (
+            <tr>
+              <td colSpan={columns.length + (anyClickable ? 1 : 0)} className="px-4 py-10 text-center text-[13px] text-warmstone-500">
+                No rows match these filters.{" "}
+                <button type="button" onClick={() => setActive({})} className="font-semibold text-brand-700 hover:text-brand-800">Clear filters</button>
+              </td>
+            </tr>
+          )}
           {page.pageRows.map((row) => {
             const action = actionFor(row);
             return (

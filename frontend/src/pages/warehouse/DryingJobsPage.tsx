@@ -69,26 +69,26 @@ export function DryingJobsPage() {
   }, [receipts]);
 
   const batchColumns: Column<DryingBatch>[] = [
-    { label: "Batch ID", render: (b) => <span className="font-mono text-[12.5px]">{b.sn}</span> },
-    { label: "Date", render: (b) => b.dryingDate || b.dryingDateRaw || "-" },
-    { label: "Warehouse", render: (b) => b.warehouse || b.warehouseSite || "-" },
-    { label: "Lot No", render: (b) => b.lotNo || b.lotNoRaw || "-" },
-    { label: "Fiche No", render: (b) => b.ficheNoRaw || "-" },
-    { label: "Dry type", render: (b) => b.dryType || "-" },
-    { label: "Destination", render: (b) => b.destinationRaw || "-" },
-    { label: "Status", render: (b) => b.status || "-" },
+    { label: "Batch ID", filter: { value: (b) => b.sn, kind: "number" }, render: (b) => <span className="font-mono text-[12.5px]">{b.sn}</span> },
+    { label: "Date", filter: { value: (b) => b.dryingDate || b.dryingDateRaw, kind: "date" }, render: (b) => b.dryingDate || b.dryingDateRaw || "-" },
+    { label: "Warehouse", filter: { value: (b) => b.warehouse || b.warehouseSite }, render: (b) => b.warehouse || b.warehouseSite || "-" },
+    { label: "Lot No", filter: { value: (b) => b.lotNo || b.lotNoRaw, kind: "text" }, render: (b) => b.lotNo || b.lotNoRaw || "-" },
+    { label: "Fiche No", filter: { value: (b) => b.ficheNoRaw, kind: "text" }, render: (b) => b.ficheNoRaw || "-" },
+    { label: "Dry type", filter: { value: (b) => b.dryType }, render: (b) => b.dryType || "-" },
+    { label: "Destination", filter: { value: (b) => b.destinationRaw }, render: (b) => b.destinationRaw || "-" },
+    { label: "Status", filter: { value: (b) => b.status }, render: (b) => b.status || "-" },
     { label: "", render: (b) => <ViewAllFieldsButton onClick={() => setDetailBatch(b)} /> },
   ];
 
   const reportColumns: Column<DryingSortingReport>[] = [
-    { label: "S.No.", render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "-"}</span> },
-    { label: "Date", render: (r) => r.dryingDate || r.dryingDateRaw || "-" },
-    { label: "Lot No", render: (r) => r.lotNo || r.lotNoRaw || "-" },
-    { label: "Supplier", render: (r) => normalizeSupplierName(r.supplierName) || "-" },
-    { label: "Issued net wt (GRN)", render: (r) => r.issuedNetWeightGrn ?? "-" },
-    { label: "Received net wt", render: (r) => r.receivedNetWeightAfterDrying ?? "-" },
-    { label: "Input moisture", render: (r) => r.inputMoisture ?? "-" },
-    { label: "Output moisture", render: (r) => r.outputMoisture ?? "-" },
+    { label: "S.No.", filter: { value: (r) => r.sn, kind: "number" }, render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "-"}</span> },
+    { label: "Date", filter: { value: (r) => r.dryingDate || r.dryingDateRaw, kind: "date" }, render: (r) => r.dryingDate || r.dryingDateRaw || "-" },
+    { label: "Lot No", filter: { value: (r) => r.lotNo || r.lotNoRaw, kind: "text" }, render: (r) => r.lotNo || r.lotNoRaw || "-" },
+    { label: "Supplier", filter: { value: (r) => normalizeSupplierName(r.supplierName) }, render: (r) => normalizeSupplierName(r.supplierName) || "-" },
+    { label: "Issued net wt (GRN)", filter: { value: (r) => r.issuedNetWeightGrn, kind: "number" }, render: (r) => r.issuedNetWeightGrn ?? "-" },
+    { label: "Received net wt", filter: { value: (r) => r.receivedNetWeightAfterDrying, kind: "number" }, render: (r) => r.receivedNetWeightAfterDrying ?? "-" },
+    { label: "Input moisture", filter: { value: (r) => r.inputMoisture, kind: "number" }, render: (r) => r.inputMoisture ?? "-" },
+    { label: "Output moisture", filter: { value: (r) => r.outputMoisture, kind: "number" }, render: (r) => r.outputMoisture ?? "-" },
     { label: "", render: (r) => <ViewAllFieldsButton onClick={() => setDetailReport(r)} /> },
   ];
 

@@ -124,18 +124,18 @@ export function TransfersPage() {
       : <span key={l.receiptId} className="font-mono text-[11.5px] text-warmstone-700">{l.lotNumber ?? l.receiptId}</span>;
 
   const columns: Column<TransferRequest>[] = [
-    { label: "BKT", nowrap: true, render: (t) => <span className="font-mono text-[12.5px]">{t.id}</span> },
-    { label: "Date", nowrap: true, render: (t) => t.transferDate },
-    { label: "From → To", render: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` },
-    { label: "Truck", nowrap: true, render: (t) => t.truckNo ?? <span className="text-warmstone-300">not sent yet</span> },
-    { label: "Lots", render: (t) => <span className="flex flex-wrap gap-x-2 gap-y-0.5">{t.lines.map(lotLink)}</span> },
-    { label: "Bags sent", nowrap: true, render: (t) => n(t.variance.bagsDispatched) },
-    { label: "Bags received", nowrap: true, render: (t) => n(t.variance.bagsReceived) },
-    { label: "Bag variance", nowrap: true, render: (t) => n(t.variance.bagVariance, true) },
-    { label: "Net sent (kg)", nowrap: true, render: (t) => n(t.variance.netDispatchedKg) },
-    { label: "Net arrived (kg)", nowrap: true, render: (t) => n(t.variance.netAtArrivalKg) },
-    { label: "Weight variance (kg)", nowrap: true, render: (t) => n(t.variance.weightVarianceKg, true) },
-    { label: "Status", nowrap: true, render: (t) => <Pill tone={TONE[t.state]} label={TRANSFER_STATE_LABELS[t.state]} /> },
+    { label: "BKT", filter: { value: (t) => t.id, kind: "text" }, nowrap: true, render: (t) => <span className="font-mono text-[12.5px]">{t.id}</span> },
+    { label: "Date", filter: { value: (t) => t.transferDate, kind: "date" }, nowrap: true, render: (t) => t.transferDate },
+    { label: "From → To", filter: { value: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` }, render: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` },
+    { label: "Truck", filter: { value: (t) => t.truckNo, kind: "text" }, nowrap: true, render: (t) => t.truckNo ?? <span className="text-warmstone-300">not sent yet</span> },
+    { label: "Lots", filter: { value: (t) => t.lines.map((l) => l.lotNumber ?? "").join(" "), kind: "text" }, render: (t) => <span className="flex flex-wrap gap-x-2 gap-y-0.5">{t.lines.map(lotLink)}</span> },
+    { label: "Bags sent", filter: { value: (t) => t.variance.bagsDispatched, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagsDispatched) },
+    { label: "Bags received", filter: { value: (t) => t.variance.bagsReceived, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagsReceived) },
+    { label: "Bag variance", filter: { value: (t) => t.variance.bagVariance, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagVariance, true) },
+    { label: "Net sent (kg)", filter: { value: (t) => t.variance.netDispatchedKg, kind: "number" }, nowrap: true, render: (t) => n(t.variance.netDispatchedKg) },
+    { label: "Net arrived (kg)", filter: { value: (t) => t.variance.netAtArrivalKg, kind: "number" }, nowrap: true, render: (t) => n(t.variance.netAtArrivalKg) },
+    { label: "Weight variance (kg)", filter: { value: (t) => t.variance.weightVarianceKg, kind: "number" }, nowrap: true, render: (t) => n(t.variance.weightVarianceKg, true) },
+    { label: "Status", filter: { value: (t) => TRANSFER_STATE_LABELS[t.state], kind: "select" }, nowrap: true, render: (t) => <Pill tone={TONE[t.state]} label={TRANSFER_STATE_LABELS[t.state]} /> },
     {
       label: "",
       render: (t) => (

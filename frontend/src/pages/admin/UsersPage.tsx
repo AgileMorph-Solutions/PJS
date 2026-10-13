@@ -51,15 +51,15 @@ export function UsersPage() {
   }
 
   const columns: Column<UserView>[] = [
-    { label: "Name", render: (u) => <div><div className="font-semibold">{u.displayName}</div><div className="text-[11.5px] text-warmstone-500">{u.username}</div></div> },
-    { label: "Role", render: (u) => ROLE_LABEL[u.role] },
+    { label: "Name", filter: { value: (u) => `${u.displayName} ${u.username}`, kind: "text" }, render: (u) => <div><div className="font-semibold">{u.displayName}</div><div className="text-[11.5px] text-warmstone-500">{u.username}</div></div> },
+    { label: "Role", filter: { value: (u) => ROLE_LABEL[u.role], kind: "select" }, render: (u) => ROLE_LABEL[u.role] },
     {
-      label: "Warehouse",
+      label: "Warehouse", filter: { value: (u) => u.warehouse ?? "All", kind: "select" },
       render: (u) => u.warehouse
         ? <span>{u.warehouse} <span className="text-warmstone-400">· {u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "untyped"}</span></span>
         : <span className="text-warmstone-400">All</span>,
     },
-    { label: "Status", render: (u) => <Pill tone={u.active ? "entry" : "gap"} label={u.active ? "Active" : "Deactivated"} /> },
+    { label: "Status", filter: { value: (u) => u.active ? "Active" : "Deactivated", kind: "select" }, render: (u) => <Pill tone={u.active ? "entry" : "gap"} label={u.active ? "Active" : "Deactivated"} /> },
     {
       label: "",
       render: (u) => (

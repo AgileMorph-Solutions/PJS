@@ -32,13 +32,13 @@ export function StockPage() {
   );
 
   const dischargeColumns: Column<WarehouseDischargeRow>[] = [
-    { label: "SN", render: (d) => <span className="font-mono text-[12.5px]">{d.sn}</span> },
-    { label: "Lot No", render: (d) => <span className="font-mono text-[12.5px]">{d.lotNo}</span> },
-    { label: "Warehouse", render: (d) => d.warehouseSite },
-    { label: "Fiche CCA", render: (d) => <span className="font-mono text-[12.5px]">{d.ficheCca}</span> },
-    { label: "Arrival date", render: (d) => d.arrivalDate || d.arrivalDateRaw || "-" },
-    { label: "Discharge date", render: (d) => d.dischargeDate || d.dischargeDateRaw || "-" },
-    { label: "Total recd", render: (d) => d.totalRecd ?? "-" },
+    { label: "SN", filter: { value: (d) => d.sn, kind: "number" }, render: (d) => <span className="font-mono text-[12.5px]">{d.sn}</span> },
+    { label: "Lot No", filter: { value: (d) => d.lotNo, kind: "text" }, render: (d) => <span className="font-mono text-[12.5px]">{d.lotNo}</span> },
+    { label: "Warehouse", filter: { value: (d) => d.warehouseSite }, render: (d) => d.warehouseSite },
+    { label: "Fiche CCA", filter: { value: (d) => d.ficheCca, kind: "text" }, render: (d) => <span className="font-mono text-[12.5px]">{d.ficheCca}</span> },
+    { label: "Arrival date", filter: { value: (d) => d.arrivalDate || d.arrivalDateRaw, kind: "date" }, render: (d) => d.arrivalDate || d.arrivalDateRaw || "-" },
+    { label: "Discharge date", filter: { value: (d) => d.dischargeDate || d.dischargeDateRaw, kind: "date" }, render: (d) => d.dischargeDate || d.dischargeDateRaw || "-" },
+    { label: "Total recd", filter: { value: (d) => d.totalRecd, kind: "number" }, render: (d) => d.totalRecd ?? "-" },
     {
       label: "",
       render: (d) => (
@@ -54,12 +54,12 @@ export function StockPage() {
   ];
 
   const columns: Column<ReceiptRecord>[] = [
-    { label: "Lot Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "-"}</span> },
-    { label: "Bin Number", render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "-"}</span> },
-    { label: "Vehicle", render: (r) => r.vehicleNo || "-" },
-    { label: "Supplier", render: (r) => normalizeSupplierName(r.supplierName) || "-" },
-    { label: "Basis for Bin allocation", render: (r) => r.stageData["n-bin"]?.["Basis for allocation (moisture / quality / KOR / space)"] || "-" },
-    { label: "Finalised", render: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] || "-" },
+    { label: "Lot Number", filter: { value: (r) => r.stageData["n-lot"]?.["Lot Number"] || r.lotNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-lot"]?.["Lot Number"] || r.lotNo || "-"}</span> },
+    { label: "Bin Number", filter: { value: (r) => r.stageData["n-bin"]?.["Bin Number"] || r.binNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "-"}</span> },
+    { label: "Vehicle", filter: { value: (r) => r.vehicleNo, kind: "text" }, render: (r) => r.vehicleNo || "-" },
+    { label: "Supplier", filter: { value: (r) => normalizeSupplierName(r.supplierName) }, render: (r) => normalizeSupplierName(r.supplierName) || "-" },
+    { label: "Basis for Bin allocation", filter: { value: (r) => r.stageData["n-bin"]?.["Basis for allocation (moisture / quality / KOR / space)"] }, render: (r) => r.stageData["n-bin"]?.["Basis for allocation (moisture / quality / KOR / space)"] || "-" },
+    { label: "Finalised", filter: { value: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] }, render: (r) => r.stageData["n-bin"]?.["Finalised (same day / next day)"] || "-" },
   ];
 
   const lotsSearch = useTableSearch(withLot, (r) => [

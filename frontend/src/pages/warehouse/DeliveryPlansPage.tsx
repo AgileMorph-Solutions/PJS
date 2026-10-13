@@ -65,7 +65,7 @@ export function DeliveryPlansPage() {
   // Everything else (receipt ids, funding reference, per-truck steps) is one click away on the plan's own page.
   const columns: Column<DeliveryPlan>[] = [
     {
-      label: "Plan", nowrap: true,
+      label: "Plan", filter: { value: (p) => `${p.id} ${normalizeSupplierName(p.supplierName)} ${p.supplierCode ?? ""}`, kind: "text" }, nowrap: true,
       render: (p) => (
         <div>
           <div className="font-mono text-[12.5px] font-semibold text-brand-700">{p.id}</div>
@@ -74,7 +74,7 @@ export function DeliveryPlansPage() {
       ),
     },
     {
-      label: "Expected",
+      label: "Expected", filter: { value: (p) => p.expectedArrivalDate, kind: "date" },
       render: (p) => (
         <div>
           <div className="whitespace-nowrap">{p.expectedDeliveryEnd ? `${p.expectedArrivalDate} → ${p.expectedDeliveryEnd}` : p.expectedArrivalDate}</div>
@@ -83,7 +83,7 @@ export function DeliveryPlansPage() {
       ),
     },
     {
-      label: "Received vs planned",
+      label: "Received vs planned", filter: { value: (p) => p.progress.actualKg, kind: "number" },
       render: (p) => {
         const { actualKg, remainingKg, varianceKg } = p.progress;
         const planned = p.expectedQuantityKg;
@@ -101,7 +101,7 @@ export function DeliveryPlansPage() {
       },
     },
     {
-      label: "Trucks",
+      label: "Trucks", filter: { value: (p) => p.progress.rejectedTrucks > 0 ? "Has rejected trucks" : p.progress.arrivals === 0 ? "None arrived yet" : p.progress.awaitingGrnTrucks > 0 ? "Awaiting GRN" : "All accepted", kind: "select" },
       render: (p) => {
         const { arrivals, acceptedTrucks, rejectedTrucks, awaitingGrnTrucks } = p.progress;
         const chip = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border whitespace-nowrap";
@@ -119,7 +119,7 @@ export function DeliveryPlansPage() {
       },
     },
     {
-      label: "Status", nowrap: true,
+      label: "Status", filter: { value: (p) => PLAN_STATUS_LABELS[p.status] + (p.overdue ? " (overdue)" : ""), kind: "select" }, nowrap: true,
       render: (p) => (
         <span className="inline-flex flex-col items-start gap-1">
           <Pill tone={STATUS_TONE[p.status]} label={PLAN_STATUS_LABELS[p.status]} />
