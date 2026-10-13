@@ -6,6 +6,7 @@
  * The property the whole feature rests on is the round trip: export a section, upload the file
  * unchanged, and NOTHING is written — not a row, not an audit entry, not an updatedAt.
  */
+import { PROFILE_FIELDS } from "@anagroci/contract/domain/supplierProfile";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import ExcelJS from "exceljs";
 import { PrismaClient } from "@prisma/client";
@@ -173,7 +174,12 @@ describe("what the file looks like to a person", { timeout: 60_000 }, () => {
     const wb = await load((await get("wi", "/api/workbook")).rawPayload);
     expect(headersOf(wb.getWorksheet("Truck Reception")!)[0]).toBe("Receipt ID");
     expect(headersOf(wb.getWorksheet("Warehouse Receiving")!)[0]).toBe("Row ID");
-    expect(headersOf(wb.getWorksheet("Suppliers")!)).toEqual(["Supplier Code", "Supplier Name"]);
+    // The Suppliers sheet carries the client's LBA register, so it can be filled in bulk (contract supplierProfile.ts).
+    expect(headersOf(wb.getWorksheet("Suppliers")!)).toEqual([
+      "Supplier Code", "Supplier ID", "Supplier Name",
+      ...PROFILE_FIELDS.filter((f) => f.key !== "name").map((f) => f.label),
+      "Status",
+    ]);
     expect(String((wb.getWorksheet("Truck Reception")!.getRow(1).getCell(1).note as any)?.texts?.map((t: any) => t.text).join("") ?? wb.getWorksheet("Truck Reception")!.getRow(1).getCell(1).note)).toMatch(/blank to add a new row/i);
   });
 

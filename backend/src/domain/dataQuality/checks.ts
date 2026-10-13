@@ -4,6 +4,7 @@
  * Counts in the comments are what was measured against the real workbooks and seed data at the
  * time of writing — they double as expectations for tests/dataQuality.test.ts.
  */
+import { missingRequired, type SupplierProfileValues } from "@anagroci/contract/domain/supplierProfile";
 import type { Check } from "./types.js";
 import { negativeBalanceRows, transferFlagRows } from "../juteBalance.js";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
@@ -1119,6 +1120,24 @@ export const CHECKS: Check[] = [
           `${open.length} problem${open.length > 1 ? "s" : ""} found in uploaded workbook rows, across ${trucks.length} truck${trucks.length > 1 ? "s" : ""} ` +
           "(a value that cannot be true, or that disagrees with the supplier master or another truck's fiche). The uploads went through " +
           "unchanged; each problem is shown on its truck's page and is cleared by marking it reviewed, not by editing it here.",
+      };
+    },
+  },
+  {
+    id: "supplier_register_incomplete",
+    async run({ prisma }) {
+      const suppliers = await prisma.supplier.findMany({ where: { status: { not: "inactive" } } });
+      const incomplete = suppliers.filter((x) => missingRequired(x as unknown as SupplierProfileValues).length > 0);
+      const sample = suppliers.filter((x) => x.detailsSource === "sample").length;
+      if (!incomplete.length && !sample) return null;
+      return {
+        id: "supplier_register_incomplete", severity: "warning",
+        title: "Suppliers whose LBA register details are missing or only sample values",
+        entity: "Supplier", affectedCount: incomplete.length + sample, sampleIds: [...incomplete, ...suppliers.filter((x) => x.detailsSource === "sample")].slice(0, 5).map((x) => x.code),
+        evidence:
+          `${incomplete.length} active or suspended supplier${incomplete.length === 1 ? " is" : "s are"} missing a required register field (zone, ` +
+          `manager, primary phone, RCCM, bank details), and ${sample} carr${sample === 1 ? "ies" : "y"} demo "sample" details rather than the ` +
+          "client's. Saving is never blocked for an existing supplier; each one's page lists what is missing.",
       };
     },
   },

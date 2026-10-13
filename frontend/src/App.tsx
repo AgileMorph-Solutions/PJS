@@ -43,6 +43,7 @@ import { WarehouseTransfersPage } from "./pages/jute/WarehouseTransfersPage";
 import { WarehouseActivityLedgerPage } from "./pages/jute/WarehouseActivityLedgerPage";
 
 import { SuppliersPage } from "./pages/masters/SuppliersPage";
+import { SupplierDetailPage } from "./pages/masters/SupplierDetailPage";
 import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
 import { BinDetailPage } from "./pages/masters/BinDetailPage";
@@ -164,6 +165,7 @@ function AppRoutes() {
               <Route path="/production" element={<ProductionPage />} />
 
               <Route path="/masters/suppliers" element={<SuppliersPage />} />
+              <Route path="/masters/suppliers/:code" element={<SupplierDetailPage />} />
               <Route path="/masters/warehouses" element={<WarehousesPage />} />
               <Route path="/masters/bins" element={<BinsPage />} />
               <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />

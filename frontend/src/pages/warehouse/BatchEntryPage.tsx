@@ -196,14 +196,20 @@ export function BatchEntryPage() {
                   {COLUMNS.map((c) => (
                     <td key={c.key} className={`px-2 py-1.5 ${c.width}`}>
                       {c.key === SUPPLIER ? (
+                        <>
                         <select
                           aria-label={`Supplier, row ${i + 1}`} data-row={i} data-col={c.key}
                           value={r.v["LBA CODE"] ?? ""} onChange={(e) => setValue(r.key, SUPPLIER, e.target.value)}
                           onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
                         >
                           <option value="">-</option>
-                          {masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
+                          {masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}{s.status === "suspended" ? " (suspended)" : ""}</option>)}
                         </select>
+                        {/* Suspended is a warning, not a block (client decision): the truck can still be entered. */}
+                        {masters.suppliers.find((s) => s.code === r.v["LBA CODE"])?.status === "suspended" && (
+                          <span className="block mt-1 text-[11px] font-semibold text-ambernut-700">Supplier is suspended</span>
+                        )}
+                        </>
                       ) : c.key === PLAN ? (
                         <select
                           aria-label={`Delivery plan, row ${i + 1}`} data-row={i} data-col={c.key}

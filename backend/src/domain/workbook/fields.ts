@@ -17,6 +17,7 @@
  * Where the database keeps a hand-typed value only as text (a date written "13-01-2026"), it gets its
  * own "… (as written)" column, so that information is still visible and survives a round trip.
  */
+import { PROFILE_FIELDS } from "@anagroci/contract/domain/supplierProfile";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 
 export interface FieldDef {
@@ -283,7 +284,15 @@ export const SHEET_FIELDS: Record<string, SheetFields> = {
   JuteWarehouseMovement: { title: "Jute Bags", idLabel: "Row ID", fields: same(JUTE), defaultToSection: () => ["whLocation"] },
   WarehouseActivityLedgerEntry: { title: "Activity Ledger", idLabel: "Row ID", fields: same(LEDGER) },
   IssuedToProduction: { title: "Issued to Production", idLabel: "Row ID", fields: same(ISSUED) },
-  Supplier: { title: "Suppliers", idLabel: "Supplier Code", fields: same([["code", "Supplier Code"], ["name", "Supplier Name"]]) },
+  // The LBA register: the client fills these in bulk here as well as on each supplier's page (labels from contract supplierProfile.ts).
+  Supplier: {
+    title: "Suppliers", idLabel: "Supplier Code",
+    fields: same([
+      ["code", "Supplier Code"], ["supplierNo", "Supplier ID"], ["name", "Supplier Name"],
+      ...PROFILE_FIELDS.filter((f) => f.key !== "name").map((f) => [f.key, f.label] as Pair),
+      ["status", "Status"],
+    ]),
+  },
 };
 
 /** How a header is compared: case, spacing and punctuation don't matter ("price (cfa/kg)" = "Price CFA kg"). */

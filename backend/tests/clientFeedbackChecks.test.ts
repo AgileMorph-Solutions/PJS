@@ -33,7 +33,9 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("client feedback audit checks", () => {
+// Each test runs the whole data-quality audit (every check over the full real dataset) before and after its change,
+// about 2.5 s a time, so the default 5 s left no headroom and the slowest one failed on timing alone.
+describe("client feedback audit checks", { timeout: 20_000 }, () => {
   it("reject_remark_not_rejected finds a truck whose remarks say REJECT but isn't marked, and stops once it is", async () => {
     const before = (await finding("reject_remark_not_rejected"))?.affectedCount ?? 0;
     const id = (await createReceipt(SITE, "2034-01-02")).id;

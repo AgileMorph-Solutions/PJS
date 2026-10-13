@@ -7,7 +7,7 @@ import { prisma } from "../db.js";
 import { WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import { WAREHOUSE_TYPES, type WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { isValidWarehouseCode } from "@anagroci/contract/domain/ids";
-import { normalizeSupplierName, suggestLbaCode } from "@anagroci/contract/domain/supplierCode";
+import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { ValidationError } from "../domain/validation.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
@@ -22,7 +22,10 @@ export async function listMasters() {
     prisma.warehouseAlias.findMany({ orderBy: { alias: "asc" } }),
   ]);
   return {
-    suppliers,
+    // Lean on purpose: every signed-in role reads this list (Branch Managers and QFS Officers too), so the register's
+    // contact and bank details stay on the supplier page (services/suppliers.ts), which only admin / Incharge reach.
+    // `active` is what the pickers filter on: an inactive supplier leaves them, a suspended one stays (with a warning).
+    suppliers: suppliers.map((x) => ({ code: x.code, supplierNo: x.supplierNo, name: x.name, formerName: x.formerName, status: x.status, active: x.status !== "inactive" })),
     // {name, kind, site} rather than a bare string[]: `kind` (Village/Regional/Factory, set only
     // on site rows) and `site` (null = this row IS a site) are what the two-section UI resolves a
     // row's section from — see packages/contract/src/data/warehouseKinds.ts.
@@ -51,71 +54,6 @@ export function supplierNameFields(name: string, { lenient = false } = {}): { na
 export async function addSupplier(code: string, name: string) {
   const fields = supplierNameFields(name);
   return prisma.supplier.upsert({ where: { code }, update: fields, create: { code, ...fields } });
-}
-
-/** The next free LBA code for a name; the person can overwrite it before saving. */
-export async function suggestSupplierCode(name: string) {
-  const codes = (await prisma.supplier.findMany({ select: { code: true } })).map((s) => s.code);
-  return suggestLbaCode(name, codes);
-}
-
-/** A new supplier from the Suppliers screen: refuses an existing code instead of silently overwriting it. */
-export async function createSupplier(input: { code?: string; name: string }) {
-  const fields = supplierNameFields(input.name);
-  const code = input.code?.trim() || (await suggestSupplierCode(fields.name));
-  if (await prisma.supplier.findUnique({ where: { code } })) throw new ValidationError(`Supplier code ${code} already exists.`);
-  return prisma.supplier.create({ data: { code, ...fields, source: "entered" } });
-}
-
-/** What still points at a supplier: the reason it can be switched off but not deleted. */
-export async function supplierReferences(code: string) {
-  const [receipts, plans, jute, assignments] = await Promise.all([
-    prisma.receipt.count({ where: { lbaCode: code } }),
-    prisma.deliveryPlan.count({ where: { supplierCode: code } }),
-    prisma.juteWarehouseMovement.count({ where: { supplierCode: code } }),
-    prisma.branchManagerSupplier.count({ where: { supplierCode: code } }),
-  ]);
-  return { receipts, plans, jute, assignments, total: receipts + plans + jute + assignments };
-}
-
-const notFound = () => Object.assign(new Error("Supplier not found"), { code: "P2025" });
-
-/** Rename, or change the code. A code other records already carry can't move: they would be left pointing at nothing. */
-export async function updateSupplier(code: string, patch: { name?: string; code?: string }) {
-  const existing = await prisma.supplier.findUnique({ where: { code } });
-  if (!existing) throw notFound();
-  const data: { name?: string; formerName?: string | null; code?: string } = {};
-  if (patch.name !== undefined) {
-    const fields = supplierNameFields(patch.name);
-    data.name = fields.name;
-    // The original is only ever the first one recorded; an edit made by hand has no "former" worth keeping.
-    if (fields.formerName && !existing.formerName) data.formerName = fields.formerName;
-  }
-  const newCode = patch.code?.trim();
-  if (newCode && newCode !== code) {
-    const refs = await supplierReferences(code);
-    if (refs.total) throw new ValidationError(`Code ${code} is already used by ${refs.total} record${refs.total > 1 ? "s" : ""}, so it can't be changed. Add a new supplier instead.`);
-    if (await prisma.supplier.findUnique({ where: { code: newCode } })) throw new ValidationError(`Supplier code ${newCode} already exists.`);
-    data.code = newCode;
-  }
-  return prisma.supplier.update({ where: { code }, data });
-}
-
-export async function setSupplierActive(code: string, active: boolean) {
-  if (!(await prisma.supplier.findUnique({ where: { code } }))) throw notFound();
-  return prisma.supplier.update({ where: { code }, data: { active } });
-}
-
-/** Deletes a supplier nothing refers to; otherwise switches it off and says why, so history stays whole. */
-export async function removeSupplier(code: string) {
-  if (!(await prisma.supplier.findUnique({ where: { code } }))) throw notFound();
-  const refs = await supplierReferences(code);
-  if (refs.total) {
-    await prisma.supplier.update({ where: { code }, data: { active: false } });
-    return { deleted: false as const, deactivated: true as const, references: refs };
-  }
-  await prisma.supplier.delete({ where: { code } });
-  return { deleted: true as const, deactivated: false as const, references: refs };
 }
 
 /**

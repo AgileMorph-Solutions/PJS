@@ -9,6 +9,7 @@ import { supplierAccessRoutes } from "./routes/supplierAccess.js";
 import { receiptRoutes } from "./routes/receipts.js";
 import { ledgerRoutes } from "./routes/ledgers.js";
 import { masterRoutes } from "./routes/masters.js";
+import { supplierRoutes } from "./routes/suppliers.js";
 import { dryingRoutes } from "./routes/drying.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { dataQualityRoutes } from "./routes/dataQuality.js";
@@ -86,6 +87,7 @@ export function buildApp() {
   app.register(transferRoutes);
   app.register(ledgerRoutes);
   app.register(masterRoutes);
+  app.register(supplierRoutes);
   app.register(dryingRoutes);
   app.register(dashboardRoutes);
   app.register(dataQualityRoutes);

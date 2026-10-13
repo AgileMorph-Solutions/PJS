@@ -52,7 +52,31 @@ export type LedgerEntries = Record<string, LedgerRow[]>;
 
 /** `active` is false for a supplier that is switched off (it still has history). Absent means active, so an
  * older payload or a freshly typed one reads as active. `formerName` is the name with the old "RCN" prefix. */
-export interface Supplier { code: string; name: string; active?: boolean; formerName?: string | null }
+export interface Supplier {
+  code: string; name: string; active?: boolean; formerName?: string | null;
+  /** SUP-0001: permanent, issued by the system. */
+  supplierNo?: string;
+  status?: import("../domain/supplierProfile.js").SupplierStatus;
+}
+
+/** The supplier page: the whole LBA register entry plus the figures worked out from its transactions. */
+export interface SupplierDetail extends Required<Pick<Supplier, "code" | "name" | "supplierNo" | "status">> {
+  formerName: string | null;
+  statusReason: string | null;
+  profile: import("../domain/supplierProfile.js").SupplierProfileValues;
+  /** "sample" when the register details are demo values, not given by the client. */
+  detailsSource: string | null;
+  completeness: { filled: number; total: number };
+  missing: string[];
+  createdAt: string;
+  createdBy: string | null;
+  updatedAt: string;
+  updatedBy: string | null;
+  source: string | null;
+  performance: import("../domain/supplierPerformance.js").SupplierPerformance;
+  /** Trucks counted, and those recorded under this supplier's name but with no LBA code (so not counted). */
+  references: SupplierReferences;
+}
 
 /** What a supplier is still used by, which decides whether it can be deleted or only switched off. */
 export interface SupplierReferences { receipts: number; plans: number; jute: number; assignments: number; total: number }

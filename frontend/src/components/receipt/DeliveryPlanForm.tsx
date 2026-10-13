@@ -79,7 +79,11 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
     <form onSubmit={handleSubmit} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-3">
       {field("dp-supplier", "Supplier", <>
         <input id="dp-supplier" list="dp-suppliers" required value={form.supplierName} onChange={(e) => pickSupplier(e.target.value)} className={inputClass} placeholder="Start typing a supplier…" />
-        <datalist id="dp-suppliers">{masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.name} />)}</datalist>
+        <datalist id="dp-suppliers">{masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.name} label={s.status === "suspended" ? "suspended" : undefined} />)}</datalist>
+        {/* Suspended is a warning, not a block (client decision): the plan can still be made. */}
+        {masters.suppliers.find((s) => s.name === form.supplierName)?.status === "suspended" && (
+          <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">This supplier is suspended.</p>
+        )}
       </>)}
       {field("dp-code", "Supplier / LBA code", <input id="dp-code" value={form.supplierCode} onChange={(e) => set("supplierCode", e.target.value)} className={inputClass} />)}
       {field("dp-origin", "Expected origin", <>

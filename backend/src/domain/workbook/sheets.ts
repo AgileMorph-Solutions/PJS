@@ -17,6 +17,18 @@ import { listTransfers } from "../../services/transfers.js";
 import { PLAN_STATUS_LABELS } from "@anagroci/contract/domain/deliveryPlan";
 import { TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
 import { SHEET_FIELDS, normalizeHeader, type FieldDef } from "./fields.js";
+import { supplierNameFields } from "../../services/masters.js";
+
+/**
+ * A supplier row from Excel follows the same rules as one typed in the app: the name loses its "RCN" prefix (the
+ * original kept), and register details filled in by the client replace any demo "sample" marking.
+ */
+function supplierRowFromFile(data: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...data };
+  if (typeof out.name === "string" && out.name.trim()) Object.assign(out, supplierNameFields(out.name, { lenient: true }));
+  if (Object.keys(out).some((k) => !["code", "name", "formerName", "source"].includes(k))) out.detailsSource = null;
+  return out;
+}
 
 export type Row = Record<string, unknown>;
 
@@ -49,6 +61,8 @@ export interface SheetSpec {
   siteColumns: string[];
   /** `seq` on this table is assigned by the server on create (max + 1). */
   assignsSeq?: boolean;
+  /** Last word on a row before it is written: rules that belong to this table whatever writes it. */
+  prepare?: (data: Record<string, unknown>) => Record<string, unknown>;
   /**
    * The sheet is for READING: everything on it is worked out from other records (a plan's progress, a BKT's
    * variance), and those records are changed in the app, where the rules live — an ID is issued, a store is
@@ -64,7 +78,7 @@ const SERVER_OWNED = ["createdAt", "updatedAt", "source", "sheetRow", "activityC
 
 function tableSheet(
   model: string,
-  opts: Pick<SheetSpec, "sections"> & Partial<Pick<SheetSpec, "key" | "master" | "siteColumns" | "assignsSeq" | "dateField">> & { extraReadOnly?: string[] }
+  opts: Pick<SheetSpec, "sections"> & Partial<Pick<SheetSpec, "key" | "master" | "siteColumns" | "assignsSeq" | "dateField" | "prepare">> & { extraReadOnly?: string[] }
 ): SheetSpec {
   const key = opts.key ?? "id";
   const info = columnInfo(model);
@@ -189,7 +203,12 @@ export const SHEETS: SheetSpec[] = [
   // No warehouse column on these two, so they aren't narrowed to a warehouse.
   tableSheet("WarehouseActivityLedgerEntry", { sections: BOTH, dateField: { column: "activityDate", label: "Date" } }),
   tableSheet("IssuedToProduction", { sections: ["CENTRAL"], dateField: { column: "date", label: "Date" } }),
-  tableSheet("Supplier", { sections: BOTH, key: "code", master: true }),
+  tableSheet("Supplier", {
+    sections: BOTH, key: "code", master: true,
+    // The system issues these; the file shows them but never sets them.
+    extraReadOnly: ["supplierNo", "status", "statusReason", "createdById", "updatedById", "detailsSource"],
+    prepare: supplierRowFromFile,
+  }),
 ];
 
 export const sheetsFor = (type: WarehouseType): SheetSpec[] => SHEETS.filter((s) => s.sections.includes(type));

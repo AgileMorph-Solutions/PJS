@@ -5,38 +5,10 @@ import type { FastifyInstance } from "fastify";
 import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { requireRole } from "../auth/plugin.js";
-import { listMasters, createSupplier, updateSupplier, removeSupplier, setSupplierActive, suggestSupplierCode, supplierReferences, addWarehouse, addBin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
+import { listMasters, addWarehouse, addBin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
 
 export async function masterRoutes(app: FastifyInstance) {
   app.get("/api/masters", async () => listMasters());
-
-  // Admin and Warehouse Incharge only (auth/policy.ts keeps the narrow roles off every /api/masters write).
-  app.get("/api/masters/suppliers/suggest-code", async (req, reply) => {
-    const { name } = req.query as { name?: string };
-    if (!name?.trim()) return reply.code(400).send({ error: "name is required" });
-    return { code: await suggestSupplierCode(name) };
-  });
-
-  app.post("/api/masters/suppliers", async (req, reply) => {
-    const { code, name } = (req.body ?? {}) as { code?: string; name?: string };
-    if (!name?.trim()) return reply.code(400).send({ error: "name is required" });
-    return reply.code(201).send(await createSupplier({ code, name }));
-  });
-
-  app.patch("/api/masters/suppliers/:code", async (req) => {
-    const { code } = req.params as { code: string };
-    return updateSupplier(code, (req.body ?? {}) as { name?: string; code?: string });
-  });
-
-  app.get("/api/masters/suppliers/:code/references", async (req) => supplierReferences((req.params as { code: string }).code));
-
-  app.post("/api/masters/suppliers/:code/active", async (req) => {
-    const { code } = req.params as { code: string };
-    const { active } = (req.body ?? {}) as { active?: boolean };
-    return setSupplierActive(code, active !== false);
-  });
-
-  app.delete("/api/masters/suppliers/:code", async (req) => removeSupplier((req.params as { code: string }).code));
 
   app.post("/api/masters/warehouses", async (req, reply) => {
     const { name, kind, site, type } = (req.body ?? {}) as { name?: string; kind?: WarehouseKind; site?: string; type?: WarehouseType };

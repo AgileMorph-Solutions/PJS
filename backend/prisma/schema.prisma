@@ -52,11 +52,40 @@ model Supplier {
   formerName String?
   /// Where this code was first observed, e.g. "seed/suppliers.json" or a workbook name.
   source String?
-  /// A supplier already used by trucks, plans or jute movements is switched off, never deleted: it
-  /// disappears from pickers and its history stays whole.
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  /// The permanent system ID (SUP-0001). Issued by the database from a sequence, so every writer — the app, the
+  /// seeder, an Excel upload — gets one without knowing about it, and it never changes even if the LBA code does.
+  supplierNo String @unique @default(dbgenerated("('SUP-'::text || lpad((nextval('supplier_no_seq'::regclass))::text, 4, '0'::text))"))
+  /// "active" | "inactive" | "suspended" (contract domain/supplierProfile.ts). Inactive suppliers leave the pickers;
+  /// suspended ones stay, with a warning. A supplier already used by trucks, plans or jute movements is made inactive
+  /// rather than deleted, so its history stays whole.
+  status       String  @default("active")
+  statusReason String?
+
+  // The LBA register (client's Oct 2026 table). Which are required lives in contract domain/supplierProfile.ts.
+  tradeName         String?
+  zone              String?
+  region            String?
+  managerName       String?
+  managerPosition   String?
+  phonePrimary      String?
+  phoneSecondary    String?
+  email             String?
+  address           String?
+  registrationRef   String?
+  /// Bank details: only the supplier page shows them (admin / Warehouse Incharge); the supplier list never carries them.
+  bankAccountHolder String?
+  bankName          String?
+  bankAccountRef    String?
+  /// "sample" when the register details were filled with demo values rather than given by the client, so they are
+  /// never mistaken for real ones. Cleared as soon as someone saves the supplier's details by hand.
+  detailsSource     String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  createdById String?
+  createdBy   User?    @relation("SupplierCreator", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?    @relation("SupplierUpdater", fields: [updatedById], references: [id])
 
   juteMovements JuteWarehouseMovement[]
 }
@@ -2209,6 +2238,8 @@ model User {
 
   sessions            Session[]
   approvedExceptions  Receipt[]               @relation("ExceptionApprover")
+  createdSuppliers    Supplier[]              @relation("SupplierCreator")
+  updatedSuppliers    Supplier[]              @relation("SupplierUpdater")
   uploadIssues        UploadIssue[]           @relation("UploadIssueUploader")
   reviewedUploadIssues UploadIssue[]          @relation("UploadIssueReviewer")
   dispatchedTransfers TransferRequest[]       @relation("TransferDispatcher")

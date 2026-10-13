@@ -181,6 +181,7 @@ export async function applyTable(ctx: Ctx, spec: SheetSpec, ops: TableOp[]): Pro
     let max = (await delegate.aggregate({ _max: { seq: true } }))._max.seq ?? 0;
     for (const o of creates) o.data.seq = ++max;
   }
-  for (const c of chunk(creates, 200)) await delegate.createMany({ data: c.map((o) => o.data) });
-  for (const o of ops.filter((x) => x.kind === "update")) await delegate.update({ where: { [spec.key]: o.key }, data: o.data });
+  const prepare = spec.prepare ?? ((d: Record<string, unknown>) => d);
+  for (const c of chunk(creates, 200)) await delegate.createMany({ data: c.map((o) => prepare(o.data)) });
+  for (const o of ops.filter((x) => x.kind === "update")) await delegate.update({ where: { [spec.key]: o.key }, data: prepare(o.data) });
 }

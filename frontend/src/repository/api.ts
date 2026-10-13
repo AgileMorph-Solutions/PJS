@@ -5,7 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, SupplierReferences, ReceiptPlanInfo, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, SupplierReferences, SupplierDetail, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -161,12 +161,12 @@ export const api = {
   masters: () => request<Masters>("/masters"),
   addSupplier: (s: Supplier) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
   suggestSupplierCode: (name: string) => request<{ code: string }>(`/masters/suppliers/suggest-code?name=${encodeURIComponent(name)}`),
-  createSupplier: (s: { code?: string; name: string }) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
-  updateSupplier: (code: string, patch: { name?: string; code?: string }) =>
+  createSupplier: (s: SupplierInput) => request<Supplier>("/masters/suppliers", { method: "POST", body: JSON.stringify(s) }),
+  /** The supplier page: register details plus the figures worked out from its trucks, plans and jute. Admin / Incharge only. */
+  getSupplier: (code: string) => request<SupplierDetail>(`/masters/suppliers/${encodeURIComponent(code)}`),
+  updateSupplier: (code: string, patch: SupplierInput) =>
     request<Supplier>(`/masters/suppliers/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify(patch) }),
-  setSupplierActive: (code: string, active: boolean) =>
-    request<Supplier>(`/masters/suppliers/${encodeURIComponent(code)}/active`, { method: "POST", body: JSON.stringify({ active }) }),
-  /** Deletes when nothing uses the supplier; otherwise switches it off. `deleted` says which happened. */
+  /** Deletes when nothing uses the supplier; otherwise makes it inactive. `deleted` says which happened. */
   removeSupplier: (code: string) =>
     request<{ deleted: boolean; deactivated: boolean; references: SupplierReferences }>(`/masters/suppliers/${encodeURIComponent(code)}`, { method: "DELETE" }),
   addWarehouse: (name: string, classification?: { kind?: string; site?: string; type?: string }) =>
@@ -435,6 +435,13 @@ export interface WorkbookSheetPlan {
   warnings: (WorkbookRowError & { severity: "warning" | "info" })[];
   samples: WorkbookSample[];
 }
+/** What the supplier form sends: any register field, plus the code and status. */
+export type SupplierInput = import("@anagroci/contract/domain/supplierProfile").SupplierProfileValues & {
+  code?: string;
+  status?: import("@anagroci/contract/domain/supplierProfile").SupplierStatus;
+  statusReason?: string | null;
+};
+
 export interface WorkbookPreview {
   token: string;
   filename: string;
