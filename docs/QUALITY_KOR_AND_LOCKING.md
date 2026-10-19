@@ -46,7 +46,9 @@ A truck's reception record **locks automatically when its GRN is complete**: the
   together with who reopened it. It locks again by itself the next time its GRN is completed.
 - Records that existed before locking was introduced are **not** locked retroactively.
 
-## 5. The two receiving modules
+## 5. The two parts of receiving a truck
+
+One Reception page lists every truck; its status filter has a **Reception** and an **Offloading** choice for these two parts.
 
 - **Reception**: Truck arrives at warehouse (Gate entry) → Verify supplier documents → Weight truck (Gross weight) → Quality analysis (QFS) → Reject / Hold and inform procurement in charge
 - **Offloading**: Unload RCN at warehouse → Weigh truck (Empty – Tare weight) → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Update warehouse RCN stock (System)

@@ -13,7 +13,7 @@ import { useCanEditDirectly } from "../../state/AuthContext";
 import { siteSlugForSiteName } from "../../config/sites";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { receiptColumns, fiche, storeCode } from "./columns";
-import { MODULE_LABELS, MODULE_STATUSES, type ReceivingModule } from "@anagroci/contract/data/modules";
+import { MODULE_STATUSES, type ReceivingModule } from "@anagroci/contract/data/modules";
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
 
@@ -22,7 +22,7 @@ const icon = (name: string) => <span className="material-symbols-outlined">{name
  * warehouses" dropdown is gone; a STORE-level sub-filter takes its place where there's more than
  * one store to choose from (derived from /api/masters' {name,kind,site} shape — a store is any
  * warehouse row whose `site` equals this section's warehouseName). */
-export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingModule } = {}) {
+export function ReceiptsListPage() {
   const { receipts, masters, refresh } = useTracking();
   const site = useSite();
   const canEdit = useCanEditDirectly();
@@ -35,9 +35,11 @@ export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingM
   const [dialogMode, setDialogMode] = useState<"upload" | "export" | null>(null);
   const navigate = useNavigate();
 
-  // "" = this module's own trucks; "all" = every truck; anything else = that one status, wherever it falls.
+  // "" = every truck; "reception" / "offloading" = the trucks in that part of receiving (contract data/modules.ts);
+  // anything else = that one status. Offloading is a filter here, not a page of its own.
   const status = params.get("status") ?? "";
-  const base = `/${site.slug}/${module === "offloading" ? "offloading" : "receipts"}`;
+  const part = status === "reception" || status === "offloading" ? (status as ReceivingModule) : null;
+  const base = `/${site.slug}/receipts`;
   const store = params.get("store") ?? "";
   const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
@@ -58,7 +60,7 @@ export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingM
 
   const rows = useMemo(() => {
     return siteReceipts
-      .filter((r) => (status === "all" ? true : status ? deriveStatus(r) === status : MODULE_STATUSES[module].includes(deriveStatus(r))))
+      .filter((r) => (part ? MODULE_STATUSES[part].includes(deriveStatus(r)) : !status || status === "all" || deriveStatus(r) === status))
       .filter((r) => !store || storeCode(r) === store)
       .filter((r) => !dateRange.from || r.arrivalDate >= dateRange.from)
       .filter((r) => !dateRange.to || r.arrivalDate <= dateRange.to)
@@ -83,10 +85,8 @@ export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingM
     <>
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
-        title={MODULE_LABELS[module]}
-        lede={module === "reception"
-          ? "Trucks arriving and being checked: gate entry, supplier documents, weighing and quality, until each is accepted or rejected. Accepted trucks move on to Offloading; choose \"All trucks\" to see every one."
-          : "Accepted trucks being unloaded and recorded: unloading and bags, net weight, Lot, Bin and GRN. Choose \"All trucks\" to see every one."}
+        title="Reception"
+        lede="Every truck from gate entry to GRN. To see only the trucks still being checked, or only the accepted ones being unloaded and recorded, use the status filter (Reception / Offloading)."
         actions={
           <div className="flex items-center gap-3">
             <SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />
@@ -109,15 +109,15 @@ export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingM
                 <span className="material-symbols-outlined text-[17px]">download</span>
                 Export
               </button>
-              {/* The one way to add entries: a grid, whether it's one truck or twenty. New trucks arrive in Reception. */}
-              {module === "reception" && <button
+              {/* The one way to add entries: a grid, whether it's one truck or twenty. */}
+              <button
                 onClick={() => navigate(`/${site.slug}/receipts/batch`)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
                 title="Add one or more entries from a grid"
               >
                 <span className="material-symbols-outlined text-[17px]">add</span>
                 Add entries
-              </button>}
+              </button>
               </>
             )}
           </div>
@@ -125,7 +125,7 @@ export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingM
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
-        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={`${base}?status=all`} />
+        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={base} />
         <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={`${base}?status=unloaded`} />
         <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={`${base}?status=grn_completed`} />
         <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={`${base}?status=pending_qa`} />
@@ -154,8 +154,9 @@ export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingM
           className="w-full sm:w-64"
         />
         <select value={status} onChange={(e) => setParams((p) => setOrDelete(p, "status", e.target.value))}>
-          <option value="">{MODULE_LABELS[module]} (default)</option>
-          <option value="all">All trucks</option>
+          <option value="">All statuses</option>
+          <option value="reception">Reception (gate to quality result)</option>
+          <option value="offloading">Offloading (accepted, unload to GRN)</option>
           {ALL_STATUSES.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABELS[s]}

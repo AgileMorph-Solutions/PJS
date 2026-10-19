@@ -12,7 +12,10 @@ COPY packages/contract/package.json ./packages/contract/
 COPY frontend/package.json ./frontend/
 # Lockfile deliberately not copied — see frontend/Dockerfile's comment (rolldown's native
 # binding is platform-specific and a lockfile from another OS omits the linux one).
-RUN npm install --no-audit --no-fund
+# --before pins resolution to the last build known to work (2026-10-13). Without a lockfile, a fresh
+# resolve picks up newer releases that trip an npm 10.x arborist bug ("reading 'edgesOut'"); the old
+# Docker cache had been hiding that. Move the date forward only after a scratch build proves it.
+RUN npm install --before=2026-10-13 --no-audit --no-fund
 
 COPY packages/contract/ ./packages/contract/
 COPY frontend/ ./frontend/

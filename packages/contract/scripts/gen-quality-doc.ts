@@ -68,7 +68,9 @@ A truck's reception record **locks automatically when its GRN is complete**: the
   together with who reopened it. It locks again by itself the next time its GRN is completed.
 - Records that existed before locking was introduced are **not** locked retroactively.
 
-## 5. The two receiving modules
+## 5. The two parts of receiving a truck
+
+One Reception page lists every truck; its status filter has a **Reception** and an **Offloading** choice for these two parts.
 
 ${(Object.keys(MODULE_STAGES) as (keyof typeof MODULE_STAGES)[]).map((m) => `- **${MODULE_LABELS[m]}**: ${MODULE_STAGES[m].map(titleOf).join(" → ")}`).join("\n")}
 `;

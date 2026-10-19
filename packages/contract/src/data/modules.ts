@@ -1,7 +1,8 @@
 /**
- * The two parts of receiving a truck (client review, Oct 2026: "separate modules for offloading / reception").
- * One list of which stages belong to which, read by the screens (what each module shows) and by the record lock
- * (what stops being editable once the GRN is complete), so they cannot disagree.
+ * The two parts of receiving a truck (client review, Oct 2026). They are NOT separate screens: the team asked for them
+ * as separate modules, then settled on one Reception page where "Offloading" is a status filter. One list of which
+ * stages belong to which, read by that filter (MODULE_STATUSES) and by the record lock (what stops being editable once
+ * the GRN is complete), so they cannot disagree.
  *
  *   Reception  : the truck arrives, its papers are checked, it is weighed and quality-tested, and accepted or rejected.
  *   Offloading : it is unloaded, the weights give the net weight, and it gets a Lot, a Bin and its GRN.
@@ -28,7 +29,7 @@ export function moduleOfStage(stageId: string): ReceivingModule | null {
 }
 
 /**
- * The trucks each module's list shows by default: a truck is in Reception until it has been accepted, and in Offloading from the
+ * The trucks each part's filter on the Reception page shows: a truck is in Reception until it has been accepted, and in Offloading from the
  * moment it passes quality. A rejected truck stays in Reception: rejection is how reception ends for it.
  */
 export const MODULE_STATUSES: Record<ReceivingModule, readonly ReceiptStatus[]> = {

@@ -10,16 +10,16 @@ Delivery Plan. Allow about 25 minutes.
 2. The new truck opens. Under **Reception**, open **Truck arrives at warehouse**: the helper line says the arrival date fills itself.
    Type a truck number, save: **DATE OF ARRIVAL** is now filled (the day the truck arrived) without typing.
 
-## 2. Reception module: weigh, quality, KOR  (points 2; KOR question)
-3. Sidebar **Reception** lists the trucks still to be accepted; this truck is there. **Offloading** (next item) does not list it yet.
+## 2. Reception: weigh, quality, KOR  (points 2; KOR question)
+3. Sidebar **Reception** lists every truck. In the status filter choose **Reception**: this truck is there. Choose **Offloading**: it is not listed yet.
 4. Fill supplier documents and the loaded weight.
 5. Sign in as `qfs.bouake` → open the truck → **QFS Officer — quality analysis & jute bag check**. Enter moisture and the **cut-test
    grams**: **KOR appears by itself** (read-only). Submit.
 6. Back as `incharge.bouake` → **Approvals** → approve. Open the truck, **Quality** step → **Pass**: the **Lot Number is issued**.
-   The truck now moves from **Reception** to **Offloading**.
+   The truck now shows under the **Offloading** filter instead of **Reception**.
 
-## 3. Offloading module: unload, bin, GRN, lock  (points 1, 2, 4; locking)
-7. Sidebar **Offloading** → open the truck. **Unload**: enter good, damp and torn bags: **DATE OF OFFLOADING fills itself**. Enter the empty
+## 3. Offloading: unload, bin, GRN, lock  (points 1, 2, 4; locking)
+7. Sidebar **Reception**, status filter **Offloading** → open the truck. **Unload**: enter good, damp and torn bags: **DATE OF OFFLOADING fills itself**. Enter the empty
    truck weight: **net weight is calculated**.
 8. **Masters → Bins → Add bin**: a new bin code, choose its **store**. Back on the truck (in the same store), **Allocate Bin**: the new bin is offered first.
    Choose it, press **Finalise bin allocation**: the **allocation date and your name are stamped**; the step closes.
@@ -50,6 +50,6 @@ Delivery Plan. Allow about 25 minutes.
 
 ## What the team should check against real operations
 - Is the record complete at **GRN quantity + price**, or at another point? (the lock point is one constant)
-- Are Reception and Offloading split at the right step? (one list in `packages/contract/src/data/modules.ts`)
+- Does the Reception / Offloading status filter split at the right step? (one list in `packages/contract/src/data/modules.ts`)
 - Drying fields, the dispatch quality fields, the Yamoussoukro arrival steps and the list of activity kinds are the first versions: the team's
   corrections are small edits to those lists.

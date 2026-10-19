@@ -31,6 +31,7 @@ import { DispatchesPage } from "./pages/warehouse/DispatchesPage";
 import { DeliveryPlansPage } from "./pages/warehouse/DeliveryPlansPage";
 import { DeliveryPlanDetailPage } from "./pages/warehouse/DeliveryPlanDetailPage";
 import { TransfersPage } from "./pages/warehouse/TransfersPage";
+import { TransferDetailPage } from "./pages/warehouse/TransferDetailPage";
 import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage";
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
 import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
@@ -102,8 +103,7 @@ function AppRoutes() {
                 two literal duplicated route trees. SiteLayout 404s on an unrecognized :site rather
                 than silently rendering garbage. */}
             <Route path="/:site" element={<SiteLayout />}>
-              <Route path="receipts" element={<ReceiptsListPage module="reception" />} />
-              <Route path="offloading" element={<ReceiptsListPage module="offloading" />} />
+              <Route path="receipts" element={<ReceiptsListPage />} />
               {/* NOT forked per site - one receipt record, one page; a receipt detail page can
                   legitimately show cross-site linked records by design (see ReceiptDetailPage's own
                   header comment and receiptLinks.ts, whose /links route deliberately never accepts
@@ -118,6 +118,7 @@ function AppRoutes() {
                 <Route path="delivery-plans" element={<DeliveryPlansPage />} />
                 <Route path="delivery-plans/:id" element={<DeliveryPlanDetailPage />} />
                 <Route path="transfers" element={<TransfersPage />} />
+                <Route path="transfers/:id" element={<TransferDetailPage />} />
               {/* Not in nav.ts (see its own comment) - reached from Reception's Downstream chips
                   and a receipt's "Linked records" card, same as the legacy /procurement/* URLs
                   below are reachable without a sidebar entry. */}

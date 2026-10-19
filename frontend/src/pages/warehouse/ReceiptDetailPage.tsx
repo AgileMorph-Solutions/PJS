@@ -27,7 +27,6 @@ import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
-import { MODULE_LABELS, moduleOfStage } from "@anagroci/contract/data/modules";
 import { api } from "../../repository/api";
 import { DryingPanel } from "../../components/receipt/DryingPanel";
 
@@ -293,11 +292,6 @@ export function ReceiptDetailPage() {
 
             return (
               <Fragment key={stage.id}>
-              {moduleOfStage(stage.id) && moduleOfStage(stage.id) !== moduleOfStage(stages[stageIndex - 1]?.id ?? "") && (
-                <h2 className="px-1 pt-4 text-[13px] font-bold text-brand-800 uppercase tracking-wider border-b border-brand-100 pb-1.5">
-                  {MODULE_LABELS[moduleOfStage(stage.id)!]}
-                </h2>
-              )}
               {(startsStep || startsLater) && (
                 <h3 className="px-1 pt-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
                   {startsStep ? `Step ${stepIndex + 1} · ${step!.title}` : "After reception"}
