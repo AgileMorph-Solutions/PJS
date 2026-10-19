@@ -13,6 +13,7 @@ import { useCanEditDirectly } from "../../state/AuthContext";
 import { siteSlugForSiteName } from "../../config/sites";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { receiptColumns, fiche, storeCode } from "./columns";
+import { MODULE_LABELS, MODULE_STATUSES, type ReceivingModule } from "@anagroci/contract/data/modules";
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
 
@@ -21,7 +22,7 @@ const icon = (name: string) => <span className="material-symbols-outlined">{name
  * warehouses" dropdown is gone; a STORE-level sub-filter takes its place where there's more than
  * one store to choose from (derived from /api/masters' {name,kind,site} shape — a store is any
  * warehouse row whose `site` equals this section's warehouseName). */
-export function ReceiptsListPage() {
+export function ReceiptsListPage({ module = "reception" }: { module?: ReceivingModule } = {}) {
   const { receipts, masters, refresh } = useTracking();
   const site = useSite();
   const canEdit = useCanEditDirectly();
@@ -34,7 +35,9 @@ export function ReceiptsListPage() {
   const [dialogMode, setDialogMode] = useState<"upload" | "export" | null>(null);
   const navigate = useNavigate();
 
+  // "" = this module's own trucks; "all" = every truck; anything else = that one status, wherever it falls.
   const status = params.get("status") ?? "";
+  const base = `/${site.slug}/${module === "offloading" ? "offloading" : "receipts"}`;
   const store = params.get("store") ?? "";
   const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
@@ -55,7 +58,7 @@ export function ReceiptsListPage() {
 
   const rows = useMemo(() => {
     return siteReceipts
-      .filter((r) => !status || deriveStatus(r) === status)
+      .filter((r) => (status === "all" ? true : status ? deriveStatus(r) === status : MODULE_STATUSES[module].includes(deriveStatus(r))))
       .filter((r) => !store || storeCode(r) === store)
       .filter((r) => !dateRange.from || r.arrivalDate >= dateRange.from)
       .filter((r) => !dateRange.to || r.arrivalDate <= dateRange.to)
@@ -68,6 +71,8 @@ export function ReceiptsListPage() {
           r.id.toLowerCase().includes(needle) ||
           r.lbaCode.toLowerCase().includes(needle) ||
           (r.lotNo ?? "").toLowerCase().includes(needle) ||
+          (r.binNo ?? "").toLowerCase().includes(needle) ||
+          storeCode(r).toLowerCase().includes(needle) ||
           fiche(r).toLowerCase().includes(needle)
         );
       })
@@ -78,9 +83,10 @@ export function ReceiptsListPage() {
     <>
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
-        title="Reception"
-        lede="Every RCN receipt at this site - open one to fill in or review its stages. Dispatch,
-          receiving and production status for each receipt shows in the Downstream column below."
+        title={MODULE_LABELS[module]}
+        lede={module === "reception"
+          ? "Trucks arriving and being checked: gate entry, supplier documents, weighing and quality, until each is accepted or rejected. Accepted trucks move on to Offloading; choose \"All trucks\" to see every one."
+          : "Accepted trucks being unloaded and recorded: unloading and bags, net weight, Lot, Bin and GRN. Choose \"All trucks\" to see every one."}
         actions={
           <div className="flex items-center gap-3">
             <SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />
@@ -103,15 +109,15 @@ export function ReceiptsListPage() {
                 <span className="material-symbols-outlined text-[17px]">download</span>
                 Export
               </button>
-              {/* The one way to add entries: a grid, whether it's one truck or twenty. */}
-              <button
+              {/* The one way to add entries: a grid, whether it's one truck or twenty. New trucks arrive in Reception. */}
+              {module === "reception" && <button
                 onClick={() => navigate(`/${site.slug}/receipts/batch`)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
                 title="Add one or more entries from a grid"
               >
                 <span className="material-symbols-outlined text-[17px]">add</span>
                 Add entries
-              </button>
+              </button>}
               </>
             )}
           </div>
@@ -119,12 +125,12 @@ export function ReceiptsListPage() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
-        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={`/${site.slug}/receipts`} />
-        <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={`/${site.slug}/receipts?status=unloaded`} />
-        <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={`/${site.slug}/receipts?status=grn_completed`} />
-        <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={`/${site.slug}/receipts?status=pending_qa`} />
-        <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to={`/${site.slug}/receipts?status=pending_unload`} />
-        <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={`/${site.slug}/receipts?status=rejected`} tone="gap" />
+        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={`${base}?status=all`} />
+        <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={`${base}?status=unloaded`} />
+        <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={`${base}?status=grn_completed`} />
+        <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={`${base}?status=pending_qa`} />
+        <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to={`${base}?status=pending_unload`} />
+        <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={`${base}?status=rejected`} tone="gap" />
       </div>
 
       {dialogMode && (
@@ -142,13 +148,14 @@ export function ReceiptsListPage() {
 
       <FilterBar>
         <input
-          placeholder="Search vehicle, supplier, LBA code, Fiche, Lot, receipt ID…"
+          placeholder="Search vehicle, supplier, LBA code, Fiche, Lot, Bin, Store, receipt ID…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="w-full sm:w-64"
         />
         <select value={status} onChange={(e) => setParams((p) => setOrDelete(p, "status", e.target.value))}>
-          <option value="">All statuses</option>
+          <option value="">{MODULE_LABELS[module]} (default)</option>
+          <option value="all">All trucks</option>
           {ALL_STATUSES.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABELS[s]}

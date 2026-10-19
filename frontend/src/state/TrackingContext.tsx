@@ -46,7 +46,6 @@ interface TrackingApi {
    * site) — never both, matching Warehouse's Site -> Store hierarchy. Omitted entirely, the
    * warehouse is added unclassified, same as this method's original behavior. */
   addWarehouse: (name: string, classification?: { kind?: string; site?: string }) => void;
-  addBin: (name: string) => void;
 
   /** Flush any buffered edits for a stage immediately — call on blur / before navigating away. */
   flushStage: (id: string, stageId: string) => void;
@@ -223,10 +222,6 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         const site = classification?.site ?? null;
         setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind, site }] }));
         api.addWarehouse(name, classification).catch((e) => { fail(e); void refresh(); });
-      },
-      addBin: (name) => {
-        setMasters((prev) => ({ ...prev, bins: [...prev.bins, name] }));
-        api.addBin(name).catch((e) => { fail(e); void refresh(); });
       },
 
       flushStage: (id, stageId) => void flushKey(`${id}\u0000${stageId}`),
@@ -457,6 +452,7 @@ export function useJuteLedgerEntries(ledgerId: string, warehouse: string | undef
 export function useReceiptLinks(receiptId: string | undefined) {
   const [links, setLinks] = useState<import("../repository/api").ReceiptLinks | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!receiptId) { setLinks(null); setLoading(false); return; }
     let alive = true;
@@ -466,8 +462,10 @@ export function useReceiptLinks(receiptId: string | undefined) {
       .catch(() => { if (alive) setLinks(null); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [receiptId]);
-  return { links, loading };
+  }, [receiptId, tick]);
+  /** Reads the links again, for after a write that adds a linked row (a drying started from the receipt). */
+  const refetch = useCallback(() => setTick((n) => n + 1), []);
+  return { links, loading, refetch };
 }
 
 /**

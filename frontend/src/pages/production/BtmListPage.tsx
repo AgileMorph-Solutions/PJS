@@ -36,7 +36,7 @@ export function BtmListPage() {
   }
 
   const columns: Column<BtmIntake>[] = [
-    { label: "BTM No", filter: { value: (r) => r.btmNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.btmNo}</span> },
+    { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.btmNo}</span> },
     { label: "Destination Bin", filter: { value: (r) => r.binNo }, render: (r) => r.binNo },
     { label: "Source", filter: { value: (r) => r.source }, render: (r) => r.source ?? "-" },
     { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },

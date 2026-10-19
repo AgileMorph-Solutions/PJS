@@ -253,6 +253,9 @@ const BKT: Pair[] = [
   ["truckNo", "Truck Registration"], ["transporter", "Transporter"], ["driver", "Driver"], ["driverPhone", "Phone"],
   ["lots", "Lot No"], ["bins", "Bin No"], ["bagsDispatched", "Bags Dispatched"], ["dispatchedGrossKg", "Loaded Truck Weight (kg)"],
   ["netDispatchedKg", "Net Weight Dispatched (kg)"], ["dispatchedAt", "Dispatched At"],
+  // One value per Lot, in Lot No order, separated by " / " like the Lot No column itself.
+  ["dispatchWhReceiptNo", "Dispatch Warehouse Receipt No"], ["moistureDispatched", "Moisture at Dispatch (%)"], ["korDispatched", "KOR at Dispatch"],
+  ["nutCountDispatched", "Nut Count at Dispatch"], ["receiveWhReceiptNo", "Receiving Warehouse Receipt No"],
   ["bagsReceived", "Bags Received"], ["damagedBags", "Damaged Bags"], ["receivedGrossKg", "Gross Weight Received (kg)"],
   ["netAtArrivalKg", "Net Weight at Arrival (kg)"], ["korReceived", "KOR Received"], ["moistureReceived", "Moisture Received (%)"],
   ["nutCountReceived", "Nut Count at Arrival"], ["receivedLotNoRaw", "Receiving Lot No (as written)"], ["receivedAt", "Received At"],

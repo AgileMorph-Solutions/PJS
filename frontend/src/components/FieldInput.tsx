@@ -13,6 +13,8 @@ interface Props {
   /** The system, not a person, produces this value. Always read-only, with the reason shown under it
    * ("Good + damp + torn bags", "Issued by the system when the truck passes quality"). */
   system?: { kind: "calculated" | "issued"; hint: string };
+  /** A quiet line under an editable field (for example "fills itself with today's date when saved"). */
+  note?: string;
   /** Offered while the field is empty and never written on its own: taking it is the person confirming it. */
   suggestion?: { value: string; from: string };
   /** Known values to pick from (a Bin from the master); typing something else is still allowed — the server decides. */
@@ -24,7 +26,7 @@ interface Props {
  * displayed value always comes from the record itself via `value`, never from the generic sample
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, suggestion, options }: Props) {
+export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, options }: Props) {
   const isNew = field.v === "";
   const locked = readOnly || Boolean(system);
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
@@ -66,6 +68,7 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
           {system.hint}
         </p>
       )}
+      {note && !system && <p className="mt-1 text-[11.5px] text-warmstone-500">{note}</p>}
       {suggestion && !locked && !value.trim() && (
         <button
           type="button"

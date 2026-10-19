@@ -44,7 +44,10 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
   // How each filterable column filters (a checklist, text, a range), decided once per set of rows rather than on every keystroke.
   const kinds = useMemo(() => {
     const out: Record<string, FilterKind> = {};
-    for (const c of columns) if (c.filter) out[c.label] = resolveKind(c.filter, rows);
+    for (const c of columns) {
+      const k = c.filter ? resolveKind(c.filter, rows) : null;
+      if (k) out[c.label] = k;
+    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, columns.map((c) => c.label).join("|")]);
@@ -56,8 +59,8 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
   }, [rows, kinds]);
   const shownRows = useMemo(() => applyFilters(rows, columns, active, kinds), [rows, columns, active, kinds]);
   const page = usePagination(shownRows);
-  const activeCount = columns.filter((c) => c.filter && isActive(active[c.label])).length;
-  const hasFilters = columns.some((c) => c.filter);
+  const activeCount = columns.filter((c) => kinds[c.label] && isActive(active[c.label])).length;
+  const hasFilters = Object.keys(kinds).length > 0;
 
   if (rows.length === 0) {
     return <EmptyState title={emptyTitle ?? "Nothing here yet"} hint={emptyHint} />;
@@ -94,9 +97,9 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
               >
                 <span className={`inline-flex items-center gap-1 ${c.align === "right" ? "flex-row-reverse" : ""}`}>
                   {c.label}
-                  {c.filter && (
+                  {kinds[c.label] && (
                     <ColumnFilterMenu
-                      label={c.label} kind={kinds[c.label] ?? "text"} options={options[c.label] ?? []}
+                      label={c.label} kind={kinds[c.label]!} options={options[c.label] ?? []}
                       value={active[c.label]} onChange={(next) => setActive((prev) => ({ ...prev, [c.label]: next }))}
                     />
                   )}

@@ -23,6 +23,12 @@ export const DECISION_BRANCHES: Record<string, BranchOutcome[]> = {
       label: "Warehouse → Drying",
       note: "Drying yard full → RCN unloaded to the warehouse first, issued to drying later once space frees up.",
     },
+    {
+      id: "none",
+      label: "No — no drying needed",
+      // Recorded as a decision only: it never creates the drying step, so the truck's status is untouched (receiptStatus.ts).
+      note: "The Lot goes on without drying. Nothing else is recorded.",
+    },
   ],
   "n-xferdec": [
     { id: "stays", label: "No — stays at this warehouse", note: "Nothing further happens until a transfer is decided on later." },

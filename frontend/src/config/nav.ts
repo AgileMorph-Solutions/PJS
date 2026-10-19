@@ -47,6 +47,9 @@ export const NAV: NavSection[] = [
     items: [
       { label: "Delivery plans", sitePath: "delivery-plans", icon: "event_upcoming", roles: ["admin", "warehouse_incharge"] },
       { label: "Reception", sitePath: "receipts", icon: "receipt_long" },
+      // Reception and Offloading are the two halves of receiving a truck (contract data/modules.ts): a truck is in Reception
+      // until it is accepted, then in Offloading until its GRN is done.
+      { label: "Offloading", sitePath: "offloading", icon: "unarchive" },
       // Back in the menu (Oct 2026): the DESTINATION warehouse records what arrived on a BKT, and its
       // Lots' own pages are at the other site, so there is nowhere else for it to do that.
       { label: "Transfers", sitePath: "transfers", icon: "local_shipping", roles: ["admin", "warehouse_incharge"] },

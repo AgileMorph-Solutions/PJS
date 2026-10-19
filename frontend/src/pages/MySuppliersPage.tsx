@@ -7,6 +7,8 @@ import { useMySuppliers, useSupplierRequests } from "../state/userManagement";
 import { api } from "../repository/api";
 import type { Supplier } from "../types/receipt";
 import type { SupplierRequestView } from "../types/user";
+import { FilterBar } from "../components/ui/FilterBar";
+import { useTableSearch } from "../components/ui/useTableSearch";
 
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -34,20 +36,25 @@ export function MySuppliersPage() {
   }
 
   const supplierCols: Column<Supplier>[] = [
-    { label: "LBA Code", filter: { value: (s) => s.code, kind: "text" }, render: (s) => <span className="font-mono text-[12.5px]">{s.code}</span> },
-    { label: "Supplier name", filter: { value: (s) => s.name, kind: "text" }, render: (s) => s.name },
+    { label: "LBA Code", render: (s) => <span className="font-mono text-[12.5px]">{s.code}</span> },
+    { label: "Supplier name", render: (s) => s.name },
   ];
   const requestCols: Column<SupplierRequestView>[] = [
-    { label: "Supplier", filter: { value: (r) => r.name, kind: "text" }, render: (r) => r.name },
-    { label: "LBA Code", filter: { value: (r) => r.code, kind: "text" }, render: (r) => r.code ?? "-" },
+    { label: "Supplier", render: (r) => r.name },
+    { label: "LBA Code", render: (r) => r.code ?? "-" },
     { label: "Status", filter: { value: (r) => r.status, kind: "select" }, render: (r) => <Pill tone={TONE[r.status]} label={r.status} /> },
-    { label: "Note", filter: { value: (r) => r.reason, kind: "text" }, render: (r) => r.reason ?? "" },
+    { label: "Note", render: (r) => r.reason ?? "" },
   ];
+
+  const search = useTableSearch(mine.rows, (s) => [s.code, s.name]);
 
   return (
     <div className="space-y-5">
       <PageHeader kicker="Branch Manager" title="My suppliers" lede="You can report on receipts for these suppliers only." />
-      <DataTable columns={supplierCols} rows={mine.rows} keyFn={(s) => s.code} emptyTitle={mine.loading ? "Loading…" : "No suppliers assigned yet"} emptyHint="Ask the Warehouse Incharge to assign suppliers to you, or request a new one below." />
+      <FilterBar>
+        <input placeholder="Search LBA code or supplier name…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
+      </FilterBar>
+      <DataTable columns={supplierCols} rows={search.filtered} keyFn={(s) => s.code} emptyTitle={mine.loading ? "Loading…" : "No suppliers assigned yet"} emptyHint="Ask the Warehouse Incharge to assign suppliers to you, or request a new one below." />
       <CollapsibleCard title="Request a new supplier">
         <form onSubmit={handleRequest} className="grid sm:grid-cols-[1fr_1fr_auto] gap-4 items-end pt-3">
           <div><label htmlFor="rq-name" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Supplier name</label>

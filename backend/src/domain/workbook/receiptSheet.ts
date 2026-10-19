@@ -27,6 +27,7 @@ import { toReceiptRecord } from "../../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ValidationError } from "../validation.js";
 import { canonical, parseCell } from "./cells.js";
 import { checkUploadRow, type UploadCheckInput } from "@anagroci/contract/domain/uploadChecks";
+import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
 import type { FileKeys } from "./tableSheet.js";
 import { SAMPLE_LIMIT, type Change, type Ctx, type ParsedSheet, type ReceiptOp, type RowError, type RowWarning, type SheetResult } from "./types.js";
 
@@ -173,6 +174,16 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
           err(`"${next}" isn't a valid decision (use ${DECISION_BRANCHES[stageId].map((b) => b.id).join(" or ")})`, h);
         } else branches[stageId] = next;
       }
+    }
+
+    // A record whose GRN is complete is locked (contract domain/recordLock.ts): the file can't change what it closed.
+    if (existing?.record.lockedAt) {
+      const closed = changes.find((c) => {
+        const stage = STAGE_HEADER.get(c.column)?.stageId;
+        const decision = BRANCH_HEADER.get(c.column);
+        return c.column.startsWith("Receipt.") || (stage !== undefined && LOCKED_STAGES.has(stage)) || (decision !== undefined && LOCKED_DECISIONS.has(decision));
+      });
+      if (closed) err(`is locked (its GRN is complete) — an Admin can reopen it in the app, then upload again`, closed.column);
     }
 
     // Keep the stage twin of a changed receipt column in step — for a new receipt always, for an

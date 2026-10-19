@@ -24,6 +24,8 @@ const REQUIRED = {
 };
 
 async function cleanup() {
+  await prisma.juteWarehouseMovement.deleteMany({ where: { supplierCode: { startsWith: "SUPC" } } });
+  await prisma.juteSupplierMovement.deleteMany({ where: { supplierCode: { startsWith: "SUPC" } } });
   await prisma.receipt.deleteMany({ where: { warehouse: A } });
   await prisma.deliveryPlan.deleteMany({ where: { destinationWarehouse: A } });
   await prisma.supplier.deleteMany({ where: { OR: [{ code: { startsWith: "SUPC" } }, { name: { startsWith: "SUPC" } }, { code: { startsWith: "LBA-9" } }] } });
@@ -161,12 +163,26 @@ describe("figures worked out from the supplier's transactions", () => {
     await truck("2026-05-04", { plan: true, pass: true, grn: "10000", kor: "44", mois: "11" });
     await truck("2026-05-06", { pass: false, kor: "30", mois: "15" });
     await truck("2026-05-05", { pass: true, grn: "5000" }); // unplanned, no readings
+    // Weighed on arrival (net weight), GRN not entered yet.
+    const weighed = await createReceipt(A, "2026-05-08");
+    await setStageFields(weighed.id, "n-verify", { "LBA CODE": "SUPC-PERF", "SUPPLIERS NAME": "SUPC PERF" });
+    await setStageFields(weighed.id, "n-qfs", { KOR: "46", "MOIS. (moisture)": "10" });
+    await setBranch(weighed.id, "n-qfs", "pass");
+    await setStageFields(weighed.id, "n-gross", { "Loaded truck weight (kg)": "30000" });
+    await setStageFields(weighed.id, "n-tare", { "Tare / empty truck weight (kg)": "20000" });
+    // Net weight is worked out from all three bag counts (contract receiptMath), so all three are given.
+    await setStageFields(weighed.id, "n-unload", { "BON SACS (good bags)": "98", "HUMID SACS (damp bags)": "1", "Sacs déchirés (torn bags)": "1" });
+    // Jute: 1,200 bags issued to the supplier on the warehouse ledger, 300 returned via deliveries on the supplier ledger.
+    await prisma.juteWarehouseMovement.create({ data: { seq: 9_000_001, activitiesType: "SUPC PERF", activityCategory: "SUPPLIER_ISSUE", supplierCode: "SUPC-PERF", whLocation: A, bagsIssued: 1200 } });
+    await prisma.juteSupplierMovement.create({ data: { supplierCode: "SUPC-PERF", returnedViaDeliveries: 300 } });
 
     const p = (await call("GET", "/api/masters/suppliers/SUPC-PERF")).json().performance;
     expect(p).toMatchObject({
       targetKg: 50000, receivedOnPlansKg: 40000, achievementPct: 80, volumeDeliveredKg: 45000,
-      averageKor: 47, korTrucks: 2, averageMoisture: 9.5, trucksArrived: 4, rejectedTrucks: 1, rejectionRatePct: 25,
-      lastDeliveryDate: "2026-05-05", juteBagBalance: null, fundingExposure: null, outstandingAmount: null,
+      // The weighed truck (net 10,000 gross - 100 bags = 9,900 kg) has no GRN: it is counted as weighed and awaiting GRN, never in the GRN volume.
+      weighedOnArrivalKg: 9900, trucksAwaitingGrn: 1,
+      averageKor: 46.8, korTrucks: 3, averageMoisture: 9.6, moistureTrucks: 3, trucksArrived: 5, rejectedTrucks: 1, rejectionRatePct: 20,
+      lastDeliveryDate: "2026-05-08", juteBagsIssued: 1200, juteBagsReturned: 300, juteBagBalance: 900, fundingExposure: null, outstandingAmount: null,
     });
   });
 });

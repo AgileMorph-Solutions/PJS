@@ -12,16 +12,17 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { ValidationError } from "../domain/validation.js";
 import { UnknownStageFieldError } from "../stageStore.js";
 import {
-  listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities,
+  listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities, finaliseBin, reopenRecord,
 } from "../services/receipts.js";
 import { createReceiptsBatch } from "../services/receiptBatch.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
+import { startDrying, type StartDryingInput } from "../services/dryingBatches.js";
 import { listUploadIssues, reviewUploadIssue } from "../services/uploadIssues.js";
 import { getDownstreamStatus } from "../services/receiptsDownstream.js";
 import { approveException, getReceiptPlanInfo, linkReceiptToPlan, listReceiptPlanInfo } from "../services/receiptPlanInfo.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
 import { scopedSite, scopedWarehouse, assertWarehouseAccess } from "../auth/scope.js";
-import { currentUser } from "../auth/plugin.js";
+import { currentUser, requireRole } from "../auth/plugin.js";
 import { assertReceiptVisible, filterReceiptsForUser } from "../auth/receiptAccess.js";
 
 /** Hard rules reject (422); unknown stage/field is a client bug (400). */
@@ -93,6 +94,29 @@ export async function receiptRoutes(app: FastifyInstance) {
     if (!(await requireReceipt(id, reply, req))) return;
     const issue = await reviewUploadIssue(id, issueId, currentUser(req).id);
     return issue ?? reply.code(404).send({ error: "Upload issue not found" });
+  });
+
+  // "Drying: Yes" — issues the Lot for drying. Warehouse Incharge / admin only (not listed in auth/policy.ts for the narrow roles).
+  app.post("/api/receipts/:id/drying", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    try { return reply.code(201).send(await startDrying(id, (req.body ?? {}) as StartDryingInput, currentUser(req))); } catch (e) { return sendError(reply, e); }
+  });
+
+  // Finalising a bin is for the Warehouse Incharge or admin (auth/policy.ts keeps the narrow roles off it); reopening is admin only.
+  app.post("/api/receipts/:id/bin/finalise", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    const u = currentUser(req);
+    try { return await finaliseBin(id, { id: u.id, displayName: u.displayName }); } catch (e) { return sendError(reply, e); }
+  });
+
+  app.post("/api/receipts/:id/reopen", { preHandler: requireRole("admin") }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { reason } = (req.body ?? {}) as { reason?: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    const u = currentUser(req);
+    try { return await reopenRecord(id, { id: u.id, displayName: u.displayName }, reason); } catch (e) { return sendError(reply, e); }
   });
 
   app.post("/api/receipts/:id/exception-approval", async (req, reply) => {

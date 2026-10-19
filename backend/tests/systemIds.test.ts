@@ -353,6 +353,7 @@ describe("Transfer Request", () => {
 
   beforeAll(async () => {
     lotted = (await createReceipt(SITE, `${YEAR}-08-01`)).id;
+    await setStageFields(lotted, "n-qfs", { "MOIS. (moisture)": "10.2", KOR: "47.5" }); // what a dispatch takes unless measured again
     lotNumber = (await setBranch(lotted, "n-qfs", "pass")).lotNo!;
   });
 
@@ -385,11 +386,11 @@ describe("Transfer Request", () => {
 
   it("steps requested → dispatched → received, never skipping or going back", async () => {
     const id = `BKT-${YEAR}-001`;
-    await expect(receiveTransfer(id, { bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
-    expect((await dispatchTransfer(id, { truckNo: "STEP-1", dispatchedGrossKg: 41300 })).status).toBe("dispatched");
-    await expect(dispatchTransfer(id, { truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
-    expect((await receiveTransfer(id, { bagsReceived: 478, receivedGrossKg: 41300 })).status).toBe("received");
-    await expect(receiveTransfer(id, { bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/already received/);
+    await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
+    expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300 })).status).toBe("dispatched");
+    await expect(dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
+    expect((await receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).status).toBe("received");
+    await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/already received/);
     await expect(addTransferLines(id, [{ receiptId: lotted }])).rejects.toThrow(/already received/);
     expect((await getTransfer(id))!.status).toBe("received");
   });

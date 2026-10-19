@@ -28,7 +28,7 @@ export function IssuedToProductionPage() {
   );
 
   const columns: Column<IssuedToProductionRow>[] = [
-    { label: "BTM No.", filter: { value: (r) => r.btmNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "-"}</span> },
+    { label: "BTM No.", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "-"}</span> },
     { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => r.date || "-" },
     { label: "Source Bin", filter: { value: (r) => r.sourceBin }, render: (r) => r.sourceBin || "-" },
     { label: "Dry Bin", filter: { value: (r) => r.dryBin }, render: (r) => r.dryBin || "-" },

@@ -34,10 +34,10 @@ export function DispatchesPage() {
   const columns: Column<WarehouseDispatchLine>[] = [
     { label: "SN", filter: { value: (l) => l.sn, kind: "number" }, render: (l) => <span className="font-mono text-[12.5px]">{l.sn ?? "-"}</span> },
     { label: "Charge date", filter: { value: (l) => l.chargeDate || l.chargeDateRaw, kind: "date" }, render: (l) => l.chargeDate || l.chargeDateRaw || "-" },
-    { label: "Voyage no.", filter: { value: (l) => l.vyogeNumber, kind: "text" }, render: (l) => l.vyogeNumber || "-" },
+    { label: "Voyage no.", render: (l) => l.vyogeNumber || "-" },
     { label: "Bin", filter: { value: (l) => l.bin }, render: (l) => l.bin || "-" },
-    { label: "Truck no.", filter: { value: (l) => l.truckNo, kind: "text" }, render: (l) => l.truckNo || "-" },
-    { label: "Fiche CCA", filter: { value: (l) => l.ficheCca, kind: "text" }, render: (l) => <span className="font-mono text-[12.5px]">{l.ficheCca || "-"}</span> },
+    { label: "Truck no.", render: (l) => l.truckNo || "-" },
+    { label: "Fiche CCA", render: (l) => <span className="font-mono text-[12.5px]">{l.ficheCca || "-"}</span> },
     { label: "Total bags", filter: { value: (l) => l.totalBags, kind: "number" }, render: (l) => l.totalBags ?? "-" },
     { label: "Status", filter: { value: (l) => l.status }, render: (l) => l.status || "-" },
     {

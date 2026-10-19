@@ -41,9 +41,9 @@ export function SuppliersPage() {
   const page = (s: Supplier) => `/masters/suppliers/${encodeURIComponent(s.code)}`;
 
   const columns: Column<Supplier>[] = [
-    { label: "Supplier ID", nowrap: true, filter: { value: (s) => s.supplierNo, kind: "text" }, render: (s) => <span className="font-mono text-[12.5px] text-warmstone-500">{s.supplierNo ?? "-"}</span> },
-    { label: "LBA Code", nowrap: true, filter: { value: (s) => s.code, kind: "text" }, render: (s) => <span className="font-mono text-[12.5px] font-semibold text-brand-700">{s.code}</span> },
-    { label: "Supplier name", filter: { value: (s) => s.name, kind: "text" }, render: (s) => s.name },
+    { label: "Supplier ID", nowrap: true, render: (s) => <span className="font-mono text-[12.5px] text-warmstone-500">{s.supplierNo ?? "-"}</span> },
+    { label: "LBA Code", nowrap: true, render: (s) => <span className="font-mono text-[12.5px] font-semibold text-brand-700">{s.code}</span> },
+    { label: "Supplier name", render: (s) => s.name },
     { label: "Status", nowrap: true, filter: { value: (s) => SUPPLIER_STATUS_LABELS[statusOf(s)], kind: "select" }, render: (s) => <Pill tone={STATUS_TONE[statusOf(s)]} label={SUPPLIER_STATUS_LABELS[statusOf(s)]} /> },
     {
       label: "", nowrap: true,

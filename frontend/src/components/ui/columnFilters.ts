@@ -3,20 +3,23 @@
  * Pure (no React), so the matching can be reasoned about and checked on its own.
  *
  * A column's `render()` returns JSX, which can't be read back as text, so a filterable column says what to
- * filter on with a `value(row)` of its own: plain text, a number, or an ISO date.
+ * filter on with a `value(row)` of its own: the text to tick in a checklist, a number, or an ISO date.
  */
-export type FilterKind = "select" | "text" | "number" | "date";
+/**
+ * A checklist, a number range or a date range. There is deliberately no free-text filter: typing to find something is
+ * the page's main search box (and a column with too many distinct values for a checklist simply isn't filterable).
+ */
+export type FilterKind = "select" | "number" | "date";
 
 export interface ColumnFilter<T> {
   /** What this column holds for a row. null / undefined / blank all count as "(blank)". */
   value: (row: T) => string | number | null | undefined;
-  /** Left out, the kind is picked from the data: a few distinct values make a checklist, anything else a text box. */
+  /** Left out, a checklist when the column has few distinct values, otherwise no filter at all. */
   kind?: FilterKind;
 }
 
 /** What the person has set for one column. Everything optional; an empty one filters nothing. */
 export interface ActiveFilter {
-  text?: string;
   /** Checked values from a checklist (BLANK stands for an empty cell). */
   selected?: string[];
   min?: string;
@@ -26,7 +29,7 @@ export interface ActiveFilter {
 }
 
 export const BLANK = "(blank)";
-/** Up to this many distinct values and a column with no stated kind gets a checklist. */
+/** Up to this many distinct values and a column with no stated kind gets a checklist; more than that and it has none. */
 export const CHECKLIST_MAX = 12;
 
 const clean = (v: string | number | null | undefined) => (v === null || v === undefined ? "" : String(v).trim());
@@ -34,7 +37,7 @@ const asNumber = (s: string) => (s === "" ? NaN : Number(s.replace(/[\s,]/g, "")
 
 export function isActive(f: ActiveFilter | undefined): boolean {
   if (!f) return false;
-  return Boolean(f.text?.trim() || f.selected?.length || f.min?.trim() || f.max?.trim() || f.from || f.to);
+  return Boolean(f.selected?.length || f.min?.trim() || f.max?.trim() || f.from || f.to);
 }
 
 export function distinctValues<T>(filter: ColumnFilter<T>, rows: T[]): string[] {
@@ -44,9 +47,10 @@ export function distinctValues<T>(filter: ColumnFilter<T>, rows: T[]): string[] 
   return [...seen].sort((a, b) => (a === BLANK ? 1 : b === BLANK ? -1 : a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })));
 }
 
-export function resolveKind<T>(filter: ColumnFilter<T>, rows: T[]): FilterKind {
+/** How a column filters, or null when it can't (no stated kind and too many distinct values for a checklist). */
+export function resolveKind<T>(filter: ColumnFilter<T>, rows: T[]): FilterKind | null {
   if (filter.kind) return filter.kind;
-  return distinctValues(filter, rows).length <= CHECKLIST_MAX ? "select" : "text";
+  return distinctValues(filter, rows).length <= CHECKLIST_MAX ? "select" : null;
 }
 
 /** Does one cell value pass this column's filter? */
@@ -55,8 +59,6 @@ export function passes(kind: FilterKind, raw: string | number | null | undefined
   switch (kind) {
     case "select":
       return !f.selected?.length || f.selected.includes(v || BLANK);
-    case "text":
-      return !f.text?.trim() || v.toLowerCase().includes(f.text.trim().toLowerCase());
     case "number": {
       const lo = asNumber(f.min ?? "");
       const hi = asNumber(f.max ?? "");
@@ -81,7 +83,7 @@ export function applyFilters<T>(
   active: Record<string, ActiveFilter>,
   kinds: Record<string, FilterKind>,
 ): T[] {
-  const live = columns.filter((c) => c.filter && isActive(active[c.label]));
+  const live = columns.filter((c) => c.filter && kinds[c.label] && isActive(active[c.label]));
   if (!live.length) return rows;
-  return rows.filter((r) => live.every((c) => passes(kinds[c.label] ?? "text", c.filter!.value(r), active[c.label]!)));
+  return rows.filter((r) => live.every((c) => passes(kinds[c.label]!, c.filter!.value(r), active[c.label]!)));
 }

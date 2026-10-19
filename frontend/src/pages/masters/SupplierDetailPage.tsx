@@ -211,19 +211,21 @@ export function SupplierDetailPage() {
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <KpiTile label="Target / commitment" value={kg(p.targetKg) ?? "No plan"} />
-          <KpiTile label="Volume delivered" value={kg(p.volumeDeliveredKg) ?? "-"} />
+          <KpiTile label={`Volume delivered (GRN${p.trucksAwaitingGrn ? `, ${p.trucksAwaitingGrn} truck${p.trucksAwaitingGrn === 1 ? "" : "s"} awaiting GRN` : ""})`} value={kg(p.volumeDeliveredKg) ?? "-"} />
+          <KpiTile label="Weighed on arrival (net)" value={kg(p.weighedOnArrivalKg) ?? "-"} />
           <KpiTile label={`Achievement (${p.receivedOnPlansKg.toLocaleString()} kg on plans)`} value={p.achievementPct === null ? "-" : `${p.achievementPct}%`} />
           <KpiTile label={`Average KOR (${p.korTrucks} truck${p.korTrucks === 1 ? "" : "s"})`} value={p.averageKor ?? "-"} />
           <KpiTile label={`Average moisture (${p.moistureTrucks} truck${p.moistureTrucks === 1 ? "" : "s"})`} value={p.averageMoisture === null ? "-" : `${p.averageMoisture}%`} />
           <KpiTile label={`Rejected trucks (of ${p.trucksArrived})`} value={p.rejectedTrucks} tone={p.rejectedTrucks ? "gap" : "default"} />
           <KpiTile label="Rejection rate" value={p.rejectionRatePct === null ? "-" : `${p.rejectionRatePct}%`} tone={p.rejectionRatePct ? "gap" : "default"} />
           <KpiTile label="Last delivery" value={p.lastDeliveryDate ?? "-"} />
-          <KpiTile label="Jute bag balance" value={p.juteBagBalance === null ? "No movements" : p.juteBagBalance.toLocaleString()} />
+          <KpiTile label={p.juteBagBalance === null ? "Jute bag balance" : `Jute bags with supplier (${p.juteBagsIssued.toLocaleString()} issued, ${p.juteBagsReturned.toLocaleString()} returned)`} value={p.juteBagBalance === null ? "No movements" : p.juteBagBalance.toLocaleString()} />
           <KpiTile label="Funding exposure" value="Not tracked" />
           <KpiTile label="Outstanding amount" value="Not tracked" />
         </div>
         <p className="mt-2 px-1 text-[11.5px] text-warmstone-400">
-          Target is the kg planned in this supplier's delivery plans (cancelled ones left out). Averages are weighted by delivered kg.
+          Target is the kg planned in this supplier's delivery plans (cancelled ones left out). Volume delivered counts only trucks whose GRN quantity is recorded; "weighed on arrival" is the net weight at the gate, a different figure.
+          Averages are weighted by each truck's GRN kg, or its net weight while no GRN is recorded.
           Funding exposure and outstanding amount need advances and payments, which the app doesn't record yet.
         </p>
       </div>

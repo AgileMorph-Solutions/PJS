@@ -13,7 +13,7 @@ export function ProductionBinsListPage() {
   const { rows, loading } = useProductionBins();
 
   const columns: Column<ProductionBinSummary>[] = [
-    { label: "Bin No", filter: { value: (r) => r.binNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.binNo}</span> },
+    { label: "Bin No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.binNo}</span> },
     { label: "BTMs in", filter: { value: (r) => r.btmCount, kind: "number" }, render: (r) => r.btmCount },
     { label: "Lots out", filter: { value: (r) => r.lotCount, kind: "number" }, render: (r) => r.lotCount },
     { label: "Source", filter: { value: (r) => r.source }, render: (r) => r.source ?? "-" },

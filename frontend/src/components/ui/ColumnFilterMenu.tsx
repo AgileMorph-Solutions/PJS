@@ -82,10 +82,6 @@ export function ColumnFilterMenu({ label, kind, options, value, onChange }: Prop
             {active && <button type="button" onClick={() => onChange({})} className="text-[11.5px] font-semibold text-brand-700 hover:text-brand-800 normal-case tracking-normal">Clear</button>}
           </div>
 
-          {kind === "text" && (
-            <input autoFocus aria-label={`${label} contains`} placeholder="Contains…" value={value?.text ?? ""} onChange={(e) => set({ text: e.target.value })} className={field} />
-          )}
-
           {kind === "number" && (
             <div className="flex items-center gap-2">
               <input autoFocus aria-label={`${label} minimum`} inputMode="decimal" placeholder="Min" value={value?.min ?? ""} onChange={(e) => set({ min: e.target.value })} className={field} />

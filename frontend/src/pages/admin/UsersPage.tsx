@@ -9,6 +9,8 @@ import { api } from "../../repository/api";
 import { ROLES, ROLE_LABEL, type Role } from "../../data/roles";
 import { WAREHOUSE_TYPE_LABEL, type WarehouseType } from "../../data/warehouseTypes";
 import type { UserView } from "../../types/user";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
 
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -50,8 +52,10 @@ export function UsersPage() {
     }
   }
 
+  const search = useTableSearch(users.rows, (u) => [u.displayName, u.username, ROLE_LABEL[u.role], u.warehouse]);
+
   const columns: Column<UserView>[] = [
-    { label: "Name", filter: { value: (u) => `${u.displayName} ${u.username}`, kind: "text" }, render: (u) => <div><div className="font-semibold">{u.displayName}</div><div className="text-[11.5px] text-warmstone-500">{u.username}</div></div> },
+    { label: "Name", render: (u) => <div><div className="font-semibold">{u.displayName}</div><div className="text-[11.5px] text-warmstone-500">{u.username}</div></div> },
     { label: "Role", filter: { value: (u) => ROLE_LABEL[u.role], kind: "select" }, render: (u) => ROLE_LABEL[u.role] },
     {
       label: "Warehouse", filter: { value: (u) => u.warehouse ?? "All", kind: "select" },
@@ -104,7 +108,10 @@ export function UsersPage() {
         </form>
       </CollapsibleCard>
       {error && <p role="alert" className="text-[13px] text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
-      <DataTable columns={columns} rows={users.rows} keyFn={(u) => u.id} emptyTitle={users.loading ? "Loading…" : "No users yet"} />
+      <FilterBar>
+        <input placeholder="Search name, username, role or warehouse…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
+      </FilterBar>
+      <DataTable columns={columns} rows={search.filtered} keyFn={(u) => u.id} emptyTitle={users.loading ? "Loading…" : "No users yet"} />
     </div>
   );
 }

@@ -65,11 +65,11 @@ export function ProductionBinDetailPage() {
   });
 
   const btmColumns: Column<BtmIntake>[] = [
-    { label: "BTM No", filter: { value: (r) => r.btmNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo}</span> },
+    { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo}</span> },
     { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
   const lotColumns: Column<ProductionLot>[] = [
-    { label: "Lot No", filter: { value: (r) => r.lotNo, kind: "text" }, render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo}</span> },
+    { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo}</span> },
     { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
   ];
   const stockColumns: Column<BinStockRow>[] = [

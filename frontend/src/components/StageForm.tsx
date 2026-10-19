@@ -1,5 +1,6 @@
 import type { Stage } from "../types/stage";
 import { derivedRuleFor } from "../domain/receiptMath";
+import { AUTO_DATE_FIELDS } from "@anagroci/contract/data/autoFields";
 import { FieldInput } from "./FieldInput";
 
 interface Props {
@@ -49,7 +50,14 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
                   kind: "issued" as const,
                   hint: f.n === "Lot Number" ? "Issued by the system when the truck passes quality" : "Filled in when the Lot is issued",
                 }
-              : undefined;
+              : stage.id === "n-bin" && (f.n === "Bin allocation date" || f.n === "Finalised by")
+                ? { kind: "issued" as const, hint: "Stamped when the bin allocation is finalised" }
+                : undefined;
+          // A date that fills itself: say so while it is still blank, so nobody wonders why it appears after saving.
+          const auto = AUTO_DATE_FIELDS[stage.id]?.find((a) => a.label === f.n);
+          const note = auto && !(values[f.n] ?? "").trim() && !readOnly
+            ? auto.from === "arrival" ? "Fills itself with the day the truck arrived when this step is saved. You can change it until the record is locked." : "Fills itself with today's date when this step is saved. You can change it until the record is locked."
+            : undefined;
           return (
             <FieldInput
               key={f.n}
@@ -62,6 +70,7 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
               idPrefix={stage.id}
               readOnly={readOnly}
               system={system}
+              note={note}
             />
           );
         })}

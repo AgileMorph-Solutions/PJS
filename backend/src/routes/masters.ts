@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify";
 import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { requireRole } from "../auth/plugin.js";
-import { listMasters, addWarehouse, addBin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
+import { listMasters, addWarehouse, createBin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
 
 export async function masterRoutes(app: FastifyInstance) {
   app.get("/api/masters", async () => listMasters());
@@ -29,8 +29,6 @@ export async function masterRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/masters/bins", async (req, reply) => {
-    const { code, warehouseName } = (req.body ?? {}) as { code?: string; warehouseName?: string };
-    if (!code) return reply.code(400).send({ error: "code is required" });
-    return reply.code(201).send(await addBin(code, warehouseName));
+    return reply.code(201).send(await createBin((req.body ?? {}) as { code?: string; warehouseName?: string }));
   });
 }

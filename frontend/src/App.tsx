@@ -102,7 +102,8 @@ function AppRoutes() {
                 two literal duplicated route trees. SiteLayout 404s on an unrecognized :site rather
                 than silently rendering garbage. */}
             <Route path="/:site" element={<SiteLayout />}>
-              <Route path="receipts" element={<ReceiptsListPage />} />
+              <Route path="receipts" element={<ReceiptsListPage module="reception" />} />
+              <Route path="offloading" element={<ReceiptsListPage module="offloading" />} />
               {/* NOT forked per site - one receipt record, one page; a receipt detail page can
                   legitimately show cross-site linked records by design (see ReceiptDetailPage's own
                   header comment and receiptLinks.ts, whose /links route deliberately never accepts

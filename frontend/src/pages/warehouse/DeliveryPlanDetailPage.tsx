@@ -17,6 +17,8 @@ import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
 import type { DeliveryPlanDetail, DeliveryPlanTruck } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { FilterBar } from "../../components/ui/FilterBar";
+import { useTableSearch } from "../../components/ui/useTableSearch";
 
 const STATUS_TONE: Record<PlanStatus, string> = { planned: "decision", partially_received: "term", delivered: "entry", cancelled: "gap" };
 const kg = (n: number | null) => (n === null ? "-" : n.toLocaleString());
@@ -63,6 +65,8 @@ export function DeliveryPlanDetailPage() {
     } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
   }
 
+  const search = useTableSearch(plan?.trucks ?? [], (t) => [t.receiptId, t.vehicleNo, t.lotNo, t.supplierName]);
+
   if (error) return <p className="text-sm text-danger-700">{error}</p>;
   if (!plan) return <p className="text-sm text-warmstone-500">Loading…</p>;
 
@@ -72,9 +76,9 @@ export function DeliveryPlanDetailPage() {
   const done = plan.trucks.filter((t) => DONE.has(t.status)).length;
   const inProgress = plan.trucks.filter((t) => !t.rejected && !DONE.has(t.status)).length;
   const columns: Column<DeliveryPlanTruck>[] = [
-    { label: "Receipt", filter: { value: (t) => t.receiptId, kind: "text" }, nowrap: true, render: (t) => <Link to={`/${site.slug}/receipts/${t.receiptId}`} className="font-mono text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">{t.receiptId}</Link> },
+    { label: "Receipt", nowrap: true, render: (t) => <Link to={`/${site.slug}/receipts/${t.receiptId}`} className="font-mono text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">{t.receiptId}</Link> },
     { label: "Arrived", filter: { value: (t) => t.arrivalDate, kind: "date" }, nowrap: true, render: (t) => t.arrivalDate },
-    { label: "Truck", filter: { value: (t) => t.vehicleNo, kind: "text" }, nowrap: true, render: (t) => t.vehicleNo || "-" },
+    { label: "Truck", nowrap: true, render: (t) => t.vehicleNo || "-" },
     { label: "Steps", render: (t) => <TruckStepTracker status={t.status} /> },
     { label: "Outcome", filter: { value: (t) => STATUS_LABELS[t.status], kind: "select" }, render: (t) => (
       <span className="inline-flex flex-col items-start gap-1">
@@ -83,7 +87,7 @@ export function DeliveryPlanDetailPage() {
       </span>
     ) },
     { label: "GRN (kg)", filter: { value: (t) => t.grnKg, kind: "number" }, nowrap: true, render: (t) => (t.rejected ? "-" : t.grnKg === null ? <span className="text-warmstone-400">awaiting GRN</span> : kg(t.grnKg)) },
-    { label: "Lot", filter: { value: (t) => t.lotNo, kind: "text" }, nowrap: true, render: (t) => t.lotNo ?? "-" },
+    { label: "Lot", nowrap: true, render: (t) => t.lotNo ?? "-" },
     { label: "Against the plan", filter: { value: (t) => RECEPTION_TYPE[t.type].label, kind: "select" }, render: (t) => (
       <span className="inline-flex flex-col items-start gap-1">
         <Pill tone={RECEPTION_TYPE[t.type].tone} label={RECEPTION_TYPE[t.type].label} />
@@ -155,7 +159,10 @@ export function DeliveryPlanDetailPage() {
       {plan.cancelledAt && <p className="text-sm text-danger-700">Cancelled{plan.cancelReason ? `: ${plan.cancelReason}` : ""}</p>}
       {plan.remarks && <p className="text-sm text-warmstone-600">{plan.remarks}</p>}
 
-      <DataTable columns={columns} rows={plan.trucks} keyFn={(t) => t.receiptId} rowHref={(t) => `/${site.slug}/receipts/${t.receiptId}`} emptyTitle="No truck has arrived against this plan yet" />
+      <FilterBar>
+        <input placeholder="Search receipt, truck or lot…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
+      </FilterBar>
+      <DataTable columns={columns} rows={search.filtered} keyFn={(t) => t.receiptId} rowHref={(t) => `/${site.slug}/receipts/${t.receiptId}`} emptyTitle="No truck has arrived against this plan yet" />
     </div>
   );
 }

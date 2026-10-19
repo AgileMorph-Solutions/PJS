@@ -41,6 +41,9 @@ export interface ReceiptRecord {
   legacyId?: string;
   /** The Delivery Plan this truck arrived against; absent for an unplanned truck, which is allowed. */
   deliveryPlanId?: string;
+  /** Set once the GRN is complete (contract domain/recordLock.ts): from then on nothing can be changed until an Admin reopens it. */
+  lockedAt?: string;
+  lockedBy?: string;
   stageData: Record<string, Record<string, string>>;
   branches: Record<string, string>;
   timeline: TimelineEntry[];
@@ -89,7 +92,11 @@ export interface WarehouseMaster {
   code?: string | null;
 }
 export interface WarehouseAliasMaster { alias: string; warehouseName: string }
-export interface Masters { suppliers: Supplier[]; warehouses: WarehouseMaster[]; aliases?: WarehouseAliasMaster[]; bins: string[]; origins: string[] }
+export interface Masters {
+  suppliers: Supplier[]; warehouses: WarehouseMaster[]; aliases?: WarehouseAliasMaster[]; bins: string[]; origins: string[];
+  /** Which store each Bin is in (null = imported without one). */
+  binInfo?: { code: string; store: string | null }[];
+}
 
 export interface DryingJob {
   id: string; date: string; warehouse: string; bin: string;
@@ -195,6 +202,10 @@ export interface TransferLine {
   fiche: string | null;
   bags: number | null;
   netWeightKg: number | null;
+  /** Quality as dispatched; null on transfers made before it was required. */
+  moisture: number | null;
+  kor: number | null;
+  nutCount: number | null;
   /** Where the Lot was loaded from; a truck loading from several Bins shows them all. */
   binCode: string | null;
 }
@@ -215,6 +226,9 @@ export interface TransferRequest {
   remarks: string | null;
   lines: TransferLine[];
 
+  /** The warehouse receipt number of the dispatch and of the receiving; null before they were required. */
+  dispatchWhReceiptNo: string | null;
+  receiveWhReceiptNo: string | null;
   truckNo: string | null;
   transporter: string | null;
   driver: string | null;

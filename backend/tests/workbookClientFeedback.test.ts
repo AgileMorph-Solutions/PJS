@@ -60,6 +60,7 @@ beforeAll(async () => {
     const r = await createReceipt(A, "2035-05-10", against);
     await setStageFields(r.id, "n-gate", { "VEHICLE NO.": veh, "WH NO.": STORE });
     await setStageFields(r.id, "n-verify", { "SUPPLIERS NAME": "WB Supplier", "LBA CODE": "LBA-WB", ORIGIN: origin });
+    await setStageFields(r.id, "n-qfs", { "MOIS. (moisture)": "10.2", KOR: "47.5" });
     await setBranch(r.id, "n-qfs", "pass");
     await setStageFields(r.id, "n-unload", { "BON SACS (good bags)": "100" });
     await setStageFields(r.id, "n-grn", { [GRN]: grn });
@@ -73,8 +74,8 @@ beforeAll(async () => {
   const onTruck = await truck(undefined, "VAVOUA", "48000", "WBCF-T4"); // the Lot that goes to the other warehouse
   const t = await createTransfer({ transferDate: "2035-05-20", fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: onTruck, bags: 590 }] });
   bkt = t.id;
-  await dispatchTransfer(bkt, { truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880 });
-  await receiveTransfer(bkt, { bagsReceived: 574, receivedGrossKg: 48820 });
+  await dispatchTransfer(bkt, { whReceiptNo: "WR-D", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880 });
+  await receiveTransfer(bkt, { whReceiptNo: "WR-R", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road" });
 });
 afterAll(async () => {
   await cleanup();

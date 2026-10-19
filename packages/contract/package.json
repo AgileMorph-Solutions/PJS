@@ -10,8 +10,8 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "gen": "tsx scripts/gen-stage-map.ts && tsx scripts/gen-production-map.ts",
-    "gen:check": "tsx scripts/gen-stage-map.ts --check && tsx scripts/gen-production-map.ts --check",
+    "gen": "tsx scripts/gen-stage-map.ts && tsx scripts/gen-production-map.ts && tsx scripts/gen-quality-doc.ts",
+    "gen:check": "tsx scripts/gen-stage-map.ts --check && tsx scripts/gen-production-map.ts --check && tsx scripts/gen-quality-doc.ts --check",
     "test": "vitest run"
   },
   "devDependencies": {

@@ -38,15 +38,16 @@ describe("supplier performance", () => {
         t({ arrivalDate: "2026-03-05", grnKg: 10000, kor: 44, moisture: 11 }),
         t({ arrivalDate: "2026-03-09", rejected: true, kor: 30, moisture: 15 }), // rejected: counts as arrived, not in averages
         t({ arrivalDate: "2026-03-07", grnKg: 5000 }), // no readings: in volume, not in averages
+        t({ arrivalDate: "2026-03-08", netKg: 10000, kor: 46, moisture: 10 }), // weighed, GRN not entered yet: weights the averages, not the GRN volume
       ],
       [{ expectedKg: 50000, receivedKg: 40000, cancelled: false }, { expectedKg: 99999, receivedKg: 0, cancelled: true }],
       { issued: 1200, returned: 900, movements: 4 },
     );
     expect(p).toMatchObject({
-      targetKg: 50000, receivedOnPlansKg: 40000, volumeDeliveredKg: 45000, achievementPct: 80,
-      averageKor: 47, korTrucks: 2, averageMoisture: 9.5, moistureTrucks: 2,
-      trucksArrived: 4, rejectedTrucks: 1, rejectionRatePct: 25, lastDeliveryDate: "2026-03-07",
-      juteBagBalance: 300, fundingExposure: null, outstandingAmount: null,
+      targetKg: 50000, receivedOnPlansKg: 40000, volumeDeliveredKg: 45000, weighedOnArrivalKg: 10000, trucksAwaitingGrn: 1, achievementPct: 80,
+      averageKor: 46.8, korTrucks: 3, averageMoisture: 9.6, moistureTrucks: 3,
+      trucksArrived: 5, rejectedTrucks: 1, rejectionRatePct: 20, lastDeliveryDate: "2026-03-08",
+      juteBagsIssued: 1200, juteBagsReturned: 900, juteBagBalance: 300, fundingExposure: null, outstandingAmount: null,
     });
   });
 

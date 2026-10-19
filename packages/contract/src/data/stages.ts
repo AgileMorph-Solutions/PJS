@@ -168,6 +168,10 @@ export const stages: Stage[] = [
       { n: "Linked Lot Number(s)", v: "" , col: "linkedLotNumbers"},
       { n: "Basis for allocation (moisture / quality / KOR / space)", v: "" , col: "allocationBasis"},
       { n: "Finalised (same day / next day)", v: "" , col: "finalisedWhen"},
+      // Stamped by the Finalise action (never typed): the date the allocation was closed, and by whom. Client review, Oct 2026:
+      // "automatically populate the bin allocation date when finalized".
+      { n: "Bin allocation date", v: "" , col: "allocationDate"},
+      { n: "Finalised by", v: "" , col: "finalisedBy"},
     ],
   },
   {

@@ -33,6 +33,7 @@ export function toReceiptRecord(row: AnyRow): ReceiptRecord & { status: ReceiptS
     binNo: binNo || undefined,
     ...(row.legacyId ? { legacyId: row.legacyId as string } : {}),
     ...(row.deliveryPlanId ? { deliveryPlanId: row.deliveryPlanId as string } : {}),
+    ...(row.lockedAt ? { lockedAt: (row.lockedAt as Date).toISOString(), ...(row.locker?.displayName ? { lockedBy: row.locker.displayName as string } : {}) } : {}),
     stageData,
     branches,
     timeline: (row.timeline ?? [])

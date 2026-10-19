@@ -144,8 +144,11 @@ model Warehouse {
 /// bin -> warehouse, and inventing that mapping is exactly what ground rule §4 forbids.
 model Bin {
   code          String  @id
+  /// The store (a warehouse row with a site) the Bin is in. NULL on Bins that came from the workbooks, which never said.
   warehouseName String?
   source        String?
+  /// When the Bin was created in the app. NULL = it was already there (imported); no date is invented for those.
+  createdAt     DateTime?
 }
 
 model Origin {
@@ -215,6 +218,12 @@ model Receipt {
   /// Read-only shadow of the pre-normalization JSON, kept for exactly one release so the
   /// round-trip tests have a live oracle and a rollback path. Dropped in the Phase 8 migration.
   stageDataShadow String?
+
+  /// Locked when the GRN is complete (contract domain/recordLock.ts); cleared by an Admin's reopen, which leaves its
+  /// reason on the timeline. NULL = open, including every record that existed before locking did.
+  lockedAt   DateTime?
+  lockedById String?
+  locker     User?     @relation("ReceiptLocker", fields: [lockedById], references: [id])
 
   stageEntries  StageEntry[]
   branches      ReceiptBranch[]
@@ -323,6 +332,9 @@ model TransferRequest {
   driverPhone       String?
   /// What leaves Bouaké: the loaded truck's weight at the dispatch scale (RCN + bags).
   dispatchedGrossKg Decimal?
+  /// The warehouse receipt number the dispatch is recorded against, and the one the receiving warehouse records on arrival.
+  dispatchWhReceiptNo String?
+  receiveWhReceiptNo  String?
   dispatchedAt      DateTime?
   dispatchedBy      String?
   dispatcher        User?     @relation("TransferDispatcher", fields: [dispatchedBy], references: [id])
@@ -361,6 +373,11 @@ model TransferRequestLine {
   receipt     Receipt         @relation(fields: [receiptId], references: [id])
   bags        Int?
   netWeightKg Decimal?
+  /// Quality of this Lot as dispatched (client review, Oct 2026). Defaults to the Lot's own quality check and can be
+  /// re-measured at dispatch; required to dispatch.
+  moisture    Decimal?
+  kor         Decimal?
+  nutCount    Int?
   /// Where the Lot was loaded from — its Bin(s) when it was added. A record, so a BKT that loads one
   /// truck from several Bins shows them all.
   binCode     String?
@@ -551,6 +568,8 @@ model StageBinAllocation {
   linkedLotNumbers String? /// Linked Lot Number(s)
   allocationBasis  String? /// Basis for allocation (moisture / quality / KOR / space)
   finalisedWhen    String? /// Finalised (same day / next day)
+  allocationDate   String? /// Bin allocation date
+  finalisedBy      String? /// Finalised by
   receipt          Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
@@ -1421,6 +1440,18 @@ model WarehouseActivityLedgerEntry {
   grossWeightWithoutPalletKg String?
   netWeightKg                String?
 
+  // Entries recorded in the app (client review, Oct 2026). Imported rows leave all of these NULL: the sheet has no site column
+  // and none is invented. `activityType` holds the category label for entered rows (contract data/warehouseActivities.ts).
+  warehouse        String?
+  locationFrom     String?
+  locationTo       String?
+  /// Triage / cleaning changes moisture and quantity, so it records its own checks.
+  moisturePct      Decimal?
+  quantityBeforeKg Decimal?
+  quantityAfterKg  Decimal?
+  createdById      String?
+  createdBy        User?    @relation("ActivityEntryAuthor", fields: [createdById], references: [id])
+
   sheetRow  Int?
   source    String?
   createdAt DateTime @default(now())
@@ -2238,6 +2269,8 @@ model User {
 
   sessions            Session[]
   approvedExceptions  Receipt[]               @relation("ExceptionApprover")
+  lockedReceipts      Receipt[]               @relation("ReceiptLocker")
+  activityEntries     WarehouseActivityLedgerEntry[] @relation("ActivityEntryAuthor")
   createdSuppliers    Supplier[]              @relation("SupplierCreator")
   updatedSuppliers    Supplier[]              @relation("SupplierUpdater")
   uploadIssues        UploadIssue[]           @relation("UploadIssueUploader")

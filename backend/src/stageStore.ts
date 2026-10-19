@@ -19,6 +19,7 @@ export const RECEIPT_INCLUDE = {
   timeline: { orderBy: { id: "asc" }, include: { actor: { select: { displayName: true } } } },
   stageEntries: true,
   branches: true,
+  locker: { select: { displayName: true } },
   ...Object.fromEntries(
     Object.values(STAGE_FIELD_MAP).map((s) => [
       s.relation,

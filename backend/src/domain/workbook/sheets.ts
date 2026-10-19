@@ -171,7 +171,9 @@ export const SHEETS: SheetSpec[] = [
         truckNo: t.truckNo, transporter: t.transporter, driver: t.driver, driverPhone: t.driverPhone,
         lots: t.lines.map((l) => l.lotNumber ?? l.receiptId).join(" / "), bins: [...new Set(t.lines.map((l) => l.binCode).filter(Boolean))].join(" / "),
         bagsDispatched: t.variance.bagsDispatched, dispatchedGrossKg: t.dispatchedGrossKg, netDispatchedKg: t.variance.netDispatchedKg,
-        dispatchedAt: t.dispatchedAt, bagsReceived: t.variance.bagsReceived, damagedBags: t.damagedBags, receivedGrossKg: t.receivedGrossKg,
+        dispatchedAt: t.dispatchedAt, dispatchWhReceiptNo: t.dispatchWhReceiptNo, receiveWhReceiptNo: t.receiveWhReceiptNo,
+        moistureDispatched: perLot(t.lines.map((l) => l.moisture)), korDispatched: perLot(t.lines.map((l) => l.kor)), nutCountDispatched: perLot(t.lines.map((l) => l.nutCount)),
+        bagsReceived: t.variance.bagsReceived, damagedBags: t.damagedBags, receivedGrossKg: t.receivedGrossKg,
         netAtArrivalKg: t.variance.netAtArrivalKg, korReceived: t.korReceived, moistureReceived: t.moistureReceived, nutCountReceived: t.nutCountReceived,
         receivedLotNoRaw: t.receivedLotNoRaw, receivedAt: t.receivedAt, bagVariance: t.variance.bagVariance, weightVarianceKg: t.variance.weightVarianceKg,
         receivedComment: t.receivedComment, remarks: t.remarks,
@@ -210,6 +212,9 @@ export const SHEETS: SheetSpec[] = [
     prepare: supplierRowFromFile,
   }),
 ];
+
+/** One value per Lot joined like the Lot No column, or nothing when none was recorded (transfers made before quality was required). */
+const perLot = (xs: (number | null)[]) => (xs.every((x) => x === null) ? null : xs.map((x) => x ?? "-").join(" / "));
 
 export const sheetsFor = (type: WarehouseType): SheetSpec[] => SHEETS.filter((s) => s.sections.includes(type));
 /** Finds a sheet by the title on its tab, ignoring case and spacing ("truck  reception" works). */

@@ -15,6 +15,8 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
 import { RECEIPT_STAGE_MIRRORS, STAGE_TO_RECEIPT_COLUMNS } from "@anagroci/contract/domain/receiptMirror";
 import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
+import { autoDateFill } from "@anagroci/contract/data/autoFields";
+import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES, isGrnComplete } from "@anagroci/contract/domain/recordLock";
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
@@ -124,6 +126,7 @@ const PATCHABLE = ["source", "arrivalDate", "supplierName", "lbaCode", "vehicleN
 
 export async function patchReceipt(id: string, patch: Record<string, unknown>, opts: WriteOpts = {}) {
   const data: Record<string, unknown> = {};
+  if (!opts.bypassValidation) await assertRecordOpen(prisma, id);
   for (const k of PATCHABLE) if (k in patch) data[k] = patch[k] === "" && k === "origin" ? null : patch[k];
   // lotNo / binNo are not columns here — they live on their stage rows. Route them properly
   // instead of silently ignoring them. The Lot is issued by the system on quality pass, so a
@@ -183,10 +186,37 @@ export async function applyStageFields(
   fields: Record<string, string>,
   opts: WriteOpts = {}
 ) {
-  if (!opts.bypassValidation) await assertCallerMayWrite(tx, id, stageId, fields);
+  if (!opts.bypassValidation) {
+    const current = await assertCallerMayWrite(tx, id, stageId, fields);
+    const meta = await tx.receipt.findUnique({ where: { id }, select: { arrivalDate: true, lockedAt: true } });
+    if (meta?.lockedAt && LOCKED_STAGES.has(stageId)) throw new ValidationError(LOCKED_MESSAGE);
+    if (stageId === "n-bin" && (current["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError(BIN_FINALISED_MESSAGE);
+    // A date the step carries but the person left blank fills itself (contract data/autoFields.ts), whatever route the write came by.
+    fields = { ...fields, ...autoDateFill(stageId, fields, current[stageId], { today: new Date().toISOString().slice(0, 10), arrivalDate: meta?.arrivalDate ?? "" }) };
+  }
   await writeStageFields(tx, id, stageId, fields, opts);
   if (!opts.bypassValidation) await syncReceiptColumns(tx, id, stageId, fields);
   if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts);
+  if (!opts.bypassValidation && stageId === "n-grn") await lockIfGrnComplete(tx, id, opts);
+}
+
+/** Refuses a change to a receipt whose GRN is complete (the lock), as one place for every route that edits its own columns. */
+async function assertRecordOpen(db: Tx | typeof prisma, id: string) {
+  const r = await db.receipt.findUnique({ where: { id }, select: { lockedAt: true } });
+  if (r?.lockedAt) throw new ValidationError(LOCKED_MESSAGE);
+}
+
+/**
+ * Locks the reception record the moment its GRN is complete (the quantity and the price, in either order). The actor is
+ * who completed it; a seeder or import (no validation) never gets here, so existing records are left open.
+ */
+async function lockIfGrnComplete(tx: Tx, id: string, opts: WriteOpts) {
+  const row = await loadReceiptRow(id, tx);
+  if (!row || row.lockedAt || !isGrnComplete(assembleStageData(row as Record<string, unknown>))) return;
+  await tx.receipt.update({ where: { id }, data: { lockedAt: new Date(), lockedById: opts.actor?.id ?? null } });
+  await tx.timelineEntry.create({
+    data: { receiptId: id, status: deriveStatus(toReceiptRecord(row) as ReceiptRecord), at: new Date().toISOString(), actorId: opts.actor?.id, note: "Record locked: the GRN is complete" },
+  });
 }
 
 /**
@@ -204,11 +234,15 @@ async function syncReceiptColumns(tx: Tx, id: string, stageId: string, fields: R
   if (Object.keys(data).length) await tx.receipt.update({ where: { id }, data });
 }
 
+export const SYSTEM_BIN_DATE_MESSAGE =
+  "The bin allocation date is stamped when the allocation is finalised — it can't be typed. Use Finalise.";
+
 export const SYSTEM_LOT_MESSAGE =
   "The Lot Number is issued by the system when the truck passes quality — it can't be typed or changed.";
 
 async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>) {
   if (stageId === "n-lot") throw new ValidationError(SYSTEM_LOT_MESSAGE);
+  if (stageId === "n-bin" && ("Bin allocation date" in fields || "Finalised by" in fields)) throw new ValidationError(SYSTEM_BIN_DATE_MESSAGE);
   // A value that is typed until its inputs exist (KOR, before the cut-test grams) is the system's only
   // once they do — judged on the stage as it will stand after this write, so grams and KOR sent
   // together are refused rather than leaving a typed number the next recalculation would overwrite.
@@ -218,6 +252,7 @@ async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields:
     const rule = derivedRuleInForce(after, stageId, label);
     if (rule) throw new ValidationError(`${label} is calculated (${rule.formula}) — change the values it is calculated from instead.`);
   }
+  return current;
 }
 
 /** Stages whose fields feed at least one calculation — a write anywhere else can't change a derived value. */
@@ -337,6 +372,8 @@ export async function applyBranch(
   opts: WriteOpts = {}
 ) {
   if (!opts.bypassValidation && stageId === "n-qfs") assertRejectionHasReason(branchId, reason);
+  // The quality decision is part of the locked record; the drying and transfer decisions come after the GRN and stay open.
+  if (!opts.bypassValidation && LOCKED_DECISIONS.has(stageId)) await assertRecordOpen(tx, id);
 
   await tx.receiptBranch.upsert({
     where: { receiptId_stageId: { receiptId: id, stageId } },
@@ -434,4 +471,51 @@ export async function setBranch(
 
   const row = await loadReceiptRow(id);
   return toReceiptRecord(row!);
+}
+
+/**
+ * Closes the bin allocation: stamps today's date and who finalised it (the stage's "Bin allocation date" and "Finalised by").
+ * Needs a Lot and a Bin first, and can only be done once; after it the bin step can't change until an Admin reopens it.
+ */
+export async function finaliseBin(id: string, actor: { id: string; displayName: string }) {
+  await prisma.$transaction(async (tx) => {
+    await assertRecordOpen(tx, id);
+    const row = await loadReceiptRow(id, tx);
+    if (!row) throw Object.assign(new Error("Receipt not found"), { code: "P2025" });
+    const stages = assembleStageData(row as Record<string, unknown>);
+    if (!(stages["n-lot"]?.["Lot Number"] ?? "").trim()) throw new ValidationError("A Bin can only be finalised once the truck has a Lot.");
+    if (!(stages["n-bin"]?.["Bin Number"] ?? "").trim()) throw new ValidationError("Choose the Bin first, then finalise.");
+    if ((stages["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError("The bin allocation is already finalised.");
+    await writeStageFields(
+      tx, id, "n-bin",
+      { "Bin allocation date": new Date().toISOString().slice(0, 10), "Finalised by": actor.displayName },
+      { actor: { id: actor.id, via: "direct" } },
+    );
+    await tx.timelineEntry.create({
+      data: { receiptId: id, status: deriveStatus(toReceiptRecord(row) as ReceiptRecord), at: new Date().toISOString(), actorId: actor.id, note: `Bin ${stages["n-bin"]["Bin Number"]} finalised` },
+    });
+  });
+  return toReceiptRecord((await loadReceiptRow(id))!);
+}
+
+/**
+ * Admin only (the route enforces it): reopens a locked record and/or a finalised bin so it can be corrected. The reason is
+ * required and stays on the timeline, so a later reader sees who reopened it and why. The record locks again by itself the
+ * next time its GRN is completed.
+ */
+export async function reopenRecord(id: string, actor: { id: string; displayName: string }, reason: string | undefined) {
+  if (!reason?.trim()) throw new ValidationError("Say why the record is being reopened.");
+  await prisma.$transaction(async (tx) => {
+    const row = await loadReceiptRow(id, tx);
+    if (!row) throw Object.assign(new Error("Receipt not found"), { code: "P2025" });
+    const stages = assembleStageData(row as Record<string, unknown>);
+    const finalised = (stages["n-bin"]?.["Bin allocation date"] ?? "").trim() !== "";
+    if (!row.lockedAt && !finalised) throw new ValidationError("This record isn't locked or finalised, so there is nothing to reopen.");
+    if (row.lockedAt) await tx.receipt.update({ where: { id }, data: { lockedAt: null, lockedById: null } });
+    if (finalised) await writeStageFields(tx, id, "n-bin", { "Bin allocation date": "", "Finalised by": "" }, { actor: { id: actor.id, via: "direct" } });
+    await tx.timelineEntry.create({
+      data: { receiptId: id, status: deriveStatus(toReceiptRecord(row) as ReceiptRecord), at: new Date().toISOString(), actorId: actor.id, note: `Reopened by ${actor.displayName}: ${reason.trim()}` },
+    });
+  });
+  return toReceiptRecord((await loadReceiptRow(id))!);
 }

@@ -8,7 +8,7 @@ import { stages } from "../data/stages.js";
  */
 export type StatusInputs = Pick<ReceiptRecord, "branches" | "stageData"> & { source?: ReceiptRecord["source"] };
 
-const GRN_QUANTITY_LABEL = "GRN Weight (kept separate from Gross/Net/Paid)";
+export const GRN_QUANTITY_LABEL = "GRN Weight (kept separate from Gross/Net/Paid)";
 
 /**
  * Oct 2026 client feedback: "make sure the GRN step is completed before the transaction is considered

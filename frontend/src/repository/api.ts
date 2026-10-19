@@ -182,6 +182,17 @@ export const api = {
   reviewUploadIssue: (receiptId: string, issueId: string) =>
     request<UploadIssueRecord>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues/${encodeURIComponent(issueId)}/review`, { method: "POST" }),
   getDeliveryPlan: (id: string) => request<DeliveryPlanDetail>(`/delivery-plans/${encodeURIComponent(id)}`),
+  /** "Drying: Yes". Issues the Lot for drying and returns the updated receipt. */
+  startDrying: (receiptId: string, body: DryingStartPayload) =>
+    request<ReceiptRecord>(`/receipts/${encodeURIComponent(receiptId)}/drying`, { method: "POST", body: JSON.stringify(body) }),
+  /** What came back from drying; the loss is worked out by the server. */
+  completeDrying: (batchId: string, body: DryingCompletePayload) =>
+    request<unknown>(`/drying-batches/${encodeURIComponent(batchId)}/complete`, { method: "POST", body: JSON.stringify(body) }),
+  /** Closes the bin allocation: stamps today's date and who. Returns the updated receipt. */
+  finaliseBin: (receiptId: string) => request<ReceiptRecord>(`/receipts/${encodeURIComponent(receiptId)}/bin/finalise`, { method: "POST" }),
+  /** Admin only: reopens a locked record or finalised bin, with the reason that goes on the timeline. */
+  reopenRecord: (receiptId: string, reason: string) =>
+    request<ReceiptRecord>(`/receipts/${encodeURIComponent(receiptId)}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }),
   listDeliveryPlans: (warehouse?: string) => request<DeliveryPlan[]>(withWarehouse("/delivery-plans", warehouse)),
   createDeliveryPlan: (plan: DeliveryPlanPayload) =>
     request<DeliveryPlan>("/delivery-plans", { method: "POST", body: JSON.stringify(plan) }),
@@ -209,7 +220,8 @@ export const api = {
   /** The DESTINATION warehouse records what actually arrived; the variance is worked out from it. */
   receiveTransfer: (id: string, p: ReceivePayload) =>
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/receive`, { method: "POST", body: JSON.stringify(p) }),
-  addBin: (code: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code }) }),
+  /** A new Bin in a store; refuses a duplicate or a bad code with a plain reason. */
+  createBin: (code: string, warehouseName: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code, warehouseName }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
    * stores + aliases) — see backend/src/domain/site.ts. Omitted = every site, unfiltered. */
@@ -244,6 +256,8 @@ export const api = {
   listIssuedToProduction: () => request<IssuedToProductionRow[]>("/issued-to-production"),
   /** Warehouse activity Ledger — read-only, no site scoping (same reason as above). Powers
    * pages/jute/WarehouseActivityLedgerPage.tsx. */
+  /** Records an "other warehouse activity" (stacking, triage, ...) in one of the fixed categories. */
+  createActivityEntry: (body: Record<string, unknown>) => request<WarehouseActivityLedgerEntry>("/warehouse-activity-ledger", { method: "POST", body: JSON.stringify(body) }),
   listWarehouseActivityLedger: () => request<WarehouseActivityLedgerEntry[]>("/warehouse-activity-ledger"),
   /** WarehouseDischarge — the raw rows behind both DISCHARGEMENT and Warehouse Receiving, shown on
    * Lots & Bins alongside the derived Receipt.stageData view that page already had. */
@@ -442,6 +456,14 @@ export type SupplierInput = import("@anagroci/contract/domain/supplierProfile").
   statusReason?: string | null;
 };
 
+export interface DryingStartPayload {
+  route: "direct" | "indirect"; date?: string; sourceBin?: string; destinationBin?: string; dryType: string;
+  issuedBags?: string; issuedNetKg: string; inputMoisture: string; inputKor?: string; inputNutCount?: string;
+}
+export interface DryingCompletePayload {
+  receivedBags?: string; receivedNetKg: string; outputMoisture: string; outputKor?: string; outputNutCount?: string; destinationBin?: string;
+}
+
 export interface WorkbookPreview {
   token: string;
   filename: string;
@@ -581,9 +603,15 @@ export interface ReceiptLinks {
 }
 
 export interface DispatchPayload {
+  /** The warehouse receipt number the dispatch is recorded against (required). */
+  whReceiptNo: string;
+  /** Each Lot's quality as dispatched: prefilled from its own quality check, changed only if it was measured again. */
+  lines?: { receiptId: string; moisture?: string; kor?: string; nutCount?: string }[];
   truckNo: string; transporter?: string | null; driver?: string | null; driverPhone?: string | null; dispatchedGrossKg?: number | string | null;
 }
 export interface ReceivePayload {
+  /** The receiving warehouse's own receipt number for this arrival (required). */
+  whReceiptNo: string;
   bagsReceived: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
   korReceived?: number | string | null; moistureReceived?: number | string | null; nutCountReceived?: number | string | null;
   receivedComment?: string | null; receivedLotNoRaw?: string | null;
@@ -844,6 +872,13 @@ export interface WarehouseActivityLedgerEntry {
   grossWeightKg: string | null;
   grossWeightWithoutPalletKg: string | null;
   netWeightKg: string | null;
+  /** Entries recorded in the app only (null on rows imported from the sheet). */
+  warehouse?: string | null;
+  locationFrom?: string | null;
+  locationTo?: string | null;
+  moisturePct?: string | null;
+  quantityBeforeKg?: string | null;
+  quantityAfterKg?: string | null;
   sheetRow: number | null;
   source: string | null;
   createdAt: string;

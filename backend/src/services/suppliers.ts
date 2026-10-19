@@ -147,7 +147,7 @@ export async function getSupplierDetail(code: string): Promise<SupplierDetail | 
   });
   if (!s) return null;
 
-  const [receipts, plans, jute, references] = await Promise.all([
+  const [receipts, plans, juteWarehouse, juteSupplier, references] = await Promise.all([
     // Trucks belong to a supplier by LBA code, the one key every truck carries; a name alone is too loose to count on.
     prisma.receipt.findMany({
       where: { lbaCode: code },
@@ -155,10 +155,14 @@ export async function getSupplierDetail(code: string): Promise<SupplierDetail | 
         arrivalDate: true,
         branches: { where: { stageId: "n-qfs" }, select: { branchId: true } },
         grn: { select: { grnWeightNum: true } },
+        netwt: { select: { netWtKgsNum: true } },
         qfs: { select: { finalKorNum: true, korNum: true, moistureNum: true } },
       },
     }),
     prisma.deliveryPlan.findMany({ where: { supplierCode: code }, include: { receipts: { select: PLAN_FACTS_SELECT } } }),
+    // Jute comes from two ledgers: the warehouse "Jute Bags movement" sheet (rows naming a supplier are bags issued to it)
+    // and the supplier movement ledger (issued, and returned via deliveries). Together they are the bags given and the bags back.
+    prisma.juteWarehouseMovement.aggregate({ where: { supplierCode: code }, _sum: { bagsIssued: true, bagsReceived: true }, _count: true }),
     prisma.juteSupplierMovement.aggregate({ where: { supplierCode: code }, _sum: { bagsIssuedToSupplier: true, returnedViaDeliveries: true }, _count: true }),
     supplierReferences(code),
   ]);
@@ -167,6 +171,7 @@ export async function getSupplierDetail(code: string): Promise<SupplierDetail | 
     arrivalDate: r.arrivalDate,
     rejected: r.branches.some((b) => b.branchId === "fail"),
     grnKg: num(r.grn?.grnWeightNum),
+    netKg: num(r.netwt?.netWtKgsNum),
     // The final KOR when the cut test was repeated, otherwise the first one.
     kor: num(r.qfs?.finalKorNum) ?? num(r.qfs?.korNum),
     moisture: num(r.qfs?.moistureNum),
@@ -186,7 +191,9 @@ export async function getSupplierDetail(code: string): Promise<SupplierDetail | 
     updatedAt: s.updatedAt.toISOString(), updatedBy: s.updatedBy?.displayName ?? null,
     source: s.source,
     performance: supplierPerformance(trucks, planFacts, {
-      issued: jute._sum.bagsIssuedToSupplier ?? 0, returned: jute._sum.returnedViaDeliveries ?? 0, movements: jute._count,
+      issued: (juteWarehouse._sum.bagsIssued ?? 0) + (juteSupplier._sum.bagsIssuedToSupplier ?? 0),
+      returned: (juteWarehouse._sum.bagsReceived ?? 0) + (juteSupplier._sum.returnedViaDeliveries ?? 0),
+      movements: juteWarehouse._count + juteSupplier._count,
     }),
     references,
   };

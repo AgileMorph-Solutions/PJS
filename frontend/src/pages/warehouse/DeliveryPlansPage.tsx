@@ -65,7 +65,7 @@ export function DeliveryPlansPage() {
   // Everything else (receipt ids, funding reference, per-truck steps) is one click away on the plan's own page.
   const columns: Column<DeliveryPlan>[] = [
     {
-      label: "Plan", filter: { value: (p) => `${p.id} ${normalizeSupplierName(p.supplierName)} ${p.supplierCode ?? ""}`, kind: "text" }, nowrap: true,
+      label: "Plan", nowrap: true,
       render: (p) => (
         <div>
           <div className="font-mono text-[12.5px] font-semibold text-brand-700">{p.id}</div>

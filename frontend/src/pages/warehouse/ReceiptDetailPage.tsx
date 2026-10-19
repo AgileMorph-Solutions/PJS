@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
-import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans } from "../../state/TrackingContext";
+import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans, useDryingBatches } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
 import { useCanEditDirectly, useMe } from "../../state/AuthContext";
 import { useSubmissions } from "../../state/userManagement";
@@ -26,6 +26,10 @@ import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
+import { MODULE_LABELS, moduleOfStage } from "@anagroci/contract/data/modules";
+import { api } from "../../repository/api";
+import { DryingPanel } from "../../components/receipt/DryingPanel";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -37,7 +41,7 @@ import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 export function ReceiptDetailPage() {
   const { id = "" } = useParams();
   const site = useSite();
-  const { receipts, getReceipt, setStageField, setBranch, flushStage, masters } = useTracking();
+  const { receipts, getReceipt, setStageField, setBranch, flushStage, masters, refresh } = useTracking();
   const receipt = getReceipt(id);
   const me = useMe();
   // Warehouse Incharge/admin edit stages directly; a Branch Manager / QFS Officer sees them
@@ -48,6 +52,8 @@ export function ReceiptDetailPage() {
   const { plans } = useDeliveryPlans(site.warehouseName);
   const [copied, setCopied] = useState(false);
   const [tab, setTab] = useState<"overview" | "stages" | "activity">("overview");
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [lockBusy, setLockBusy] = useState(false);
 
   const otherInSameBin = useMemo(
     () => (receipt?.binNo ? receipts.filter((r) => r.binNo === receipt.binNo && r.id !== receipt.id) : []),
@@ -57,18 +63,27 @@ export function ReceiptDetailPage() {
   // What the system calculates from the readings as they stand — shown at once, so a net weight
   // follows the tare weight as it is typed rather than appearing after the server has saved it.
   const derived = useMemo(() => (receipt ? computeDerivedFields(receipt.stageData) : {}), [receipt]);
-  const { links, loading: linksLoading } = useReceiptLinks(receipt?.id);
+  const { links, loading: linksLoading, refetch: refetchLinks } = useReceiptLinks(receipt?.id);
+  // The drying types already in use at this site, offered as suggestions on the drying form.
+  const { batches: siteDryingBatches } = useDryingBatches(site.warehouseName);
+  const dryTypes = useMemo(() => [...new Set(["SUN DRYING", ...siteDryingBatches.map((d) => (d.dryType ?? "").trim()).filter(Boolean)])], [siteDryingBatches]);
   // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself: the store codes the master
   // also holds are left out, and the bins of this truck's own store come first.
   const store = receipt?.stageData["n-gate"]?.["WH NO."]?.trim();
   const binOptions = useMemo(() => {
     const stores = new Set(masters.warehouses.filter((w) => w.site).map((w) => w.name));
     const bins = masters.bins.filter((b) => !stores.has(b)).sort();
-    return store ? [...bins.filter((b) => b.startsWith(`${store}-`)), ...bins.filter((b) => !b.startsWith(`${store}-`))] : bins;
-  }, [masters.bins, masters.warehouses, store]);
+    if (!store) return bins;
+    // The Bins of this truck's own store come first: by the store each Bin was created in, or, for Bins imported without one, by its code.
+    const storeOf = new Map((masters.binInfo ?? []).map((b) => [b.code, b.store]));
+    const mine = (b: string) => storeOf.get(b) === store || (!storeOf.get(b) && b.startsWith(`${store}-`));
+    return [...bins.filter(mine), ...bins.filter((b) => !mine(b))];
+  }, [masters.bins, masters.binInfo, masters.warehouses, store]);
   const plan = plans.find((p) => p.id === receipt?.deliveryPlanId);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
+  const isAdmin = me.role === "admin";
+  const binFinalised = (receipt.stageData["n-bin"]?.["Bin allocation date"] ?? "").trim() !== "";
   // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
   if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
 
@@ -181,6 +196,34 @@ export function ReceiptDetailPage() {
         </div>
       </div>
 
+      {/* A complete GRN locks the reception record; a finalised bin closes that step. Only an Admin reopens, with a reason. */}
+      {(receipt.lockedAt || (receipt.stageData["n-bin"]?.["Bin allocation date"] ?? "").trim()) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ambernut-200 bg-ambernut-50 px-4 py-3 text-[13px] text-ambernut-900">
+          <span className="material-symbols-outlined text-[19px] text-ambernut-700">lock</span>
+          <span className="flex-1 min-w-[16rem]">
+            {receipt.lockedAt
+              ? <>This record is <b>locked</b> since {receipt.lockedAt.slice(0, 10)}{receipt.lockedBy ? ` (${receipt.lockedBy})` : ""}: its GRN is complete. Stock, drying and transfers can still go ahead.</>
+              : <>The bin allocation was <b>finalised</b> on {receipt.stageData["n-bin"]?.["Bin allocation date"]}{receipt.stageData["n-bin"]?.["Finalised by"] ? ` by ${receipt.stageData["n-bin"]["Finalised by"]}` : ""}.</>}
+            {!isAdmin && " An Admin can reopen it with a reason."}
+          </span>
+          {isAdmin && (
+            <button
+              type="button" disabled={lockBusy}
+              onClick={() => {
+                const reason = window.prompt("Why is this record being reopened? (kept on its timeline)");
+                if (!reason?.trim()) return;
+                setLockBusy(true); setLockError(null);
+                api.reopenRecord(receipt.id, reason.trim()).then(() => refresh()).catch((e) => setLockError(e instanceof Error ? e.message : String(e))).finally(() => setLockBusy(false));
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-ambernut-300 text-ambernut-900 text-[12.5px] font-semibold hover:bg-ambernut-100 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[16px]">lock_open</span>Reopen
+            </button>
+          )}
+          {lockError && <span role="alert" className="w-full text-danger-700">{lockError}</span>}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-warmstone-200 overflow-x-auto">
         {([
@@ -250,6 +293,11 @@ export function ReceiptDetailPage() {
 
             return (
               <Fragment key={stage.id}>
+              {moduleOfStage(stage.id) && moduleOfStage(stage.id) !== moduleOfStage(stages[stageIndex - 1]?.id ?? "") && (
+                <h2 className="px-1 pt-4 text-[13px] font-bold text-brand-800 uppercase tracking-wider border-b border-brand-100 pb-1.5">
+                  {MODULE_LABELS[moduleOfStage(stage.id)!]}
+                </h2>
+              )}
               {(startsStep || startsLater) && (
                 <h3 className="px-1 pt-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
                   {startsStep ? `Step ${stepIndex + 1} · ${step!.title}` : "After reception"}
@@ -307,19 +355,47 @@ export function ReceiptDetailPage() {
                 </summary>
                 <div className="px-5 pb-5 pt-1 border-t border-warmstone-100 bg-warmstone-50/60">
                   <div className="pt-4">
-                    <StageForm
-                      stage={stage}
-                      values={values}
-                      derived={derived[stage.id]}
-                      suggestions={suggestionsFor(stage.id, values)}
-                      options={stage.id === "n-bin" ? { "Bin Number": binOptions } : undefined}
-                      onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
-                      onFieldBlur={() => flushStage(receipt.id, stage.id)}
-                      readOnly={!canEdit}
-                    />
-                    {branchOptions && (
+                    {stage.id === "n-drying" ? (
+                      <DryingPanel
+                        receipt={receipt}
+                        batches={[...(links?.dryingBatches ?? [])].sort((a, b) => a.sn - b.sn)}
+                        dryTypes={dryTypes}
+                        bins={masters.bins}
+                        canEdit={canEdit}
+                        onSayNo={() => setBranch(receipt.id, "n-drying", "none")}
+                        onChanged={() => { void refresh(); refetchLinks(); }}
+                      />
+                    ) : (
+                      <StageForm
+                        stage={stage}
+                        values={values}
+                        derived={derived[stage.id]}
+                        suggestions={suggestionsFor(stage.id, values)}
+                        options={stage.id === "n-bin" ? { "Bin Number": binOptions } : undefined}
+                        onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
+                        onFieldBlur={() => flushStage(receipt.id, stage.id)}
+                        readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_STAGES.has(stage.id)) || (stage.id === "n-bin" && binFinalised)}
+                      />
+                    )}
+                    {stage.id === "n-bin" && canEdit && !binFinalised && !receipt.lockedAt && Boolean(receipt.lotNo && receipt.stageData["n-bin"]?.["Bin Number"]) && (
+                      <div className="mt-4 flex items-center gap-3">
+                        <button
+                          type="button" disabled={lockBusy}
+                          onClick={() => {
+                            setLockBusy(true); setLockError(null);
+                            flushStage(receipt.id, stage.id);
+                            api.finaliseBin(receipt.id).then(() => refresh()).catch((e) => setLockError(e instanceof Error ? e.message : String(e))).finally(() => setLockBusy(false));
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-[17px]">task_alt</span>Finalise bin allocation
+                        </button>
+                        <span className="text-[12px] text-warmstone-500">Stamps today's date and your name. After this the bin step is closed until an Admin reopens it.</span>
+                      </div>
+                    )}
+                    {branchOptions && stage.id !== "n-drying" && (
                       <div className="mt-4">
-                        <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)} readOnly={!canEdit} />
+                        <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)} readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))} />
                       </div>
                     )}
                   </div>

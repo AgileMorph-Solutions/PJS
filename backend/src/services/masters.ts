@@ -35,6 +35,8 @@ export async function listMasters() {
     warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, type: w.type, site: w.site, code: w.code })),
     aliases: aliases.map((a) => ({ alias: a.alias, warehouseName: a.warehouseName })),
     bins: bins.map((b) => b.code),
+    // Which store each Bin is in (null = imported without one), so a truck can be offered the Bins of its own store first.
+    binInfo: bins.map((b) => ({ code: b.code, store: b.warehouseName })),
     origins: origins.map((o) => o.name),
   };
 }
@@ -125,10 +127,23 @@ async function codeInUse(code: string): Promise<boolean> {
 
 const siteIdPrefixAnyYear = (kind: string, code: string) => `${kind}-${code}-`;
 
-export async function addBin(code: string, warehouseName?: string) {
-  return prisma.bin.upsert({
-    where: { code },
-    update: { warehouseName: warehouseName ?? undefined },
-    create: { code, warehouseName },
-  });
+/**
+ * A new Bin from Masters › Bins. A Bin is a place inside a store, so the store is required (it is also what lets the Allocate-Bin
+ * step offer a truck the Bins of its own store first). The code is kept to letters, digits and - _ . (the Bin step reads several
+ * Bins separated by "/" or ","), can't be a store's own code, and can't already exist: a duplicate is refused, never quietly merged.
+ */
+export async function createBin(input: { code?: string; warehouseName?: string }) {
+  const code = (input.code ?? "").trim().toUpperCase();
+  if (!code) throw new ValidationError("A Bin needs a code.");
+  if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(code)) throw new ValidationError(`"${code}" can only use letters, digits and - _ . (no spaces, slashes or commas).`);
+  const store = (input.warehouseName ?? "").trim();
+  if (!store) throw new ValidationError("Choose the store this Bin is in.");
+  if (!(await prisma.warehouse.findFirst({ where: { name: store, site: { not: null } }, select: { name: true } }))) {
+    throw new ValidationError(`"${store}" isn't a store. Choose one of the stores of a warehouse.`);
+  }
+  if (await prisma.warehouse.findFirst({ where: { name: code, site: { not: null } }, select: { name: true } })) {
+    throw new ValidationError(`${code} is a store (a warehouse code), not a Bin. Use a Bin code inside it, e.g. ${code}-BIN-012.`);
+  }
+  if (await prisma.bin.findUnique({ where: { code }, select: { code: true } })) throw new ValidationError(`Bin ${code} already exists.`);
+  return prisma.bin.create({ data: { code, warehouseName: store, source: "entered", createdAt: new Date() } });
 }
