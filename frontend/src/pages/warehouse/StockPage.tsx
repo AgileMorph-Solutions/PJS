@@ -13,6 +13,7 @@ import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { ReceiptRecord } from "../../types/receipt";
 import type { WarehouseDischargeRow } from "../../repository/api";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * Lots & Bins is identical field-for-field at both sites (n-lot / n-bin are the same two stages in
@@ -36,8 +37,8 @@ export function StockPage() {
     { label: "Lot No", render: (d) => <span className="font-mono text-[12.5px]">{d.lotNo}</span> },
     { label: "Warehouse", filter: { value: (d) => d.warehouseSite }, render: (d) => d.warehouseSite },
     { label: "Fiche CCA", render: (d) => <span className="font-mono text-[12.5px]">{d.ficheCca}</span> },
-    { label: "Arrival date", filter: { value: (d) => d.arrivalDate || d.arrivalDateRaw, kind: "date" }, render: (d) => d.arrivalDate || d.arrivalDateRaw || "-" },
-    { label: "Discharge date", filter: { value: (d) => d.dischargeDate || d.dischargeDateRaw, kind: "date" }, render: (d) => d.dischargeDate || d.dischargeDateRaw || "-" },
+    { label: "Arrival date", filter: { value: (d) => d.arrivalDate || d.arrivalDateRaw, kind: "date" }, render: (d) => formatDate(d.arrivalDate || d.arrivalDateRaw) || "-" },
+    { label: "Discharge date", filter: { value: (d) => d.dischargeDate || d.dischargeDateRaw, kind: "date" }, render: (d) => formatDate(d.dischargeDate || d.dischargeDateRaw) || "-" },
     { label: "Total recd", filter: { value: (d) => d.totalRecd, kind: "number" }, render: (d) => d.totalRecd ?? "-" },
     {
       label: "",

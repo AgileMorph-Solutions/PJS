@@ -1,3 +1,6 @@
+import { DateInput } from "../ui/DateInput";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
+
 export interface DateRange {
   from: string;
   to: string;
@@ -30,27 +33,13 @@ export function DateRangeFilter({ value, onChange }: Props) {
         <label htmlFor="dashboard-filter-from" className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500">
           From
         </label>
-        <input
-          id="dashboard-filter-from"
-          type="date"
-          value={value.from}
-          max={value.to || undefined}
-          onChange={(e) => onChange({ ...value, from: e.target.value })}
-          className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
-        />
+        <DateInput id="dashboard-filter-from" value={value.from} max={value.to || undefined} onChange={(from) => onChange({ ...value, from })} className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700" />
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="dashboard-filter-to" className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500">
           To
         </label>
-        <input
-          id="dashboard-filter-to"
-          type="date"
-          value={value.to}
-          min={value.from || undefined}
-          onChange={(e) => onChange({ ...value, to: e.target.value })}
-          className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700"
-        />
+        <DateInput id="dashboard-filter-to" value={value.to} min={value.from || undefined} onChange={(to) => onChange({ ...value, to })} className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700" />
       </div>
       <button
         type="button"
@@ -63,7 +52,7 @@ export function DateRangeFilter({ value, onChange }: Props) {
       </button>
       {isFiltered && (
         <span className="text-[12px] text-warmstone-500 ml-auto self-center">
-          Showing {value.from || "the start"} to {value.to || "now"} - every figure below is scoped to this range.
+          Showing {formatDate(value.from) || "the start"} to {formatDate(value.to) || "now"} - every figure below is scoped to this range.
         </span>
       )}
     </div>

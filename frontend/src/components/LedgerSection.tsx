@@ -5,6 +5,8 @@ import { usePagination } from "./ui/usePagination";
 import { Pagination } from "./ui/Pagination";
 import { FilterBar } from "./ui/FilterBar";
 import { DateRangeInputs } from "./ui/DateRangeInputs";
+import { DateInput } from "./ui/DateInput";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { useDateRangeFilter } from "./ui/useDateRangeFilter";
 // NOTE: allRowsFor() is deliberately NOT used any more. It prepended juteBags.ts's hardcoded
 // sampleRows to the entered rows, which was right when the ledger was empty demo data. The API now
@@ -119,6 +121,8 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
                         ))}
                       </datalist>
                     </>
+                  ) : c === dateColumn ? (
+                    <DateInput id={id} value={draft[c.label] ?? ""} onChange={(d) => setDraft((prev) => ({ ...prev, [c.label]: d }))} className={inputCls} />
                   ) : (
                     <input
                       id={id}
@@ -171,7 +175,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
               <tr key={i} className="border-b border-warmstone-100 last:border-0 hover:bg-warmstone-50">
                 {ledger.columns.map((c) => (
                   <td key={c.label} className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
-                    {row[c.label] || "-"}
+                    {(c === dateColumn ? formatDate(row[c.label]) : row[c.label]) || "-"}
                   </td>
                 ))}
               </tr>

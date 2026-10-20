@@ -16,6 +16,11 @@ export interface StageField {
    * rename is a UI-only edit with no migration.
    */
   col: string;
+  /**
+   * Set on a field that holds a date ("date") or a timestamp ("datetime"), stored as ISO. The forms then give it the app's
+   * date picker and show it in the one on-screen format (domain/dateFormat.ts) instead of as typed text.
+   */
+  format?: "date" | "datetime";
 }
 
 export interface Stage {

@@ -1,4 +1,6 @@
 import type { StageField } from "../types/stage";
+import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
+import { DateInput } from "./ui/DateInput";
 
 interface Props {
   field: StageField;
@@ -47,9 +49,13 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
           )
         )}
       </div>
+      {field.format === "date" && !locked ? (
+        <DateInput id={id} value={value} onChange={onChange} onBlur={onBlur} className={`w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${locked ? "cursor-default text-warmstone-600" : ""}`} />
+      ) : (
       <input
         id={id}
-        value={value}
+        // A date or timestamp that cannot be edited here is still shown in the app's one date format.
+        value={field.format === "datetime" ? formatDateTime(value) : field.format === "date" ? formatDate(value) : value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         readOnly={locked}
@@ -58,6 +64,7 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         placeholder={value ? "" : system ? (system.kind === "calculated" ? "Calculated automatically" : "Issued automatically") : "Not recorded yet"}
         className={`w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${locked ? "cursor-default text-warmstone-600" : ""}`}
       />
+      )}
       {options && !locked && (
         <datalist id={`${id}-options`}>
           {options.map((o) => <option key={o} value={o} />)}

@@ -16,13 +16,14 @@ import { api } from "../../repository/api";
 import { DeliveryPlanForm, emptyPlanForm } from "../../components/receipt/DeliveryPlanForm";
 import type { DeliveryPlan } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 
 const STATUS_TONE: Record<PlanStatus, string> = { planned: "decision", partially_received: "term", delivered: "entry", cancelled: "gap" };
 
 const inputClass =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayIso;
 const kg = (n: number | null) => (n === null ? "-" : n.toLocaleString());
 
 /**
@@ -77,7 +78,7 @@ export function DeliveryPlansPage() {
       label: "Expected", filter: { value: (p) => p.expectedArrivalDate, kind: "date" },
       render: (p) => (
         <div>
-          <div className="whitespace-nowrap">{p.expectedDeliveryEnd ? `${p.expectedArrivalDate} → ${p.expectedDeliveryEnd}` : p.expectedArrivalDate}</div>
+          <div className="whitespace-nowrap">{p.expectedDeliveryEnd ? `${formatDate(p.expectedArrivalDate)} → ${formatDate(p.expectedDeliveryEnd)}` : formatDate(p.expectedArrivalDate)}</div>
           <div className="text-[12px] text-warmstone-500">{p.expectedOrigin ? `${p.expectedOrigin} → ` : ""}{p.destinationWarehouse}{p.destinationStore ? ` · ${p.destinationStore}` : ""}</div>
         </div>
       ),

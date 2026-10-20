@@ -9,6 +9,7 @@ import { useSubmissions, useSupplierRequests } from "../../state/userManagement"
 import { api } from "../../repository/api";
 import { siteSlugForSiteName } from "../../config/sites";
 import type { SupplierRequestView } from "../../types/user";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /** Warehouse Incharge's queue: Branch Manager / QFS submissions and supplier requests waiting on a
  * decision. Approving a submission applies its values to the receipt (atomically, server-side). */
@@ -64,7 +65,7 @@ function SupplierRequestRow({ request, onDone }: { request: SupplierRequestView;
       <div className="flex items-center gap-3 flex-wrap">
         <span className="font-semibold text-warmstone-900 text-[14px]">{request.name}</span>
         <Pill tone="decision" label="Add supplier" />
-        <span className="text-[12.5px] text-warmstone-500 ml-auto">{request.requestedBy} · {new Date(request.createdAt).toLocaleDateString()}</span>
+        <span className="text-[12.5px] text-warmstone-500 ml-auto">{request.requestedBy} · {formatDate(request.createdAt)}</span>
       </div>
       <div className="flex items-end gap-3 flex-wrap">
         <div>

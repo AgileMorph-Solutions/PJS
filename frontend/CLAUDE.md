@@ -96,6 +96,16 @@ than growing `TrackingApi` is the established pattern, specifically so existing 
 context don't need to change when unrelated features are added. Only touch `TrackingApi` itself if
 the change is genuinely about receipts, ledgers, or masters — the three things it already owns.
 
+## Dates — one widget, one format
+
+Every date a person types, picks, filters by or reads goes through two things, so the app can never show two formats:
+`components/ui/DateInput` (a DD/MM/YYYY box with a calendar button; its value is always ISO or "") for input, and
+`formatDate` / `formatDateTime` from `@anagroci/contract/domain/dateFormat` for display. Never put `<input type="date">`,
+`toLocaleDateString()` or a bare `.slice(0, 10)` in a page: the first shows the visitor's own locale format, the others
+show ISO. Stored and sent values stay ISO. Free-text dates from the workbooks (`*Raw` columns) pass through
+`formatDate` unchanged, on purpose. A stage field that holds a date is marked `format: "date"` in `stages.ts` and
+`FieldInput` does the rest. The format itself lives in one place, `packages/contract/src/domain/dateFormat.ts`.
+
 ## Testing gap — read before assuming coverage exists
 
 There is currently no frontend test suite (no `*.test.tsx`, no testing-library dependency). The

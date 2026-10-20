@@ -8,6 +8,7 @@ import { useProductionBin, useBinPhaseProgress } from "../../state/TrackingConte
 import { api } from "../../repository/api";
 import type { BtmIntake, ProductionLot, BinStockRow, BinPhaseStep } from "../../repository/api";
 import { productionTableById } from "@anagroci/contract/data/productionTables";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /** The Bin is the physical identity a set of cashews is actually tracked by — the pivot both the
  * BTM intake spine and the Lot production spine hang off. This page is the featured production
@@ -66,14 +67,14 @@ export function ProductionBinDetailPage() {
 
   const btmColumns: Column<BtmIntake>[] = [
     { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo}</span> },
-    { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => formatDate(r.createdAt) },
   ];
   const lotColumns: Column<ProductionLot>[] = [
     { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px]">{r.lotNo}</span> },
-    { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => formatDate(r.createdAt) },
   ];
   const stockColumns: Column<BinStockRow>[] = [
-    { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => r.date },
+    { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => formatDate(r.date) },
     { label: "Type", filter: { value: (r) => r.movement_type }, render: (r) => r.movement_type },
     { label: "In", filter: { value: (r) => r.qty_in, kind: "number" }, render: (r) => r.qty_in },
     { label: "Out", filter: { value: (r) => r.qty_out, kind: "number" }, render: (r) => r.qty_out },

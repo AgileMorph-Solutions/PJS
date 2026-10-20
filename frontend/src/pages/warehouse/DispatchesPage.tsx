@@ -10,6 +10,7 @@ import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { useWarehouseDispatches } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { WarehouseDispatchLine } from "../../repository/api";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * CHARGEMENT — unit-warehouse dispatch OUT, one row per sheet LINE (a voyage may span several
@@ -33,7 +34,7 @@ export function DispatchesPage() {
 
   const columns: Column<WarehouseDispatchLine>[] = [
     { label: "SN", filter: { value: (l) => l.sn, kind: "number" }, render: (l) => <span className="font-mono text-[12.5px]">{l.sn ?? "-"}</span> },
-    { label: "Charge date", filter: { value: (l) => l.chargeDate || l.chargeDateRaw, kind: "date" }, render: (l) => l.chargeDate || l.chargeDateRaw || "-" },
+    { label: "Charge date", filter: { value: (l) => l.chargeDate || l.chargeDateRaw, kind: "date" }, render: (l) => formatDate(l.chargeDate || l.chargeDateRaw) || "-" },
     { label: "Voyage no.", render: (l) => l.vyogeNumber || "-" },
     { label: "Bin", filter: { value: (l) => l.bin }, render: (l) => l.bin || "-" },
     { label: "Truck no.", render: (l) => l.truckNo || "-" },

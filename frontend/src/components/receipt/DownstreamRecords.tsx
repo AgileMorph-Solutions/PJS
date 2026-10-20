@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { ReceiptLinks } from "../../repository/api";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 const n = (x: number | null | undefined, unit = "") => (x === null || x === undefined ? "-" : `${x.toLocaleString()}${unit}`);
 const t = (x: string | null | undefined) => (x && String(x).trim() ? x : "-");
@@ -68,7 +69,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
     <div className="space-y-4">
       <Section icon="light_mode" title="Drying" source="Drying Batch sheet" count={links.dryingBatches.length + links.dryingJobs.length} emptyText="This Lot has not been issued to drying.">
         {links.dryingBatches.map((b) => (
-          <Row key={b.id} title={`Batch ${b.sn} · ${b.status ?? "-"}`} sub={b.dryingDate}>
+          <Row key={b.id} title={`Batch ${b.sn} · ${b.status ?? "-"}`} sub={formatDate(b.dryingDate)}>
             <Fact label="Method" value={t(b.dryType)} />
             <Fact label="Bin in → out" value={`${t(b.sourceBinNo)} → ${t(b.destinationBinNo)}`} />
             <Fact label="Bags in → out" value={`${n(b.inputBags)} → ${n(b.outputBags)}`} />
@@ -80,7 +81,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
           </Row>
         ))}
         {links.dryingJobs.map((d) => (
-          <Row key={d.id} title={`Drying job ${d.id} · ${d.status}`} sub={d.date}>
+          <Row key={d.id} title={`Drying job ${d.id} · ${d.status}`} sub={formatDate(d.date)}>
             <Fact label="Method" value={t(d.dryType)} />
             <Fact label="Bin" value={t(d.bin)} />
             <Fact label="Destination" value={t(d.destination)} />
@@ -91,7 +92,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
 
       <Section icon="local_shipping" title="Dispatch to the factory" source="Chargement sheet" count={links.dispatches.length} emptyText="Not dispatched yet.">
         {links.dispatches.map((d) => (
-          <Row key={d.id} title={`Voyage ${t(d.vyogeNumber)}`} sub={d.chargeDate}>
+          <Row key={d.id} title={`Voyage ${t(d.vyogeNumber)}`} sub={formatDate(d.chargeDate)}>
             <Fact label="From" value={t(d.warehouseSite)} />
             <Fact label="Bin" value={t(d.bin)} />
             <Fact label="Truck" value={t(d.truckNo)} />
@@ -105,7 +106,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
 
       <Section icon="factory" title="Received at the factory" source="Warehouse Receiving sheet" count={links.warehouseReceiving.length} emptyText="Not received at the central warehouse yet.">
         {links.warehouseReceiving.map((w) => (
-          <Row key={w.id} title={`${w.warehouseSite} · SN ${w.sn}`} sub={w.arrivalDate}>
+          <Row key={w.id} title={`${w.warehouseSite} · SN ${w.sn}`} sub={formatDate(w.arrivalDate)}>
             <Fact label="Lot there" value={t(w.lotNo)} />
             <Fact label="Truck" value={t(w.truckNo)} />
             <Fact label="Bags received" value={n(w.totalRecd)} />
@@ -116,7 +117,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
 
       <Section icon="swap_horiz" title="Transfer receipts" source="Receiving at Factory report" count={links.transfers.length} emptyText="No transfer receipt yet.">
         {links.transfers.map((x) => (
-          <Row key={x.sn} title={`SN ${x.sn} · ${x.sourceWarehouse} → ${t(x.destinationWarehouse)}`} sub={x.receivedDate}>
+          <Row key={x.sn} title={`SN ${x.sn} · ${x.sourceWarehouse} → ${t(x.destinationWarehouse)}`} sub={formatDate(x.receivedDate)}>
             <Fact label="Truck" value={t(x.truckRegistration)} />
             <Fact label="Bin" value={t(x.binNo)} />
             <Fact label="Bags sent → received" value={`${n(x.bagsDispatched)} → ${n(x.bagsReceived)}`} />
@@ -136,7 +137,7 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
           </Row>
         ))}
         {links.issuedToProduction.map((p) => (
-          <Row key={p.id} title={`Issued · BTM ${t(p.btmNo)}`} sub={p.date}>
+          <Row key={p.id} title={`Issued · BTM ${t(p.btmNo)}`} sub={formatDate(p.date)}>
             <Fact label="Source bin" value={t(p.sourceBin)} />
             <Fact label="Dry bin" value={t(p.dryBin)} />
             <Fact label="Bin status" value={t(p.binStatus)} />

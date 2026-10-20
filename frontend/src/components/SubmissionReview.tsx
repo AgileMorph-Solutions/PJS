@@ -4,6 +4,7 @@ import type { SubmissionView } from "../types/user";
 import { formById } from "../data/roles";
 import { api } from "../repository/api";
 import { useTracking } from "../state/TrackingContext";
+import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
 /** One submission as a current → submitted diff, with Approve / Reject (reason required). Shared by
  * the receipt page (its own submissions) and the Approvals queue (all pending ones). */
@@ -42,7 +43,7 @@ export function SubmissionReview({
       <div className="flex items-center justify-between gap-3 flex-wrap text-[12.5px]">
         <span className="font-semibold text-warmstone-900">{formById(submission.formId)?.title ?? submission.formId}</span>
         <span className="text-warmstone-500">
-          {submission.submittedBy} · {new Date(submission.submittedAt).toLocaleString()}
+          {submission.submittedBy} · {formatDateTime(submission.submittedAt)}
         </span>
       </div>
       <table className="w-full text-[12.5px]">

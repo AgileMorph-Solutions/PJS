@@ -7,6 +7,7 @@ import { formById } from "../data/roles";
 import type { SubmissionView } from "../types/user";
 import { FilterBar } from "../components/ui/FilterBar";
 import { useTableSearch } from "../components/ui/useTableSearch";
+import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
 const TONE: Record<string, string> = { submitted: "decision", approved: "entry", rejected: "gap" };
 const LABEL: Record<string, string> = { submitted: "Waiting", approved: "Approved", rejected: "Rejected" };
@@ -18,7 +19,7 @@ export function MySubmissionsPage() {
   const columns: Column<SubmissionView>[] = [
     { label: "Receipt", render: (s) => <span className="font-mono text-[12.5px]">{s.receiptId}</span> },
     { label: "Form", filter: { value: (s) => formById(s.formId)?.title ?? s.formId, kind: "select" }, render: (s) => formById(s.formId)?.title ?? s.formId },
-    { label: "Submitted", filter: { value: (s) => s.submittedAt, kind: "date" }, render: (s) => new Date(s.submittedAt).toLocaleString() },
+    { label: "Submitted", filter: { value: (s) => s.submittedAt, kind: "date" }, render: (s) => formatDateTime(s.submittedAt) },
     { label: "Status", filter: { value: (s) => LABEL[s.status], kind: "select" }, render: (s) => <Pill tone={TONE[s.status]} label={LABEL[s.status]} /> },
     { label: "Reason", render: (s) => s.rejectReason ?? "" },
   ];

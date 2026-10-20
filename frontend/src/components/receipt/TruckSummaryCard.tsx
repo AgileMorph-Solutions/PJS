@@ -1,5 +1,6 @@
 import { truckTimeline, type TimelineStepState } from "@anagroci/contract/domain/truckTimeline";
 import type { ReceiptRecord } from "../../types/receipt";
+import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
 const DOT: Record<TimelineStepState, string> = {
   done: "bg-success-600 text-white",
@@ -33,7 +34,7 @@ export function TruckSummaryCard({ receipt }: { receipt: ReceiptRecord }) {
               </p>
               {(s.at || s.detail) && (
                 <p className="text-[12px] text-warmstone-500 tabular-nums">
-                  {s.at}{s.at && s.atKind === "recorded" ? " (recorded)" : ""}{s.at && s.detail ? " · " : ""}{s.detail}
+                  {formatDateTime(s.at)}{s.at && s.atKind === "recorded" ? " (recorded)" : ""}{s.at && s.detail ? " · " : ""}{s.detail}
                 </p>
               )}
             </div>

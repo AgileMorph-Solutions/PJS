@@ -12,6 +12,7 @@ import { ProgressBar } from "../../components/ui/ProgressBar";
 import { useTracking } from "../../state/TrackingContext";
 import { api, type SupplierInput } from "../../repository/api";
 import type { SupplierDetail } from "../../types/receipt";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -218,7 +219,7 @@ export function SupplierDetailPage() {
           <KpiTile label={`Average moisture (${p.moistureTrucks} truck${p.moistureTrucks === 1 ? "" : "s"})`} value={p.averageMoisture === null ? "-" : `${p.averageMoisture}%`} />
           <KpiTile label={`Rejected trucks (of ${p.trucksArrived})`} value={p.rejectedTrucks} tone={p.rejectedTrucks ? "gap" : "default"} />
           <KpiTile label="Rejection rate" value={p.rejectionRatePct === null ? "-" : `${p.rejectionRatePct}%`} tone={p.rejectionRatePct ? "gap" : "default"} />
-          <KpiTile label="Last delivery" value={p.lastDeliveryDate ?? "-"} />
+          <KpiTile label="Last delivery" value={formatDate(p.lastDeliveryDate) || "-"} />
           <KpiTile label={p.juteBagBalance === null ? "Jute bag balance" : `Jute bags with supplier (${p.juteBagsIssued.toLocaleString()} issued, ${p.juteBagsReturned.toLocaleString()} returned)`} value={p.juteBagBalance === null ? "No movements" : p.juteBagBalance.toLocaleString()} />
           <KpiTile label="Funding exposure" value="Not tracked" />
           <KpiTile label="Outstanding amount" value="Not tracked" />
@@ -243,8 +244,8 @@ export function SupplierDetailPage() {
         {sectionCard("Administrative identification", "gavel")}
         {sectionCard("Payment", "account_balance")}
         <InfoCard icon="history" title="Control">
-          <InfoRow label="Created" value={`${d.createdAt.slice(0, 10)}${d.createdBy ? ` by ${d.createdBy}` : d.source && d.source !== "entered" ? " (imported)" : ""}`} />
-          <InfoRow label="Last updated" value={`${d.updatedAt.slice(0, 10)}${d.updatedBy ? ` by ${d.updatedBy}` : ""}`} />
+          <InfoRow label="Created" value={`${formatDate(d.createdAt)}${d.createdBy ? ` by ${d.createdBy}` : d.source && d.source !== "entered" ? " (imported)" : ""}`} />
+          <InfoRow label="Last updated" value={`${formatDate(d.updatedAt)}${d.updatedBy ? ` by ${d.updatedBy}` : ""}`} />
           <InfoRow label="Reason for suspension / inactivation" value={d.status !== "active" ? d.statusReason : null} />
           <InfoRow label="Used by" value={`${d.references.receipts} truck(s), ${d.references.plans} plan(s), ${d.references.jute} jute movement(s)`} />
         </InfoCard>

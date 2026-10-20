@@ -6,6 +6,7 @@ import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { APPROVAL, LINK_STATUS, PlanFlagList, RECEPTION_TYPE } from "./PlanBadges";
 import { Pill } from "../ui/Pill";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 const inputClass =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -55,7 +56,7 @@ export function ReceiptPlanCard({
       <InfoRow label="Exception approval" value={<Pill tone={approval.tone} label={approval.label} />} />
       {info.approvedAt && (
         // An approval carried in from the client's workbook has no approver or date of its own — say so rather than show a dash.
-        <InfoRow label="Approved by" value={info.approvedBy ? `${info.approvedBy} · ${info.approvedAt.slice(0, 10)}` : `Approver not recorded · applied ${info.approvedAt.slice(0, 10)}`} />
+        <InfoRow label="Approved by" value={info.approvedBy ? `${info.approvedBy} · ${formatDate(info.approvedAt)}` : `Approver not recorded · applied ${formatDate(info.approvedAt)}`} />
       )}
       {info.approvalNote && <InfoRow label="Note" value={info.approvalNote} />}
       {info.flags.length > 0 && <div className="pt-1"><PlanFlagList flags={info.flags} /></div>}

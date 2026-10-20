@@ -7,6 +7,7 @@ import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
 import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { useProductionLots } from "../../state/TrackingContext";
 import { api, type ProductionLot } from "../../repository/api";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /** A Lot is created at Cooking, never before (confirmed rule) — so "create a Lot" here really means
  * "cook the first batch", exactly mirroring the BTM list page's "create = first receipt line". */
@@ -37,7 +38,7 @@ export function LotsListPage() {
     { label: "Lot No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.lotNo}</span> },
     { label: "Bin", filter: { value: (r) => r.binNo }, render: (r) => r.binNo },
     { label: "Source", filter: { value: (r) => r.source }, render: (r) => r.source ?? "-" },
-    { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "Created", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => formatDate(r.createdAt) },
   ];
 
   const dateFilter = useDateRangeFilter(rows, (r) => r.createdAt?.slice(0, 10));

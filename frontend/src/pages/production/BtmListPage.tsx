@@ -7,6 +7,7 @@ import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
 import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { useBtmIntakes } from "../../state/TrackingContext";
 import { api, type BtmIntake } from "../../repository/api";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /** BTM register — the intake spine's list page. A BTM is auto-created the moment its first
  * receipt line is written (see backend/src/services/production/btm.ts), so "create a BTM" here is
@@ -39,7 +40,7 @@ export function BtmListPage() {
     { label: "BTM No", render: (r) => <span className="font-mono text-[12.5px] font-semibold">{r.btmNo}</span> },
     { label: "Destination Bin", filter: { value: (r) => r.binNo }, render: (r) => r.binNo },
     { label: "Source", filter: { value: (r) => r.source }, render: (r) => r.source ?? "-" },
-    { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => new Date(r.createdAt).toLocaleDateString() },
+    { label: "Recorded", filter: { value: (r) => r.createdAt, kind: "date" }, render: (r) => formatDate(r.createdAt) },
   ];
 
   const dateFilter = useDateRangeFilter(rows, (r) => r.createdAt?.slice(0, 10));

@@ -2,6 +2,8 @@ import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ACTIVITY_CATEGORIES, activityProblems, categoryById, type ActivityCategoryId } from "@anagroci/contract/data/warehouseActivities";
 import { api } from "../../repository/api";
 import type { ReceiptRecord } from "../../types/receipt";
+import { todayIso } from "@anagroci/contract/domain/dateFormat";
+import { DateInput } from "../ui/DateInput";
 
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-white text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700";
@@ -28,7 +30,7 @@ interface Props {
  * so the form and the server cannot disagree. Triage asks for its own moisture and quantity before and after.
  */
 export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
-  const [v, setV] = useState({ category: "" as ActivityCategoryId | "", date: new Date().toISOString().slice(0, 10), lotNo: "", locationFrom: "", locationTo: "", bags: "", moisturePct: "", quantityBeforeKg: "", quantityAfterKg: "", remarks: "" });
+  const [v, setV] = useState({ category: "" as ActivityCategoryId | "", date: todayIso(), lotNo: "", locationFrom: "", locationTo: "", bags: "", moisturePct: "", quantityBeforeKg: "", quantityAfterKg: "", remarks: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
             {ACTIVITY_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}{c.useDryingForm ? " (recorded on the truck)" : ""}</option>)}
           </select>
         ))}
-        {field("Date", <input type="date" value={v.date} onChange={(e) => set("date", e.target.value)} className={inputCls} />, "Today unless you change it")}
+        {field("Date", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />, "Today unless you change it")}
         {field(cat?.needsLot ? "Lot *" : "Lot (optional)", (
           <select value={v.lotNo} onChange={(e) => set("lotNo", e.target.value)} className={inputCls}>
             <option value="">{cat?.needsLot ? "Choose the Lot…" : "No Lot"}</option>

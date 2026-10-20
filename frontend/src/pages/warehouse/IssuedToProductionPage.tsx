@@ -8,6 +8,7 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { RecordDetailModal } from "../../components/ui/RecordDetailModal";
 import { useIssuedToProduction } from "../../state/TrackingContext";
 import type { IssuedToProductionRow } from "../../repository/api";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * Factory Warehouse RCN Transfer to Production Report — no site column on this table at all (it's
@@ -29,7 +30,7 @@ export function IssuedToProductionPage() {
 
   const columns: Column<IssuedToProductionRow>[] = [
     { label: "BTM No.", render: (r) => <span className="font-mono text-[12.5px]">{r.btmNo || "-"}</span> },
-    { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => r.date || "-" },
+    { label: "Date", filter: { value: (r) => r.date, kind: "date" }, render: (r) => formatDate(r.date) || "-" },
     { label: "Source Bin", filter: { value: (r) => r.sourceBin }, render: (r) => r.sourceBin || "-" },
     { label: "Dry Bin", filter: { value: (r) => r.dryBin }, render: (r) => r.dryBin || "-" },
     { label: "Bin Status", filter: { value: (r) => r.binStatus }, render: (r) => r.binStatus || "-" },

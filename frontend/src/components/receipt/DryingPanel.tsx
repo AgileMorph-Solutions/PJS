@@ -3,6 +3,8 @@ import { dryingLoss } from "@anagroci/contract/domain/dryingLoss";
 import { DECISION_BRANCHES } from "@anagroci/contract/domain/decisions";
 import { api, type DryingStartPayload, type LinkedDryingBatchRow } from "../../repository/api";
 import type { ReceiptRecord } from "../../types/receipt";
+import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
+import { DateInput } from "../ui/DateInput";
 
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-white text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700";
@@ -54,7 +56,7 @@ export function DryingPanel({ receipt, batches, dryTypes, bins, canEdit, onChang
     inputKor: sd["n-qfs"]?.["FINAL KOR"] || sd["n-qfs"]?.["KOR"] || "",
     sourceBin: receipt.binNo ?? "",
   }), [sd, receipt.binNo]);
-  const [form, setForm] = useState<Record<string, string>>({ route: "direct", dryType: dryTypes[0] ?? "SUN DRYING", date: new Date().toISOString().slice(0, 10), ...defaults });
+  const [form, setForm] = useState<Record<string, string>>({ route: "direct", dryType: dryTypes[0] ?? "SUN DRYING", date: todayIso(), ...defaults });
   const [done, setDone] = useState<Record<string, string>>({ destinationBin: "" });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -71,7 +73,7 @@ export function DryingPanel({ receipt, batches, dryTypes, bins, canEdit, onChang
   const summary = (b: LinkedDryingBatchRow) => (
     <dl className="grid sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-2 text-[13px]">
       {[
-        ["Batch", `#${b.sn} · ${b.status ?? "-"}`], ["Type", b.dryType ?? "-"], ["Date", b.dryingDate?.slice(0, 10) ?? "-"],
+        ["Batch", `#${b.sn} · ${b.status ?? "-"}`], ["Type", b.dryType ?? "-"], ["Date", formatDate(b.dryingDate) || "-"],
         ["Bins", `${b.sourceBinNo ?? "-"} → ${b.destinationBinNo ?? b.destinationRaw ?? "-"}`],
         ["Issued", `${n(b.issuedNetWeightKg, " kg")}${b.inputBags ? ` · ${n(b.inputBags)} bags` : ""}`],
         ["Returned", `${n(b.receivedNetWeightKg, " kg")}${b.outputBags ? ` · ${n(b.outputBags)} bags` : ""}`],
@@ -127,7 +129,7 @@ export function DryingPanel({ receipt, batches, dryTypes, bins, canEdit, onChang
                 {DECISION_BRANCHES["n-drying"]!.filter((b) => b.id !== "none").map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
               </select>
             ))}
-            {field("Drying date", <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} className={inputCls} />, "Today unless you change it")}
+            {field("Drying date", <DateInput value={form.date} onChange={(d) => set("date", d)} className={inputCls} />, "Today unless you change it")}
             {field("Drying type", <><input list="dry-types" required value={form.dryType} onChange={(e) => set("dryType", e.target.value)} className={inputCls} /><datalist id="dry-types">{dryTypes.map((t) => <option key={t} value={t} />)}</datalist></>)}
             {field("Source bin", (
               <select value={form.sourceBin} onChange={(e) => set("sourceBin", e.target.value)} className={inputCls}>

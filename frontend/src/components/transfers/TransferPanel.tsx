@@ -6,6 +6,7 @@ import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import type { api } from "../../repository/api";
 import type { TransferRequest } from "../../types/receipt";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 export const TRANSFER_TONE: Record<TransferState, string> = { requested: "decision", in_transit: "term", closed: "entry", discrepancy: "gap" };
 
@@ -69,7 +70,7 @@ export function TransferPanel({
         <InfoRow label="Loaded weight" value={t.dispatchedGrossKg === null ? undefined : `${t.dispatchedGrossKg.toLocaleString()} kg`} />
         <InfoRow label="Bags sent" value={n(v.bagsDispatched)} />
         <InfoRow label="Net sent" strong value={v.netDispatchedKg === null ? undefined : `${v.netDispatchedKg.toLocaleString()} kg`} />
-        <InfoRow label="Dispatched" value={t.dispatchedAt ? `${t.dispatchedAt.slice(0, 10)}${t.dispatchedBy ? ` · ${t.dispatchedBy}` : ""}` : undefined} />
+        <InfoRow label="Dispatched" value={t.dispatchedAt ? `${formatDate(t.dispatchedAt)}${t.dispatchedBy ? ` · ${t.dispatchedBy}` : ""}` : undefined} />
       </InfoCard>
 
       <InfoCard icon="inventory_2" title="What arrived" badge={t.status !== "received" ? <Pill tone="system" label="Not received yet" /> : undefined}>
@@ -82,7 +83,7 @@ export function TransferPanel({
         <InfoRow label="Weight variance" strong value={v.weightVarianceKg === null ? undefined : `${n(v.weightVarianceKg, true)} kg`} />
         <InfoRow label="KOR / moisture / nuts" value={[t.korReceived, t.moistureReceived, t.nutCountReceived].some((x) => x !== null) ? [t.korReceived, t.moistureReceived, t.nutCountReceived].map((x) => x ?? "-").join(" / ") : undefined} />
         <InfoRow label="Their Lot no." value={t.receivedLotNoRaw} />
-        <InfoRow label="Received" value={t.receivedAt ? `${t.receivedAt.slice(0, 10)}${t.receivedBy ? ` · ${t.receivedBy}` : ""}` : undefined} />
+        <InfoRow label="Received" value={t.receivedAt ? `${formatDate(t.receivedAt)}${t.receivedBy ? ` · ${t.receivedBy}` : ""}` : undefined} />
         {t.receivedComment && <p className="pt-1 text-[12.5px] text-warmstone-600">{t.receivedComment}</p>}
       </InfoCard>
 

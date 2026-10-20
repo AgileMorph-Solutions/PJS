@@ -4,6 +4,7 @@ import {
   ReferenceLine, ReferenceArea, ReferenceDot,
 } from "recharts";
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 interface Props {
   rows: LedgerRow[];
@@ -104,6 +105,7 @@ export function JuteBalanceTrendChart({ rows }: Props) {
           tickLine={false}
           axisLine={{ stroke: "#d6d3d1" }}
           interval={tickInterval}
+          tickFormatter={(v: string) => formatDate(v)}
           minTickGap={24}
         />
         <YAxis
@@ -153,7 +155,7 @@ function BalanceTooltip({ active, payload }: { active?: boolean; payload?: { pay
       <div className={`text-[16px] font-bold tabular-nums ${p.balance < 0 ? "text-danger-700" : "text-warmstone-900"}`}>
         {p.balance.toLocaleString()} bags
       </div>
-      <div className="text-[12px] text-warmstone-500">{p.date}</div>
+      <div className="text-[12px] text-warmstone-500">{formatDate(p.date)}</div>
     </div>
   );
 }

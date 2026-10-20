@@ -6,6 +6,7 @@ import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { ReceiptStatusPill } from "../ReceiptStatusPill";
 import { Pill } from "../ui/Pill";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 const v = (r: ReceiptRecord, stage: string, label: string) => {
   const x = r.stageData[stage]?.[label];
@@ -76,7 +77,7 @@ export function LotOverview({
         />
         <InfoRow label="Bin allocated for" value={v(receipt, "n-bin", "Basis for allocation (moisture / quality / KOR / space)")} />
         <InfoRow label="Warehouse" value={receipt.warehouse} />
-        <InfoRow label="Lot issued" value={v(receipt, "n-lot", "Date/time assigned")?.slice(0, 10)} />
+        <InfoRow label="Lot issued" value={formatDate(v(receipt, "n-lot", "Date/time assigned"))} />
       </InfoCard>
 
       <InfoCard
@@ -128,7 +129,7 @@ export function LotOverview({
         <InfoRow label="Supplier code" value={receipt.lbaCode} />
         <InfoRow label="Origin" value={receipt.origin} />
         <InfoRow label="Vehicle" value={receipt.vehicleNo} />
-        <InfoRow label="Arrived" value={receipt.arrivalDate} />
+        <InfoRow label="Arrived" value={formatDate(receipt.arrivalDate)} />
         <InfoRow label="Fiche" value={links?.fiche ?? v(receipt, "n-verify", "FICHE")} />
         <InfoRow
           label="Delivery plan"
@@ -141,12 +142,12 @@ export function LotOverview({
         title="Movement"
         badge={<ReceiptStatusPill status={deriveStatus(receipt)} />}
       >
-        <InfoRow label="Dispatched" value={links?.dispatches[0]?.chargeDate} />
+        <InfoRow label="Dispatched" value={formatDate(links?.dispatches[0]?.chargeDate)} />
         <InfoRow label="Dispatch no." value={links?.dispatches[0]?.vyogeNumber} />
-        <InfoRow label="Received at factory" value={links?.warehouseReceiving.find((w) => !/bouak/i.test(w.warehouseSite))?.arrivalDate} />
+        <InfoRow label="Received at factory" value={formatDate(links?.warehouseReceiving.find((w) => !/bouak/i.test(w.warehouseSite))?.arrivalDate)} />
         <InfoRow label="Transfer to" value={links?.transfers[0]?.destinationWarehouse} />
         <InfoRow label="Production BTM" value={links?.btmIntakes[0]?.btmNo} />
-        <InfoRow label="Issued to production" value={links?.issuedToProduction[0]?.date} />
+        <InfoRow label="Issued to production" value={formatDate(links?.issuedToProduction[0]?.date)} />
       </InfoCard>
     </div>
   );

@@ -6,6 +6,8 @@ import { useSite } from "../../state/SiteContext";
 import { api } from "../../repository/api";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { BATCH_TRUCK_COLUMNS, BATCH_REQUIRED_LABEL, BATCH_MAX_ROWS, type BatchTruckRow } from "../../data/batchEntry";
+import { todayIso } from "@anagroci/contract/domain/dateFormat";
+import { DateInput } from "../../components/ui/DateInput";
 
 /** A grid row's values, keyed by the stage field label (so it maps straight onto the API payload). */
 type Values = Record<string, string>;
@@ -32,7 +34,7 @@ const cellCls =
 const btnSecondary =
   "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-semibold hover:bg-warmstone-50 transition-all";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayIso;
 const INITIAL_ROWS = 5;
 
 let nextKey = 1;
@@ -223,6 +225,13 @@ export function BatchEntryPage() {
                             .map((p) => <option key={p.id} value={p.id}>{p.id} · {normalizeSupplierName(p.supplierName)}</option>)}
                         </select>
                       ) : (
+                        c.type === "date" ? (
+                          <DateInput
+                            aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
+                            value={r.v[c.key] ?? ""} onChange={(d) => setValue(r.key, c.key, d)}
+                            onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
+                          />
+                        ) : (
                         <input
                           aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
                           type={c.type ?? "text"} value={r.v[c.key] ?? ""}
@@ -230,6 +239,7 @@ export function BatchEntryPage() {
                           onChange={(e) => setValue(r.key, c.key, e.target.value)}
                           onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
                         />
+                        )
                       )}
                     </td>
                   ))}

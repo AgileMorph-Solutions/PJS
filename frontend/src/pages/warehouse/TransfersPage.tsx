@@ -16,8 +16,10 @@ import { api } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
 import type { ReceiptRecord, TransferRequest } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
+import { DateInput } from "../../components/ui/DateInput";
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayIso;
 
 /** A Lot can go on a transfer once: it needs a Lot (so it passed quality), must not be rejected and
  * must not already be on one. The API enforces all three; this only keeps the picker honest. */
@@ -105,7 +107,7 @@ export function TransfersPage() {
 
   const columns: Column<TransferRequest>[] = [
     { label: "BKT", nowrap: true, render: (t) => <span className="font-mono text-[12.5px]">{t.id}</span> },
-    { label: "Date", filter: { value: (t) => t.transferDate, kind: "date" }, nowrap: true, render: (t) => t.transferDate },
+    { label: "Date", filter: { value: (t) => t.transferDate, kind: "date" }, nowrap: true, render: (t) => formatDate(t.transferDate) },
     { label: "From → To", filter: { value: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` }, render: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` },
     { label: "Truck", nowrap: true, render: (t) => t.truckNo ?? <span className="text-warmstone-300">not sent yet</span> },
     { label: "Lots", render: (t) => <span className="flex flex-wrap gap-x-2 gap-y-0.5">{t.lines.map(lotLink)}</span> },
@@ -131,7 +133,7 @@ export function TransfersPage() {
         <CollapsibleCard title="New transfer request" meta={`from ${site.warehouseName}`}>
           <form onSubmit={handleCreate} className="space-y-4 pt-3">
             <div className="grid sm:grid-cols-3 gap-4">
-              <Field id="tr-date" label="Date"><input id="tr-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} /></Field>
+              <Field id="tr-date" label="Date"><DateInput id="tr-date" required value={date} onChange={setDate} className={inputClass} /></Field>
               <Field id="tr-to" label="To warehouse">
                 <select id="tr-to" required value={to} onChange={(e) => setTo(e.target.value)} className={inputClass}>
                   <option value="" disabled>Select…</option>

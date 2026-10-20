@@ -17,6 +17,7 @@ import { useSite, useSwitchSite } from "../../state/SiteContext";
 import type { DryingBatch, DryingSortingReport } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /** A "View all fields" cell — every DataTable row here may also be a link (rowHref), so this stops
  * the click from bubbling into the row's own navigation. */
@@ -70,7 +71,7 @@ export function DryingJobsPage() {
 
   const batchColumns: Column<DryingBatch>[] = [
     { label: "Batch ID", filter: { value: (b) => b.sn, kind: "number" }, render: (b) => <span className="font-mono text-[12.5px]">{b.sn}</span> },
-    { label: "Date", filter: { value: (b) => b.dryingDate || b.dryingDateRaw, kind: "date" }, render: (b) => b.dryingDate || b.dryingDateRaw || "-" },
+    { label: "Date", filter: { value: (b) => b.dryingDate || b.dryingDateRaw, kind: "date" }, render: (b) => formatDate(b.dryingDate || b.dryingDateRaw) || "-" },
     { label: "Warehouse", filter: { value: (b) => b.warehouse || b.warehouseSite }, render: (b) => b.warehouse || b.warehouseSite || "-" },
     { label: "Lot No", render: (b) => b.lotNo || b.lotNoRaw || "-" },
     { label: "Fiche No", render: (b) => b.ficheNoRaw || "-" },
@@ -82,7 +83,7 @@ export function DryingJobsPage() {
 
   const reportColumns: Column<DryingSortingReport>[] = [
     { label: "S.No.", filter: { value: (r) => r.sn, kind: "number" }, render: (r) => <span className="font-mono text-[12.5px]">{r.sn ?? "-"}</span> },
-    { label: "Date", filter: { value: (r) => r.dryingDate || r.dryingDateRaw, kind: "date" }, render: (r) => r.dryingDate || r.dryingDateRaw || "-" },
+    { label: "Date", filter: { value: (r) => r.dryingDate || r.dryingDateRaw, kind: "date" }, render: (r) => formatDate(r.dryingDate || r.dryingDateRaw) || "-" },
     { label: "Lot No", render: (r) => r.lotNo || r.lotNoRaw || "-" },
     { label: "Supplier", filter: { value: (r) => normalizeSupplierName(r.supplierName) }, render: (r) => normalizeSupplierName(r.supplierName) || "-" },
     { label: "Issued net wt (GRN)", filter: { value: (r) => r.issuedNetWeightGrn, kind: "number" }, render: (r) => r.issuedNetWeightGrn ?? "-" },

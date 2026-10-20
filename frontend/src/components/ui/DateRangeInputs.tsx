@@ -1,3 +1,5 @@
+import { DateInput } from "./DateInput";
+
 export interface DateRange {
   from: string;
   to: string;
@@ -18,23 +20,11 @@ export function DateRangeInputs({ value, onChange }: Props) {
   const isFiltered = Boolean(value.from || value.to);
   return (
     <div className="flex items-center gap-1.5">
-      <input
-        type="date"
-        aria-label="From date"
-        value={value.from}
-        max={value.to || undefined}
-        onChange={(e) => onChange({ ...value, from: e.target.value })}
-      />
+      <DateInput aria-label="From date" value={value.from} max={value.to || undefined} onChange={(from) => onChange({ ...value, from })} />
       <span className="text-warmstone-400 text-[12px]" aria-hidden="true">
         &ndash;
       </span>
-      <input
-        type="date"
-        aria-label="To date"
-        value={value.to}
-        min={value.from || undefined}
-        onChange={(e) => onChange({ ...value, to: e.target.value })}
-      />
+      <DateInput aria-label="To date" value={value.to} min={value.from || undefined} onChange={(to) => onChange({ ...value, to })} />
       {isFiltered && (
         <button
           type="button"

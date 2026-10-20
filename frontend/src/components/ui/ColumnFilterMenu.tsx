@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isActive, type ActiveFilter, type FilterKind } from "./columnFilters";
+import { DateInput } from "./DateInput";
 
 interface Props {
   label: string;
@@ -93,10 +94,10 @@ export function ColumnFilterMenu({ label, kind, options, value, onChange }: Prop
           {kind === "date" && (
             <div className="space-y-1.5">
               <label className="block text-[11px] font-semibold text-warmstone-500 normal-case tracking-normal">From
-                <input autoFocus type="date" aria-label={`${label} from`} value={value?.from ?? ""} max={value?.to || undefined} onChange={(e) => set({ from: e.target.value })} className={`${field} mt-0.5`} />
+                <DateInput autoFocus aria-label={`${label} from`} value={value?.from ?? ""} max={value?.to || undefined} onChange={(from) => set({ from })} className={`${field} mt-0.5 w-full`} />
               </label>
               <label className="block text-[11px] font-semibold text-warmstone-500 normal-case tracking-normal">To
-                <input type="date" aria-label={`${label} to`} value={value?.to ?? ""} min={value?.from || undefined} onChange={(e) => set({ to: e.target.value })} className={`${field} mt-0.5`} />
+                <DateInput aria-label={`${label} to`} value={value?.to ?? ""} min={value?.from || undefined} onChange={(to) => set({ to })} className={`${field} mt-0.5 w-full`} />
               </label>
             </div>
           )}

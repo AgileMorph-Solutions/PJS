@@ -19,6 +19,7 @@ import type { DeliveryPlanDetail, DeliveryPlanTruck } from "../../types/receipt"
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
+import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 
 const STATUS_TONE: Record<PlanStatus, string> = { planned: "decision", partially_received: "term", delivered: "entry", cancelled: "gap" };
 const kg = (n: number | null) => (n === null ? "-" : n.toLocaleString());
@@ -60,7 +61,7 @@ export function DeliveryPlanDetailPage() {
   async function recordArrival() {
     setActionError(null);
     try {
-      const rid = await createReceipt(site.warehouseName, { arrivalDate: new Date().toISOString().slice(0, 10), deliveryPlanId: id });
+      const rid = await createReceipt(site.warehouseName, { arrivalDate: todayIso(), deliveryPlanId: id });
       navigate(`/${site.slug}/receipts/${rid}`);
     } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
   }
@@ -77,7 +78,7 @@ export function DeliveryPlanDetailPage() {
   const inProgress = plan.trucks.filter((t) => !t.rejected && !DONE.has(t.status)).length;
   const columns: Column<DeliveryPlanTruck>[] = [
     { label: "Receipt", nowrap: true, render: (t) => <Link to={`/${site.slug}/receipts/${t.receiptId}`} className="font-mono text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">{t.receiptId}</Link> },
-    { label: "Arrived", filter: { value: (t) => t.arrivalDate, kind: "date" }, nowrap: true, render: (t) => t.arrivalDate },
+    { label: "Arrived", filter: { value: (t) => t.arrivalDate, kind: "date" }, nowrap: true, render: (t) => formatDate(t.arrivalDate) },
     { label: "Truck", nowrap: true, render: (t) => t.vehicleNo || "-" },
     { label: "Steps", render: (t) => <TruckStepTracker status={t.status} /> },
     { label: "Outcome", filter: { value: (t) => STATUS_LABELS[t.status], kind: "select" }, render: (t) => (
@@ -102,7 +103,7 @@ export function DeliveryPlanDetailPage() {
       <PageHeader
         kicker={<Link to={`/${site.slug}/delivery-plans`} className="hover:text-warmstone-700">← Delivery plans</Link>}
         title={plan.id}
-        lede={`${normalizeSupplierName(plan.supplierName)}${plan.supplierCode ? ` · ${plan.supplierCode}` : ""} → ${plan.destinationWarehouse}${plan.destinationStore ? ` · ${plan.destinationStore}` : ""}. Expected ${plan.expectedDeliveryEnd ? `${plan.expectedArrivalDate} to ${plan.expectedDeliveryEnd}` : plan.expectedArrivalDate}${plan.expectedOrigin ? ` from ${plan.expectedOrigin}` : ""}.`}
+        lede={`${normalizeSupplierName(plan.supplierName)}${plan.supplierCode ? ` · ${plan.supplierCode}` : ""} → ${plan.destinationWarehouse}${plan.destinationStore ? ` · ${plan.destinationStore}` : ""}. Expected ${plan.expectedDeliveryEnd ? `${formatDate(plan.expectedArrivalDate)} to ${formatDate(plan.expectedDeliveryEnd)}` : formatDate(plan.expectedArrivalDate)}${plan.expectedOrigin ? ` from ${plan.expectedOrigin}` : ""}.`}
         actions={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Pill tone={STATUS_TONE[plan.status]} label={PLAN_STATUS_LABELS[plan.status]} />

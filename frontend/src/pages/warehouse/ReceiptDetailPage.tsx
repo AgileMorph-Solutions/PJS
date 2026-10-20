@@ -29,6 +29,7 @@ import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
 import { api } from "../../repository/api";
 import { DryingPanel } from "../../components/receipt/DryingPanel";
+import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -201,7 +202,7 @@ export function ReceiptDetailPage() {
           <span className="material-symbols-outlined text-[19px] text-ambernut-700">lock</span>
           <span className="flex-1 min-w-[16rem]">
             {receipt.lockedAt
-              ? <>This record is <b>locked</b> since {receipt.lockedAt.slice(0, 10)}{receipt.lockedBy ? ` (${receipt.lockedBy})` : ""}: its GRN is complete. Stock, drying and transfers can still go ahead.</>
+              ? <>This record is <b>locked</b> since {formatDate(receipt.lockedAt)}{receipt.lockedBy ? ` (${receipt.lockedBy})` : ""}: its GRN is complete. Stock, drying and transfers can still go ahead.</>
               : <>The bin allocation was <b>finalised</b> on {receipt.stageData["n-bin"]?.["Bin allocation date"]}{receipt.stageData["n-bin"]?.["Finalised by"] ? ` by ${receipt.stageData["n-bin"]["Finalised by"]}` : ""}.</>}
             {!isAdmin && " An Admin can reopen it with a reason."}
           </span>
@@ -448,7 +449,7 @@ export function ReceiptDetailPage() {
               <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
                 <ReceiptStatusPill status={e.status} />
                 <span className="text-[11px] text-warmstone-400">
-                  {new Date(e.at).toLocaleString()}{e.actor ? ` · ${e.actor}` : ""}
+                  {formatDateTime(e.at)}{e.actor ? ` · ${e.actor}` : ""}
                 </span>
                 {e.note && <p className="text-[12px] text-warmstone-500">{e.note}</p>}
               </li>

@@ -2,6 +2,8 @@ import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useTracking } from "../../state/TrackingContext";
 import type { DeliveryPlanPayload } from "../../repository/api";
 import type { DeliveryPlan } from "../../types/receipt";
+import { todayIso } from "@anagroci/contract/domain/dateFormat";
+import { DateInput } from "../ui/DateInput";
 
 const inputClass =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -11,7 +13,7 @@ export interface PlanFormState {
   start: string; end: string; quantity: string; trucks: string; truckType: string; funding: string; remarks: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayIso;
 export const emptyPlanForm = (): PlanFormState => ({
   supplierName: "", supplierCode: "", origin: "", store: "", start: today(), end: "", quantity: "", trucks: "", truckType: "", funding: "", remarks: "",
 });
@@ -96,8 +98,8 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
           {stores.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       ))}
-      {field("dp-start", "Expected delivery from", <input id="dp-start" type="date" required value={form.start} onChange={(e) => set("start", e.target.value)} className={inputClass} />)}
-      {field("dp-end", "Expected delivery until", <input id="dp-end" type="date" value={form.end} min={form.start} onChange={(e) => set("end", e.target.value)} className={inputClass} />)}
+      {field("dp-start", "Expected delivery from", <DateInput id="dp-start" required value={form.start} onChange={(d) => set("start", d)} className={inputClass} />)}
+      {field("dp-end", "Expected delivery until", <DateInput id="dp-end" value={form.end} min={form.start} onChange={(d) => set("end", d)} className={inputClass} />)}
       {field("dp-qty", "Expected quantity (kg)", <input id="dp-qty" inputMode="decimal" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className={inputClass} />)}
       {field("dp-trucks", "Expected number of trucks", <input id="dp-trucks" inputMode="numeric" value={form.trucks} onChange={(e) => set("trucks", e.target.value)} className={inputClass} />)}
       {field("dp-truck", "Expected truck type", <input id="dp-truck" value={form.truckType} onChange={(e) => set("truckType", e.target.value)} className={inputClass} />)}

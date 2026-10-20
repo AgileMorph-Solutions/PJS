@@ -12,6 +12,7 @@ import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { ActivityForm } from "../../components/warehouse/ActivityForm";
 import { ACTIVITY_LABEL, classifyActivity } from "@anagroci/contract/data/warehouseActivities";
 import type { WarehouseActivityLedgerEntry } from "../../repository/api";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * "Warehouse activity Ledger" — a fifth ledger-shaped page alongside the four `juteLedgers.ts`
@@ -30,7 +31,7 @@ export function WarehouseActivityLedgerPage() {
   const [detail, setDetail] = useState<WarehouseActivityLedgerEntry | null>(null);
 
   const columns: Column<WarehouseActivityLedgerEntry>[] = [
-    { label: "Date", filter: { value: (r) => r.activityDate || r.activityDateRaw, kind: "date" }, render: (r) => r.activityDate || r.activityDateRaw || "-" },
+    { label: "Date", filter: { value: (r) => r.activityDate || r.activityDateRaw, kind: "date" }, render: (r) => formatDate(r.activityDate || r.activityDateRaw) || "-" },
     // One classification for every row, imported or recorded here, from its activity text (contract data/warehouseActivities.ts).
     // The text itself is left exactly as the sheet wrote it, so this reads it and never rewrites it.
     { label: "Category", filter: { value: (r) => ACTIVITY_LABEL[classifyActivity(r.activityType)] }, render: (r) => ACTIVITY_LABEL[classifyActivity(r.activityType)] },

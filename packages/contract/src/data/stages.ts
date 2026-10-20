@@ -14,7 +14,7 @@ export const stages: Stage[] = [
     note: "Security logs the truck the moment it reaches the gate. Same event whether this is a Village, Regional Central or Factory warehouse — only the WH LOCATION/WH NO. fields differ.",
     fields: [
       { n: "S N", v: "1" , col: "sn"},
-      { n: "DATE OF ARRIVAL", v: "2026-02-16" , col: "dateOfArrival"},
+      { n: "DATE OF ARRIVAL", v: "2026-02-16" , col: "dateOfArrival", format: "date"},
       // v: "" — the new-sheets "Truck Reception" export (which replaces this sheet) has no
       // equivalent column at all. Genuinely dropped, not renamed; never fabricated back in. See
       // backend/src/domain/imports/truckReception.ts's header comment.
@@ -105,7 +105,7 @@ export const stages: Stage[] = [
     sheet: "Truck Reception · 28 columns",
     note: "Doc §5.1 sequence: park at unloading area → labour + manpower contractor allocated → tarpaulin removed → Tally Clerk counts bags → cleaning labour manages spillage → bags on pallets (30/pallet) → forklift moves pallet to the location the Warehouse team decided. This is also the flow's jute bag touchpoint — the bag counts below feed both the Warehouse-level and Supplier-level jute bag ledgers (see the panel above and the note alongside). SACS is calculated as good + damp + torn (domain/receiptMath.ts); 44 real rows disagree with that sum and are kept as recorded and reported.",
     fields: [
-      { n: "DATE OF OFFLOADING", v: "2026-02-16" , col: "dateOfOffloading"},
+      { n: "DATE OF OFFLOADING", v: "2026-02-16" , col: "dateOfOffloading", format: "date"},
       { n: "SACS (bags)", v: "478" , col: "sacs"},
       { n: "BON SACS (good bags)", v: "463" , col: "bonSacs"},
       { n: "HUMID SACS (damp bags)", v: "0" , col: "humidSacs"},
@@ -153,7 +153,7 @@ export const stages: Stage[] = [
       { n: "Lot Number", v: "" , col: "lotNumber"},
       { n: "Truck reference", v: "" , col: "truckReference"},
       { n: "Assigned by (Warehouse Team)", v: "" , col: "assignedBy"},
-      { n: "Date/time assigned", v: "" , col: "assignedAt"},
+      { n: "Date/time assigned", v: "" , col: "assignedAt", format: "datetime"},
     ],
   },
   {
@@ -170,7 +170,7 @@ export const stages: Stage[] = [
       { n: "Finalised (same day / next day)", v: "" , col: "finalisedWhen"},
       // Stamped by the Finalise action (never typed): the date the allocation was closed, and by whom. Client review, Oct 2026:
       // "automatically populate the bin allocation date when finalized".
-      { n: "Bin allocation date", v: "" , col: "allocationDate"},
+      { n: "Bin allocation date", v: "" , col: "allocationDate", format: "date"},
       { n: "Finalised by", v: "" , col: "finalisedBy"},
     ],
   },
