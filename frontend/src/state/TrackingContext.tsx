@@ -295,6 +295,27 @@ export function useTransfers(warehouse?: string) {
 }
 
 /**
+ * The dashboard's supplier-wise figures for a period and site. Its own hook, like the others, so TrackingApi stays as it
+ * is. A response that arrives after the period or site has changed again is dropped, so a slow answer can never
+ * overwrite the one the person is now looking at.
+ */
+export function useSupplierAnalytics(range: { from: string; to: string }, warehouse?: string) {
+  const [data, setData] = useState<import("@anagroci/contract/types/receipt").SupplierAnalytics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    setLoading(true);
+    api.getSupplierAnalytics(range, warehouse)
+      .then((d) => { if (current) { setData(d); setError(null); } })
+      .catch((e) => { if (current) setError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [range.from, range.to, warehouse]);
+  return { data, loading, error };
+}
+
+/**
  * CHARGEMENT-derived unit dispatch lines — its own hook for the same reason as useDryingJobs: a
  * brand-new table, never part of TrackingApi. Currently unused by any page — dispatch status
  * shows via Reception's Downstream column instead (see DownstreamStatusChips) — kept as a working

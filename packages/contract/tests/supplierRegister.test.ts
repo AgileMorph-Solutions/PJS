@@ -51,9 +51,28 @@ describe("supplier performance", () => {
     });
   });
 
+  it("counts bags and paid weight on accepted trucks only, and measures damaged bags only where a split was recorded", () => {
+    const p = supplierPerformance(
+      [
+        t({ netKg: 10000, paidKg: 9900, bags: 200, goodBags: 190, dampBags: 6, tornBags: 4 }),
+        t({ netKg: 20000, paidKg: 19800, bags: 400, goodBags: 400, dampBags: 0, tornBags: 0 }),
+        t({ netKg: 5000, bags: 100 }), // counted, no split recorded: in the bag total, not in the damaged share
+        t({ rejected: true, netKg: 9000, paidKg: 9000, bags: 150, goodBags: 100, dampBags: 50, tornBags: 0 }), // rejected: nothing counts
+      ],
+      [],
+      { issued: 0, returned: 0, movements: 0 },
+    );
+    expect(p).toMatchObject({
+      acceptedTrucks: 3, bagsDelivered: 700, goodBags: 590, dampBags: 6, tornBags: 4,
+      damagedBagPct: 1.7, // 10 of the 600 bags whose split was recorded
+      paidWeightKg: 29700, weighedOnArrivalKg: 35000, averageNetKgPerTruck: 11667,
+    });
+  });
+
   it("leaves a figure empty when its records don't exist, rather than showing 0", () => {
     const p = supplierPerformance([], [], { issued: 0, returned: 0, movements: 0 });
-    expect(p).toMatchObject({ targetKg: null, achievementPct: null, averageKor: null, rejectionRatePct: null, lastDeliveryDate: null, juteBagBalance: null });
+    expect(p).toMatchObject({ targetKg: null, achievementPct: null, averageKor: null, rejectionRatePct: null, lastDeliveryDate: null, juteBagBalance: null, damagedBagPct: null, averageNetKgPerTruck: null });
     expect(p.volumeDeliveredKg).toBe(0);
+    expect(p.bagsDelivered).toBe(0);
   });
 });

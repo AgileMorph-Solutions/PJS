@@ -14,6 +14,13 @@ export interface SupplierTruckFacts {
   netKg?: number;
   kor?: number;
   moisture?: number;
+  /** Bags counted at unloading (SACS) and how they split; undefined until the unloading step is filled in. */
+  bags?: number;
+  goodBags?: number;
+  dampBags?: number;
+  tornBags?: number;
+  /** PAID WT: the weight the supplier is paid on. */
+  paidKg?: number;
 }
 
 export interface SupplierPlanFacts {
@@ -34,6 +41,18 @@ export interface SupplierPerformance {
   weighedOnArrivalKg: number;
   /** Accepted trucks with no GRN quantity yet: weighed and in, but not in the delivered volume. */
   trucksAwaitingGrn: number;
+  /** PAID WT on accepted trucks. */
+  paidWeightKg: number;
+  acceptedTrucks: number;
+  /** Net weighed kg over the accepted trucks that have a weight. Null when none does. */
+  averageNetKgPerTruck: number | null;
+  /** Bags counted at unloading on accepted trucks, and their good / damp / torn split. */
+  bagsDelivered: number;
+  goodBags: number;
+  dampBags: number;
+  tornBags: number;
+  /** (damp + torn) as a share of the bags counted, over trucks whose split was recorded. Null when no bags were counted. */
+  damagedBagPct: number | null;
   achievementPct: number | null;
   /** Weighted by each truck's GRN kg, or its net weight while no GRN is recorded; over accepted trucks with a reading and a weight. */
   averageKor: number | null;
@@ -87,6 +106,12 @@ export function supplierPerformance(
   const rejectedTrucks = trucks.length - accepted.length;
   const kor = weightedAverage(trucks, (t) => t.kor);
   const moisture = weightedAverage(trucks, (t) => t.moisture);
+  const weighed = accepted.filter((t) => t.netKg !== undefined);
+  const sum = (pick: (t: SupplierTruckFacts) => number | undefined) => accepted.reduce((n, t) => n + (pick(t) ?? 0), 0);
+  // The damaged share is measured only on trucks that recorded a split, so a truck with a bag count but no split can't dilute it.
+  const split = accepted.filter((t) => t.bags !== undefined && (t.dampBags !== undefined || t.tornBags !== undefined));
+  const splitBags = split.reduce((n, t) => n + (t.bags ?? 0), 0);
+  const splitDamaged = split.reduce((n, t) => n + (t.dampBags ?? 0) + (t.tornBags ?? 0), 0);
   const last = accepted.map((t) => t.arrivalDate).filter(Boolean).sort().at(-1) ?? null;
   return {
     targetKg,
@@ -94,6 +119,14 @@ export function supplierPerformance(
     volumeDeliveredKg: accepted.reduce((n, t) => n + (t.grnKg ?? 0), 0),
     weighedOnArrivalKg: accepted.reduce((n, t) => n + (t.netKg ?? 0), 0),
     trucksAwaitingGrn: accepted.filter((t) => t.grnKg === undefined).length,
+    paidWeightKg: sum((t) => t.paidKg),
+    acceptedTrucks: accepted.length,
+    averageNetKgPerTruck: weighed.length ? round(weighed.reduce((n, t) => n + (t.netKg ?? 0), 0) / weighed.length, 0) : null,
+    bagsDelivered: sum((t) => t.bags),
+    goodBags: sum((t) => t.goodBags),
+    dampBags: sum((t) => t.dampBags),
+    tornBags: sum((t) => t.tornBags),
+    damagedBagPct: splitBags > 0 ? round((splitDamaged / splitBags) * 100, 1) : null,
     achievementPct: targetKg ? round((receivedOnPlansKg / targetKg) * 100, 1) : null,
     averageKor: kor.value, korTrucks: kor.count,
     averageMoisture: moisture.value, moistureTrucks: moisture.count,

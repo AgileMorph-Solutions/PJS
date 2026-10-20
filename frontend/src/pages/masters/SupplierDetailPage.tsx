@@ -214,6 +214,9 @@ export function SupplierDetailPage() {
           <KpiTile label="Target / commitment" value={kg(p.targetKg) ?? "No plan"} />
           <KpiTile label={`Volume delivered (GRN${p.trucksAwaitingGrn ? `, ${p.trucksAwaitingGrn} truck${p.trucksAwaitingGrn === 1 ? "" : "s"} awaiting GRN` : ""})`} value={kg(p.volumeDeliveredKg) ?? "-"} />
           <KpiTile label="Weighed on arrival (net)" value={kg(p.weighedOnArrivalKg) ?? "-"} />
+          <KpiTile label={`Paid weight (${p.acceptedTrucks} accepted truck${p.acceptedTrucks === 1 ? "" : "s"})`} value={kg(p.paidWeightKg) ?? "-"} />
+          <KpiTile label={p.bagsDelivered ? `Bags delivered (${p.goodBags.toLocaleString()} good / ${p.dampBags.toLocaleString()} damp / ${p.tornBags.toLocaleString()} torn)` : "Bags delivered"} value={p.bagsDelivered ? p.bagsDelivered.toLocaleString() : "-"} />
+          <KpiTile label="Damaged bags (damp + torn)" value={p.damagedBagPct === null ? "-" : `${p.damagedBagPct}%`} tone={p.damagedBagPct ? "gap" : "default"} />
           <KpiTile label={`Achievement (${p.receivedOnPlansKg.toLocaleString()} kg on plans)`} value={p.achievementPct === null ? "-" : `${p.achievementPct}%`} />
           <KpiTile label={`Average KOR (${p.korTrucks} truck${p.korTrucks === 1 ? "" : "s"})`} value={p.averageKor ?? "-"} />
           <KpiTile label={`Average moisture (${p.moistureTrucks} truck${p.moistureTrucks === 1 ? "" : "s"})`} value={p.averageMoisture === null ? "-" : `${p.averageMoisture}%`} />

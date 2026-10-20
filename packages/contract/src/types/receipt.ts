@@ -81,6 +81,24 @@ export interface SupplierDetail extends Required<Pick<Supplier, "code" | "name" 
   references: SupplierReferences;
 }
 
+/** One supplier's line in the dashboard's supplier analytics: the same figures as its own page, for the period asked. */
+export interface SupplierAnalyticsRow {
+  /** "" for the line of trucks that carry no LBA code. */
+  code: string;
+  name: string;
+  /** Null for a code that is not in the supplier register (a truck can carry one that was never registered). */
+  status: import("../domain/supplierProfile.js").SupplierStatus | null;
+  performance: import("../domain/supplierPerformance.js").SupplierPerformance;
+}
+export interface SupplierAnalytics {
+  rows: SupplierAnalyticsRow[];
+  /** Trucks with no LBA code, so that rows + this line + nothing else add up to every truck in the period. */
+  noCode: SupplierAnalyticsRow | null;
+  /** The same calculation over every truck, plan and jute movement in the period. */
+  totals: import("../domain/supplierPerformance.js").SupplierPerformance;
+  period: { from: string | null; to: string | null };
+}
+
 /** What a supplier is still used by, which decides whether it can be deleted or only switched off. */
 export interface SupplierReferences { receipts: number; plans: number; jute: number; assignments: number; total: number }
 /** `kind` (Village/Regional/Factory) is set only on SITE rows; `site` is null for a site row and

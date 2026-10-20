@@ -5,6 +5,7 @@ import { KpiTile } from "../components/ui/KpiTile";
 import { ReceiptStatusPill } from "../components/ReceiptStatusPill";
 import { DateRangeFilter, type DateRange } from "../components/dashboard/DateRangeFilter";
 import { ReceiptsByStatusChart } from "../components/dashboard/ReceiptsByStatusChart";
+import { SupplierAnalyticsSection } from "../components/dashboard/SupplierAnalyticsSection";
 import { JuteBalanceTrendChart, parseLedgerDate } from "../components/dashboard/JuteBalanceTrendChart";
 import { useTracking } from "../state/TrackingContext";
 import { computeDashboardCounts, deriveStatus } from "../domain/receiptStatus";
@@ -118,6 +119,8 @@ export function DashboardPage() {
       >
         <ReceiptsByStatusChart receipts={filteredReceipts} />
       </ChartCard>
+
+      <SupplierAnalyticsSection range={range} />
 
       <ChartCard
         icon="warehouse"

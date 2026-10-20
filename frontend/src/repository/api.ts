@@ -5,7 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, SupplierReferences, SupplierDetail, ReceiptPlanInfo, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -206,6 +206,15 @@ export const api = {
     request<ReceiptPlanInfo>(`/receipts/${encodeURIComponent(receiptId)}/exception-approval`, { method: "POST", body: JSON.stringify({ note }) }),
   linkReceiptToPlan: (receiptId: string, deliveryPlanId: string) =>
     request<ReceiptPlanInfo>(`/receipts/${encodeURIComponent(receiptId)}/delivery-plan`, { method: "POST", body: JSON.stringify({ deliveryPlanId }) }),
+
+  /** Supplier-wise figures for the dashboard, for a period and (admin only) one site. Warehouse Incharge / admin only. */
+  getSupplierAnalytics: (range: { from?: string; to?: string }, warehouse?: string) => {
+    const q = new URLSearchParams();
+    if (range.from) q.set("from", range.from);
+    if (range.to) q.set("to", range.to);
+    if (warehouse) q.set("warehouse", warehouse);
+    return request<SupplierAnalytics>(`/dashboard/suppliers${q.size ? `?${q}` : ""}`);
+  },
 
   listTransfers: (warehouse?: string) => request<TransferRequest[]>(withWarehouse("/transfers", warehouse)),
   createTransfer: (t: {
