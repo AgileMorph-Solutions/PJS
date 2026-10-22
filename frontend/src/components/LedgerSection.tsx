@@ -99,11 +99,6 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
                     <label htmlFor={id} className="text-[12.5px] font-semibold text-warmstone-700">
                       {c.label}
                     </label>
-                    {!c.real && (
-                      <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-ambernut-100 text-ambernut-800">
-                        new
-                      </span>
-                    )}
                   </div>
                   {c.label === "Activities type" ? (
                     <>

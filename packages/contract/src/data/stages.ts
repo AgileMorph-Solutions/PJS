@@ -264,7 +264,7 @@ export interface ReceptionStep {
 /**
  * The Oct 2026 team flow — Arrival → Weight → Quality → Unloading → Lot → Bin → GRN — as groups of
  * the stages above. The information arrives at different times, so each step is filled on its own.
- * Tare sits under Unloading because the empty truck is weighed after it is unloaded. Everything
+ * Tare sits under Weight, beside the loaded reading (Oct 2026 client change; see n-gross). Everything
  * after GRN keeps its own stage-by-stage layout.
  */
 export const RECEPTION_STEPS: ReceptionStep[] = [
