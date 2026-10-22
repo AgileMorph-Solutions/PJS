@@ -77,7 +77,7 @@ const bmForm = (extra: Record<string, Record<string, string>> = {}) => ({
   values: {
     "n-gate": { "VEHICLE NO.": "TRUCK-42" },
     "n-verify": { "SUPPLIERS NAME": "UM Test Supplier", "LBA CODE": SUPPLIER, FICHE: "F-100" },
-    "n-grn": { PRICE: "470" },
+    // No PRICE: since Oct 2026 the Branch Manager sets it directly (PUT /price), never through this approval form.
     ...extra,
   },
 });
@@ -154,7 +154,7 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
   });
 
   it("rejects fields outside the Branch Manager form — including the Lot and the weights the system now produces", async () => {
-    const outside = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, { values: { "n-tare": { "Tare / empty truck weight (kg)": "1" } } });
+    const outside = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, { values: { "n-gross": { "Tare / empty truck weight (kg)": "1" } } });
     expect(outside.statusCode).toBe(422);
     // Lot is issued on quality pass; gross and net are calculated — nobody submits them any more.
     const extras: Record<string, Record<string, string>>[] = [
@@ -197,17 +197,16 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect((await as(P + "wi", "POST", `/api/submissions/${submissionId}/approve`)).statusCode).toBe(200);
 
     const r = (await as(P + "wi", "GET", `/api/receipts/${receiptA}`)).json();
-    expect(r.stageData["n-grn"]["PRICE"]).toBe("470");
+    expect(r.stageData["n-grn"]).toBeUndefined();
     expect(r.stageData["n-verify"]["FICHE"]).toBe("F-100");
     // Approving the Branch Manager's form never hands out a Lot — that happens on quality pass.
     expect(r.lotNo ?? "").toBe("");
     expect(r).toMatchObject({ lbaCode: SUPPLIER, supplierName: "UM Test Supplier", vehicleNo: "TRUCK-42",
-      // A price alone no longer makes a truck GRN-completed (Oct 2026: the GRN quantity must be recorded), so the
-      // approved price leaves it where its other stages put it — it never unloaded or passed quality in this test.
+      // It never unloaded or passed quality in this test.
       status: "pending_qa" });
 
     const changes = await prisma.stageFieldChange.findMany({ where: { receiptId: receiptA } });
-    expect(changes.length).toBeGreaterThanOrEqual(5);
+    expect(changes.length).toBeGreaterThanOrEqual(4);
     expect(changes.every((c) => c.via === "approval" && c.userId === ids.wi)).toBe(true);
     // The gate's vehicle number changed GATE-1 -> TRUCK-42, and the audit says so.
     expect(changes.find((c) => c.label === "VEHICLE NO.")).toMatchObject({ oldValue: "GATE-1", newValue: "TRUCK-42" });
@@ -223,10 +222,16 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
   });
 
   it("audits a Warehouse Incharge's direct correction", async () => {
-    const res = await as(P + "wi", "PATCH", `/api/receipts/${receiptA}/stages/n-grn`, { fields: { PRICE: "480" } });
+    const res = await as(P + "wi", "PATCH", `/api/receipts/${receiptA}/stages/n-verify`, { fields: { FICHE: "F-101" } });
     expect(res.statusCode).toBe(200);
     const c = await prisma.stageFieldChange.findFirst({ where: { receiptId: receiptA, via: "direct" } });
-    expect(c).toMatchObject({ label: "PRICE", oldValue: "470", newValue: "480" });
+    expect(c).toMatchObject({ label: "FICHE", oldValue: "F-100", newValue: "F-101" });
+  });
+
+  it("the Branch Manager's price goes straight onto the truck, audited as theirs", async () => {
+    expect((await as(P + "bm", "PUT", `/api/receipts/${receiptA}/price`, { price: "470" })).statusCode).toBe(200);
+    const c = await prisma.stageFieldChange.findFirst({ where: { receiptId: receiptA, label: "PRICE" } });
+    expect(c).toMatchObject({ via: "direct", userId: ids.bm, newValue: "470" });
   });
 });
 

@@ -9,6 +9,8 @@ import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { serializeCell } from "./cells.js";
 import { exportFilename, filterByDate, type DateRange } from "./dateFilter.js";
 import { sheetsFor } from "./sheets.js";
+import { hiddenKeys } from "./fields.js";
+import type { Role } from "@anagroci/contract/data/roles";
 
 export interface BuiltWorkbook {
   buffer: ExcelJS.Buffer;
@@ -40,14 +42,17 @@ export async function buildWorkbookFile(args: {
   range: DateRange;
   blank: boolean;
   today: string;
+  /** Who downloads it: columns hidden from that role (price and amount for the Warehouse Incharge) are left out. */
+  role?: Role;
 }): Promise<BuiltWorkbook> {
   const { type, warehouse, site, range, blank, today } = args;
+  const hidden = hiddenKeys(args.role);
   const wb = new ExcelJS.Workbook();
   const written: BuiltWorkbook["sheets"] = [];
   let withoutDate = 0;
 
   for (const spec of sheetsFor(type)) {
-    const fields = spec.fields(type);
+    const fields = spec.fields(type).filter((f) => !hidden.has(f.key));
     let rows = blank ? [] : await spec.rows(site);
     if (!blank && spec.dateField && !spec.master) {
       const f = filterByDate(rows, spec.dateField.column, range);

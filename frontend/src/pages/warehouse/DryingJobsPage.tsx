@@ -18,6 +18,7 @@ import type { DryingBatch, DryingSortingReport } from "../../repository/api";
 import { deriveStatus } from "../../domain/receiptStatus";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { DRYING_PHASE_LABELS, dryingPhase } from "@anagroci/contract/domain/sunDrying";
 
 /** A "View all fields" cell — every DataTable row here may also be a link (rowHref), so this stops
  * the click from bubbling into the row's own navigation. */
@@ -77,7 +78,10 @@ export function DryingJobsPage() {
     { label: "Fiche No", render: (b) => b.ficheNoRaw || "-" },
     { label: "Dry type", filter: { value: (b) => b.dryType }, render: (b) => b.dryType || "-" },
     { label: "Destination", filter: { value: (b) => b.destinationRaw }, render: (b) => b.destinationRaw || "-" },
-    { label: "Status", filter: { value: (b) => b.status }, render: (b) => b.status || "-" },
+    { label: "Round", filter: { value: (b) => b.round ?? null, kind: "number" }, render: (b) => b.round ?? "-" },
+    { label: "Moisture", render: (b) => (b.inputMoisturePct == null && b.outputMoisturePct == null ? "-" : `${b.inputMoisturePct ?? "-"} → ${b.outputMoisturePct ?? "-"} %`) },
+    // A sun-drying round's status is one of the app's; an imported row keeps its sheet's own text.
+    { label: "Status", filter: { value: (b) => (dryingPhase(b.status) === "other" ? b.status : DRYING_PHASE_LABELS[dryingPhase(b.status)]) }, render: (b) => (dryingPhase(b.status) === "other" ? b.status || "-" : DRYING_PHASE_LABELS[dryingPhase(b.status)]) },
     { label: "", render: (b) => <ViewAllFieldsButton onClick={() => setDetailBatch(b)} /> },
   ];
 

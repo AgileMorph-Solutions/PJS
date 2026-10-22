@@ -62,7 +62,7 @@ export interface DerivedRule {
 export const KOR_FACTOR = 0.17637;
 
 const LOADED: FieldRef = ["n-gross", "Loaded truck weight (kg)"];
-const TARE: FieldRef = ["n-tare", "Tare / empty truck weight (kg)"];
+const TARE: FieldRef = ["n-gross", "Tare / empty truck weight (kg)"];
 const GROSS: FieldRef = ["n-gross", "GROSS WT KGS"];
 const GOOD: FieldRef = ["n-unload", "BON SACS (good bags)"];
 const DAMP: FieldRef = ["n-unload", "HUMID SACS (damp bags)"];
@@ -78,10 +78,12 @@ const KOR: FieldRef = ["n-qfs", "KOR"];
 const FINAL_KOR: FieldRef = ["n-qfs", "FINAL KOR"];
 const panel = (name: "Sample" | "Final"): FieldRef[] =>
   (["Good Kernel", "Immature", "Spotted"] as const).map((g) => ["n-qfs", `${name} – ${g} (g)`] as const);
+/** KOR from a cut test's grams: (good kernel + ½ × (immature + spotted)) × KOR_FACTOR. Used at QFS and at every drying check. */
+export const korFromGrams = (good: number, immature: number, spotted: number): number => (good + 0.5 * (immature + spotted)) * KOR_FACTOR;
 const korRule = (target: FieldRef, name: "Sample" | "Final"): DerivedRule => ({
   target,
   inputs: panel(name),
-  compute: ([good, immature, spotted]) => (good! + 0.5 * (immature! + spotted!)) * KOR_FACTOR,
+  compute: ([good, immature, spotted]) => korFromGrams(good!, immature!, spotted!),
   formula: `(Good kernel + ½ × (immature + spotted)) × ${KOR_FACTOR} — ${name.toLowerCase()} cut test`,
   fallbackToTyped: true,
 });

@@ -20,7 +20,8 @@ import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES,
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
-import { assertLotBeforeBin, assertRejectionHasReason, ValidationError } from "../domain/validation.js";
+import { assertLotBeforeBin, assertRejectionHasReason, ForbiddenError, ValidationError } from "../domain/validation.js";
+import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
 import { nextLotNumber, nextReceiptId } from "./ids.js";
 
 type Tx = Prisma.TransactionClient;
@@ -28,7 +29,7 @@ export interface WriteOpts {
   bypassValidation?: boolean;
   /** Who is writing, and how — when set, every changed field is recorded in StageFieldChange.
    * The seeder and importers pass nothing: their data predates users and gets no invented actor. */
-  actor?: { id: string; via: "direct" | "approval" | "import" };
+  actor?: { id: string; via: "direct" | "approval" | "import"; role?: Role };
 }
 
 export async function loadReceiptRow(id: string, tx: Tx | typeof prisma = prisma) {
@@ -187,7 +188,7 @@ export async function applyStageFields(
   opts: WriteOpts = {}
 ) {
   if (!opts.bypassValidation) {
-    const current = await assertCallerMayWrite(tx, id, stageId, fields);
+    const current = await assertCallerMayWrite(tx, id, stageId, fields, opts.actor?.role);
     const meta = await tx.receipt.findUnique({ where: { id }, select: { arrivalDate: true, lockedAt: true } });
     if (meta?.lockedAt && LOCKED_STAGES.has(stageId)) throw new ValidationError(LOCKED_MESSAGE);
     if (stageId === "n-bin" && (current["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError(BIN_FINALISED_MESSAGE);
@@ -240,8 +241,10 @@ export const SYSTEM_BIN_DATE_MESSAGE =
 export const SYSTEM_LOT_MESSAGE =
   "The Lot Number is issued by the system when the truck passes quality — it can't be typed or changed.";
 
-async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>) {
+async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>, role?: Role) {
   if (stageId === "n-lot") throw new ValidationError(SYSTEM_LOT_MESSAGE);
+  // A field hidden from the writer's role is not theirs to write either (price and amount, for the Warehouse Incharge).
+  if (role) for (const label of Object.keys(fields)) if (!canSeeField(role, stageId, label)) throw new ForbiddenError(PRICE_NOT_YOURS_MESSAGE);
   if (stageId === "n-bin" && ("Bin allocation date" in fields || "Finalised by" in fields)) throw new ValidationError(SYSTEM_BIN_DATE_MESSAGE);
   // A value that is typed until its inputs exist (KOR, before the cut-test grams) is the system's only
   // once they do — judged on the stage as it will stand after this write, so grams and KOR sent
@@ -344,6 +347,23 @@ async function writeStageFields(
       create: { receiptId: id, ...data },
     });
   }
+}
+
+export const PRICE_NOT_YOURS_MESSAGE = "The price is recorded by the Branch Manager (or an Admin); it isn't shown to the Warehouse Incharge.";
+
+/**
+ * The negotiated price per kg, set directly by the Branch Manager who negotiated it (or an Admin), with no approval step: the
+ * Warehouse Incharge, who approves the other reception details, may no longer see prices (Oct 2026). The amount follows by
+ * itself (price × paid weight), and a price that completes the GRN locks the record, exactly as any other GRN write.
+ */
+export async function setPrice(id: string, price: unknown, actor: { id: string; role: Role }) {
+  if (!canSetPrice(actor.role)) throw new ForbiddenError(PRICE_NOT_YOURS_MESSAGE);
+  const v = String(price ?? "").trim();
+  if (v !== "") {
+    const n = Number(v.replace(/\s/g, "").replace(",", "."));
+    if (!Number.isFinite(n) || n <= 0) throw new ValidationError("The price must be a number above 0 (XOF per kg).");
+  }
+  return setStageFields(id, "n-grn", { PRICE: v }, { actor: { id: actor.id, via: "direct", role: actor.role } });
 }
 
 export async function setStageFields(

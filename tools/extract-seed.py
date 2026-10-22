@@ -101,8 +101,8 @@ def build_masters(rows, suppliers_sheet):
 
 def build_stage_data(row):
     """Mirrors truckReception.ts's parse() field-for-field: a stage exists if and only if at
-    least one of its mapped fields is non-empty in this row (two deliberate exceptions: n-gate and
-    n-tare always exist). No stage is ever fabricated, no branch is ever set — this is exactly what
+    least one of its mapped fields is non-empty in this row (one deliberate exception: n-gate always
+    exists; until Oct 2026 an empty n-tare did too — the tare is now a field of n-gross). No stage is ever fabricated, no branch is ever set — this is exactly what
     a real upload through the app's own importer would produce from this same file."""
     sd = {
         "n-gate": {
@@ -110,7 +110,6 @@ def build_stage_data(row):
             "CREDIT/CASH": row["CREDIT/CASH"], "WH LOCATION": row["WH LOCATION"], "WH NO.": row["WH NO."],
             "VEHICLE NO.": row["VEHICLE NO."], "REMARKS": row["REMARKS"], "WEEK": row["WEEK"],
         },
-        "n-tare": {"Tare / empty truck weight (kg)": ""},
     }
 
     def has(v):

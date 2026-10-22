@@ -3,7 +3,7 @@ import { checkUploadRow, type UploadCheckInput } from "../src/domain/uploadCheck
 
 const clean = (over: Partial<UploadCheckInput> = {}): UploadCheckInput => ({
   arrivalDate: "2026-09-02", supplierName: "SCOOP AKISSI", lbaCode: "LBA-101-AKI", today: "2026-10-12",
-  stageData: { "n-gross": { "Loaded truck weight (kg)": "38000" }, "n-tare": { "Tare / empty truck weight (kg)": "6800" }, "n-qfs": { "MOIS. (moisture)": "10,5", KOR: "47.2" } },
+  stageData: { "n-gross": { "Loaded truck weight (kg)": "38000", "Tare / empty truck weight (kg)": "6800" }, "n-qfs": { "MOIS. (moisture)": "10,5", KOR: "47.2" } },
   suppliers: new Map([["LBA-101-AKI", "SCOOP AKISSI"]]), ficheUsedBy: [], ...over,
 });
 const messages = (i: UploadCheckInput) => checkUploadRow(i).map((w) => w.message);
@@ -22,7 +22,7 @@ describe("upload row checks", () => {
   });
 
   it("flags moisture over 100 and KOR over 80, and an empty truck heavier than the loaded one", () => {
-    const m = messages(clean({ stageData: { "n-qfs": { "MOIS. (moisture)": "140", KOR: "95" }, "n-gross": { "Loaded truck weight (kg)": "5000" }, "n-tare": { "Tare / empty truck weight (kg)": "6000" } } }));
+    const m = messages(clean({ stageData: { "n-qfs": { "MOIS. (moisture)": "140", KOR: "95" }, "n-gross": { "Loaded truck weight (kg)": "5000", "Tare / empty truck weight (kg)": "6000" } } }));
     expect(m.some((x) => /over 100%/.test(x))).toBe(true);
     expect(m.some((x) => /over 80/.test(x))).toBe(true);
     expect(m.some((x) => /empty truck/.test(x))).toBe(true);

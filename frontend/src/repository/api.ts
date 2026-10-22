@@ -185,9 +185,15 @@ export const api = {
   /** "Drying: Yes". Issues the Lot for drying and returns the updated receipt. */
   startDrying: (receiptId: string, body: DryingStartPayload) =>
     request<ReceiptRecord>(`/receipts/${encodeURIComponent(receiptId)}/drying`, { method: "POST", body: JSON.stringify(body) }),
-  /** What came back from drying; the loss is worked out by the server. */
-  completeDrying: (batchId: string, body: DryingCompletePayload) =>
-    request<unknown>(`/drying-batches/${encodeURIComponent(batchId)}/complete`, { method: "POST", body: JSON.stringify(body) }),
+  /** A sun-drying round's return: what came back from the yard. The weight loss is worked out by the server. */
+  returnDrying: (batchId: string, body: DryingReturnPayload) =>
+    request<unknown>(`/drying-batches/${encodeURIComponent(batchId)}/return`, { method: "POST", body: JSON.stringify(body) }),
+  /** A round's quality check: passes the Lot, or sends it back as the next round. */
+  checkDrying: (batchId: string, body: DryingCheckPayload) =>
+    request<unknown>(`/drying-batches/${encodeURIComponent(batchId)}/check`, { method: "POST", body: JSON.stringify(body) }),
+  /** The negotiated price per kg: set directly by the Branch Manager (or an Admin). Returns the updated receipt. */
+  setPrice: (receiptId: string, price: string) =>
+    request<ReceiptRecord>(`/receipts/${encodeURIComponent(receiptId)}/price`, { method: "PUT", body: JSON.stringify({ price }) }),
   /** Closes the bin allocation: stamps today's date and who. Returns the updated receipt. */
   finaliseBin: (receiptId: string) => request<ReceiptRecord>(`/receipts/${encodeURIComponent(receiptId)}/bin/finalise`, { method: "POST" }),
   /** Admin only: reopens a locked record or finalised bin, with the reason that goes on the timeline. */
@@ -465,13 +471,14 @@ export type SupplierInput = import("@anagroci/contract/domain/supplierProfile").
   statusReason?: string | null;
 };
 
-export interface DryingStartPayload {
+/** A drying quality reading as the form sends it: moisture, nut count, the cut-test grams and a typed KOR (used only without grams). */
+export type DryingQualityPayload<P extends string> = Partial<Record<`${P}${"Moisture" | "NutCount" | "Kor" | "GoodKernelG" | "ImmatureG" | "SpottedG" | "RejectionG" | "VoidG" | "OilG" | "ShellG"}`, string>>;
+export type DryingStartPayload = DryingQualityPayload<"input"> & {
   route: "direct" | "indirect"; date?: string; sourceBin?: string; destinationBin?: string; dryType: string;
-  issuedBags?: string; issuedNetKg: string; inputMoisture: string; inputKor?: string; inputNutCount?: string;
-}
-export interface DryingCompletePayload {
-  receivedBags?: string; receivedNetKg: string; outputMoisture: string; outputKor?: string; outputNutCount?: string; destinationBin?: string;
-}
+  issuedBags?: string; issuedNetKg: string;
+};
+export interface DryingReturnPayload { receivedBags?: string; receivedNetKg: string; destinationBin?: string }
+export type DryingCheckPayload = DryingQualityPayload<"output"> & { decision: "pass" | "redry" };
 
 export interface WorkbookPreview {
   token: string;
@@ -583,7 +590,26 @@ export interface LinkedDryingBatchRow {
   dryingLossKg: number | null;
   remarks: string | null;
   ficheAgrees: boolean;
+  /** Sun drying done in the app (Oct 2026): the round (1, 2 …), the first round it continues, and "entered" vs "imported". */
+  round: number | null;
+  firstBatchId: string | null;
+  source: string | null;
+  issuedBags: number | null;
+  receivedBags: number | null;
+  inputNutCount: number | null;
+  outputNutCount: number | null;
+  /** The drying sample's cut test before and after the round, in grams of a 1000 g sample. */
+  inputGrams: DryingCutGrams | null;
+  outputGrams: DryingCutGrams | null;
+  dryingLossPct: number | null;
+  moistureLossPct: number | null;
+  returnedAt: string | null;
+  checkedAt: string | null;
+  startedBy: string | null;
+  returnedBy: string | null;
+  checkedBy: string | null;
 }
+export interface DryingCutGrams { goodKernel: number | null; immature: number | null; spotted: number | null; rejection: number | null; void: number | null; oil: number | null; shell: number | null }
 
 /** IssuedToProduction row reached via the same idTransfer -> BtmIntake.btmNo hop as `btmIntakes`. */
 export interface LinkedIssuedToProduction {
@@ -708,6 +734,8 @@ export interface WarehouseDispatchLine {
 export interface DryingBatch {
   id: string;
   sn: number;
+  /** Sun drying done in the app: the round of its Lot's drying (1, 2 …). Null on imported workbook rows. */
+  round?: number | null;
   dryingDate: string | null;
   dryingDateRaw: string | null;
   warehouseSite: string | null;

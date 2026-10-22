@@ -34,6 +34,8 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
     { method: "GET", path: /^\/api\/my-suppliers$/ },
     { method: "GET", path: /^\/api\/supplier-requests$/ },
     { method: "POST", path: /^\/api\/supplier-requests$/ },
+    // The price is the Branch Manager's to set directly, with no approval (Oct 2026: the Incharge who approves no longer sees prices).
+    { method: "PUT", path: /^\/api\/receipts\/[^/]+\/price$/ },
   ],
   qfs_officer: [...COMMON, ...READ_RECEIPTS],
 };

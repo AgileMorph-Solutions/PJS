@@ -131,7 +131,26 @@ export interface LinkedDryingBatchRow {
   dryingLossKg: number | null;
   remarks: string | null;
   ficheAgrees: boolean;
+  /** Sun drying done in the app (Oct 2026): the round (1, 2 …), the first round it continues, and "entered" vs "imported". */
+  round: number | null;
+  firstBatchId: string | null;
+  source: string | null;
+  issuedBags: number | null;
+  receivedBags: number | null;
+  inputNutCount: number | null;
+  outputNutCount: number | null;
+  /** The drying sample's cut test before and after the round, in grams of a 1000 g sample. */
+  inputGrams: DryingCutGrams | null;
+  outputGrams: DryingCutGrams | null;
+  dryingLossPct: number | null;
+  moistureLossPct: number | null;
+  returnedAt: string | null;
+  checkedAt: string | null;
+  startedBy: string | null;
+  returnedBy: string | null;
+  checkedBy: string | null;
 }
+export interface DryingCutGrams { goodKernel: number | null; immature: number | null; spotted: number | null; rejection: number | null; void: number | null; oil: number | null; shell: number | null }
 
 /** IssuedToProduction rows reached via the same idTransfer -> BtmIntake.btmNo hop as `btmIntakes`
  * above — a receipt's production record, one more join past the production bin it landed in. */
@@ -162,6 +181,13 @@ export interface ReceiptLinks {
 }
 
 const num = (v: { toString(): string } | null | undefined) => (v === null || v === undefined ? null : Number(v.toString()));
+
+/** One side of a drying round's cut test, or null when none of it was recorded. */
+function cutGrams(b: Record<string, { toString(): string } | null | unknown>, side: "input" | "output"): DryingCutGrams | null {
+  const g = (k: string) => num(b[`${side}${k}G`] as { toString(): string } | null);
+  const out = { goodKernel: g("GoodKernel"), immature: g("Immature"), spotted: g("Spotted"), rejection: g("Rejection"), void: g("Void"), oil: g("Oil"), shell: g("Shell") };
+  return Object.values(out).some((v) => v !== null) ? out : null;
+}
 
 /** DATE -> "YYYY-MM-DD"; falls back to the hand-typed original text when the source cell wasn't a
  * real date (11 real transfer rows are like this) — mirrors services/ledgers.ts's RAW_FALLBACK for
@@ -245,6 +271,10 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
         dryType: true, sourceBinNo: true, destinationBinNo: true, destinationRaw: true, ficheNoRaw: true,
         inputBagsForDrying: true, outputBagsAfterDrying: true, inputMoisturePct: true, outputMoisturePct: true,
         inputKor: true, outputKor: true, issuedNetWeightKg: true, receivedNetWeightKg: true, dryingLossKg: true, remarks: true,
+        round: true, firstBatchId: true, source: true, issuedBags: true, receivedBags: true, inputNutCount: true, outputNutCount: true,
+        dryingLossPct: true, moistureLossPct: true, returnedAt: true, checkedAt: true, startedBy: true, returnedBy: true, checkedBy: true,
+        inputGoodKernelG: true, inputImmatureG: true, inputSpottedG: true, inputRejectionG: true, inputVoidG: true, inputOilG: true, inputShellG: true,
+        outputGoodKernelG: true, outputImmatureG: true, outputSpottedG: true, outputRejectionG: true, outputVoidG: true, outputOilG: true, outputShellG: true,
       },
       orderBy: { sn: "asc" },
     }),
@@ -309,6 +339,12 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       issuedNetWeightKg: num(b.issuedNetWeightKg), receivedNetWeightKg: num(b.receivedNetWeightKg),
       dryingLossKg: num(b.dryingLossKg), remarks: b.remarks,
       ficheAgrees: ficheAgrees(b.ficheNoRaw),
+      round: b.round, firstBatchId: b.firstBatchId, source: b.source, issuedBags: b.issuedBags, receivedBags: b.receivedBags,
+      inputNutCount: num(b.inputNutCount), outputNutCount: num(b.outputNutCount),
+      inputGrams: cutGrams(b, "input"), outputGrams: cutGrams(b, "output"),
+      dryingLossPct: num(b.dryingLossPct), moistureLossPct: num(b.moistureLossPct),
+      returnedAt: b.returnedAt?.toISOString() ?? null, checkedAt: b.checkedAt?.toISOString() ?? null,
+      startedBy: b.startedBy, returnedBy: b.returnedBy, checkedBy: b.checkedBy,
     })),
     issuedToProduction: issuedToProductionRows.map((p) => ({
       id: p.id, btmNo: p.btmNo ?? "", date: p.date, sourceBin: p.sourceBin, dryBin: p.dryBin, binStatus: p.binStatus,

@@ -34,7 +34,7 @@ step; the Branch Manager and QFS forms are unchanged apart from the fields liste
 | Arrival | `n-gate`, `n-verify` | Recording it issues the **Receipt ID**. Optionally against a Delivery Plan |
 | Weight | `n-gross` | The **loaded** truck is weighed here |
 | Quality | `n-qfs` | **Pass** issues the **Lot Number**. Fail → rejected, with a reason, and no Lot. Record the **cut test** (sample and final grams) and **KOR is calculated** from it |
-| Unloading | `n-unload`, `n-tare`, `n-netwt` | The **empty** truck is weighed after unloading; bags, gross, net and paid weight are calculated |
+| Unloading | `n-unload`, `n-netwt` | Bags are counted; net and paid weight are calculated. (Oct 2026: the **empty** truck (tare) reading is recorded in the weight step `n-gross`, with the loaded one; gross is calculated from the two, or typed from the ticket.) |
 | Lot | `n-lot` | Read-only: shows the Lot the system issued |
 | Bin | `n-bin` | Needs a Lot first. A Bin is a place **inside** a store (`BKE-002-BIN-012`), chosen from the Bin master — never the store code itself |
 | GRN | `n-grn` | **GRN Quantity** is suggested from the net weight and confirmed; the receipt only reads *GRN completed* once it is recorded. Amount is calculated |

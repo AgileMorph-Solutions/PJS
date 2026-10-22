@@ -19,33 +19,37 @@ Delivery Plan. Allow about 25 minutes.
    The truck now shows under the **Offloading** filter instead of **Reception**.
 
 ## 3. Offloading: unload, bin, GRN, lock  (points 1, 2, 4; locking)
-7. Sidebar **Reception**, status filter **Offloading** → open the truck. **Unload**: enter good, damp and torn bags: **DATE OF OFFLOADING fills itself**. Enter the empty
-   truck weight: **net weight is calculated**.
+7. Sidebar **Reception**, status filter **Offloading** → open the truck. **Unload**: enter good, damp and torn bags: **DATE OF OFFLOADING fills itself**. The loaded and empty
+   truck weights are both entered in the **Weight** step (gross is calculated from them, or typed from the ticket): **net weight is calculated**.
 8. **Masters → Bins → Add bin**: a new bin code, choose its **store**. Back on the truck (in the same store), **Allocate Bin**: the new bin is offered first.
    Choose it, press **Finalise bin allocation**: the **allocation date and your name are stamped**; the step closes.
-9. **GRN**: enter the GRN quantity and the price. The page shows **"This record is locked"**: try changing the truck number: refused.
+9. **GRN**: as the Incharge, enter the GRN quantity (the Incharge sees no price or amount anywhere). Sign in as `manager.bouake`, open the truck,
+   **Price you negotiated** → save: no approval needed. The record is now complete and the page shows **"This record is locked"**: try changing the truck number: refused.
 10. Sign in as `admin` → the same banner has **Reopen**: it asks for a reason, which then shows on the truck's **Activity** tab.
 
-## 4. Drying Yes / No  (point 3)
-11. On a truck that does not need drying, **Does this Lot need drying? → No**: recorded, nothing else changes (its status stays).
-12. On this truck choose **Yes**: the **Drying details** form opens (date fills itself; net kg, bags and moisture are offered from the truck).
-    **Start drying**: the truck's status becomes **In drying**.
-13. Later press **Complete drying**: enter the dried kg, bags and moisture after: the **loss in kg, per cent and moisture points is calculated**.
+## 4. Sun drying  (point 3)
+11. On a truck that does not need drying, **Does this Lot need sun drying? → No**: recorded, nothing else changes (its status stays).
+12. On this truck choose **Yes**: the sun-drying form opens for **round 1** (date fills itself; net kg and bags are offered from the truck). Enter the
+    **quality before drying** on the drying sample: moisture, nut count and the cut-test grams (**KOR is calculated**). The QFS reception sample is shown
+    above for reference only; it is never copied or changed. **Start sun drying**: the truck's status becomes **In drying**.
+13. **Record what came back**: the dried kg and bags: the **weight loss is calculated**, and the round waits for its quality check.
+14. **Quality check after drying**: moisture, nut count, cut test. Choose **Dry it again**: round 1 closes as *Sent for re-drying* and **round 2** starts
+    with what came back. Repeat, and choose **Passed**: the drying is finished. Each round shows its weights and quality before and after.
 
 ## 5. Dispatch with quality and the warehouse receipt number; Yamoussoukro receives  (points 5, 6)
-14. **Transfers** → create a BKT with this Lot → open it → **Dispatch truck**: the Lot's moisture, KOR and nut count are **prefilled from its
+15. **Transfers** → create a BKT with this Lot → open it → **Dispatch truck**: the Lot's moisture, KOR and nut count are **prefilled from its
     quality check** (change one only if re-measured). Enter the **warehouse receipt number** and the truck. Dispatch.
-15. Sign in as `incharge.yakro` → **Transfers** → the BKT → record arrival. Enter **their warehouse receipt number**, bags and weights, and the
+16. Sign in as `incharge.yakro` → **Transfers** → the BKT → record arrival. Enter **their warehouse receipt number**, bags and weights, and the
     **arrival quality**. If the bags or weight differ, a **"Why it differs"** box becomes required; the BKT closes or shows **Discrepancy**.
 
 ## 6. Other warehouse activities  (point 7)
-16. As `incharge.bouake`: **Jute Bag Management → Warehouse activity ledger**. The **Category** column classifies **every** row, including the
+17. As `incharge.bouake`: **Jute Bag Management → Warehouse activity ledger**. The **Category** column classifies **every** row, including the
     787 imported ones ("Staking" → Stacking, "Destaking" → Destacking, "Dying" → Drying, "RAMASSAGE" → Triage / cleaning). Use the funnel on **Category**.
-17. **Record an activity**: choose **Triage / cleaning**, the Lot, a place, and note that **moisture and the kg before and after** are required.
+18. **Record an activity**: choose **Triage / cleaning**, the Lot, a place, and note that **moisture and the kg before and after** are required.
     Save: it appears in the list under its category.
 
 ## 7. The written answer on KOR and locking
-18. `docs/QUALITY_KOR_AND_LOCKING.md` gives the exact form name, the KOR formula, the workflow and the lock rule. It is generated from the
+19. `docs/QUALITY_KOR_AND_LOCKING.md` gives the exact form name, the KOR formula, the workflow and the lock rule. It is generated from the
     application's own definitions, so it cannot disagree with what was just shown.
 
 ## What the team should check against real operations

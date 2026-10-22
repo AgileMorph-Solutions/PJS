@@ -155,10 +155,9 @@ whatever columns it has. Each stage is created for an imported receipt **if and 
 one of its mapped source columns is non-empty** in that row — never a fabricated spread of
 progress. Two deliberate exceptions:
 
-- **Gate entry (`n-gate`) and tare weighing (`n-tare`) are always created.** `n-tare` is present but
-  empty — the client's own process notes confirm every truck physically passes tare weighing, even
-  though `Truck Reception` has no column for it — this already matches the existing
-  `tare_never_recorded` data-quality finding.
+- **Gate entry (`n-gate`) is always created.** (Until Oct 2026 an empty tare step `n-tare` was too; the
+  tare is now a field of the gross weight step `n-gross`, and `Truck Reception` has no column for it —
+  see the `tare_never_recorded` data-quality finding.)
 - **Bin, Stock, Drying, Other Activity, Ledger, Transfer decision, and Rejection
   (`n-bin`/`n-stock`/`n-drying`/`n-otheract`/`n-ledger`/`n-xferdec`/`n-reject`) are never created
   by the receipts importer.** `Truck Reception` captures none of them, so creating them would

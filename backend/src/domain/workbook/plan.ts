@@ -8,7 +8,7 @@
  * in keys — and everything that goes back to the person is translated to labels on the way out.
  */
 import { applyReceipt, planReceipts } from "./receiptSheet.js";
-import { normalizeHeader } from "./fields.js";
+import { hiddenKeys, normalizeHeader } from "./fields.js";
 import { canonical, parseCell, serializeCell } from "./cells.js";
 import { SHEETS, sheetByTitle, sheetsFor, type SheetSpec } from "./sheets.js";
 import { applyTable, planTable, type FileKeys } from "./tableSheet.js";
@@ -18,16 +18,22 @@ import type { Ctx, ParsedSheet, ParsedWorkbook, ReceiptOp, SheetResult, TableOp,
 export const errorCount = (plan: WorkbookPlan) => plan.sheets.reduce((n, s) => n + s.errors.length, 0);
 
 /** key -> plain label for one sheet in one section. */
-function labelsFor(spec: SheetSpec, type: Ctx["type"]) {
-  const byKey = new Map(spec.fields(type).map((f) => [f.key, f.label]));
+/** A sheet's columns as this uploader may see them: the ones hidden from their role are not there at all. */
+const visible = (spec: SheetSpec, ctx: Pick<Ctx, "type" | "role">) => {
+  const hidden = hiddenKeys(ctx.role);
+  return spec.fields(ctx.type).filter((f) => !hidden.has(f.key));
+};
+
+function labelsFor(spec: SheetSpec, ctx: Pick<Ctx, "type" | "role">) {
+  const byKey = new Map(visible(spec, ctx).map((f) => [f.key, f.label]));
   return (key: string) => byKey.get(key) ?? key;
 }
 
 /** Re-key an uploaded sheet from plain headers to internal keys. Headers we don't use are dropped
  * (and said so). A column the sheet lacks is simply absent — and so left alone by the planner. */
-function translate(spec: SheetSpec, sheet: ParsedSheet, type: Ctx["type"], notices: string[]): ParsedSheet {
+function translate(spec: SheetSpec, sheet: ParsedSheet, ctx: Pick<Ctx, "type" | "role">, notices: string[]): ParsedSheet {
   // A column renamed since an older export (GRN Weight → GRN Quantity) still reads under its old header.
-  const byHeader = new Map(spec.fields(type).flatMap((f) => [f.label, ...(f.aka ?? [])].map((h) => [normalizeHeader(h), f.key] as const)));
+  const byHeader = new Map(visible(spec, ctx).flatMap((f) => [f.label, ...(f.aka ?? [])].map((h) => [normalizeHeader(h), f.key] as const)));
   const keyOf = new Map<string, string>();
   const unknown: string[] = [];
   for (const h of sheet.headers) {
@@ -53,7 +59,7 @@ function translate(spec: SheetSpec, sheet: ParsedSheet, type: Ctx["type"], notic
  */
 async function compareExportOnly(ctx: Ctx, spec: SheetSpec, sheet: ParsedSheet, notices: string[]): Promise<SheetResult> {
   const current = new Map((await spec.rows(ctx.site)).map((r) => [canonical(r[spec.key]), r]));
-  const fields = spec.fields(ctx.type);
+  const fields = visible(spec, ctx);
   const plain = (v: unknown) => { const p = parseCell(v, "String"); return p.ok ? canonical(p.value) : String(v); };
   let differing = 0;
   for (const r of sheet.rows) {
@@ -76,7 +82,7 @@ export async function planWorkbook(ctx: Ctx, wb: ParsedWorkbook): Promise<Workbo
     const spec = sheetByTitle(sheet.name);
     if (!spec) notices.push(`Sheet "${sheet.name}" isn't one of our sheets — ignored.`);
     else if (!inSection.includes(spec)) notices.push(`Sheet "${sheet.name}" isn't part of the ${sectionLabel(ctx.type)} workbook — ignored.`);
-    else given.set(spec, translate(spec, sheet, ctx.type, notices));
+    else given.set(spec, translate(spec, sheet, ctx, notices));
   }
   if (!wb.sheets.size) notices.push("The file has no data sheets.");
 
@@ -96,7 +102,7 @@ export async function planWorkbook(ctx: Ctx, wb: ParsedWorkbook): Promise<Workbo
   for (const spec of inSection) {
     const sheet = given.get(spec);
     if (!sheet) continue;
-    const label = labelsFor(spec, ctx.type);
+    const label = labelsFor(spec, ctx);
 
     let planned: SheetResult;
     if (spec.exportOnly) {

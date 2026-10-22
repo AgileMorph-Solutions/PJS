@@ -169,7 +169,7 @@ describe("figures worked out from the supplier's transactions", () => {
     await setStageFields(weighed.id, "n-qfs", { KOR: "46", "MOIS. (moisture)": "10" });
     await setBranch(weighed.id, "n-qfs", "pass");
     await setStageFields(weighed.id, "n-gross", { "Loaded truck weight (kg)": "30000" });
-    await setStageFields(weighed.id, "n-tare", { "Tare / empty truck weight (kg)": "20000" });
+    await setStageFields(weighed.id, "n-gross", { "Tare / empty truck weight (kg)": "20000" });
     // Net weight is worked out from all three bag counts (contract receiptMath), so all three are given.
     await setStageFields(weighed.id, "n-unload", { "BON SACS (good bags)": "98", "HUMID SACS (damp bags)": "1", "Sacs déchirés (torn bags)": "1" });
     // Jute: 1,200 bags issued to the supplier on the warehouse ledger, 300 returned via deliveries on the supplier ledger.

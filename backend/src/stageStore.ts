@@ -76,8 +76,7 @@ export function assembleBranches(receipt: AnyRow): Record<string, string> {
 
 /** Columns that carry a typed shadow, written alongside the string column in the same transaction. */
 const SHADOW_COLS: Record<string, string[]> = {
-  "n-gross": ["loadedTruckWtKgs", "grossWtKgs"],
-  "n-tare": ["tareWtKgs"],
+  "n-gross": ["loadedTruckWtKgs", "tareWtKgs", "grossWtKgs"],
   "n-netwt": ["netWtKgs", "paidWt"],
   "n-unload": ["sacs", "bonSacs", "humidSacs", "sacsDechires", "refraction"],
   "n-qfs": ["moisture", "nutCount", "kor", "finalKor"],

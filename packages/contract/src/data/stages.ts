@@ -59,10 +59,12 @@ export const stages: Stage[] = [
     kind: "entry",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "Loaded truck on the weighbridge, before quality and unloading (Oct 2026 team flow: Arrival → Weight → Quality → Unloading → Lot → Bin → GRN). The empty truck is weighed again after unloading (n-tare); GROSS WT KGS — the RCN plus its bags, already net of the truck in the real sheet (41,300 kg for 478 bags) — is then calculated as loaded − empty. Doc §4 asks Gross / Net / GRN / Paid Weight / Refraction to each be kept separately, not blended.",
+    note: "Loaded truck on the weighbridge, before quality and unloading (Oct 2026 team flow: Arrival → Weight → Quality → Unloading → Lot → Bin → GRN). GROSS WT KGS — the RCN plus its bags, already net of the truck in the real sheet (41,300 kg for 478 bags) — is calculated as loaded − empty once both readings are in, and typed straight from the weighbridge ticket when they are not. Oct 2026 client change: the empty-truck (tare) reading is recorded here, in the weight section, with the loaded reading, not as a step of its own after unloading. Doc §4 asks Gross / Net / GRN / Paid Weight / Refraction to each be kept separately, not blended.",
     fields: [
       // v: "" — no workbook column; it is the Bordereau de Livraison's "Poids Entrés camion".
       { n: "Loaded truck weight (kg)", v: "" , col: "loadedTruckWtKgs"},
+      // v: "" — the Truck Reception sheet has no Tare column; it is the Bordereau's "Poids vide (Tare)".
+      { n: "Tare / empty truck weight (kg)", v: "" , col: "tareWtKgs"},
       { n: "GROSS WT KGS", v: "41300" , col: "grossWtKgs"},
     ],
   },
@@ -103,7 +105,7 @@ export const stages: Stage[] = [
     kind: "entry",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "Doc §5.1 sequence: park at unloading area → labour + manpower contractor allocated → tarpaulin removed → Tally Clerk counts bags → cleaning labour manages spillage → bags on pallets (30/pallet) → forklift moves pallet to the location the Warehouse team decided. This is also the flow's jute bag touchpoint — the bag counts below feed both the Warehouse-level and Supplier-level jute bag ledgers (see the panel above and the note alongside). SACS is calculated as good + damp + torn (domain/receiptMath.ts); 44 real rows disagree with that sum and are kept as recorded and reported.",
+    note: "Doc §5.1 sequence: park at unloading area → labour + manpower contractor allocated → tarpaulin removed → Tally Clerk counts bags → cleaning labour manages spillage → bags on pallets (30/pallet) → forklift moves pallet into store. (Oct 2026 client change: the forklift destination is no longer recorded.) This is also the flow's jute bag touchpoint — the bag counts below feed both the Warehouse-level and Supplier-level jute bag ledgers (see the panel above and the note alongside). SACS is calculated as good + damp + torn (domain/receiptMath.ts); 44 real rows disagree with that sum and are kept as recorded and reported.",
     fields: [
       { n: "DATE OF OFFLOADING", v: "2026-02-16" , col: "dateOfOffloading", format: "date"},
       { n: "SACS (bags)", v: "478" , col: "sacs"},
@@ -114,23 +116,11 @@ export const stages: Stage[] = [
       { n: "Manpower contractor / team", v: "" , col: "manpowerContractor"},
       { n: "Tally Clerk bag count", v: "" , col: "tallyClerkBagCount"},
       { n: "Pallets used (30 bags/pallet)", v: "" , col: "palletsUsed"},
-      { n: "Forklift destination (Warehouse team decision)", v: "" , col: "forkliftDestination"},
-    ],
-  },
-  {
-    id: "n-tare",
-    num: 5,
-    title: "Weigh truck (Empty – Tare weight)",
-    phase: "Phase 2 · Truck arrival & reception",
-    kind: "entry",
-    note: "Empty truck back on the weighbridge, after unloading. The current Truck Reception sheet has no separate Tare column — only Gross and the resulting Net are stored, so today the tare reading itself is lost.",
-    fields: [
-      { n: "Tare / empty truck weight (kg)", v: "" , col: "tareWtKgs"},
     ],
   },
   {
     id: "n-netwt",
-    num: 6,
+    num: 5,
     title: "Calculate net weight",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
@@ -144,7 +134,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-lot",
-    num: 7,
+    num: 6,
     title: "Assign Lot Number to truck",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
@@ -158,7 +148,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-bin",
-    num: 8,
+    num: 7,
     title: "Allocate Bin (physical storage location)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "gap",
@@ -176,7 +166,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-grn",
-    num: 9,
+    num: 8,
     title: "Generate RCN reception record (GRN)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "entry",
@@ -191,7 +181,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-stock",
-    num: 10,
+    num: 9,
     title: "Update warehouse RCN stock (System)",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
@@ -204,8 +194,8 @@ export const stages: Stage[] = [
   },
   {
     id: "n-drying",
-    title: "Does this truck/lot need drying?",
-    phase: "Phase 3 · Drying",
+    title: "Sun drying: does this truck/lot need drying?",
+    phase: "Phase 3 · Sun drying",
     kind: "decision",
     note: "Confirmed: drying isn't mandatory for every truck/Lot/Bin — it's done mainly when moisture is outside the acceptable range. Important: even if this Lot's RCN is sitting in a Bin together with other Lots, drying is always issued and tracked at the specific Lot/quantity level — never treat a whole Bin as one drying batch, since a Bin can mix several Lots/trucks. Sequence once drying is needed: check moisture → issue the specific Lot/quantity for drying → dry it → check moisture again → return the dried quantity to the warehouse → store it in the new/assigned Bin, clearly marked as dried stock, while keeping the original Lot/truck traceability. Note: this is different from cleaning/triage (see Other warehouse activities below) — triage can change quality as well as moisture, so it needs its own quality, quantity and moisture records, not just a moisture check.",
     fields: [
@@ -220,7 +210,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-otheract",
-    num: 11,
+    num: 10,
     title: "Other warehouse activities",
     phase: "Phase 4 · Other activities, ledger & traceability",
     kind: "gap",
@@ -236,7 +226,7 @@ export const stages: Stage[] = [
   },
   {
     id: "n-ledger",
-    num: 12,
+    num: 11,
     title: "Activity ledger (sequence of record)",
     phase: "Phase 4 · Other activities, ledger & traceability",
     kind: "gap",
@@ -281,7 +271,7 @@ export const RECEPTION_STEPS: ReceptionStep[] = [
   { id: "arrival", title: "Arrival", stageIds: ["n-gate", "n-verify"] },
   { id: "weight", title: "Weight", stageIds: ["n-gross"] },
   { id: "quality", title: "Quality", stageIds: ["n-qfs"] },
-  { id: "unloading", title: "Unloading", stageIds: ["n-unload", "n-tare", "n-netwt"] },
+  { id: "unloading", title: "Unloading", stageIds: ["n-unload", "n-netwt"] },
   { id: "lot", title: "Lot", stageIds: ["n-lot"] },
   { id: "bin", title: "Bin", stageIds: ["n-bin"] },
   { id: "grn", title: "GRN", stageIds: ["n-grn"] },

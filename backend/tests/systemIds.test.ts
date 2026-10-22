@@ -155,7 +155,7 @@ describe("calculated weights, bags and amount", () => {
     expect(r.stageData["n-unload"]["SACS (bags)"]).toBe("478");
     expect(r.stageData["n-netwt"]).toBeUndefined(); // no empty-truck weight yet — nothing to subtract
 
-    await setStageFields(id, "n-tare", { "Tare / empty truck weight (kg)": "15000" });
+    await setStageFields(id, "n-gross", { "Tare / empty truck weight (kg)": "15000" });
     await setStageFields(id, "n-grn", { PRICE: "470" });
     r = (await getReceipt(id))!;
     expect(r.stageData["n-gross"]["GROSS WT KGS"]).toBe("41300");
@@ -164,7 +164,7 @@ describe("calculated weights, bags and amount", () => {
   });
 
   it("recalculate when a reading is corrected", async () => {
-    await setStageFields(id, "n-tare", { "Tare / empty truck weight (kg)": "15100" });
+    await setStageFields(id, "n-gross", { "Tare / empty truck weight (kg)": "15100" });
     const r = (await getReceipt(id))!;
     expect(r.stageData["n-gross"]["GROSS WT KGS"]).toBe("41200");
     expect(r.stageData["n-netwt"]["NET WT KGS"]).toBe("40722");

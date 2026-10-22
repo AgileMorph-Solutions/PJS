@@ -38,7 +38,7 @@ export async function workbookRoutes(app: FastifyInstance) {
   app.get("/api/workbook", async (req, reply) => {
     const { warehouse, from, to } = req.query as { warehouse?: string; from?: string; to?: string };
     const range = parseDateRange(from, to);
-    const built = await downloadWorkbook(await sectionOf(req, warehouse), range, false);
+    const built = await downloadWorkbook(await sectionOf(req, warehouse), range, false, currentUser(req).role);
     return reply
       .header("Content-Type", XLSX)
       .header("Content-Disposition", `attachment; filename="${built.filename}"`)
@@ -50,7 +50,7 @@ export async function workbookRoutes(app: FastifyInstance) {
   /** The same workbook with headers only — what Upload offers as its blank template. */
   app.get("/api/workbook/template", async (req, reply) => {
     const { warehouse } = req.query as { warehouse?: string };
-    const built = await downloadWorkbook(await sectionOf(req, warehouse), {}, true);
+    const built = await downloadWorkbook(await sectionOf(req, warehouse), {}, true, currentUser(req).role);
     return reply
       .header("Content-Type", XLSX)
       .header("Content-Disposition", `attachment; filename="${built.filename}"`)

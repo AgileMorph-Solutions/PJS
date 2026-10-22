@@ -160,7 +160,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<void> {
       const damp = i % 4;
       const torn = 3 + (i % 5);
       bags = good + damp + torn;
-      await setStageFields(id, "n-tare", { "Tare / empty truck weight (kg)": String(Math.round(loaded * 0.18)) });
+      await setStageFields(id, "n-gross", { "Tare / empty truck weight (kg)": String(Math.round(loaded * 0.18)) });
       await setStageFields(id, "n-unload", {
         "DATE OF OFFLOADING": arrival, "BON SACS (good bags)": String(good), "HUMID SACS (damp bags)": String(damp),
         "Sacs déchirés (torn bags)": String(torn), "Refraction": String(40 + (i % 4) * 10),

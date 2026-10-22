@@ -185,14 +185,14 @@ describe("truckReception importer — per-stage presence from real row data, nev
     expect(Object.keys(qfs!)).not.toContain("branch");
   });
 
-  it("always creates n-gate and present-but-empty n-tare, and never n-lot/n-bin/n-drying (no real signal in Truck Reception)", () => {
+  it("always creates n-gate, never a tare step (the tare is part of the gross weight step since Oct 2026), and never n-lot/n-bin/n-drying (no real signal in Truck Reception)", () => {
     const row = new Array(28).fill("");
     row[0] = "1"; row[1] = "2026-01-05"; row[4] = "YAKRO"; row[5] = "WH-1";
 
     const wb = buildTruckReceptionWorkbook([row]);
     const stageData = truckReceptionImporter.parse(wb)[0]!.data.stageData;
     expect(stageData["n-gate"]).toBeTruthy();
-    expect(stageData["n-tare"]).toEqual({ "Tare / empty truck weight (kg)": "" });
+    expect(stageData["n-tare"]).toBeUndefined();
     for (const neverCreated of ["n-lot", "n-bin", "n-stock", "n-drying", "n-otheract", "n-ledger", "n-xferdec", "n-reject"]) {
       expect(stageData[neverCreated], neverCreated).toBeUndefined();
     }

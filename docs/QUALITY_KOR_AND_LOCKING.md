@@ -30,14 +30,14 @@ The **Pass / Fail** decision is **not** part of this form: the Warehouse Incharg
 2. The **Warehouse Incharge** reviews it and approves (or rejects) the submission. Until it is approved, nothing is written to the truck.
 3. On approval the values are written to the truck's quality step, with who submitted, who approved, and when.
 4. The Warehouse Incharge records **Pass** (the truck gets its Lot Number automatically) or **Fail** (with a reason).
-5. The **Branch Manager's** separate form ("Branch Manager — reception details") covers VEHICLE NO., SUPPLIERS NAME, LBA CODE, FICHE, PRICE, and is approved the same way.
+5. The **Branch Manager's** separate form ("Branch Manager — reception details") covers VEHICLE NO., SUPPLIERS NAME, LBA CODE, FICHE, and is approved the same way.
 
 ## 4. Record locking
 
 A truck's reception record **locks automatically when its GRN is complete**: the GRN quantity and the price are both recorded
 (in either order; they are entered by different people).
 
-- **What locks:** the reception record from the gate to the GRN. Truck arrives at warehouse (Gate entry); Verify supplier documents; Weight truck (Gross weight); Quality analysis (QFS); Reject / Hold and inform procurement in charge; Unload RCN at warehouse; Weigh truck (Empty – Tare weight); Calculate net weight; Assign Lot Number to truck; Allocate Bin (physical storage location); Generate RCN reception record (GRN); and the Pass / Fail decision (Quality analysis (QFS)).
+- **What locks:** the reception record from the gate to the GRN. Truck arrives at warehouse (Gate entry); Verify supplier documents; Weight truck (Gross weight); Quality analysis (QFS); Reject / Hold and inform procurement in charge; Unload RCN at warehouse; Calculate net weight; Assign Lot Number to truck; Allocate Bin (physical storage location); Generate RCN reception record (GRN); and the Pass / Fail decision (Quality analysis (QFS)).
 - **What stays open:** the steps that follow the GRN: the system's stock update, the drying decision and drying, other warehouse
   activities, and the transfer decision.
 - **A locked record cannot be changed** from the screens or by an Excel upload (the upload reports the row as an error).
@@ -51,4 +51,4 @@ A truck's reception record **locks automatically when its GRN is complete**: the
 One Reception page lists every truck; its status filter has a **Reception** and an **Offloading** choice for these two parts.
 
 - **Reception**: Truck arrives at warehouse (Gate entry) → Verify supplier documents → Weight truck (Gross weight) → Quality analysis (QFS) → Reject / Hold and inform procurement in charge
-- **Offloading**: Unload RCN at warehouse → Weigh truck (Empty – Tare weight) → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Update warehouse RCN stock (System)
+- **Offloading**: Unload RCN at warehouse → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Update warehouse RCN stock (System)

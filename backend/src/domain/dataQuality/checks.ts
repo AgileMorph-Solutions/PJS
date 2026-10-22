@@ -79,12 +79,12 @@ export const CHECKS: Check[] = [
     async run({ prisma }) {
       const total = await prisma.receipt.count();
       if (!total) return null;
-      const withTare = await prisma.stageTareWeight.count({ where: { tareWtKgs: { not: null, notIn: [""] } } });
+      const withTare = await prisma.stageGrossWeight.count({ where: { tareWtKgs: { not: null, notIn: [""] } } });
       if (withTare === total) return null;
       return {
         id: "tare_never_recorded", severity: "warning",
         title: "Tare weight is never captured",
-        entity: "StageTareWeight", affectedCount: total - withTare, sampleIds: [],
+        entity: "StageGrossWeight", affectedCount: total - withTare, sampleIds: [],
         evidence:
           "The OFFLOADINGS sheet has no Tare column — only Gross and the resulting Net — so the tare " +
           "reading is lost today. The rule is now settled (see net_uses_bag_count_not_tare): Gross is " +

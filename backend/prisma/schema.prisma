@@ -239,7 +239,6 @@ model Receipt {
   lot             StageLotAssignment?
   bin             StageBinAllocation?
   unload          StageUnload?
-  tare            StageTareWeight?
   netwt           StageNetWeight?
   grn             StageGrn?
   stock           StageStockUpdate?
@@ -534,8 +533,10 @@ model StageQualityQfs {
 model StageGrossWeight {
   receiptId           String   @id
   loadedTruckWtKgs    String? /// Loaded truck weight (kg)
+  tareWtKgs           String? /// Tare / empty truck weight (kg)
   grossWtKgs          String? /// GROSS WT KGS
   loadedTruckWtKgsNum Decimal? /// typed shadow of loadedTruckWtKgs, for reporting/DQ only — never round-tripped
+  tareWtKgsNum        Decimal? /// typed shadow of tareWtKgs, for reporting/DQ only — never round-tripped
   grossWtKgsNum       Decimal? /// typed shadow of grossWtKgs, for reporting/DQ only — never round-tripped
   receipt             Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
@@ -586,21 +587,12 @@ model StageUnload {
   manpowerContractor  String? /// Manpower contractor / team
   tallyClerkBagCount  String? /// Tally Clerk bag count
   palletsUsed         String? /// Pallets used (30 bags/pallet)
-  forkliftDestination String? /// Forklift destination (Warehouse team decision)
   sacsNum             Decimal? /// typed shadow of sacs, for reporting/DQ only — never round-tripped
   bonSacsNum          Decimal? /// typed shadow of bonSacs, for reporting/DQ only — never round-tripped
   humidSacsNum        Decimal? /// typed shadow of humidSacs, for reporting/DQ only — never round-tripped
   sacsDechiresNum     Decimal? /// typed shadow of sacsDechires, for reporting/DQ only — never round-tripped
   refractionNum       Decimal? /// typed shadow of refraction, for reporting/DQ only — never round-tripped
   receipt             Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-}
-
-/// Stage n-tare (entry) — Weigh truck (Empty – Tare weight)
-model StageTareWeight {
-  receiptId    String   @id
-  tareWtKgs    String? /// Tare / empty truck weight (kg)
-  tareWtKgsNum Decimal? /// typed shadow of tareWtKgs, for reporting/DQ only — never round-tripped
-  receipt      Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
 /// Stage n-netwt (system) — Calculate net weight
@@ -1308,6 +1300,34 @@ model DryingBatch {
   /// flagged "YES" here, and one 6-digit concatenated row is NOT), which is itself worth keeping
   /// visible rather than silently reconciling the two into one answer.
   needsLotAllocationClarificationRaw String?
+
+  /// In-app sun drying (Oct 2026): a Lot is dried in rounds. Round 1 is the first issue; a quality check that sends the Lot back
+  /// opens the next round, which points at the first through firstBatchId. Status: IN DRYING → QUALITY CHECK → PASSED | RE-DRY
+  /// (contract domain/sunDrying.ts). Imported workbook rows leave all of these null.
+  round        Int?
+  firstBatchId String?
+  /// The drying sample's cut test (grams of a 1000 g sample) before the round and after it. The QFS reception sample is a
+  /// separate measurement and is never copied here.
+  inputGoodKernelG  Decimal?
+  inputImmatureG    Decimal?
+  inputSpottedG     Decimal?
+  inputRejectionG   Decimal?
+  inputVoidG        Decimal?
+  inputOilG         Decimal?
+  inputShellG       Decimal?
+  outputGoodKernelG Decimal?
+  outputImmatureG   Decimal?
+  outputSpottedG    Decimal?
+  outputRejectionG  Decimal?
+  outputVoidG       Decimal?
+  outputOilG        Decimal?
+  outputShellG      Decimal?
+  returnedAt        DateTime?
+  checkedAt         DateTime?
+  /// Who issued, received back and checked the round (display names, as the timeline shows them).
+  startedBy         String?
+  returnedBy        String?
+  checkedBy         String?
 
   sheetRow  Int?
   source    String?

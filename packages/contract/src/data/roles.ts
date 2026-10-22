@@ -52,7 +52,8 @@ export const ROLE_FORMS: RoleForm[] = [
     stages: [
       { stageId: "n-gate", labels: ["VEHICLE NO."] },
       { stageId: "n-verify", labels: ["SUPPLIERS NAME", "LBA CODE", "FICHE"] },
-      { stageId: "n-grn", labels: ["PRICE"] },
+      // PRICE left this form (Oct 2026): the Branch Manager sets it directly (canSetPrice below), because the Warehouse
+      // Incharge who approves this form may no longer see prices.
     ],
   },
   {
@@ -98,7 +99,42 @@ export const ROLE_FORMS: RoleForm[] = [
   },
 ];
 
-/** Admin and Warehouse Incharge are top of the hierarchy: their stage edits apply immediately. */
+type FieldRef = readonly [stageId: string, label: string];
+
+/** The money on a truck: the negotiated price per kg and the amount it comes to (price × paid weight). */
+export const PRICE_FIELDS: readonly FieldRef[] = [["n-grn", "PRICE"], ["n-grn", "AMOUNT"]];
+
+/**
+ * Fields a role may neither see nor write (Oct 2026 client change: "hide price/amount from the Warehouse In-Charge and show them
+ * to the Branch Manager"). The server strips them from every response to that role and refuses its writes to them; the screens
+ * leave them out. Admin, Branch Manager and QFS Officer are not limited here (QFS Officers never see the GRN step's form anyway).
+ */
+export const HIDDEN_FIELDS: Partial<Record<Role, readonly FieldRef[]>> = { warehouse_incharge: PRICE_FIELDS };
+
+export function canSeeField(role: Role, stageId: string, label: string): boolean {
+  return !(HIDDEN_FIELDS[role] ?? []).some(([s, l]) => s === stageId && l === label);
+}
+
+/** stageData without the fields this role may not see; the same object when nothing is hidden from it. */
+export function redactStageData<T extends Record<string, Record<string, string>>>(stageData: T, role: Role): T {
+  const hidden = HIDDEN_FIELDS[role];
+  if (!hidden?.length || !stageData) return stageData;
+  const out: Record<string, Record<string, string>> = { ...stageData };
+  for (const [stageId, label] of hidden) {
+    if (out[stageId] && label in out[stageId]!) {
+      const { [label]: _gone, ...rest } = out[stageId]!;
+      out[stageId] = rest;
+    }
+  }
+  return out as T;
+}
+
+/** Who sets the price, directly and with no approval step: the Branch Manager who negotiated it, and Admin. */
+export function canSetPrice(role: Role): boolean {
+  return role === "branch_manager" || role === "admin";
+}
+
+/** Admin and Warehouse Incharge are top of the hierarchy: their stage edits apply immediately (except fields hidden from them). */
 export function canWriteStageDirectly(role: Role): boolean {
   return role === "admin" || role === "warehouse_incharge";
 }

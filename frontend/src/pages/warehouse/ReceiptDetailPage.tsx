@@ -29,6 +29,8 @@ import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
 import { api } from "../../repository/api";
 import { DryingPanel } from "../../components/receipt/DryingPanel";
+import { PricePanel } from "../../components/receipt/PricePanel";
+import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
 /**
@@ -254,7 +256,7 @@ export function ReceiptDetailPage() {
               <ReceiptPlanCard receiptId={receipt.id} info={planInfo} plans={plans} siteSlug={site.slug} canEdit={canEdit} onChanged={() => void refetchPlanInfo()} />
             </div>
           )}
-          <LotOverview receipt={receipt} links={links} othersInBin={otherInSameBin} siteSlug={site.slug} />
+          <LotOverview receipt={receipt} links={links} othersInBin={otherInSameBin} siteSlug={site.slug} showPrice={canSeeField(me.role, "n-grn", "PRICE")} />
           <div>
             <h2 className="text-base font-bold text-warmstone-900 flex items-center gap-2 mb-3 px-1">
               <span className="material-symbols-outlined text-[19px] text-brand-700">account_tree</span>
@@ -370,7 +372,12 @@ export function ReceiptDetailPage() {
                         onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
                         onFieldBlur={() => flushStage(receipt.id, stage.id)}
                         readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_STAGES.has(stage.id)) || (stage.id === "n-bin" && binFinalised)}
+                        hidden={stage.fields.filter((f) => !canSeeField(me.role, stage.id, f.n)).map((f) => f.n)}
                       />
+                    )}
+                    {/* The Branch Manager sets the price here directly; an Admin edits it in the form above like any field. */}
+                    {stage.id === "n-grn" && canSetPrice(me.role) && !canEdit && (
+                      <PricePanel receipt={receipt} onSaved={() => void refresh()} />
                     )}
                     {stage.id === "n-bin" && canEdit && !binFinalised && !receipt.lockedAt && Boolean(receipt.lotNo && receipt.stageData["n-bin"]?.["Bin Number"]) && (
                       <div className="mt-4 flex items-center gap-3">

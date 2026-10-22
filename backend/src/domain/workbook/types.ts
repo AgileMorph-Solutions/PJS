@@ -10,6 +10,8 @@ export interface Ctx {
   db: Db;
   userId: string;
   isAdmin: boolean;
+  /** The uploader's role: columns hidden from it (price and amount for the Warehouse Incharge) are ignored. */
+  role?: import("@anagroci/contract/data/roles").Role;
   /** The section's warehouse (a site name) and its Unit/Central type. */
   warehouse: string;
   type: WarehouseType;

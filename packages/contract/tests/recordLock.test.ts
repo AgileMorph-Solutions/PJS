@@ -16,7 +16,7 @@ describe("when a record is complete enough to lock", () => {
   });
 
   it("closes the reception record from the gate to the GRN, and leaves the steps after the GRN open", () => {
-    for (const s of ["n-gate", "n-verify", "n-gross", "n-qfs", "n-unload", "n-tare", "n-netwt", "n-lot", "n-bin", "n-grn"]) expect(LOCKED_STAGES.has(s), s).toBe(true);
+    for (const s of ["n-gate", "n-verify", "n-gross", "n-qfs", "n-unload", "n-netwt", "n-lot", "n-bin", "n-grn"]) expect(LOCKED_STAGES.has(s), s).toBe(true);
     for (const s of ["n-stock", "n-drying", "n-otheract", "n-ledger", "n-xferdec"]) expect(LOCKED_STAGES.has(s), s).toBe(false);
     expect([...LOCKED_DECISIONS]).toEqual(["n-qfs"]); // drying and transfer decisions happen after the GRN
   });

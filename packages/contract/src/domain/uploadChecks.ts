@@ -44,7 +44,7 @@ const num = (raw: string) => (raw === "" ? undefined : Number(raw.replace(/\s/g,
 const warn = (column: string | undefined, message: string): UploadWarning => ({ column, message, severity: "warning" });
 
 const NUMERIC: [stage: string, label: string][] = [
-  ["n-gross", "Loaded truck weight (kg)"], ["n-tare", "Tare / empty truck weight (kg)"],
+  ["n-gross", "Loaded truck weight (kg)"], ["n-gross", "Tare / empty truck weight (kg)"],
   ["n-qfs", "MOIS. (moisture)"], ["n-qfs", "KOR"], ["n-qfs", "FINAL KOR"],
   ["n-unload", "BON SACS (good bags)"], ["n-unload", "HUMID SACS (damp bags)"], ["n-unload", "Sacs déchirés (torn bags)"], ["n-unload", "Refraction"],
   ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"], ["n-grn", "PRICE"],
@@ -73,7 +73,7 @@ const percentOutOfRange: UploadCheck = (i) => {
 
 const emptyTruckHeavier: UploadCheck = (i) => {
   const loaded = num(value(i, "n-gross", "Loaded truck weight (kg)"));
-  const tare = num(value(i, "n-tare", "Tare / empty truck weight (kg)"));
+  const tare = num(value(i, "n-gross", "Tare / empty truck weight (kg)"));
   return loaded !== undefined && tare !== undefined && tare > loaded
     ? [warn("Tare / empty truck weight (kg)", `the empty truck (${tare} kg) weighs more than the loaded truck (${loaded} kg)`)]
     : [];

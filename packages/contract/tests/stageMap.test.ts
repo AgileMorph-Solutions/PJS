@@ -13,13 +13,13 @@ import { DECISION_BRANCHES } from "../src/domain/decisions.js";
 const allStages = [...stages, rejectStage];
 
 describe("stage dictionary", () => {
-  it("covers all 16 stage records and 88 fields", () => {
-    expect(allStages.length).toBe(16);
+  it("covers all 15 stage records and 87 fields", () => {
+    expect(allStages.length).toBe(15);
     // 69 + REMARKS/WEEK on n-gate — real "Truck Reception" columns that were fingerprinted but
     // never actually captured until now (see truckReception.ts's parser and stages.ts's n-gate) —
     // + n-gross's loaded truck weight, the reading Gross is now calculated from.
-    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(88);
-    expect(Object.keys(STAGE_FIELD_MAP).length).toBe(16);
+    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(87);
+    expect(Object.keys(STAGE_FIELD_MAP).length).toBe(15);
   });
 
   it("gives every field a column name that Postgres can actually hold", () => {

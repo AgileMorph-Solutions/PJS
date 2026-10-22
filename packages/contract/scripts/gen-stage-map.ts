@@ -24,7 +24,6 @@ const STAGE_MODELS: Record<string, { model: string; relation: string; cardinalit
   "n-lot": { model: "StageLotAssignment", relation: "lot", cardinality: "one" },
   "n-bin": { model: "StageBinAllocation", relation: "bin", cardinality: "one" },
   "n-unload": { model: "StageUnload", relation: "unload", cardinality: "one" },
-  "n-tare": { model: "StageTareWeight", relation: "tare", cardinality: "one" },
   "n-netwt": { model: "StageNetWeight", relation: "netwt", cardinality: "one" },
   "n-grn": { model: "StageGrn", relation: "grn", cardinality: "one" },
   "n-stock": { model: "StageStockUpdate", relation: "stock", cardinality: "one" },

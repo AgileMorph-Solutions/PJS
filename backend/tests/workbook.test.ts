@@ -187,9 +187,15 @@ describe("what the file looks like to a person", { timeout: 60_000 }, () => {
     const wb = await load((await get("wi", "/api/workbook")).rawPayload);
     expect(headersOf(wb.getWorksheet("Truck Reception")!)).toEqual(expect.arrayContaining([
       "Receipt ID", "Arrival Date", "Supplier Name", "Supplier Code", "Truck No", "Fiche Code", "Fiche No", "Gross Weight (kg)", "Net Weight (kg)",
-      "Bags Count", "Good Bags", "Humid Bags", "Torn Bags", "Refraction (kg)", "Paid Weight (kg)", "Price (CFA/kg)", "Amount (CFA)",
+      "Bags Count", "Good Bags", "Humid Bags", "Torn Bags", "Refraction (kg)", "Paid Weight (kg)", "Loaded Truck Weight (kg)", "Tare Weight (kg)",
       "Moisture (%)", "Nut Count", "KOR", "Final KOR", "Origin", "Remarks", "Week",
     ]));
+    // Price and amount are hidden from the Warehouse Incharge (Oct 2026); an Admin's file still carries them.
+    const mine = headersOf(wb.getWorksheet("Truck Reception")!);
+    expect(mine).not.toContain("Price (CFA/kg)");
+    expect(mine).not.toContain("Amount (CFA)");
+    const admin = headersOf((await load((await get("admin", "/api/workbook?warehouse=BOUAKE")).rawPayload)).getWorksheet("Truck Reception")!);
+    expect(admin).toEqual(expect.arrayContaining(["Price (CFA/kg)", "Amount (CFA)"]));
   });
 
   it("keeps the lab results in full on Warehouse Receiving, each section with the panel it records", async () => {
@@ -230,7 +236,7 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
   beforeAll(async () => {
     await removeSentinels();
     await prisma.receipt.create({ data: { id: SENTINEL, source: "entered", arrivalDate: "2026-09-30", supplierName: "WB Supplier", lbaCode: "", vehicleNo: VEH + "OLD", warehouse: "BOUAKE" } });
-    await setStageFields(SENTINEL, "n-gate", { "VEHICLE NO.": VEH + "OLD" });
+    await setStageFields(SENTINEL, "n-gate", { "VEHICLE NO.": VEH + "OLD", REMARKS: "100" });
     await setStageFields(SENTINEL, "n-verify", { "SUPPLIERS NAME": "WB Supplier" });
     await setStageFields(SENTINEL, "n-grn", { PRICE: "100" });
   });
@@ -239,17 +245,17 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
   it("one edited cell is exactly one change, named in plain words, and audited", async () => {
     const buf = await edited("wi", (wb) => {
       const ws = wb.getWorksheet("Truck Reception")!;
-      setCell(ws, rowOf(ws, "Receipt ID", SENTINEL), "Price (CFA/kg)", "150");
+      setCell(ws, rowOf(ws, "Receipt ID", SENTINEL), "Remarks", "150");
     });
     const body = (await preview("wi", buf)).json();
     expect(sheetBody(body, "Truck Reception")).toMatchObject({ created: 0, changed: 1 });
-    expect(sheetBody(body, "Truck Reception").samples[0].changes).toEqual([{ column: "Price (CFA/kg)", from: "100", to: "150" }]);
+    expect(sheetBody(body, "Truck Reception").samples[0].changes).toEqual([{ column: "Remarks", from: "100", to: "150" }]);
     expect(body.errorCount).toBe(0);
 
     expect((await commit("wi", body.token)).json()).toMatchObject({ totalUpdated: 1, totalCreated: 0 });
     const r = (await get("wi", `/api/receipts/${SENTINEL}`)).json();
-    expect(r.stageData["n-grn"]["PRICE"]).toBe("150");
-    expect(await prisma.stageFieldChange.findFirst({ where: { receiptId: SENTINEL, via: "import" } })).toMatchObject({ label: "PRICE", oldValue: "100", newValue: "150" });
+    expect(r.stageData["n-gate"]["REMARKS"]).toBe("150");
+    expect(await prisma.stageFieldChange.findFirst({ where: { receiptId: SENTINEL, via: "import" } })).toMatchObject({ label: "REMARKS", oldValue: "100", newValue: "150" });
     expect(r.timeline[r.timeline.length - 1].note).toMatch(/Updated from workbook/);
   });
 
@@ -259,7 +265,7 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
       const row = rowOf(ws, "Receipt ID", SENTINEL);
       setCell(ws, row, "Supplier Name", "WB Supplier 2");
       setCell(ws, row, "Truck No", VEH + "NEW-TRUCK");
-      setCell(ws, row, "Price (CFA/kg)", null); // and clearing a cell clears the value
+      setCell(ws, row, "Remarks", null); // and clearing a cell clears the value
     });
     const body = (await preview("wi", buf)).json();
     expect(sheetBody(body, "Truck Reception").changed).toBe(1);
@@ -268,13 +274,13 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
     expect(r).toMatchObject({ supplierName: "WB Supplier 2", vehicleNo: VEH + "NEW-TRUCK" });
     expect(r.stageData["n-verify"]["SUPPLIERS NAME"]).toBe("WB Supplier 2");
     expect(r.stageData["n-gate"]["VEHICLE NO."]).toBe(VEH + "NEW-TRUCK");
-    expect(r.stageData["n-grn"]["PRICE"]).toBe("");
+    expect(r.stageData["n-gate"]["REMARKS"]).toBe("");
   });
 
   it("a blank Receipt ID adds a truck at the section's warehouse; Pass issues its Lot, a new origin is added", async () => {
     const buf = await edited("wi", (wb) => {
       addRow(wb.getWorksheet("Truck Reception")!, {
-        "Truck No": VEH + "NEW", "Supplier Name": "WB New", "Price (CFA/kg)": "77",
+        "Truck No": VEH + "NEW", "Supplier Name": "WB New", "Remarks": "77",
         "Origin": "WBTEST-ORIGIN", "Quality Result": "Pass ",
       });
     });
@@ -288,7 +294,7 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
     // Numbered by the system: the warehouse's code, then the year of the arrival date.
     expect(made.id).toMatch(/^REC-BKE-\d{4}-\d{4,}$/);
     const r = (await get("wi", `/api/receipts/${made.id}`)).json();
-    expect(r.stageData["n-grn"]["PRICE"]).toBe("77");
+    expect(r.stageData["n-gate"]["REMARKS"]).toBe("77");
     expect(r.stageData["n-gate"]["VEHICLE NO."]).toBe(VEH + "NEW"); // the stage got it too
     // The Pass in the same row issued the Lot — nobody typed it.
     expect(r.lotNo).toMatch(/^LOT-BKE-\d{4}-\d{4,}$/);
@@ -356,7 +362,7 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
   it("a column left out of the file leaves that field alone, never blanks it", async () => {
     const buf = await edited("wi", (wb) => {
       const ws = wb.getWorksheet("Truck Reception")!;
-      const c = colOf(ws, "Price (CFA/kg)");
+      const c = colOf(ws, "Remarks");
       ws.spliceColumns(c, 1);
     });
     const body = (await preview("wi", buf)).json();

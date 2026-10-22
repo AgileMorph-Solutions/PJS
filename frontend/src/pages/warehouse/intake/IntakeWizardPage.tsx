@@ -6,6 +6,8 @@ import { DecisionBranch } from "../../../components/DecisionBranch";
 import { DECISION_BRANCHES } from "../../../domain/decisions";
 import { useTracking } from "../../../state/TrackingContext";
 import { useSite } from "../../../state/SiteContext";
+import { useMe } from "../../../state/AuthContext";
+import { canSeeField } from "@anagroci/contract/data/roles";
 
 const btnPrimary =
   "inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none";
@@ -23,6 +25,7 @@ export function IntakeWizardPage() {
   const { id = "", stageId = "" } = useParams();
   const site = useSite();
   const navigate = useNavigate();
+  const me = useMe();
   const { getReceipt, setStageField, setBranch, flushStage } = useTracking();
   const receipt = getReceipt(id);
 
@@ -106,6 +109,7 @@ export function IntakeWizardPage() {
           derived={derived}
           onFieldChange={(fieldName, value) => setStageField(id, stageId, fieldName, value)}
           onFieldBlur={() => flushStage(id, stageId)}
+          hidden={stage.fields.filter((f) => !canSeeField(me.role, stageId, f.n)).map((f) => f.n)}
         />
         {branchOptions && (
           <div className="mt-4">

@@ -7,6 +7,7 @@ import { ReceiptStatusPill } from "../ReceiptStatusPill";
 import { Pill } from "../ui/Pill";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { DRYING_PHASE_LABELS, dryingPhase } from "@anagroci/contract/domain/sunDrying";
 
 const v = (r: ReceiptRecord, stage: string, label: string) => {
   const x = r.stageData[stage]?.[label];
@@ -22,8 +23,13 @@ function dryingSummary(r: ReceiptRecord, links: ReceiptLinks | null) {
   const stage = r.stageData["n-drying"];
   const decision = r.branches["n-drying"];
   if (!batch && !stage && !decision) return { label: "Not sent to drying", tone: "system" as const, batch, stage };
-  const done = /complete|done|finish/i.test(batch?.status ?? "") || Boolean(stage?.["Moisture % — after drying"]);
-  return { label: done ? "Drying completed" : "Drying in progress", tone: done ? ("entry" as const) : ("decision" as const), batch, stage };
+  // An imported row's status is the sheet's own text; a sun-drying round's is one of the app's (contract domain/sunDrying.ts).
+  const phase = dryingPhase(batch?.status);
+  const done = phase === "passed" || /complete|done|finish/i.test(batch?.status ?? "") || Boolean(stage?.["Moisture % — after drying"]);
+  const label = done ? "Drying completed"
+    : phase === "quality_check" || phase === "redry" ? `${DRYING_PHASE_LABELS[phase]}${batch?.round ? ` (round ${batch.round})` : ""}`
+    : `Drying in progress${batch?.round ? ` (round ${batch.round})` : ""}`;
+  return { label, tone: done ? ("entry" as const) : ("decision" as const), batch, stage };
 }
 
 /**
@@ -36,11 +42,14 @@ export function LotOverview({
   links,
   othersInBin,
   siteSlug,
+  showPrice = true,
 }: {
   receipt: ReceiptRecord;
   links: ReceiptLinks | null;
   othersInBin: ReceiptRecord[];
   siteSlug: string;
+  /** False for a role the price and amount are hidden from (the Warehouse Incharge): the rows are left out, not shown empty. */
+  showPrice?: boolean;
 }) {
   const dry = dryingSummary(receipt, links);
   const qfs = receipt.branches["n-qfs"];
@@ -93,7 +102,7 @@ export function LotOverview({
         <InfoRow label="Method" value={dry.batch?.dryType} />
         <InfoRow label="Moisture before" value={pct(dry.batch?.inputMoisturePct ?? v(receipt, "n-drying", "Moisture % — before drying"))} />
         <InfoRow label="Moisture after" value={pct(dry.batch?.outputMoisturePct ?? v(receipt, "n-drying", "Moisture % — after drying"))} />
-        <InfoRow label="Bags in → out" value={dry.batch && (dry.batch.inputBags != null || dry.batch.outputBags != null) ? `${dry.batch.inputBags ?? "-"} → ${dry.batch.outputBags ?? "-"}` : undefined} />
+        <InfoRow label="Bags in → out" value={dry.batch && ((dry.batch.inputBags ?? dry.batch.issuedBags) != null || (dry.batch.outputBags ?? dry.batch.receivedBags) != null) ? `${dry.batch.inputBags ?? dry.batch.issuedBags ?? "-"} → ${dry.batch.outputBags ?? dry.batch.receivedBags ?? "-"}` : undefined} />
         <InfoRow label="Bin in → out" value={dry.batch && (dry.batch.sourceBinNo || dry.batch.destinationBinNo) ? `${dry.batch.sourceBinNo || "-"} → ${dry.batch.destinationBinNo || "-"}` : undefined} />
         <InfoRow label="Weight loss" value={kg(dry.batch?.dryingLossKg)} />
       </InfoCard>
@@ -114,14 +123,14 @@ export function LotOverview({
 
       <InfoCard icon="scale" title="Weights & bags">
         <InfoRow label="Loaded truck" value={kg(v(receipt, "n-gross", "Loaded truck weight (kg)"))} />
-        <InfoRow label="Empty truck" value={kg(v(receipt, "n-tare", "Tare / empty truck weight (kg)"))} />
+        <InfoRow label="Empty truck" value={kg(v(receipt, "n-gross", "Tare / empty truck weight (kg)"))} />
         <InfoRow label="Gross" value={kg(v(receipt, "n-gross", "GROSS WT KGS"))} />
         <InfoRow label="Net" value={kg(v(receipt, "n-netwt", "NET WT KGS"))} strong />
         <InfoRow label="Paid weight" value={kg(v(receipt, "n-netwt", "PAID WT"))} />
         <InfoRow label="GRN quantity" strong value={kg(v(receipt, "n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"))} />
         <InfoRow label="Bags (good / damp / torn)" value={v(receipt, "n-unload", "SACS (bags)") ? `${v(receipt, "n-unload", "SACS (bags)")} (${v(receipt, "n-unload", "BON SACS (good bags)") ?? 0} / ${v(receipt, "n-unload", "HUMID SACS (damp bags)") ?? 0} / ${v(receipt, "n-unload", "Sacs déchirés (torn bags)") ?? 0})` : undefined} />
-        <InfoRow label="Price / kg" value={v(receipt, "n-grn", "PRICE")} />
-        <InfoRow label="GRN amount" value={v(receipt, "n-grn", "AMOUNT") ? `${Number(v(receipt, "n-grn", "AMOUNT")).toLocaleString()} XOF` : undefined} strong />
+        {showPrice && <InfoRow label="Price / kg" value={v(receipt, "n-grn", "PRICE")} />}
+        {showPrice && <InfoRow label="GRN amount" value={v(receipt, "n-grn", "AMOUNT") ? `${Number(v(receipt, "n-grn", "AMOUNT")).toLocaleString()} XOF` : undefined} strong />}
       </InfoCard>
 
       <InfoCard icon="local_shipping" title="Supplier & delivery">

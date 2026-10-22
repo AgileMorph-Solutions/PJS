@@ -16,6 +16,8 @@ interface Props {
   readOnly?: boolean;
   /** Limit the grid to these field labels (a role's form covers only part of a stage). */
   only?: string[];
+  /** Field labels this person may not see at all (price and amount for the Warehouse Incharge, contract HIDDEN_FIELDS). */
+  hidden?: string[];
   /** What could be filled in from elsewhere, per empty field label — offered, never written. */
   suggestions?: Record<string, { value: string; from: string }>;
   /** Known values per field label to choose from. */
@@ -25,7 +27,7 @@ interface Props {
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only, suggestions, options }: Props) {
+export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only, hidden, suggestions, options }: Props) {
   return (
     <div className="space-y-4">
       {stage.file && (
@@ -36,7 +38,7 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
         </span>
       )}
       <div className="grid sm:grid-cols-2 gap-4">
-        {stage.fields.filter((f) => !only || only.includes(f.n)).map((f) => {
+        {stage.fields.filter((f) => (!only || only.includes(f.n)) && !hidden?.includes(f.n)).map((f) => {
           // A calculation with a typed fallback (KOR) locks the field only once it has a value to show:
           // `derived` holds a value for it exactly when every input is recorded.
           const rule = derivedRuleFor(stage.id, f.n);

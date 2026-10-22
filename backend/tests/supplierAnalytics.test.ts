@@ -39,7 +39,7 @@ async function truck(date: string, o: { code?: string; name: string; pass: boole
   await setStageFields(r.id, "n-verify", { ...(o.code ? { "LBA CODE": o.code } : {}), "SUPPLIERS NAME": o.name });
   if (o.pass) await setBranch(r.id, "n-qfs", "pass"); else await setBranch(r.id, "n-qfs", "fail", "Moisture too high");
   await setStageFields(r.id, "n-gross", { "Loaded truck weight (kg)": String(o.gross) });
-  await setStageFields(r.id, "n-tare", { "Tare / empty truck weight (kg)": String(o.tare) });
+  await setStageFields(r.id, "n-gross", { "Tare / empty truck weight (kg)": String(o.tare) });
   await setStageFields(r.id, "n-unload", { "BON SACS (good bags)": String(o.good), "HUMID SACS (damp bags)": String(o.damp), "Sacs déchirés (torn bags)": String(o.torn) });
   if (o.grn !== undefined) await setStageFields(r.id, "n-grn", { [GRN]: String(o.grn) });
 }

@@ -14,7 +14,7 @@ import type { ReceiptStatus } from "../types/receipt.js";
 export type ReceivingModule = "reception" | "offloading";
 
 export const RECEPTION_STAGES = ["n-gate", "n-verify", "n-gross", "n-qfs", "n-reject"] as const;
-export const OFFLOADING_STAGES = ["n-unload", "n-tare", "n-netwt", "n-lot", "n-bin", "n-grn", "n-stock"] as const;
+export const OFFLOADING_STAGES = ["n-unload", "n-netwt", "n-lot", "n-bin", "n-grn", "n-stock"] as const;
 
 export const MODULE_STAGES: Record<ReceivingModule, readonly string[]> = {
   reception: RECEPTION_STAGES,

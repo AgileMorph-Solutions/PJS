@@ -50,8 +50,7 @@ describe("derived fields", () => {
 
   it("flows a new weighbridge reading through gross, net, paid and amount", () => {
     const out = computeDerivedFields({
-      "n-gross": { "Loaded truck weight (kg)": "56300" },
-      "n-tare": { "Tare / empty truck weight (kg)": "15000" },
+      "n-gross": { "Loaded truck weight (kg)": "56300", "Tare / empty truck weight (kg)": "15000" },
       "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
       "n-grn": { PRICE: "470" },
     });
@@ -60,8 +59,13 @@ describe("derived fields", () => {
   });
 
   it("never blanks an imported gross that has no loaded/empty readings behind it", () => {
-    const out = computeDerivedFields({ "n-gross": { "GROSS WT KGS": "41300" }, "n-tare": {} });
+    const out = computeDerivedFields({ "n-gross": { "GROSS WT KGS": "41300", "Tare / empty truck weight (kg)": "" } });
     expect(out["n-gross"]).toBeUndefined();
+  });
+
+  it("keeps the tare in the gross weight step (Oct 2026): a gross typed from the ticket stands until both readings exist", () => {
+    expect(computeDerivedFields({ "n-gross": { "GROSS WT KGS": "41300", "Loaded truck weight (kg)": "56300" } })["n-gross"]).toBeUndefined();
+    expect(computeDerivedFields({ "n-gross": { "GROSS WT KGS": "41300", "Loaded truck weight (kg)": "56300", "Tare / empty truck weight (kg)": "15100" } })["n-gross"]!["GROSS WT KGS"]).toBe("41200");
   });
 
   it("skips a rule whose inputs are incomplete", () => {

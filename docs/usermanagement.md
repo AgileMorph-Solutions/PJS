@@ -11,8 +11,8 @@ the API and the UI read.
 | Role | Scope | What they do |
 |---|---|---|
 | **Admin** | all warehouses | Creates users, sets roles, assigns each person to **one warehouse**, and assigns each warehouse its Unit/Central type. Can do everything a Warehouse Incharge can, at any warehouse. |
-| **Warehouse Incharge** | one warehouse | Top of the operational hierarchy. Fills every stage that isn't a Branch Manager / QFS form (gate, quality analysis, tare, bin, drying, …) **directly, with no approval**. Approves or rejects Branch Manager and QFS submissions. Can correct any entry, including approved ones — every correction is audited. Assigns suppliers to Branch Managers and decides their supplier requests. Runs imports, jute ledgers and masters. |
-| **Branch Manager** | one warehouse, plus assigned suppliers | After unloading, submits: truck no., supplier, LBA code, FICHE, negotiated price. (Lot number, gross weight and net weight are no longer typed — see `docs/system-ids-and-reception-flow.md`.) Only sees and reports on suppliers the Warehouse Incharge assigned. Can ask the Warehouse Incharge to add a supplier. |
+| **Warehouse Incharge** | one warehouse | Top of the operational hierarchy. Fills every stage that isn't a Branch Manager / QFS form (gate, quality analysis, weighbridge, bin, drying, …) **directly, with no approval**. Does not see or write the price and the amount (Oct 2026). Approves or rejects Branch Manager and QFS submissions. Can correct any entry, including approved ones — every correction is audited. Assigns suppliers to Branch Managers and decides their supplier requests. Runs imports, jute ledgers and masters. |
+| **Branch Manager** | one warehouse, plus assigned suppliers | After unloading, submits: truck no., supplier, LBA code, FICHE. Sets the **negotiated price directly** on the truck, with no approval (Oct 2026: the Warehouse Incharge no longer sees prices or amounts). (Lot number, gross weight and net weight are no longer typed — see `docs/system-ids-and-reception-flow.md`.) Only sees and reports on suppliers the Warehouse Incharge assigned. Can ask the Warehouse Incharge to add a supplier. |
 | **QFS Officer** | one warehouse | After unloading, does the quality analysis (moisture, nut count, KOR, final KOR) and checks the jute bags on the truck (total, good, damp, torn), and submits both together. |
 
 Assumption worth confirming with the client: "request branch manager to add suppliers" was read as
@@ -54,7 +54,7 @@ Every changed field — a Warehouse Incharge's direct edit or an approval — is
 
 | Form | Stage → field |
 |---|---|
-| Branch Manager | `n-gate` VEHICLE NO. · `n-verify` SUPPLIERS NAME, LBA CODE, FICHE · `n-grn` PRICE |
+| Branch Manager | `n-gate` VEHICLE NO. · `n-verify` SUPPLIERS NAME, LBA CODE, FICHE (the price is set directly: `PUT /api/receipts/:id/price`) |
 | QFS Officer | `n-qfs` MOIS. (moisture), NUT COUNT, KOR, FINAL KOR · `n-unload` BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) — the total SACS is calculated from these three |
 
 The QFS **Pass / Fail** decision is not part of the form: the Warehouse Incharge records it, because a

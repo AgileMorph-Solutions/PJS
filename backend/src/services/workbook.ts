@@ -4,6 +4,7 @@
  * warehouse, Unit or Central) and a user.
  */
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
+import type { Role } from "@anagroci/contract/data/roles";
 import { prisma } from "../db.js";
 import { resolveSite } from "../domain/site.js";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
@@ -16,7 +17,7 @@ import { buildWorkbookFile } from "../domain/workbook/write.js";
 import { ImportRejectedError, ImportTokenError } from "./imports.js";
 
 export interface Section { warehouse: string; type: WarehouseType; site: string[] }
-export interface Uploader { id: string; role: string }
+export interface Uploader { id: string; role: Role }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -31,12 +32,12 @@ export async function sectionFor(warehouse: string): Promise<Section> {
   return { warehouse, type: wh.type, site: await resolveSite(warehouse) };
 }
 
-export async function downloadWorkbook(section: Section, range: DateRange, blank: boolean) {
-  return buildWorkbookFile({ type: section.type, warehouse: section.warehouse, site: section.site, range, blank, today: today() });
+export async function downloadWorkbook(section: Section, range: DateRange, blank: boolean, role?: Role) {
+  return buildWorkbookFile({ type: section.type, warehouse: section.warehouse, site: section.site, range, blank, today: today(), role });
 }
 
 const ctxFor = (db: Ctx["db"], section: Section, user: Uploader, filename: string): Ctx => ({
-  db, userId: user.id, isAdmin: user.role === "admin", warehouse: section.warehouse, type: section.type, site: section.site, filename, today: today(),
+  db, userId: user.id, isAdmin: user.role === "admin", role: user.role, warehouse: section.warehouse, type: section.type, site: section.site, filename, today: today(),
 });
 
 const ERRORS_SHOWN_PER_SHEET = 25;

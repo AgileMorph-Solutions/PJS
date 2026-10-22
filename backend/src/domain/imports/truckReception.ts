@@ -100,7 +100,6 @@ function parse(workbook: ExcelJS.Workbook): ParsedRow<OffloadingRow>[] {
         "WH LOCATION": whLocation, "WH NO.": whNo, "VEHICLE NO.": truckNo,
         "REMARKS": remarks, "WEEK": week,
       },
-      "n-tare": { "Tare / empty truck weight (kg)": "" },
     };
 
     // "REF." has no equivalent column in this sheet either — never included, same reasoning.

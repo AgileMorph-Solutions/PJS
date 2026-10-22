@@ -12,7 +12,7 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { ValidationError } from "../domain/validation.js";
 import { UnknownStageFieldError } from "../stageStore.js";
 import {
-  listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setBranch, getReceiptActivities, finaliseBin, reopenRecord,
+  listReceipts, getReceipt, createReceipt, patchReceipt, setStageFields, setPrice, setBranch, getReceiptActivities, finaliseBin, reopenRecord,
 } from "../services/receipts.js";
 import { createReceiptsBatch } from "../services/receiptBatch.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
@@ -181,7 +181,17 @@ export async function receiptRoutes(app: FastifyInstance) {
     if (!fields || typeof fields !== "object") return reply.code(400).send({ error: "body.fields is required" });
     if (!(await requireReceipt(id, reply, req))) return;
     try {
-      const data = await setStageFields(id, stageId, fields, { actor: { id: currentUser(req).id, via: "direct" } });
+      const data = await setStageFields(id, stageId, fields, { actor: { id: currentUser(req).id, via: "direct", role: currentUser(req).role } });
+      return { data, warnings: warningsForReceipt(data) };
+    } catch (e) { return sendError(reply, e); }
+  });
+
+  /** The Branch Manager's price, set directly (services/receipts.ts setPrice). */
+  app.put("/api/receipts/:id/price", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    try {
+      const data = await setPrice(id, (req.body as { price?: unknown } | undefined)?.price, currentUser(req));
       return { data, warnings: warningsForReceipt(data) };
     } catch (e) { return sendError(reply, e); }
   });

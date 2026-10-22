@@ -18,6 +18,8 @@
  * own "… (as written)" column, so that information is still visible and survives a round trip.
  */
 import { PROFILE_FIELDS } from "@anagroci/contract/domain/supplierProfile";
+import { HIDDEN_FIELDS, type Role } from "@anagroci/contract/data/roles";
+import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 
 export interface FieldDef {
@@ -108,8 +110,8 @@ const RECEIPT: Pair[] = [
   ["ReceiptBranch.n-qfs", "Quality Result"],
   ["StageRejection.reason", "Rejection Reason"],
   ["StageGrossWeight.loadedTruckWtKgs", "Loaded Truck Weight (kg)"],
+  ["StageGrossWeight.tareWtKgs", "Tare Weight (kg)"],
   ["StageGrossWeight.grossWtKgs", "Gross Weight (kg)"],
-  ["StageTareWeight.tareWtKgs", "Tare Weight (kg)"],
   ["StageNetWeight.netWtKgs", "Net Weight (kg)"],
   ["StageNetWeight.paidWt", "Paid Weight (kg)"],
   ["StageUnload.sacs", "Bags Count"],
@@ -301,3 +303,14 @@ export const SHEET_FIELDS: Record<string, SheetFields> = {
 /** How a header is compared: case, spacing and punctuation don't matter ("price (cfa/kg)" = "Price CFA kg"). */
 export const normalizeHeader = (s: string): string =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * The workbook columns a role may not see (contract HIDDEN_FIELDS: price and amount for the Warehouse Incharge), as Receipt-sheet
+ * keys. Left out of that role's export, and an upload of them is ignored like any other unknown column (and said so).
+ */
+export function hiddenKeys(role: Role | undefined): Set<string> {
+  return new Set((role ? HIDDEN_FIELDS[role] ?? [] : []).map(([stageId, label]) => {
+    const spec = STAGE_FIELD_MAP[stageId]!;
+    return `${spec.model}.${spec.fields.find((f) => f.label === label)!.col}`;
+  }));
+}
