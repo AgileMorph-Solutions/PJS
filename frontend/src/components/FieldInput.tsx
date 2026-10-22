@@ -23,13 +23,11 @@ interface Props {
   options?: string[];
 }
 
-/** One field row: label + an optional "new" badge + a controlled input. `field.v` only ever
- * decides the badge (is this a proposed field with no real workbook backing it) — the actual
- * displayed value always comes from the record itself via `value`, never from the generic sample
+/** One field row: label + an optional system/calculated badge + a controlled input. The displayed
+ * value always comes from the record itself via `value`, never from the generic sample (`field.v`)
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
 export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, options }: Props) {
-  const isNew = field.v === "";
   const locked = readOnly || Boolean(system);
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
 
@@ -39,14 +37,10 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         <label htmlFor={id} className="text-[12.5px] font-semibold text-warmstone-700">
           {field.n}
         </label>
-        {system ? (
+        {system && (
           <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-warmstone-200 text-warmstone-700">
             {system.kind === "calculated" ? "calculated" : "system"}
           </span>
-        ) : (
-          isNew && (
-            <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-ambernut-100 text-ambernut-800">new</span>
-          )
         )}
       </div>
       {field.format === "date" && !locked ? (
