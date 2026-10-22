@@ -15,7 +15,7 @@ COPY frontend/package.json ./frontend/
 # only the host's (npm/cli#4828), so a lockfile generated on macOS omits rolldown's linux binding
 # and the build fails inside the container. The backend image does use the lockfile — it has no
 # native deps. See backend/README.md.
-RUN npm install --no-audit --no-fund
+RUN npm install --before=2026-10-13 --no-audit --no-fund
 
 COPY packages/contract/ ./packages/contract/
 COPY frontend/ ./frontend/
