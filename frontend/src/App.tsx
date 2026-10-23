@@ -11,6 +11,7 @@ import { MySubmissionsPage } from "./pages/MySubmissionsPage";
 import type { Role } from "./data/roles";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
+import { PendingApprovalsProvider } from "./state/PendingApprovals";
 import { SiteLayout } from "./state/SiteContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
@@ -198,11 +199,13 @@ function AuthGate() {
   if (status === "anonymous" || !me) return <LoginPage />;
   return (
     <TrackingProvider key={me.id}>
-      <Layout>
-        <LoadGate>
-          <AppRoutes />
-        </LoadGate>
-      </Layout>
+      <PendingApprovalsProvider>
+        <Layout>
+          <LoadGate>
+            <AppRoutes />
+          </LoadGate>
+        </Layout>
+      </PendingApprovalsProvider>
     </TrackingProvider>
   );
 }

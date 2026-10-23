@@ -6,6 +6,7 @@ import { Pill } from "../../components/ui/Pill";
 import { SubmissionReview } from "../../components/SubmissionReview";
 import { useTracking } from "../../state/TrackingContext";
 import { useSubmissions, useSupplierRequests } from "../../state/userManagement";
+import { usePendingApprovals } from "../../state/PendingApprovals";
 import { api } from "../../repository/api";
 import { siteSlugForSiteName } from "../../config/sites";
 import type { SupplierRequestView } from "../../types/user";
@@ -50,6 +51,7 @@ export function ApprovalsPage() {
 
 function SupplierRequestRow({ request, onDone }: { request: SupplierRequestView; onDone: () => void }) {
   const { refresh } = useTracking();
+  const { refresh: refreshPending } = usePendingApprovals();
   const [code, setCode] = useState(request.code ?? "");
   const [reason, setReason] = useState("");
   const [rejecting, setRejecting] = useState(false);
@@ -57,7 +59,7 @@ function SupplierRequestRow({ request, onDone }: { request: SupplierRequestView;
 
   async function act(fn: () => Promise<unknown>) {
     setError(null);
-    try { await fn(); await refresh(); onDone(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { await fn(); await refresh(); refreshPending(); onDone(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
   return (

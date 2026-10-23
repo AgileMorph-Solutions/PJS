@@ -2,6 +2,7 @@ import { type FormEvent, type ReactNode, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppNav } from "./AppNav";
 import { useAuth } from "../state/AuthContext";
+import { usePendingApprovals } from "../state/PendingApprovals";
 import { ROLE_LABEL } from "../data/roles";
 import { WAREHOUSE_TYPE_LABEL } from "../data/warehouseTypes";
 import { siteSlugForType } from "../config/sites";
@@ -13,6 +14,7 @@ export function Layout({ children }: { children: ReactNode }) {
   // Below `lg` the sidebar is an off-canvas drawer (see AppNav), closed by default so it never
   // covers the content on a phone/tablet the way a permanently-fixed w-72 sidebar used to.
   const [navOpen, setNavOpen] = useState(false);
+  const { count: pendingApprovals } = usePendingApprovals();
 
   function handleSearch(e: FormEvent) {
     e.preventDefault();
@@ -37,10 +39,12 @@ export function Layout({ children }: { children: ReactNode }) {
         <header className="fixed top-0 left-0 lg:left-72 right-0 h-16 bg-white/95 backdrop-blur-md border-b border-warmstone-200 z-30 px-4 sm:px-6 lg:px-8 flex items-center gap-3">
           <button
             onClick={() => setNavOpen(true)}
-            aria-label="Open navigation"
-            className="lg:hidden shrink-0 p-2 -ml-1 rounded-lg text-warmstone-600 hover:bg-warmstone-100"
+            aria-label={pendingApprovals ? `Open navigation (${pendingApprovals} approvals waiting)` : "Open navigation"}
+            className="relative lg:hidden shrink-0 p-2 -ml-1 rounded-lg text-warmstone-600 hover:bg-warmstone-100"
           >
             <span className="material-symbols-outlined text-[22px]">menu</span>
+            {/* The sidebar is a closed drawer on a phone, so its count would never be seen. */}
+            {!!pendingApprovals && <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-brand-700 ring-2 ring-white" aria-hidden="true" />}
           </button>
           <form onSubmit={handleSearch} className="relative flex-1 max-w-80">
             <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[19px] text-warmstone-400">
