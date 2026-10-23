@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { PLAN_STATUS_LABELS, type PlanStatus } from "@anagroci/contract/domain/deliveryPlan";
+import { useSearchParams } from "react-router-dom";
+import { PLAN_STATUS_LABELS, planDeadline, type PlanStatus } from "@anagroci/contract/domain/deliveryPlan";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -14,6 +15,7 @@ import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
 import { DeliveryPlanForm, emptyPlanForm } from "../../components/receipt/DeliveryPlanForm";
+import { Tabs } from "../../components/ui/Tabs";
 import type { DeliveryPlan } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
@@ -36,7 +38,11 @@ export function DeliveryPlansPage() {
   const site = useSite();
   const switchSite = useSwitchSite();
   const canEdit = useCanEditDirectly();
-  const { plans, refetch } = useDeliveryPlans(site.warehouseName);
+  const { plans, loading, refetch } = useDeliveryPlans(site.warehouseName);
+  // The tab lives in the URL (?tab=overdue) so the dashboard's "Overdue plans" tile can open it directly.
+  const [params] = useSearchParams();
+  const tab = params.get("tab") === "overdue" ? "overdue" : "all";
+  const overdueCount = useMemo(() => plans.filter((p) => p.overdue).length, [plans]);
   // Cancelled plans are left out: their trucks are exceptions, not progress against an expectation.
   const totals = useMemo(() => {
     const live = plans.filter((p) => p.status !== "cancelled");
@@ -47,6 +53,11 @@ export function DeliveryPlansPage() {
     };
   }, [plans]);
   const search = useTableSearch(plans, (p) => [p.id, p.supplierName, p.supplierCode, p.expectedOrigin, p.fundingReference, p.truckNos.join(" "), p.remarks]);
+  // Overdue tab: the same table, narrowed to late plans, longest overdue first.
+  const rows = useMemo(
+    () => (tab === "overdue" ? search.filtered.filter((p) => p.overdue).sort((a, b) => (planDeadline(a) < planDeadline(b) ? -1 : 1)) : search.filtered),
+    [tab, search.filtered]
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
@@ -158,8 +169,9 @@ export function DeliveryPlansPage() {
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiTile label="Active plans" value={totals.plans} />
+        <KpiTile label="Overdue" value={loading ? "…" : overdueCount} tone={overdueCount > 0 ? "gap" : "default"} to="?tab=overdue" />
         <KpiTile label="Trucks arrived" value={totals.arrived} />
         <KpiTile label="Accepted" value={totals.accepted} />
         <KpiTile label="Rejected" value={totals.rejected} tone="gap" />
@@ -181,13 +193,24 @@ export function DeliveryPlansPage() {
       <FilterBar>
         <input placeholder="Search plan, supplier, origin, truck, funding ref…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
       </FilterBar>
+      <Tabs
+        items={[
+          { to: ".", label: "All plans", icon: "list", active: tab === "all", badge: plans.length },
+          { to: "?tab=overdue", label: "Overdue", icon: "event_busy", active: tab === "overdue", badge: overdueCount, badgeTone: overdueCount > 0 ? "gap" : "default" },
+        ]}
+      />
       <DataTable
+        key={tab}
         columns={columns}
-        rows={search.filtered}
+        rows={rows}
         keyFn={(p) => p.id}
         rowHref={(p) => `/${site.slug}/delivery-plans/${p.id}`}
-        emptyTitle="No delivery plans yet"
-        emptyHint="Add a plan for each delivery you expect, so what arrives can be compared with what was planned."
+        emptyTitle={tab === "overdue" ? "No plan is running late" : "No delivery plans yet"}
+        emptyHint={
+          tab === "overdue"
+            ? "A plan shows here once the end of its delivery window has passed and it is still not delivered or cancelled."
+            : "Add a plan for each delivery you expect, so what arrives can be compared with what was planned."
+        }
       />
     </div>
   );
