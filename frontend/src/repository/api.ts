@@ -5,7 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -178,6 +178,7 @@ export const api = {
   setWarehouseCode: (name: string, code: string | null) =>
     request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ code }) }),
 
+  listFieldChanges: (receiptId: string) => request<FieldChangeRecord[]>(`/receipts/${encodeURIComponent(receiptId)}/field-changes`),
   listUploadIssues: (receiptId: string) => request<UploadIssueRecord[]>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues`),
   reviewUploadIssue: (receiptId: string, issueId: string) =>
     request<UploadIssueRecord>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues/${encodeURIComponent(issueId)}/review`, { method: "POST" }),

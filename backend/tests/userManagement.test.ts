@@ -12,6 +12,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setStageFields } from "../src/services/receipts.js";
+import type { FieldChangeRecord } from "@anagroci/contract/types/receipt";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -232,6 +233,29 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect((await as(P + "bm", "PUT", `/api/receipts/${receiptA}/price`, { price: "470" })).statusCode).toBe(200);
     const c = await prisma.stageFieldChange.findFirst({ where: { receiptId: receiptA, label: "PRICE" } });
     expect(c).toMatchObject({ via: "direct", userId: ids.bm, newValue: "470" });
+  });
+
+  it("field history shows every change to an admin, newest first, with who made it", async () => {
+    const res = await as(P + "admin", "GET", `/api/receipts/${receiptA}/field-changes`);
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as FieldChangeRecord[];
+    expect(rows.find((r) => r.label === "PRICE")).toMatchObject({ by: "bm", oldValue: null, newValue: "470", via: "direct" });
+    expect(rows.find((r) => r.label === "FICHE" && r.newValue === "F-101")).toMatchObject({ by: "wi", oldValue: "F-100" });
+    expect(rows.map((r) => r.at)).toEqual([...rows.map((r) => r.at)].sort().reverse());
+  });
+
+  it("field history never shows the Warehouse Incharge a price or amount change", async () => {
+    const res = await as(P + "wi", "GET", `/api/receipts/${receiptA}/field-changes`);
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as FieldChangeRecord[];
+    expect(rows.some((r) => r.label === "FICHE")).toBe(true);
+    expect(rows.filter((r) => r.stageId === "n-grn" && (r.label === "PRICE" || r.label === "AMOUNT"))).toEqual([]);
+    expect(res.body).not.toContain("470");
+  });
+
+  it("field history is closed to the narrow roles and to another warehouse", async () => {
+    expect((await as(P + "bm", "GET", `/api/receipts/${receiptA}/field-changes`)).statusCode).toBe(403);
+    expect((await as(P + "wiY", "GET", `/api/receipts/${receiptA}/field-changes`)).statusCode).toBe(403);
   });
 });
 
