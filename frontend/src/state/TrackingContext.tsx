@@ -470,6 +470,24 @@ export function useJuteLedgerEntries(ledgerId: string, warehouse: string | undef
  * tradeoff this accepts). Same shape as useDryingJobs, but keyed on receiptId so navigating
  * between receipts refetches instead of showing the previous receipt's links.
  */
+/** A truck's saved field edits, newest first. Read when the History tab mounts, so it shows edits made since the page opened. */
+export function useFieldChanges(receiptId: string) {
+  const [changes, setChanges] = useState<import("@anagroci/contract/types/receipt").FieldChangeRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    api.listFieldChanges(receiptId)
+      .then((c) => { if (alive) setChanges(c); })
+      .catch((e: unknown) => { if (alive) setError(e instanceof Error ? e.message : String(e)); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [receiptId]);
+  return { changes, loading, error };
+}
+
 export function useReceiptLinks(receiptId: string | undefined) {
   const [links, setLinks] = useState<import("../repository/api").ReceiptLinks | null>(null);
   const [loading, setLoading] = useState(true);
