@@ -212,11 +212,6 @@ export async function receiptRoutes(app: FastifyInstance) {
     } catch (e) { return sendError(reply, e); }
   });
 
-  /**
-   * The full 1:N history for the two stages ReceiptRecord.stageData can only show one row of
-   * (n-otheract, n-ledger). Doc §7 wants the activity ledger as a sequence, not disconnected
-   * entries — this is that sequence.
-   */
   /** Every saved field edit on this truck: who, when, old -> new. Price/amount rows are redacted per role (auth/redact.ts). */
   app.get("/api/receipts/:id/field-changes", async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -224,6 +219,11 @@ export async function receiptRoutes(app: FastifyInstance) {
     return listFieldChanges(id);
   });
 
+  /**
+   * The full 1:N history for the two stages ReceiptRecord.stageData can only show one row of
+   * (n-otheract, n-ledger). Doc §7 wants the activity ledger as a sequence, not disconnected
+   * entries — this is that sequence.
+   */
   app.get("/api/receipts/:id/activities", async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!(await requireReceipt(id, reply, req))) return;

@@ -30,16 +30,13 @@ interface Props {
   changes: FieldChangeRecord[];
   loading: boolean;
   error: string | null;
-  /** Only this stage's edits, without the search bar — the per-stage log on the Stages tab. */
-  stageId?: string;
 }
 
 /**
  * Every saved edit on this truck: who, when, which field, old → new. Read straight from the server's change log; fields the
  * viewer's role may not see (price and amount for the Warehouse Incharge) are already removed from the response there.
  */
-export function FieldHistory({ changes: all, loading, error, stageId }: Props) {
-  const changes = useMemo(() => (stageId ? all.filter((c) => c.stageId === stageId) : all), [all, stageId]);
+export function FieldHistory({ changes, loading, error }: Props) {
   const search = useTableSearch(changes, (c) => [c.label, STAGES.get(c.stageId)?.title, c.by, c.oldValue, c.newValue]);
 
   const columns: Column<FieldChangeRecord>[] = useMemo(() => [
@@ -91,11 +88,9 @@ export function FieldHistory({ changes: all, loading, error, stageId }: Props) {
 
   return (
     <div className="space-y-3">
-      {!stageId && (
-        <FilterBar>
-          <input placeholder="Search field, step, person or value…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
-        </FilterBar>
-      )}
+      <FilterBar>
+        <input placeholder="Search field, step, person or value…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
+      </FilterBar>
       {loading ? (
         <div className="space-y-2" aria-busy="true">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-12 rounded-xl bg-warmstone-100 animate-pulse" />)}
@@ -106,7 +101,7 @@ export function FieldHistory({ changes: all, loading, error, stageId }: Props) {
           rows={search.filtered}
           keyFn={(c) => String(c.id)}
           emptyTitle={changes.length === 0 ? "No edits recorded yet" : "No edits match"}
-          emptyHint={changes.length === 0 ? `Each saved change to a field on this ${stageId ? "step" : "truck"} shows here, with who made it and when.` : "Try a different search or clear the column filters."}
+          emptyHint={changes.length === 0 ? "Each saved change to a field on this truck shows here, with who made it and when." : "Try a different search or clear the column filters."}
         />
       )}
     </div>

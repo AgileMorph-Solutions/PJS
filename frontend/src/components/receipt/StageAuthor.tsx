@@ -29,13 +29,34 @@ function Person({ label, who, at }: { label: string; who: string; at?: string })
 
 /**
  * Who filled this step in, who approved it, and who last touched it, for a stage card's header — from the same change log
- * as the History tab (`changes` is this stage's rows, newest first). Renders nothing for a stage with no logged edits,
- * e.g. one imported before the log existed: there is no "who" to show, and guessing one would be inventing it.
+ * as the History tab (`changes` is this stage's rows, newest first; `values` the stage as it stands). Renders nothing for a
+ * stage with no logged edits, e.g. one imported before the log existed: there is no "who" to show, and guessing one would be
+ * inventing it.
  */
-export function StageAuthor({ changes }: { changes: FieldChangeRecord[] }) {
+export function StageAuthor({ changes, values }: { changes: FieldChangeRecord[]; values: Record<string, string> }) {
   if (changes.length === 0) return null;
   const latest = changes[0]!;
   const first = changes[changes.length - 1]!;
+  // The oldest logged change is only the entry if the log saw the whole step being filled in. A seeded truck's values
+  // predate the log, so a later one-field correction must not be shown as "Entered by" whoever made it.
+  const logged = new Set(changes.map((c) => c.label));
+  const entryOnRecord = Object.entries(values).every(([label, v]) => v.trim() === "" || logged.has(label));
+  if (!entryOnRecord) {
+    return (
+      <>
+        <div className="hidden sm:flex items-start gap-3 shrink-0 max-w-80 pl-4 border-l border-warmstone-100">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 items-baseline">
+            <Person label="Last edit" who={latest.by} at={latest.at} />
+            {latest.approvedBy && <Person label="Approved" who={latest.approvedBy} />}
+          </dl>
+          <Avatar name={latest.by} size="md" />
+        </div>
+        <p className="sm:hidden basis-full pl-11.5 -mt-2 text-[11px] text-warmstone-500">
+          Last edit by <span className="font-semibold text-warmstone-700">{splitName(latest.by).name}</span> · {formatDateTime(latest.at)}
+        </p>
+      </>
+    );
+  }
   // Several fields saved together share a minute and a person; that's the first entry again, not a later edit.
   const laterEdit = latest.by !== first.by || formatDateTime(latest.at) !== formatDateTime(first.at);
 

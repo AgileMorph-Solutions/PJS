@@ -20,16 +20,24 @@ export function useLoaded<T>(fetcher: () => Promise<T[]>, deps: unknown[], { ena
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Only the newest request may write: an older one answering late (the previous record's, or a reload overtaken by
+  // the next save) would otherwise put stale rows on screen — another truck's change log under this one's heading.
+  const latest = useRef(0);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const refetch = useCallback(async () => {
+    const call = ++latest.current;
     if (!enabled) { setRows([]); setLoading(false); return; }
     try {
-      setRows(await fetcher());
+      const next = await fetcher();
+      if (call !== latest.current) return;
+      setRows(next);
       setError(null);
     } catch (e) {
+      if (call !== latest.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (call === latest.current) setLoading(false);
     }
   }, [...deps, enabled]);
 

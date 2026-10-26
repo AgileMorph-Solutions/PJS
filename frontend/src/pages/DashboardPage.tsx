@@ -10,7 +10,7 @@ import { JuteBalanceTrendChart, parseLedgerDate } from "../components/dashboard/
 import { useDeliveryPlans, useTracking } from "../state/TrackingContext";
 import { useActiveSite } from "../state/SiteContext";
 import { useHasRole } from "../state/AuthContext";
-import { siteSlugForSiteName } from "../config/sites";
+import { SITES, siteSlugForSiteName } from "../config/sites";
 import { computeDashboardCounts, deriveStatus } from "../domain/receiptStatus";
 import { lastBalance } from "../domain/jute";
 import type { LedgerRow } from "../repository/juteRepo";
@@ -96,13 +96,16 @@ export function DashboardPage() {
 
   // Late as of today, so the date range above doesn't apply. The server scopes the list to the viewer's own
   // warehouse; an admin sees both sites, so the tile opens whichever site actually has overdue plans,
-  // preferring the one they were last looking at.
+  // preferring the one they were last looking at — and counts only that site's, so the number matches the list
+  // it opens. When both sites have late plans the tile names the one it counts.
   const canSeePlans = useHasRole("admin", "warehouse_incharge");
   const activeSite = useActiveSite();
   const { plans, loading: plansLoading } = useDeliveryPlans();
   const overduePlans = useMemo(() => plans.filter((p) => p.overdue), [plans]);
   const overdueSites = new Set(overduePlans.map((p) => siteSlugForSiteName(p.destinationWarehouse)));
   const overdueSite = overdueSites.has(activeSite.slug) || overdueSites.size === 0 ? activeSite.slug : [...overdueSites].find(Boolean) ?? activeSite.slug;
+  const overdueAtSite = overduePlans.filter((p) => siteSlugForSiteName(p.destinationWarehouse) === overdueSite).length;
+  const overdueLabel = overdueSites.size > 1 ? `Overdue plans · ${SITES[overdueSite].sublabel}` : "Overdue plans";
 
   const recent = [...filteredReceipts].sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1)).slice(0, 8);
 
@@ -125,8 +128,8 @@ export function DashboardPage() {
         <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to="/procurement/receipts?status=rejected" tone="gap" />
         {canSeePlans && (
           <KpiTile
-            icon={icon("event_busy")} label="Overdue plans" value={plansLoading ? "…" : overduePlans.length}
-            tone={overduePlans.length > 0 ? "gap" : "default"} to={`/${overdueSite}/delivery-plans?overdue`}
+            icon={icon("event_busy")} label={overdueLabel} value={plansLoading ? "…" : overdueAtSite}
+            tone={overdueAtSite > 0 ? "gap" : "default"} to={`/${overdueSite}/delivery-plans?overdue`}
           />
         )}
       </div>

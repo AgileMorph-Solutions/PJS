@@ -252,7 +252,9 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     const rows = res.json() as FieldChangeRecord[];
     expect(rows.some((r) => r.label === "FICHE")).toBe(true);
     expect(rows.filter((r) => r.stageId === "n-grn" && (r.label === "PRICE" || r.label === "AMOUNT"))).toEqual([]);
-    expect(res.body).not.toContain("470");
+    // The price must not surface under any other label either. Compared value by value, not by searching the body:
+    // row ids and millisecond timestamps can contain "470" by chance.
+    expect(rows.filter((r) => r.oldValue === "470" || r.newValue === "470")).toEqual([]);
   });
 
   it("field history is closed to the narrow roles and to another warehouse", async () => {
