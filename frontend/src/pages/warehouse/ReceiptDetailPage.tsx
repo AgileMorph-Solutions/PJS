@@ -23,8 +23,6 @@ import { UploadIssuesCard } from "../../components/receipt/UploadIssuesCard";
 import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
 import { buildJourney } from "../../components/receipt/lotJourney.ts";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { usePagination } from "../../components/ui/usePagination";
-import { Pagination } from "../../components/ui/Pagination";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
 import { api } from "../../repository/api";
@@ -34,7 +32,7 @@ import { StageAuthor } from "../../components/receipt/StageAuthor";
 import { PricePanel } from "../../components/receipt/PricePanel";
 import { originFieldProps } from "../../components/receipt/originPicker";
 import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
-import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -64,7 +62,7 @@ export function ReceiptDetailPage() {
   const { info: planInfo, refetch: refetchPlanInfo } = useOneReceiptPlanInfo(id, canEdit);
   const { plans } = useDeliveryPlans(site.warehouseName);
   const [copied, setCopied] = useState(false);
-  const [tab, setTab] = useState<"overview" | "stages" | "activity" | "history">("overview");
+  const [tab, setTab] = useState<"overview" | "stages" | "history">("overview");
   const [lockError, setLockError] = useState<string | null>(null);
   const [lockBusy, setLockBusy] = useState(false);
 
@@ -72,7 +70,6 @@ export function ReceiptDetailPage() {
     () => (receipt?.binNo ? receipts.filter((r) => r.binNo === receipt.binNo && r.id !== receipt.id) : []),
     [receipts, receipt?.binNo, receipt?.id]
   );
-  const timelinePage = usePagination(receipt ? [...receipt.timeline].reverse() : []);
   // What the system calculates from the readings as they stand — shown at once, so a net weight
   // follows the tare weight as it is typed rather than appearing after the server has saved it.
   const derived = useMemo(() => (receipt ? computeDerivedFields(receipt.stageData) : {}), [receipt]);
@@ -242,10 +239,8 @@ export function ReceiptDetailPage() {
         {([
           ["overview", "Overview", "dashboard"],
           ["stages", "Stages & entry", "fact_check"],
-          // Every role sees the status timeline; the field change log is Warehouse Incharge / admin only
-          // (backend auth/policy.ts keeps it from the narrow roles).
-          ["activity", `Activity (${receipt.timeline.length})`, "history"],
-          ...(canEdit ? [["history", "Field changes", "edit_note"] as const] : []),
+          // The change log is read by Warehouse Incharge / admin only (backend auth/policy.ts keeps it from the narrow roles).
+          ...(canEdit ? [["history", "History", "history"] as const] : []),
         ] as const).map(([id, label, icon]) => (
           <button
             key={id}
@@ -463,24 +458,6 @@ export function ReceiptDetailPage() {
               </div>
             </CollapsibleCard>
           )}
-        </div>
-      )}
-
-      {tab === "activity" && (
-        <div className="max-w-2xl bg-white border border-warmstone-200 rounded-2xl shadow-xs p-5">
-          {receipt.timeline.length === 0 && <p className="text-[12.5px] text-warmstone-400">Nothing recorded yet.</p>}
-          <ul className="space-y-3">
-            {timelinePage.pageRows.map((e, i) => (
-              <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
-                <ReceiptStatusPill status={e.status} />
-                <span className="text-[11px] text-warmstone-400">
-                  {formatDateTime(e.at)}{e.actor ? ` · ${e.actor}` : ""}
-                </span>
-                {e.note && <p className="text-[12px] text-warmstone-500">{e.note}</p>}
-              </li>
-            ))}
-          </ul>
-          <Pagination state={timelinePage} />
         </div>
       )}
 
