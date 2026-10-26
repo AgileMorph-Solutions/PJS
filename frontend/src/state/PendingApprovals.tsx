@@ -1,37 +1,45 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
-import { api } from "../repository/api";
 import { useHasRole } from "./AuthContext";
+import { useSubmissions, useSupplierRequests, type Loaded } from "./userManagement";
+import type { SubmissionView, SupplierRequestView } from "../types/user";
 
 interface PendingApprovals {
-  /** Form submissions + supplier requests waiting on this reviewer; null until the first read (or for a non-reviewer). */
+  /** Form submissions waiting on this reviewer — the same list ApprovalsPage renders. */
+  submissions: Loaded<SubmissionView>;
+  /** Supplier requests waiting on this reviewer — the same list ApprovalsPage renders. */
+  supplierRequests: Loaded<SupplierRequestView>;
+  /** Derived from the two lists above; null until the first read (or for a non-reviewer). */
   count: number | null;
   /** Read again now — for right after an approve/reject, so the sidebar doesn't wait for the next poll. */
   refresh: () => void;
 }
 
-const Ctx = createContext<PendingApprovals>({ count: null, refresh: () => {} });
+const empty = { rows: [], loading: false, error: null, refetch: async () => {} };
+const Ctx = createContext<PendingApprovals>({ submissions: empty, supplierRequests: empty, count: null, refresh: () => {} });
 
 const POLL_MS = 60_000;
 
 /**
- * The sidebar's "waiting for you" number. Same two queues ApprovalsPage shows, read from the same endpoints, which
- * already scope to the reviewer's own warehouse (admin: all). There is no push channel, so it re-reads on a slow poll,
- * when the tab comes back into focus, and on each navigation; a failed read keeps the last number rather than showing 0.
+ * The reviewer's two queues, held once so the sidebar badge and ApprovalsPage can never disagree: the count is
+ * derived from the very rows the page lists. The endpoints already scope to the reviewer's own warehouse (admin:
+ * all). There is no push channel, so it re-reads on a slow poll, when the tab comes back into focus, and on each
+ * navigation; a failed read keeps the last rows rather than emptying them.
  */
 export function PendingApprovalsProvider({ children }: { children: ReactNode }) {
   const isReviewer = useHasRole("admin", "warehouse_incharge");
   const { pathname } = useLocation();
-  const [count, setCount] = useState<number | null>(null);
+  // Re-read on each navigation, so the count is fresh whichever page the reviewer lands on.
+  const load = { enabled: isReviewer, reloadOn: pathname };
+  const submissions = useSubmissions({ status: "submitted" }, load);
+  const supplierRequests = useSupplierRequests("pending", load);
+  const { refetch: refetchSubs } = submissions;
+  const { refetch: refetchReqs } = supplierRequests;
 
   const refresh = useCallback(() => {
     if (!isReviewer) return;
-    void Promise.all([api.listSubmissions({ status: "submitted" }), api.listSupplierRequests("pending")])
-      .then(([subs, reqs]) => setCount(subs.length + reqs.length))
-      .catch(() => {});
-  }, [isReviewer]);
-
-  useEffect(refresh, [refresh, pathname]);
+    void Promise.all([refetchSubs(), refetchReqs()]);
+  }, [isReviewer, refetchSubs, refetchReqs]);
 
   useEffect(() => {
     if (!isReviewer) return;
@@ -41,7 +49,10 @@ export function PendingApprovalsProvider({ children }: { children: ReactNode }) 
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [isReviewer, refresh]);
 
-  return <Ctx.Provider value={{ count: isReviewer ? count : null, refresh }}>{children}</Ctx.Provider>;
+  const settled = !submissions.loading && !supplierRequests.loading;
+  const count = isReviewer && settled ? submissions.rows.length + supplierRequests.rows.length : null;
+
+  return <Ctx.Provider value={{ submissions, supplierRequests, count, refresh }}>{children}</Ctx.Provider>;
 }
 
 export const usePendingApprovals = () => useContext(Ctx);

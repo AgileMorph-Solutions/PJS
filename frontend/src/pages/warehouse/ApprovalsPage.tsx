@@ -5,7 +5,6 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { Pill } from "../../components/ui/Pill";
 import { SubmissionReview } from "../../components/SubmissionReview";
 import { useTracking } from "../../state/TrackingContext";
-import { useSubmissions, useSupplierRequests } from "../../state/userManagement";
 import { usePendingApprovals } from "../../state/PendingApprovals";
 import { api } from "../../repository/api";
 import { siteSlugForSiteName } from "../../config/sites";
@@ -13,11 +12,11 @@ import type { SupplierRequestView } from "../../types/user";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /** Warehouse Incharge's queue: Branch Manager / QFS submissions and supplier requests waiting on a
- * decision. Approving a submission applies its values to the receipt (atomically, server-side). */
+ * decision. Approving a submission applies its values to the receipt (atomically, server-side). The
+ * rows come from PendingApprovalsProvider — the same copy the sidebar badge counts. */
 export function ApprovalsPage() {
   const { receipts } = useTracking();
-  const pending = useSubmissions({ status: "submitted" });
-  const requests = useSupplierRequests("pending");
+  const { submissions: pending, supplierRequests: requests } = usePendingApprovals();
 
   return (
     <div className="space-y-6">
@@ -34,7 +33,7 @@ export function ApprovalsPage() {
               <Link to={`/${slug}/receipts/${s.receiptId}`} className="text-[13px] font-bold text-brand-700 hover:text-brand-800">
                 {receipt?.lotNo ? `Lot ${receipt.lotNo} · ` : ""}{s.receiptId}
               </Link>
-              <SubmissionReview submission={s} receipt={receipt} onDone={() => void pending.refetch()} />
+              <SubmissionReview submission={s} receipt={receipt} />
             </div>
           );
         })}
@@ -43,13 +42,13 @@ export function ApprovalsPage() {
       <section className="space-y-3">
         <h2 className="text-[11px] font-bold text-warmstone-400 uppercase tracking-wider px-1">Supplier requests · {requests.rows.length}</h2>
         {requests.rows.length === 0 && <EmptyState title={requests.loading ? "Loading…" : "No supplier requests waiting"} />}
-        {requests.rows.map((r) => <SupplierRequestRow key={r.id} request={r} onDone={() => void requests.refetch()} />)}
+        {requests.rows.map((r) => <SupplierRequestRow key={r.id} request={r} />)}
       </section>
     </div>
   );
 }
 
-function SupplierRequestRow({ request, onDone }: { request: SupplierRequestView; onDone: () => void }) {
+function SupplierRequestRow({ request }: { request: SupplierRequestView }) {
   const { refresh } = useTracking();
   const { refresh: refreshPending } = usePendingApprovals();
   const [code, setCode] = useState(request.code ?? "");
@@ -59,7 +58,7 @@ function SupplierRequestRow({ request, onDone }: { request: SupplierRequestView;
 
   async function act(fn: () => Promise<unknown>) {
     setError(null);
-    try { await fn(); await refresh(); refreshPending(); onDone(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { await fn(); await refresh(); refreshPending(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   }
 
   return (

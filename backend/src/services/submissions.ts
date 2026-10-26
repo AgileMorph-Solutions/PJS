@@ -130,7 +130,7 @@ export async function approveSubmission(reviewer: User, id: string) {
 
   await prisma.$transaction(async (tx) => {
     for (const [stageId, fields] of Object.entries(values)) {
-      await applyStageFields(tx, sub.receiptId, stageId, fields, { actor: { id: reviewer.id, via: "approval" } });
+      await applyStageFields(tx, sub.receiptId, stageId, fields, { actor: { id: reviewer.id, via: "approval", submissionId: sub.id } });
     }
 
     const fresh = await loadReceiptRow(sub.receiptId, tx);

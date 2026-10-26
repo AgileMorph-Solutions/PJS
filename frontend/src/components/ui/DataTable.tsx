@@ -31,6 +31,9 @@ interface Props<T> {
   onRowClick?: (row: T) => void;
   emptyTitle?: string;
   emptyHint?: string;
+  /** Column filters already set when the table mounts, keyed by column label — for a link that opens the page
+   * pre-filtered. Read once: change the table's `key` to apply a different set. */
+  initialFilters?: Record<string, ActiveFilter>;
 }
 
 /** A click on something that is already interactive inside the row (a link, a button, an input) does its
@@ -38,9 +41,9 @@ interface Props<T> {
 const fromControl = (e: MouseEvent | KeyboardEvent) =>
   e.target instanceof Element && e.target.closest("a,button,input,select,textarea,label") !== null && e.target !== e.currentTarget;
 
-export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyTitle, emptyHint }: Props<T>) {
+export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyTitle, emptyHint, initialFilters }: Props<T>) {
   const navigate = useNavigate();
-  const [active, setActive] = useState<Record<string, ActiveFilter>>({});
+  const [active, setActive] = useState<Record<string, ActiveFilter>>(initialFilters ?? {});
   // How each filterable column filters (a checklist, text, a range), decided once per set of rows rather than on every keystroke.
   const kinds = useMemo(() => {
     const out: Record<string, FilterKind> = {};

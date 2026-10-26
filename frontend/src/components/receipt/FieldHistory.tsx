@@ -6,8 +6,8 @@ import { stages, rejectStage } from "../../data/stages";
 import { DataTable, type Column } from "../ui/DataTable";
 import { FilterBar } from "../ui/FilterBar";
 import { Pill } from "../ui/Pill";
+import { Avatar } from "../ui/Avatar";
 import { useTableSearch } from "../ui/useTableSearch";
-import { useFieldChanges } from "../../state/TrackingContext";
 
 const STAGES = new Map([...stages, rejectStage].map((s) => [s.id, s]));
 const fieldOf = (c: FieldChangeRecord): StageField | undefined => STAGES.get(c.stageId)?.fields.find((f) => f.n === c.label);
@@ -25,12 +25,21 @@ function Value({ value, format, strike }: { value: string | null; format?: Stage
   return <span className={strike ? "text-warmstone-500 line-through decoration-warmstone-300" : "font-semibold text-warmstone-900"}>{shown}</span>;
 }
 
+interface Props {
+  /** The truck's whole change log (useFieldChanges), read once by the page and shared with every stage card. */
+  changes: FieldChangeRecord[];
+  loading: boolean;
+  error: string | null;
+  /** Only this stage's edits, without the search bar — the per-stage log on the Stages tab. */
+  stageId?: string;
+}
+
 /**
  * Every saved edit on this truck: who, when, which field, old → new. Read straight from the server's change log; fields the
  * viewer's role may not see (price and amount for the Warehouse Incharge) are already removed from the response there.
  */
-export function FieldHistory({ receiptId }: { receiptId: string }) {
-  const { changes, loading, error } = useFieldChanges(receiptId);
+export function FieldHistory({ changes: all, loading, error, stageId }: Props) {
+  const changes = useMemo(() => (stageId ? all.filter((c) => c.stageId === stageId) : all), [all, stageId]);
   const search = useTableSearch(changes, (c) => [c.label, STAGES.get(c.stageId)?.title, c.by, c.oldValue, c.newValue]);
 
   const columns: Column<FieldChangeRecord>[] = useMemo(() => [
@@ -42,8 +51,11 @@ export function FieldHistory({ receiptId }: { receiptId: string }) {
       label: "Who", nowrap: true, filter: { value: (c) => c.by, kind: "select" },
       render: (c) => (
         <span className="inline-flex items-center gap-2">
-          <span className="w-6 h-6 rounded-full bg-brand-50 text-brand-700 text-[11px] font-bold grid place-items-center uppercase">{c.by.slice(0, 1)}</span>
-          {c.by}
+          <Avatar name={c.by} />
+          <span>
+            {c.by}
+            {c.approvedBy && <span className="block text-[11.5px] text-warmstone-500">approved by {c.approvedBy}</span>}
+          </span>
         </span>
       ),
     },
@@ -79,9 +91,11 @@ export function FieldHistory({ receiptId }: { receiptId: string }) {
 
   return (
     <div className="space-y-3">
-      <FilterBar>
-        <input placeholder="Search field, step, person or value…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
-      </FilterBar>
+      {!stageId && (
+        <FilterBar>
+          <input placeholder="Search field, step, person or value…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
+        </FilterBar>
+      )}
       {loading ? (
         <div className="space-y-2" aria-busy="true">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-12 rounded-xl bg-warmstone-100 animate-pulse" />)}
@@ -92,7 +106,7 @@ export function FieldHistory({ receiptId }: { receiptId: string }) {
           rows={search.filtered}
           keyFn={(c) => String(c.id)}
           emptyTitle={changes.length === 0 ? "No edits recorded yet" : "No edits match"}
-          emptyHint={changes.length === 0 ? "Each saved change to a field on this truck shows here, with who made it and when." : "Try a different search or clear the column filters."}
+          emptyHint={changes.length === 0 ? `Each saved change to a field on this ${stageId ? "step" : "truck"} shows here, with who made it and when.` : "Try a different search or clear the column filters."}
         />
       )}
     </div>

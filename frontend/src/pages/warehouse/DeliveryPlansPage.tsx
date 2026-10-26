@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { PLAN_STATUS_LABELS, planDeadline, type PlanStatus } from "@anagroci/contract/domain/deliveryPlan";
+import { PLAN_STATUS_LABELS, type PlanStatus } from "@anagroci/contract/domain/deliveryPlan";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -15,7 +15,6 @@ import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
 import { DeliveryPlanForm, emptyPlanForm } from "../../components/receipt/DeliveryPlanForm";
-import { Tabs } from "../../components/ui/Tabs";
 import type { DeliveryPlan } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
@@ -27,6 +26,8 @@ const inputClass =
 
 const today = todayIso;
 const kg = (n: number | null) => (n === null ? "-" : n.toLocaleString());
+/** The Status column's filter value — also what `?overdue` pre-ticks, so the two can't drift apart. */
+const statusFilterValue = (p: DeliveryPlan) => PLAN_STATUS_LABELS[p.status] + (p.overdue ? " (overdue)" : "");
 
 /**
  * What is expected to arrive, recorded before the truck comes — a pre-alert, so the warehouse can
@@ -39,10 +40,16 @@ export function DeliveryPlansPage() {
   const switchSite = useSwitchSite();
   const canEdit = useCanEditDirectly();
   const { plans, loading, refetch } = useDeliveryPlans(site.warehouseName);
-  // The tab lives in the URL (?tab=overdue) so the dashboard's "Overdue plans" tile can open it directly.
+  // `?overdue` (the dashboard's "Overdue plans" tile, and the Overdue tile here) opens the table with the Status
+  // filter ticked on every overdue value actually present — the checklist only offers values in the rows.
   const [params] = useSearchParams();
-  const tab = params.get("tab") === "overdue" ? "overdue" : "all";
-  const overdueCount = useMemo(() => plans.filter((p) => p.overdue).length, [plans]);
+  const overdueOnly = params.has("overdue");
+  const overduePlans = useMemo(() => plans.filter((p) => p.overdue), [plans]);
+  const overdueCount = overduePlans.length;
+  const overdueFilter = useMemo(
+    () => (overdueOnly && overduePlans.length ? { Status: { selected: [...new Set(overduePlans.map(statusFilterValue))] } } : undefined),
+    [overdueOnly, overduePlans]
+  );
   // Cancelled plans are left out: their trucks are exceptions, not progress against an expectation.
   const totals = useMemo(() => {
     const live = plans.filter((p) => p.status !== "cancelled");
@@ -53,11 +60,6 @@ export function DeliveryPlansPage() {
     };
   }, [plans]);
   const search = useTableSearch(plans, (p) => [p.id, p.supplierName, p.supplierCode, p.expectedOrigin, p.fundingReference, p.truckNos.join(" "), p.remarks]);
-  // Overdue tab: the same table, narrowed to late plans, longest overdue first.
-  const rows = useMemo(
-    () => (tab === "overdue" ? search.filtered.filter((p) => p.overdue).sort((a, b) => (planDeadline(a) < planDeadline(b) ? -1 : 1)) : search.filtered),
-    [tab, search.filtered]
-  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
@@ -131,7 +133,7 @@ export function DeliveryPlansPage() {
       },
     },
     {
-      label: "Status", filter: { value: (p) => PLAN_STATUS_LABELS[p.status] + (p.overdue ? " (overdue)" : ""), kind: "select" }, nowrap: true,
+      label: "Status", filter: { value: statusFilterValue, kind: "select" }, nowrap: true,
       render: (p) => (
         <span className="inline-flex flex-col items-start gap-1">
           <Pill tone={STATUS_TONE[p.status]} label={PLAN_STATUS_LABELS[p.status]} />
@@ -171,7 +173,7 @@ export function DeliveryPlansPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiTile label="Active plans" value={totals.plans} />
-        <KpiTile label="Overdue" value={loading ? "…" : overdueCount} tone={overdueCount > 0 ? "gap" : "default"} to="?tab=overdue" />
+        <KpiTile label="Overdue" value={loading ? "…" : overdueCount} tone={overdueCount > 0 ? "gap" : "default"} to="?overdue" />
         <KpiTile label="Trucks arrived" value={totals.arrived} />
         <KpiTile label="Accepted" value={totals.accepted} />
         <KpiTile label="Rejected" value={totals.rejected} tone="gap" />
@@ -193,24 +195,17 @@ export function DeliveryPlansPage() {
       <FilterBar>
         <input placeholder="Search plan, supplier, origin, truck, funding ref…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
       </FilterBar>
-      <Tabs
-        items={[
-          { to: ".", label: "All plans", icon: "list", active: tab === "all", badge: plans.length },
-          { to: "?tab=overdue", label: "Overdue", icon: "event_busy", active: tab === "overdue", badge: overdueCount, badgeTone: overdueCount > 0 ? "gap" : "default" },
-        ]}
-      />
       <DataTable
-        key={tab}
+        // Remounts once the plans have loaded (the overdue values to tick aren't known before) and when `?overdue` is
+        // followed from this page; a later refetch doesn't, so filters the person changed stay as they are.
+        key={overdueOnly ? `overdue-${loading ? "loading" : "ready"}` : "all"}
+        initialFilters={overdueFilter}
         columns={columns}
-        rows={rows}
+        rows={search.filtered}
         keyFn={(p) => p.id}
         rowHref={(p) => `/${site.slug}/delivery-plans/${p.id}`}
-        emptyTitle={tab === "overdue" ? "No plan is running late" : "No delivery plans yet"}
-        emptyHint={
-          tab === "overdue"
-            ? "A plan shows here once the end of its delivery window has passed and it is still not delivered or cancelled."
-            : "Add a plan for each delivery you expect, so what arrives can be compared with what was planned."
-        }
+        emptyTitle="No delivery plans yet"
+        emptyHint="Add a plan for each delivery you expect, so what arrives can be compared with what was planned."
       />
     </div>
   );

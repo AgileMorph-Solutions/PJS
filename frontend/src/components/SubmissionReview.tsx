@@ -11,7 +11,7 @@ import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
  * the receipt page (its own submissions) and the Approvals queue (all pending ones). */
 export function SubmissionReview({
   submission, receipt, onDone,
-}: { submission: SubmissionView; receipt?: ReceiptRecord; onDone: () => void }) {
+}: { submission: SubmissionView; receipt?: ReceiptRecord; onDone?: () => void }) {
   const { refresh } = useTracking();
   const { refresh: refreshPending } = usePendingApprovals();
   const [rejecting, setRejecting] = useState(false);
@@ -27,7 +27,7 @@ export function SubmissionReview({
       await fn();
       await refresh();
       refreshPending();
-      onDone();
+      onDone?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

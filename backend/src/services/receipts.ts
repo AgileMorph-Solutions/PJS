@@ -29,7 +29,11 @@ export interface WriteOpts {
   bypassValidation?: boolean;
   /** Who is writing, and how — when set, every changed field is recorded in StageFieldChange.
    * The seeder and importers pass nothing: their data predates users and gets no invented actor. */
-  actor?: { id: string; via: "direct" | "approval" | "import"; role?: Role };
+  actor?: {
+    id: string; via: "direct" | "approval" | "import"; role?: Role;
+    /** For "approval": the submission being applied, so the change log can name who typed the values, not just who approved them. */
+    submissionId?: string;
+  };
 }
 
 export async function loadReceiptRow(id: string, tx: Tx | typeof prisma = prisma) {
@@ -328,7 +332,7 @@ async function writeStageFields(
       const old = before?.[col] ?? null;
       return String(old ?? "") === value ? [] : [{
         receiptId: id, stageId, label, oldValue: old === null ? null : String(old), newValue: value,
-        userId: opts.actor!.id, via: opts.actor!.via,
+        userId: opts.actor!.id, via: opts.actor!.via, submissionId: opts.actor!.submissionId ?? null,
       }];
     });
     if (changes.length) await tx.stageFieldChange.createMany({ data: changes });

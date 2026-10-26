@@ -126,7 +126,7 @@ export function DashboardPage() {
         {canSeePlans && (
           <KpiTile
             icon={icon("event_busy")} label="Overdue plans" value={plansLoading ? "…" : overduePlans.length}
-            tone={overduePlans.length > 0 ? "gap" : "default"} to={`/${overdueSite}/delivery-plans?tab=overdue`}
+            tone={overduePlans.length > 0 ? "gap" : "default"} to={`/${overdueSite}/delivery-plans?overdue`}
           />
         )}
       </div>

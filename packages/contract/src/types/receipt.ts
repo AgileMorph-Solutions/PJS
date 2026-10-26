@@ -222,7 +222,11 @@ export interface FieldChangeRecord {
   oldValue: string | null;
   newValue: string | null;
   at: string;
+  /** Who entered the value: the editor, the uploader, or — for an approved form — the person who submitted it. */
   by: string;
+  /** For an approved form, who approved it. Null otherwise, and on approval rows logged before the submitter was linked
+   * (those name the approver in `by`, the only person on record). */
+  approvedBy: string | null;
   /** direct edit, applied from an approved submission, or written by a workbook upload */
   via: "direct" | "approval" | "import";
 }

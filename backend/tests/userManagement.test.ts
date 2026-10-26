@@ -208,7 +208,7 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
 
     const changes = await prisma.stageFieldChange.findMany({ where: { receiptId: receiptA } });
     expect(changes.length).toBeGreaterThanOrEqual(4);
-    expect(changes.every((c) => c.via === "approval" && c.userId === ids.wi)).toBe(true);
+    expect(changes.every((c) => c.via === "approval" && c.userId === ids.wi && c.submissionId === submissionId)).toBe(true);
     // The gate's vehicle number changed GATE-1 -> TRUCK-42, and the audit says so.
     expect(changes.find((c) => c.label === "VEHICLE NO.")).toMatchObject({ oldValue: "GATE-1", newValue: "TRUCK-42" });
 
@@ -240,7 +240,9 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect(res.statusCode).toBe(200);
     const rows = res.json() as FieldChangeRecord[];
     expect(rows.find((r) => r.label === "PRICE")).toMatchObject({ by: "bm", oldValue: null, newValue: "470", via: "direct" });
-    expect(rows.find((r) => r.label === "FICHE" && r.newValue === "F-101")).toMatchObject({ by: "wi", oldValue: "F-100" });
+    expect(rows.find((r) => r.label === "FICHE" && r.newValue === "F-101")).toMatchObject({ by: "wi", oldValue: "F-100", approvedBy: null });
+    // An approved form's values are the submitter's, not the approver's: the approver is named separately.
+    expect(rows.find((r) => r.label === "VEHICLE NO.")).toMatchObject({ by: "bm", approvedBy: "wi", via: "approval", newValue: "TRUCK-42" });
     expect(rows.map((r) => r.at)).toEqual([...rows.map((r) => r.at)].sort().reverse());
   });
 

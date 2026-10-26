@@ -4,6 +4,7 @@ import { NAV, type NavLeaf } from "../config/nav";
 import { useActiveSite } from "../state/SiteContext";
 import { useMe } from "../state/AuthContext";
 import { usePendingApprovals } from "../state/PendingApprovals";
+import { Pill } from "./ui/Pill";
 import type { Role } from "../data/roles";
 import type { SiteSlug } from "../config/sites";
 
@@ -40,19 +41,8 @@ function sectionForPath(nav: ReturnType<typeof navFor>, pathname: string, active
   return nav.find((section) => section.items.some((item) => isItemActive(pathname, item, activeSite)))?.label;
 }
 
-/** "Something is waiting": a count in the brand colour, capped so a long queue doesn't widen the sidebar. */
-function CountBadge({ n, inverted }: { n: number; inverted?: boolean }) {
-  return (
-    <span
-      aria-label={`${n} waiting`}
-      className={`min-w-5 h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] font-bold tabular-nums ${
-        inverted ? "bg-white text-warmstone-900" : "bg-brand-700 text-white"
-      }`}
-    >
-      {n > 99 ? "99+" : n}
-    </span>
-  );
-}
+/** Capped so a long queue doesn't widen the sidebar. */
+const countLabel = (n: number) => (n > 99 ? "99+" : String(n));
 
 export function AppNav({ open, onClose }: Props) {
   const location = useLocation();
@@ -149,7 +139,7 @@ export function AppNav({ open, onClose }: Props) {
                   {section.label}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  {hiddenCount > 0 && <CountBadge n={hiddenCount} />}
+                  {hiddenCount > 0 && <Pill tone="term" label={countLabel(hiddenCount)} />}
                   <span
                     className={`material-symbols-outlined text-[16px] text-warmstone-400 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
                   >
@@ -193,7 +183,7 @@ export function AppNav({ open, onClose }: Props) {
                         {item.badge}
                       </span>
                     )}
-                    {countOf(item) > 0 && <CountBadge n={countOf(item)} inverted={isActive} />}
+                    {countOf(item) > 0 && <Pill tone="term" label={countLabel(countOf(item))} />}
                   </>
                 )}
               </NavLink>
