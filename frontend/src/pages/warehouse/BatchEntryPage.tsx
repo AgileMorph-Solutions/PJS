@@ -8,6 +8,8 @@ import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { BATCH_TRUCK_COLUMNS, BATCH_REQUIRED_LABEL, BATCH_MAX_ROWS, type BatchTruckRow } from "../../data/batchEntry";
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
+import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
+import { UNLISTED_ORIGIN } from "../../components/receipt/originPicker";
 
 /** A grid row's values, keyed by the stage field label (so it maps straight onto the API payload). */
 type Values = Record<string, string>;
@@ -237,7 +239,10 @@ export function BatchEntryPage() {
                           type={c.type ?? "text"} value={r.v[c.key] ?? ""}
                           list={c.key === "CREDIT/CASH" ? "batch-credit-cash" : c.key === "ORIGIN" ? "batch-origins" : undefined}
                           onChange={(e) => setValue(r.key, c.key, e.target.value)}
-                          onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
+                          onKeyDown={(e) => onEnter(e, i, c.key)}
+                          // A town the master doesn't have is marked, not refused (see originPicker.ts).
+                          title={c.key === "ORIGIN" && isUnlistedOrigin(r.v[c.key], masters.origins) ? UNLISTED_ORIGIN : undefined}
+                          className={c.key === "ORIGIN" && isUnlistedOrigin(r.v[c.key], masters.origins) ? `${cellCls} border-ambernut-500! bg-ambernut-50!` : cellCls}
                         />
                         )
                       )}

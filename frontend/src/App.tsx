@@ -49,6 +49,7 @@ import { SupplierDetailPage } from "./pages/masters/SupplierDetailPage";
 import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
 import { BinDetailPage } from "./pages/masters/BinDetailPage";
+import { OriginsPage } from "./pages/masters/OriginsPage";
 
 /** Everything a Branch Manager / QFS Officer can't reach; the API refuses it for them too. */
 const REVIEWERS: Role[] = ["admin", "warehouse_incharge"];
@@ -172,6 +173,7 @@ function AppRoutes() {
               <Route path="/masters/warehouses" element={<WarehousesPage />} />
               <Route path="/masters/bins" element={<BinsPage />} />
               <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />
+              <Route path="/masters/origins" element={<OriginsPage />} />
               <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/supplier-assignment" element={<SupplierAssignmentPage />} />
             </Route>

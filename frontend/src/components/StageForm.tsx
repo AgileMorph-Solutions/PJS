@@ -22,6 +22,8 @@ interface Props {
   suggestions?: Record<string, { value: string; from: string }>;
   /** Known values per field label to choose from. */
   options?: Record<string, string[]>;
+  /** A caution per field label, shown under the field while it is editable. */
+  warnings?: Record<string, string>;
 }
 
 /**
@@ -44,7 +46,7 @@ function pairSampleFinal<F extends { n: string }>(fields: F[]) {
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only, hidden, suggestions, options }: Props) {
+export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only, hidden, suggestions, options, warnings }: Props) {
   const shown = stage.fields.filter((f) => (!only || only.includes(f.n)) && !hidden?.includes(f.n));
   const { single, pairs } = pairSampleFinal(shown);
   const render = (f: Stage["fields"][number]) => {
@@ -76,6 +78,7 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
         value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
         suggestion={suggestions?.[f.n]}
         options={options?.[f.n]}
+        warning={warnings?.[f.n]}
         onChange={(v) => onFieldChange(f.n, v)}
         onBlur={onFieldBlur}
         idPrefix={stage.id}

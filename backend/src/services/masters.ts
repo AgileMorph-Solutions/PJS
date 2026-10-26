@@ -8,6 +8,7 @@ import { WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/war
 import { WAREHOUSE_TYPES, type WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { isValidWarehouseCode } from "@anagroci/contract/domain/ids";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { normalizeOriginName, findSimilarOrigin } from "@anagroci/contract/domain/origin";
 import { ValidationError } from "../domain/validation.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
@@ -38,6 +39,7 @@ export async function listMasters() {
     // Which store each Bin is in (null = imported without one), so a truck can be offered the Bins of its own store first.
     binInfo: bins.map((b) => ({ code: b.code, store: b.warehouseName })),
     origins: origins.map((o) => o.name),
+    originInfo: origins.map((o) => ({ name: o.name, source: o.source, createdAt: o.createdAt?.toISOString() ?? null })),
   };
 }
 
@@ -146,4 +148,20 @@ export async function createBin(input: { code?: string; warehouseName?: string }
   }
   if (await prisma.bin.findUnique({ where: { code }, select: { code: true } })) throw new ValidationError(`Bin ${code} already exists.`);
   return prisma.bin.create({ data: { code, warehouseName: store, source: "entered", createdAt: new Date() } });
+}
+
+/**
+ * A new Origin from Masters › Origins. Stored in capitals like the rest of the master, and refused — never quietly merged —
+ * when the town is already there, either exactly or under another spelling (M BAHIAKRO for M'BAHIAKRO, SAKKASSOU for SAKASSOU):
+ * a second spelling would make a truck's origin look different from its plan's (deliveryPlan.ts's origin_mismatch).
+ */
+export async function createOrigin(input: { name?: string }) {
+  const name = normalizeOriginName(input.name);
+  if (!name) throw new ValidationError("An origin needs a name.");
+  if (!/^[\p{L}0-9][\p{L}0-9 '.-]*$/u.test(name)) throw new ValidationError(`"${name}" can only use letters, digits, spaces and ' . -`);
+  const existing = (await prisma.origin.findMany({ select: { name: true } })).map((o) => o.name);
+  if (existing.includes(name)) throw new ValidationError(`Origin ${name} already exists.`);
+  const similar = findSimilarOrigin(name, existing);
+  if (similar) throw new ValidationError(`${similar} is already in the master — it looks like the same town as ${name}. Use ${similar}.`);
+  return prisma.origin.create({ data: { name, source: "entered", createdAt: new Date() } });
 }

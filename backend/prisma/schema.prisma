@@ -152,9 +152,11 @@ model Bin {
 }
 
 model Origin {
-  name     String    @id
-  source   String?
-  receipts Receipt[]
+  name      String    @id
+  source    String?
+  /// When the Origin was added in the app (Masters › Origins). NULL = observed in a workbook; no date is invented for those.
+  createdAt DateTime?
+  receipts  Receipt[]
 }
 
 /// One workbook calls the Yakro factory warehouse "ANAGROCI-01". That is an inference (from the

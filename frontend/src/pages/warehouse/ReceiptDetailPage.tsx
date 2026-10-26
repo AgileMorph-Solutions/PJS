@@ -32,6 +32,7 @@ import { DryingPanel } from "../../components/receipt/DryingPanel";
 import { FieldHistory } from "../../components/receipt/FieldHistory";
 import { StageAuthor } from "../../components/receipt/StageAuthor";
 import { PricePanel } from "../../components/receipt/PricePanel";
+import { originFieldProps } from "../../components/receipt/originPicker";
 import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
@@ -382,7 +383,8 @@ export function ReceiptDetailPage() {
                         values={values}
                         derived={derived[stage.id]}
                         suggestions={suggestionsFor(stage.id, values)}
-                        options={stage.id === "n-bin" ? { "Bin Number": binOptions } : undefined}
+                        options={stage.id === "n-bin" ? { "Bin Number": binOptions } : originFieldProps(stage.id, values, masters.origins).options}
+                        warnings={originFieldProps(stage.id, values, masters.origins).warnings}
                         onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
                         onFieldBlur={() => flushStage(receipt.id, stage.id)}
                         readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_STAGES.has(stage.id)) || (stage.id === "n-bin" && binFinalised)}
