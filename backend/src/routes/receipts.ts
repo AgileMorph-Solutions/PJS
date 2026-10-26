@@ -18,6 +18,7 @@ import { createReceiptsBatch } from "../services/receiptBatch.js";
 import { getReceiptLinks } from "../services/receiptLinks.js";
 import { startDrying, type StartDryingInput } from "../services/dryingBatches.js";
 import { listUploadIssues, reviewUploadIssue } from "../services/uploadIssues.js";
+import { listFieldChanges } from "../services/fieldHistory.js";
 import { getDownstreamStatus } from "../services/receiptsDownstream.js";
 import { approveException, getReceiptPlanInfo, linkReceiptToPlan, listReceiptPlanInfo } from "../services/receiptPlanInfo.js";
 import { warningsForReceipt } from "../domain/dataQuality/index.js";
@@ -209,6 +210,13 @@ export async function receiptRoutes(app: FastifyInstance) {
       const data = await setBranch(id, stageId, branchId, reason, { actor: { id: currentUser(req).id, via: "direct" } });
       return { data, warnings: warningsForReceipt(data) };
     } catch (e) { return sendError(reply, e); }
+  });
+
+  /** Every saved field edit on this truck: who, when, old -> new. Price/amount rows are redacted per role (auth/redact.ts). */
+  app.get("/api/receipts/:id/field-changes", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!(await requireReceipt(id, reply, req))) return;
+    return listFieldChanges(id);
   });
 
   /**

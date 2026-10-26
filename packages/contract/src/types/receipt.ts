@@ -212,6 +212,27 @@ export interface UploadIssueRecord {
   reviewedBy: string | null;
 }
 
+/**
+ * One saved change to one stage field (backend StageFieldChange). `oldValue` null = the field was empty before.
+ * Changes to fields a role may not see (price and amount for the Warehouse Incharge) never reach that role:
+ * the server's response redaction drops any entry whose stageId + label is hidden.
+ */
+export interface FieldChangeRecord {
+  id: number;
+  stageId: string;
+  label: string;
+  oldValue: string | null;
+  newValue: string | null;
+  at: string;
+  /** Who entered the value: the editor, the uploader, or — for an approved form — the person who submitted it. */
+  by: string;
+  /** For an approved form, who approved it. Null otherwise, and on approval rows logged before the submitter was linked
+   * (those name the approver in `by`, the only person on record). */
+  approvedBy: string | null;
+  /** direct edit, applied from an approved submission, or written by a workbook upload */
+  via: "direct" | "approval" | "import";
+}
+
 export type TransferStatus = "requested" | "dispatched" | "received";
 
 export interface TransferLine {

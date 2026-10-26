@@ -2374,6 +2374,7 @@ model FormSubmission {
   reviewedAt    DateTime?
   rejectReason  String?
   createdAt     DateTime  @default(now())
+  fieldChanges  StageFieldChange[]
 
   @@index([receiptId, formId])
   @@index([status])
@@ -2388,11 +2389,16 @@ model StageFieldChange {
   label     String
   oldValue  String?
   newValue  String?
+  /// Whoever's action wrote the row: the editor for "direct", the approver for "approval".
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   at        DateTime @default(now())
   /// "direct" (Warehouse Incharge / admin edit) | "approval" (applied from a FormSubmission)
   via       String
+  /// The submission an "approval" row came from — who typed the values is its submittedBy, not `user` (the
+  /// approver). Null for direct edits and uploads, and for approval rows written before this link existed.
+  submissionId String?
+  submission   FormSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
 
   @@index([receiptId])
 }

@@ -16,6 +16,8 @@ export interface NavLeaf {
   /** Short pill shown after the label, e.g. "Soon" for a page that's an intentional placeholder
    * (see ProductionPage.tsx) — so clicking into it isn't mistaken for a broken link. */
   badge?: string;
+  /** A live number shown after the label (AppNav reads it); hidden while 0 or not yet loaded. */
+  count?: "pendingApprovals";
   /** Who sees this item. Omitted = every signed-in role. The API is the real gate (see
    * backend/src/auth/policy.ts); this only keeps people from seeing links that would 403. */
   roles?: Role[];
@@ -93,7 +95,7 @@ export const NAV: NavSection[] = [
     // suppliers; a Branch Manager sees their own suppliers and can request new ones.
     label: "Approvals",
     items: [
-      { label: "Approvals", to: "/approvals", icon: "approval", roles: ["admin", "warehouse_incharge"] },
+      { label: "Approvals", to: "/approvals", icon: "approval", count: "pendingApprovals", roles: ["admin", "warehouse_incharge"] },
       { label: "Supplier assignment", to: "/supplier-assignment", icon: "assignment_ind", roles: ["admin", "warehouse_incharge"] },
       { label: "My suppliers", to: "/my-suppliers", icon: "groups", roles: ["branch_manager"] },
       { label: "My submissions", to: "/my-submissions", icon: "outbox", roles: ["branch_manager", "qfs_officer"] },

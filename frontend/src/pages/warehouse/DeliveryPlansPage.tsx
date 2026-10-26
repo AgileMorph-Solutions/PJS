@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PLAN_STATUS_LABELS, type PlanStatus } from "@anagroci/contract/domain/deliveryPlan";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
@@ -25,6 +26,8 @@ const inputClass =
 
 const today = todayIso;
 const kg = (n: number | null) => (n === null ? "-" : n.toLocaleString());
+/** The Status column's filter value — also what `?overdue` pre-ticks, so the two can't drift apart. */
+const statusFilterValue = (p: DeliveryPlan) => PLAN_STATUS_LABELS[p.status] + (p.overdue ? " (overdue)" : "");
 
 /**
  * What is expected to arrive, recorded before the truck comes — a pre-alert, so the warehouse can
@@ -36,7 +39,17 @@ export function DeliveryPlansPage() {
   const site = useSite();
   const switchSite = useSwitchSite();
   const canEdit = useCanEditDirectly();
-  const { plans, refetch } = useDeliveryPlans(site.warehouseName);
+  const { plans, loading, refetch } = useDeliveryPlans(site.warehouseName);
+  // `?overdue` (the dashboard's "Overdue plans" tile, and the Overdue tile here) opens the table with the Status
+  // filter ticked on every overdue value actually present — the checklist only offers values in the rows.
+  const [params] = useSearchParams();
+  const overdueOnly = params.has("overdue");
+  const overduePlans = useMemo(() => plans.filter((p) => p.overdue), [plans]);
+  const overdueCount = overduePlans.length;
+  const overdueFilter = useMemo(
+    () => (overdueOnly && overduePlans.length ? { Status: { selected: [...new Set(overduePlans.map(statusFilterValue))] } } : undefined),
+    [overdueOnly, overduePlans]
+  );
   // Cancelled plans are left out: their trucks are exceptions, not progress against an expectation.
   const totals = useMemo(() => {
     const live = plans.filter((p) => p.status !== "cancelled");
@@ -120,7 +133,7 @@ export function DeliveryPlansPage() {
       },
     },
     {
-      label: "Status", filter: { value: (p) => PLAN_STATUS_LABELS[p.status] + (p.overdue ? " (overdue)" : ""), kind: "select" }, nowrap: true,
+      label: "Status", filter: { value: statusFilterValue, kind: "select" }, nowrap: true,
       render: (p) => (
         <span className="inline-flex flex-col items-start gap-1">
           <Pill tone={STATUS_TONE[p.status]} label={PLAN_STATUS_LABELS[p.status]} />
@@ -158,8 +171,9 @@ export function DeliveryPlansPage() {
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiTile label="Active plans" value={totals.plans} />
+        <KpiTile label="Overdue" value={loading ? "…" : overdueCount} tone={overdueCount > 0 ? "gap" : "default"} to="?overdue" />
         <KpiTile label="Trucks arrived" value={totals.arrived} />
         <KpiTile label="Accepted" value={totals.accepted} />
         <KpiTile label="Rejected" value={totals.rejected} tone="gap" />
@@ -182,6 +196,10 @@ export function DeliveryPlansPage() {
         <input placeholder="Search plan, supplier, origin, truck, funding ref…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
       </FilterBar>
       <DataTable
+        // Remounts once the plans have loaded (the overdue values to tick aren't known before) and when `?overdue` is
+        // followed from this page; a later refetch doesn't, so filters the person changed stay as they are.
+        key={overdueOnly ? `overdue-${loading ? "loading" : "ready"}` : "all"}
+        initialFilters={overdueFilter}
         columns={columns}
         rows={search.filtered}
         keyFn={(p) => p.id}
