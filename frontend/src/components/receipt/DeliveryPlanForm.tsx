@@ -4,6 +4,8 @@ import type { DeliveryPlanPayload } from "../../repository/api";
 import type { DeliveryPlan } from "../../types/receipt";
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../ui/DateInput";
+import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
+import { UNLISTED_ORIGIN } from "./originPicker";
 
 const inputClass =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -91,6 +93,7 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
       {field("dp-origin", "Expected origin", <>
         <input id="dp-origin" list="dp-origins" value={form.origin} onChange={(e) => set("origin", e.target.value)} className={inputClass} />
         <datalist id="dp-origins">{masters.origins.map((o) => <option key={o} value={o} />)}</datalist>
+        {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
       </>)}
       {field("dp-store", "Destination store", (
         <select id="dp-store" value={form.store} onChange={(e) => set("store", e.target.value)} className={inputClass}>

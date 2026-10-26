@@ -1,11 +1,9 @@
-// Mirrors masters / addSupplier / addWarehouse / addBin on TrackingApi. Origins have no "add"
-// endpoint on the frontend today either (the master list is read-only there) — kept the same
-// here, on purpose, not an oversight.
+// Mirrors masters / addSupplier / addWarehouse / addBin / createOrigin on TrackingApi.
 import type { FastifyInstance } from "fastify";
 import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { requireRole } from "../auth/plugin.js";
-import { listMasters, addWarehouse, createBin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
+import { listMasters, addWarehouse, createBin, createOrigin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
 
 export async function masterRoutes(app: FastifyInstance) {
   app.get("/api/masters", async () => listMasters());
@@ -30,5 +28,9 @@ export async function masterRoutes(app: FastifyInstance) {
 
   app.post("/api/masters/bins", async (req, reply) => {
     return reply.code(201).send(await createBin((req.body ?? {}) as { code?: string; warehouseName?: string }));
+  });
+
+  app.post("/api/masters/origins", async (req, reply) => {
+    return reply.code(201).send(await createOrigin((req.body ?? {}) as { name?: string }));
   });
 }

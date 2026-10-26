@@ -180,8 +180,9 @@ export const CHECKS: Check[] = [
     async run({ prisma }) {
       // The seeder adds every observed origin to the master, so an orphan can't exist by
       // construction — provenance is what identifies the ones the curated master never had.
+      // "entered" ones were added on purpose from Masters › Origins, so they ARE the curated master.
       const added = await prisma.origin.findMany({
-        where: { source: { not: "seed/origins.json" } }, select: { name: true },
+        where: { source: { notIn: ["seed/origins.json", "entered"] } }, select: { name: true },
       });
       if (!added.length) return null;
       return {

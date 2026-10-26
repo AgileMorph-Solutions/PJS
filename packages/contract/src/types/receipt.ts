@@ -114,6 +114,8 @@ export interface Masters {
   suppliers: Supplier[]; warehouses: WarehouseMaster[]; aliases?: WarehouseAliasMaster[]; bins: string[]; origins: string[];
   /** Which store each Bin is in (null = imported without one). */
   binInfo?: { code: string; store: string | null }[];
+  /** Where each Origin came from ("seed/origins.json", a workbook, "upload: <file>", "entered") and when it was added in the app (null = observed in a workbook). */
+  originInfo?: { name: string; source: string | null; createdAt: string | null }[];
 }
 
 export interface DryingJob {

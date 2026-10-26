@@ -21,13 +21,15 @@ interface Props {
   suggestion?: { value: string; from: string };
   /** Known values to pick from (a Bin from the master); typing something else is still allowed — the server decides. */
   options?: string[];
+  /** A caution under an editable field (a value the master doesn't have) — it warns, it doesn't block. */
+  warning?: string;
 }
 
 /** One field row: label + an optional system/calculated badge + a controlled input. The displayed
  * value always comes from the record itself via `value`, never from the generic sample (`field.v`)
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, options }: Props) {
+export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, options, warning }: Props) {
   const locked = readOnly || Boolean(system);
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
 
@@ -70,6 +72,7 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         </p>
       )}
       {note && !system && <p className="mt-1 text-[11.5px] text-warmstone-500">{note}</p>}
+      {warning && !locked && <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">{warning}</p>}
       {suggestion && !locked && !value.trim() && (
         <button
           type="button"

@@ -237,6 +237,7 @@ export const api = {
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/receive`, { method: "POST", body: JSON.stringify(p) }),
   /** A new Bin in a store; refuses a duplicate or a bad code with a plain reason. */
   createBin: (code: string, warehouseName: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code, warehouseName }) }),
+  createOrigin: (name: string) => request<unknown>("/masters/origins", { method: "POST", body: JSON.stringify({ name }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
    * stores + aliases) — see backend/src/domain/site.ts. Omitted = every site, unfiltered. */

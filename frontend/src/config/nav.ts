@@ -85,6 +85,7 @@ export const NAV: NavSection[] = [
       { label: "Suppliers", to: "/masters/suppliers", icon: "groups", roles: ["admin", "warehouse_incharge"] },
       { label: "Warehouses", to: "/masters/warehouses", icon: "domain", roles: ["admin", "warehouse_incharge"] },
       { label: "Bins", to: "/masters/bins", icon: "inventory", roles: ["admin", "warehouse_incharge"] },
+      { label: "Origins", to: "/masters/origins", icon: "location_on", roles: ["admin", "warehouse_incharge"] },
     ],
   },
   {
