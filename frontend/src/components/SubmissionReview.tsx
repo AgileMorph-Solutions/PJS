@@ -4,14 +4,16 @@ import type { SubmissionView } from "../types/user";
 import { formById } from "../data/roles";
 import { api } from "../repository/api";
 import { useTracking } from "../state/TrackingContext";
+import { usePendingApprovals } from "../state/PendingApprovals";
 import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 
 /** One submission as a current → submitted diff, with Approve / Reject (reason required). Shared by
  * the receipt page (its own submissions) and the Approvals queue (all pending ones). */
 export function SubmissionReview({
   submission, receipt, onDone,
-}: { submission: SubmissionView; receipt?: ReceiptRecord; onDone: () => void }) {
+}: { submission: SubmissionView; receipt?: ReceiptRecord; onDone?: () => void }) {
   const { refresh } = useTracking();
+  const { refresh: refreshPending } = usePendingApprovals();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,7 +26,8 @@ export function SubmissionReview({
     try {
       await fn();
       await refresh();
-      onDone();
+      refreshPending();
+      onDone?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -4,6 +4,7 @@ import {
 import type { ReceiptRecord } from "../types/receipt";
 import { deriveStatus } from "../domain/receiptStatus";
 import { api, ApiError } from "../repository/api";
+import { useLoaded } from "./useLoaded";
 import { removeKey, LEGACY_STATE_KEY } from "../repository/storage";
 import type { LedgerEntries, LedgerRow } from "../repository/juteRepo";
 import type { Masters, Supplier } from "../repository/mastersRepo";
@@ -53,6 +54,9 @@ interface TrackingApi {
   error: string | null;
   /** Data-quality warnings from the most recent write, if any. */
   warnings: string[];
+  /** Goes up after every write the server accepted (and every full reload) — something reading server-side history keys
+   * on it to re-read, since a write can add change-log rows the receipt itself doesn't carry. */
+  savedRevision: number;
   refresh: () => Promise<void>;
   resetAll: () => void;
 }
@@ -68,6 +72,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [savedRevision, setSavedRevision] = useState(0);
 
   // Buffered stage edits, keyed "receiptId\u0000stageId".
   const dirty = useRef(new Map<string, Record<string, string>>());
@@ -78,6 +83,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
 
   const mergeReceipt = useCallback((r: ReceiptRecord) => {
     setReceipts((prev) => (prev.some((x) => x.id === r.id) ? prev.map((x) => (x.id === r.id ? r : x)) : [...prev, r]));
+    setSavedRevision((n) => n + 1);
   }, []);
 
   const fail = useCallback((e: unknown) => {
@@ -96,6 +102,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       });
       const [rs, ls, ms] = await Promise.all([api.listReceipts(), ledgersOrNone, api.masters()]);
       setReceipts(rs);
+      setSavedRevision((n) => n + 1);
       setLedgerEntries(ls);
       setMasters(ms);
       setError(null);
@@ -127,6 +134,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         const { data, warnings: w } = await api.patchStage(id, stageId, pending);
         // Only accept the server's copy if nothing was typed while the request was in flight.
         if ((seq.current.get(key) ?? 0) === at) mergeReceipt(data);
+        else setSavedRevision((n) => n + 1); // saved even though newer typing keeps the local copy
         setWarnings(w);
         setError(null);
       } catch (e) {
@@ -228,10 +236,11 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       warnings,
+      savedRevision,
       refresh,
       resetAll: () => void refresh(),
     }),
-    [receipts, ledgerEntries, masters, loading, error, warnings, mergeReceipt, fail, refresh, flushKey]
+    [receipts, ledgerEntries, masters, loading, error, warnings, savedRevision, mergeReceipt, fail, refresh, flushKey]
   );
 
   return <TrackingCtx.Provider value={api_}>{children}</TrackingCtx.Provider>;
@@ -465,11 +474,25 @@ export function useJuteLedgerEntries(ledgerId: string, warehouse: string | undef
 }
 
 /**
+ * A truck's saved field edits, newest first. Re-read quietly after every accepted write (`savedRevision`), so the
+ * Stages tab shows an edit as soon as it lands. `enabled: false` skips the request — the narrow roles aren't allowed
+ * the change log (backend auth/policy.ts).
+ */
+export function useFieldChanges(receiptId: string | undefined, enabled = true) {
+  const { savedRevision } = useTracking();
+  const { rows: changes, loading, error } = useLoaded(
+    () => api.listFieldChanges(receiptId!), [receiptId], { enabled: enabled && Boolean(receiptId), reloadOn: savedRevision },
+  );
+  return { changes, loading, error };
+}
+
+/**
  * A receipt's cross-references to drying jobs / transfer receipts about the same physical batch
  * (joined server-side on Lot Number — see backend/src/services/receiptLinks.ts for the accuracy
  * tradeoff this accepts). Same shape as useDryingJobs, but keyed on receiptId so navigating
  * between receipts refetches instead of showing the previous receipt's links.
  */
+
 export function useReceiptLinks(receiptId: string | undefined) {
   const [links, setLinks] = useState<import("../repository/api").ReceiptLinks | null>(null);
   const [loading, setLoading] = useState(true);

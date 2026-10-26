@@ -7,7 +7,10 @@ import { DateRangeFilter, type DateRange } from "../components/dashboard/DateRan
 import { ReceiptsByStatusChart } from "../components/dashboard/ReceiptsByStatusChart";
 import { SupplierAnalyticsSection } from "../components/dashboard/SupplierAnalyticsSection";
 import { JuteBalanceTrendChart, parseLedgerDate } from "../components/dashboard/JuteBalanceTrendChart";
-import { useTracking } from "../state/TrackingContext";
+import { useDeliveryPlans, useTracking } from "../state/TrackingContext";
+import { useActiveSite } from "../state/SiteContext";
+import { useHasRole } from "../state/AuthContext";
+import { siteSlugForSiteName } from "../config/sites";
 import { computeDashboardCounts, deriveStatus } from "../domain/receiptStatus";
 import { lastBalance } from "../domain/jute";
 import type { LedgerRow } from "../repository/juteRepo";
@@ -91,6 +94,16 @@ export function DashboardPage() {
   );
   const balance = lastBalance(filteredWarehouseRows);
 
+  // Late as of today, so the date range above doesn't apply. The server scopes the list to the viewer's own
+  // warehouse; an admin sees both sites, so the tile opens whichever site actually has overdue plans,
+  // preferring the one they were last looking at.
+  const canSeePlans = useHasRole("admin", "warehouse_incharge");
+  const activeSite = useActiveSite();
+  const { plans, loading: plansLoading } = useDeliveryPlans();
+  const overduePlans = useMemo(() => plans.filter((p) => p.overdue), [plans]);
+  const overdueSites = new Set(overduePlans.map((p) => siteSlugForSiteName(p.destinationWarehouse)));
+  const overdueSite = overdueSites.has(activeSite.slug) || overdueSites.size === 0 ? activeSite.slug : [...overdueSites].find(Boolean) ?? activeSite.slug;
+
   const recent = [...filteredReceipts].sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1)).slice(0, 8);
 
   return (
@@ -103,13 +116,19 @@ export function DashboardPage() {
 
       <DateRangeFilter value={range} onChange={setRange} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 ${canSeePlans ? "xl:grid-cols-7" : "xl:grid-cols-6"}`}>
         <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to="/procurement/receipts" />
         <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to="/procurement/receipts?status=unloaded" />
         <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to="/procurement/receipts?status=grn_completed" />
         <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to="/procurement/receipts?status=pending_qa" />
         <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to="/procurement/receipts?status=pending_unload" />
         <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to="/procurement/receipts?status=rejected" tone="gap" />
+        {canSeePlans && (
+          <KpiTile
+            icon={icon("event_busy")} label="Overdue plans" value={plansLoading ? "…" : overduePlans.length}
+            tone={overduePlans.length > 0 ? "gap" : "default"} to={`/${overdueSite}/delivery-plans?overdue`}
+          />
+        )}
       </div>
 
       <ChartCard

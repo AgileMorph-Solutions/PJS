@@ -3,6 +3,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import { NAV, type NavLeaf } from "../config/nav";
 import { useActiveSite } from "../state/SiteContext";
 import { useMe } from "../state/AuthContext";
+import { usePendingApprovals } from "../state/PendingApprovals";
+import { Pill } from "./ui/Pill";
 import type { Role } from "../data/roles";
 import type { SiteSlug } from "../config/sites";
 
@@ -39,11 +41,17 @@ function sectionForPath(nav: ReturnType<typeof navFor>, pathname: string, active
   return nav.find((section) => section.items.some((item) => isItemActive(pathname, item, activeSite)))?.label;
 }
 
+/** Capped so a long queue doesn't widen the sidebar. */
+const countLabel = (n: number) => (n > 99 ? "99+" : String(n));
+
 export function AppNav({ open, onClose }: Props) {
   const location = useLocation();
   const activeSite = useActiveSite();
   const me = useMe();
   const nav = useMemo(() => navFor(me.role), [me.role]);
+  const { count: pendingApprovals } = usePendingApprovals();
+  const counts: Record<NonNullable<NavLeaf["count"]>, number> = { pendingApprovals: pendingApprovals ?? 0 };
+  const countOf = (item: NavLeaf) => (item.count ? counts[item.count] : 0);
 
   // Starts on whichever section holds the current route; a section with only one item has
   // nothing to hide, so it's never collapsible in the first place (see the render below).
@@ -116,6 +124,8 @@ export function AppNav({ open, onClose }: Props) {
           if (!items.length) return null;
           const collapsible = items.length > 1;
           const isOpen = !collapsible || openSections.has(section.label);
+          // A collapsed section still says something is waiting inside it.
+          const hiddenCount = isOpen ? 0 : items.reduce((n, i) => n + countOf(i), 0);
           return (
           <div className="space-y-1" key={section.label}>
             {collapsible ? (
@@ -128,10 +138,13 @@ export function AppNav({ open, onClose }: Props) {
                 <span className="block text-left text-[11px] font-bold text-warmstone-400 uppercase tracking-wider group-hover:text-warmstone-600">
                   {section.label}
                 </span>
-                <span
-                  className={`material-symbols-outlined text-[16px] text-warmstone-400 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
-                >
-                  expand_more
+                <span className="flex items-center gap-1.5">
+                  {hiddenCount > 0 && <Pill tone="term" label={countLabel(hiddenCount)} />}
+                  <span
+                    className={`material-symbols-outlined text-[16px] text-warmstone-400 transition-transform ${isOpen ? "rotate-0" : "-rotate-90"}`}
+                  >
+                    expand_more
+                  </span>
                 </span>
               </button>
             ) : (
@@ -170,6 +183,7 @@ export function AppNav({ open, onClose }: Props) {
                         {item.badge}
                       </span>
                     )}
+                    {countOf(item) > 0 && <Pill tone="term" label={countLabel(countOf(item))} />}
                   </>
                 )}
               </NavLink>

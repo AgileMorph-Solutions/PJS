@@ -93,10 +93,15 @@ export function planStatus(plan: PlanTerms, progress: PlanProgress): PlanStatus 
   return progress.arrivals > 0 ? "partially_received" : "planned";
 }
 
-/** Past the end of the window (or its start, when no end was given) and not yet delivered or cancelled. */
+/** The last on-time day: the end of the window, or its start when no end was given. */
+export function planDeadline(plan: Pick<PlanTerms, "expectedArrivalDate" | "expectedDeliveryEnd">): string {
+  return plan.expectedDeliveryEnd ?? plan.expectedArrivalDate;
+}
+
+/** Past the deadline and not yet delivered or cancelled. */
 export function isOverdue(plan: PlanTerms, status: PlanStatus, today: string): boolean {
   if (status === "delivered" || status === "cancelled") return false;
-  return today > (plan.expectedDeliveryEnd ?? plan.expectedArrivalDate);
+  return today > planDeadline(plan);
 }
 
 // ── Per-truck: planned, planned with exception, or unplanned ─────────────────────────────────

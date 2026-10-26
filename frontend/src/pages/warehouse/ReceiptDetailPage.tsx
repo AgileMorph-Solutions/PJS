@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
-import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans, useDryingBatches } from "../../state/TrackingContext";
+import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans, useDryingBatches, useFieldChanges } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
 import { useCanEditDirectly, useMe } from "../../state/AuthContext";
 import { useSubmissions } from "../../state/userManagement";
@@ -23,15 +23,15 @@ import { UploadIssuesCard } from "../../components/receipt/UploadIssuesCard";
 import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
 import { buildJourney } from "../../components/receipt/lotJourney.ts";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
-import { usePagination } from "../../components/ui/usePagination";
-import { Pagination } from "../../components/ui/Pagination";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
 import { api } from "../../repository/api";
 import { DryingPanel } from "../../components/receipt/DryingPanel";
+import { FieldHistory } from "../../components/receipt/FieldHistory";
+import { StageAuthor } from "../../components/receipt/StageAuthor";
 import { PricePanel } from "../../components/receipt/PricePanel";
 import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
-import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -49,11 +49,19 @@ export function ReceiptDetailPage() {
   // Warehouse Incharge/admin edit stages directly; a Branch Manager / QFS Officer sees them
   // read-only and submits their own form (SubmissionCard) for approval instead.
   const canEdit = useCanEditDirectly();
+  // Read once for the History tab and every stage card's "who / when". The change log is Warehouse Incharge / admin only
+  // (backend auth/policy.ts keeps it from the narrow roles), so the others don't ask for it.
+  const fieldLog = useFieldChanges(id, canEdit);
+  const changesByStage = useMemo(() => {
+    const by = new Map<string, typeof fieldLog.changes>();
+    for (const c of fieldLog.changes) by.set(c.stageId, [...(by.get(c.stageId) ?? []), c]);
+    return by;
+  }, [fieldLog.changes]);
   const submissions = useSubmissions({ receiptId: id });
   const { info: planInfo, refetch: refetchPlanInfo } = useOneReceiptPlanInfo(id, canEdit);
   const { plans } = useDeliveryPlans(site.warehouseName);
   const [copied, setCopied] = useState(false);
-  const [tab, setTab] = useState<"overview" | "stages" | "activity">("overview");
+  const [tab, setTab] = useState<"overview" | "stages" | "history">("overview");
   const [lockError, setLockError] = useState<string | null>(null);
   const [lockBusy, setLockBusy] = useState(false);
 
@@ -61,7 +69,6 @@ export function ReceiptDetailPage() {
     () => (receipt?.binNo ? receipts.filter((r) => r.binNo === receipt.binNo && r.id !== receipt.id) : []),
     [receipts, receipt?.binNo, receipt?.id]
   );
-  const timelinePage = usePagination(receipt ? [...receipt.timeline].reverse() : []);
   // What the system calculates from the readings as they stand — shown at once, so a net weight
   // follows the tare weight as it is typed rather than appearing after the server has saved it.
   const derived = useMemo(() => (receipt ? computeDerivedFields(receipt.stageData) : {}), [receipt]);
@@ -231,7 +238,8 @@ export function ReceiptDetailPage() {
         {([
           ["overview", "Overview", "dashboard"],
           ["stages", "Stages & entry", "fact_check"],
-          ["activity", `Activity (${receipt.timeline.length})`, "history"],
+          // The change log is read by Warehouse Incharge / admin only (backend auth/policy.ts keeps it from the narrow roles).
+          ...(canEdit ? [["history", "History", "history"] as const] : []),
         ] as const).map(([id, label, icon]) => (
           <button
             key={id}
@@ -307,7 +315,7 @@ export function ReceiptDetailPage() {
                 }`}
               >
                 <summary
-                  className={`list-none cursor-pointer p-4.5 flex items-center gap-3.5 transition-colors ${
+                  className={`list-none cursor-pointer p-4.5 flex flex-wrap sm:flex-nowrap items-center gap-3.5 transition-colors ${
                     isActive ? "bg-gradient-to-r from-brand-50 via-white to-white" : "hover:bg-warmstone-50"
                   }`}
                 >
@@ -349,6 +357,7 @@ export function ReceiptDetailPage() {
                     </div>
                     <p className="text-xs text-warmstone-500 mt-0.5">{stage.phase}</p>
                   </div>
+                  <StageAuthor changes={changesByStage.get(stage.id) ?? []} />
                 </summary>
                 <div className="px-5 pb-5 pt-1 border-t border-warmstone-100 bg-warmstone-50/60">
                   <div className="pt-4">
@@ -400,6 +409,13 @@ export function ReceiptDetailPage() {
                         <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)} readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))} />
                       </div>
                     )}
+                    {/* {canEdit && changesByStage.has(stage.id) && (
+                      <div className="mt-5">
+                        <CollapsibleCard title="Change log" meta={`${changesByStage.get(stage.id)!.length} changes`}>
+                          <div className="pt-3"><FieldHistory {...fieldLog} stageId={stage.id} /></div>
+                        </CollapsibleCard>
+                      </div>
+                    )} */}
                   </div>
                 </div>
               </details>
@@ -409,7 +425,7 @@ export function ReceiptDetailPage() {
 
           {receipt.branches["n-qfs"] === "fail" && (
             <details open className="bg-white rounded-2xl overflow-hidden border-2 border-danger-600 shadow-md shadow-danger-600/10">
-              <summary className="list-none cursor-pointer p-4.5 flex items-center gap-3.5 bg-danger-50">
+              <summary className="list-none cursor-pointer p-4.5 flex flex-wrap sm:flex-nowrap items-center gap-3.5 bg-danger-50">
                 <span className="w-8 h-8 shrink-0 rounded-full bg-danger-600 text-white flex items-center justify-center">
                   <span className="material-symbols-outlined text-[18px]">cancel</span>
                 </span>
@@ -417,6 +433,8 @@ export function ReceiptDetailPage() {
                   <span className="text-sm font-bold text-warmstone-900">{rejectStage.title}</span>
                   <p className="text-xs text-warmstone-500 mt-0.5">{rejectStage.phase}</p>
                 </div>
+                <div className="flex-1 hidden sm:block" />
+                <StageAuthor changes={changesByStage.get("n-reject") ?? []} />
               </summary>
               <div className="px-5 pb-5 pt-4 border-t border-warmstone-100 bg-warmstone-50/60">
                 <StageForm
@@ -448,23 +466,7 @@ export function ReceiptDetailPage() {
         </div>
       )}
 
-      {tab === "activity" && (
-        <div className="max-w-2xl bg-white border border-warmstone-200 rounded-2xl shadow-xs p-5">
-          {receipt.timeline.length === 0 && <p className="text-[12.5px] text-warmstone-400">Nothing recorded yet.</p>}
-          <ul className="space-y-3">
-            {timelinePage.pageRows.map((e, i) => (
-              <li key={i} className="flex flex-col gap-1 pb-3 border-b border-warmstone-100 last:border-0 last:pb-0">
-                <ReceiptStatusPill status={e.status} />
-                <span className="text-[11px] text-warmstone-400">
-                  {formatDateTime(e.at)}{e.actor ? ` · ${e.actor}` : ""}
-                </span>
-                {e.note && <p className="text-[12px] text-warmstone-500">{e.note}</p>}
-              </li>
-            ))}
-          </ul>
-          <Pagination state={timelinePage} />
-        </div>
-      )}
+      {tab === "history" && canEdit && <FieldHistory {...fieldLog} />}
     </div>
   );
 }
