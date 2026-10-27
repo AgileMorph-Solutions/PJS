@@ -15,9 +15,11 @@ import { ensureDemoUsers } from "./demoUsers.js";
 const prisma = new PrismaClient();
 
 /**
- * Site/Store typology, upserted rather than created-if-missing so re-running always converges:
- * BOUAKE and YAKRO FACTORY are the two known SITES (kind set); ANAGROCI-01 is a STORE under
- * YAKRO FACTORY, and YAMOUSSOUKRO is a third name the client's own sheets use for that same site.
+ * Site typology, upserted rather than created-if-missing so re-running always converges:
+ * BOUAKE and YAKRO FACTORY are the two known SITES (kind set), and ANAGROCI-01 / YAMOUSSOUKRO are
+ * names the client's own sheets use for that same Yakro site (aliases, so an upload naming them
+ * still lands there). Stores under a site are not created here — the team adds them in Masters ›
+ * Warehouses (Oct 2026 fresh start; ANAGROCI-01 used to be created as a store here).
  *
  * Evidence: ANAGROCI DATA PROCUREMENT 2026.xlsx, sheet "Warehouse Receiving", places
  * `warehouse = ANAGROCI-01` peer to `warehouse = BKE-001/002/003` in the same column, with
@@ -41,12 +43,7 @@ async function backfillWarehouseTypology() {
     update: { kind: "FACTORY" },
     create: { name: "YAKRO FACTORY", kind: "FACTORY", source: "seed/warehouses.json" },
   });
-  // Depends on YAKRO FACTORY existing (site is a soft FK to it) — the two upserts above must run first.
-  await prisma.warehouse.upsert({
-    where: { name: "ANAGROCI-01" },
-    update: { site: "YAKRO FACTORY" },
-    create: { name: "ANAGROCI-01", site: "YAKRO FACTORY", source },
-  });
+  // Depends on YAKRO FACTORY existing (warehouseName is a foreign key to it) — the two upserts above must run first.
   await prisma.warehouseAlias.upsert({
     where: { alias: "ANAGROCI-01" },
     update: { warehouseName: "YAKRO FACTORY", provenance: "stated-in-source", source },
