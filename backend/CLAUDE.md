@@ -24,8 +24,9 @@ src/serialize.ts        toReceiptRecord(): row -> wire shape, with status attach
 prisma/schema.prisma    63 models. The 16 stage tables and 25 production tables are GENERATED (see
                         packages/contract's gen-prisma-models.ts / gen-production-map.ts) — don't
                         hand-edit their columns; regenerate.
-prisma/seed.ts          Loads real data via the service layer with bypassValidation: true. See
-                        "Why bypassValidation exists" below before assuming it's a shortcut to copy.
+prisma/seed.ts          Since Oct 2026: sets up the two sites and the user accounts only — the team
+                        started from an empty database, so it loads no data. Sections below that talk
+                        about "the seeder" loading real data describe the old behaviour.
 ```
 
 **When adding a feature: route → service → (domain rule or Prisma call).** Never route → Prisma

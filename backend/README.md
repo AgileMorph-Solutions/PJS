@@ -12,6 +12,8 @@ open http://localhost:8080
 ```
 
 The backend container runs `prisma migrate deploy`, then the seeder (idempotent), then the server.
+**Since Oct 2026 the seeder sets up only the two sites and the user accounts** — the team started from an empty
+database, so the paragraph below describes the old behaviour; nothing loads the workbook data any more.
 On an empty volume that brings up the full real dataset: 50 receipts, 74 suppliers, 37 drying jobs,
 298 jute warehouse movements, 367 transfer receipts.
 
@@ -208,7 +210,7 @@ Raised rather than resolved — see `/api/data-quality` for the measured evidenc
 ```
 prisma/schema.prisma        31 models; the 16 stage tables are generated from stages.ts
 prisma/migrations/          init + the partial index and the four views
-prisma/seed.ts              real data, via the service layer with bypassValidation
+prisma/seed.ts              the two sites and the user accounts only (no data since Oct 2026)
 src/stageStore.ts           stageData <-> per-stage tables; where round-trip fidelity lives
 src/services/               receipts, ledgers — shared by the routes and the seeder
 src/domain/juteBalance.ts   reads the SQL views

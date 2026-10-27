@@ -47,12 +47,10 @@ services:
     command:
       - sh
       - -c
-      - npx prisma migrate deploy && npx prisma generate && npx tsx prisma/seed.ts && npx tsx prisma/seedProduction.ts && npx tsx watch src/server.ts
+      - npx prisma migrate deploy && npx prisma generate && npx tsx prisma/seed.ts && npx tsx watch src/server.ts
     volumes:
       - ./backend:/app/backend
       - ./packages/contract:/app/packages/contract
-      # The seeder reads the real data out of the frontend's seed folder (see backend/Dockerfile).
-      - ./frontend/src/data/seed:/app/frontend/src/data/seed:ro
       # Keep the container's own node_modules (Linux binaries, Prisma's generated client): the bind
       # mount above would otherwise cover them with the host's macOS ones.
       - /app/backend/node_modules

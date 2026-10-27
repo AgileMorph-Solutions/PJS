@@ -42,7 +42,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
 `backend`'s container runs `prisma migrate deploy` (applies pending migrations) and the idempotent
-seeder on every start, then serves — same behavior as the dev compose file, just without
+`prisma/seed.ts` on every start, then serves. Since Oct 2026 that sets up only the two sites and the user accounts;
+it loads no data, so an empty database stays empty until the team enters records in the app — same behavior as the dev compose file, just without
 publishing 3000 or 5432 to the host.
 
 The first request to `https://pjs.agilemorph.in` triggers nothing extra — Traefik requests and

@@ -14,9 +14,6 @@ RUN npm install
 
 COPY packages/contract/ ./packages/contract/
 COPY backend/ ./backend/
-# The seeder reads real data out of frontend/src/data/seed — bring that along rather than
-# duplicating the JSON into this image.
-COPY frontend/src/data/seed/ ./frontend/src/data/seed/
 
 WORKDIR /app/backend
 RUN npx prisma generate
@@ -24,7 +21,6 @@ RUN npx prisma generate
 ENV PORT=3000
 EXPOSE 3000
 
-# DATABASE_URL comes from compose (the `db` service). Migrate, seed (idempotent) — procurement then
-# production, each with its own idempotency guard since seed.ts's `receipt.count() > 0` guard would
-# otherwise skip production seeding forever on a DB seeded before this file existed — then serve.
-CMD npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx prisma/seedProduction.ts && npx tsx src/server.ts
+# DATABASE_URL comes from compose (the `db` service). Migrate, set up the sites and user accounts (prisma/seed.ts —
+# idempotent, loads no data), then serve.
+CMD npx prisma migrate deploy && npx tsx prisma/seed.ts && npx tsx src/server.ts
