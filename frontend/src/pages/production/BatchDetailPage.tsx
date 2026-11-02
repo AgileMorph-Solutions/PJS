@@ -74,9 +74,9 @@ export function BatchDetailPage() {
             </p>
           </div>
           <div className="bg-warmstone-50 border border-warmstone-200 rounded-2xl p-4 w-full lg:w-96">
-            <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Intake · {loads} load{loads === 1 ? "" : "s"} received</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Intake · {loads} RCN Receipt{loads === 1 ? "" : "s"}</span>
             {waiting.length === 0 ? (
-              <p className="mt-1.5 text-sm font-bold text-warmstone-900">{loads === 0 ? "Next: record the first load" : "Nothing waiting"}</p>
+              <p className="mt-1.5 text-sm font-bold text-warmstone-900">{loads === 0 ? "Next: record the first RCN Receipt" : "Nothing waiting"}</p>
             ) : (
               <ul className="mt-1.5 space-y-1">
                 {waiting.map(([st, n]) => (
