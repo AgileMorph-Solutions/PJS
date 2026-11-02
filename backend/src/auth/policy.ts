@@ -37,7 +37,15 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
     // The price is the Branch Manager's to set directly, with no approval (Oct 2026: the Incharge who approves no longer sees prices).
     { method: "PUT", path: /^\/api\/receipts\/[^/]+\/price$/ },
   ],
-  qfs_officer: [...COMMON, ...READ_RECEIPTS],
+  qfs_officer: [
+    ...COMMON,
+    ...READ_RECEIPTS,
+    // Production Phase 1, step 2: the QFS Officer does each load's moisture check, so reads its batch and
+    // receipts and submits the check; the Incharge approves it.
+    { method: "GET", path: /^\/api\/production\/batches(\/[^/]+)?$/ },
+    { method: "GET", path: /^\/api\/production\/rcn-receipts$/ },
+    { method: "POST", path: /^\/api\/production\/rcn-receipts\/[^/]+\/moisture-checks$/ },
+  ],
 };
 
 export function isAllowed(role: Role, method: string, path: string): boolean {

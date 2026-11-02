@@ -11,6 +11,8 @@ import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
 } from "@anagroci/contract/types/user";
 import type { BatchTruckRow } from "@anagroci/contract/data/batchEntry";
+import type { AvailableBin, BatchDetail, BatchSummary } from "@anagroci/contract/types/productionBatch";
+import type { MoistureCheckInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
 
 export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -332,6 +334,24 @@ export const api = {
 
   commitWorkbook: (token: string) =>
     request<WorkbookCommitResult>(`/workbook/${encodeURIComponent(token)}/commit`, { method: "POST" }),
+
+  // ── Production Phase 0: batches (client's "Phase 1 — Batch & Intake" doc). ──
+  listBatchBins: () => request<AvailableBin[]>("/production/batch-bins"),
+  listBatches: () => request<BatchSummary[]>("/production/batches"),
+  getBatch: (code: string) => request<BatchDetail>(`/production/batches/${encodeURIComponent(code)}`),
+  createBatch: (b: { code: string; startDate: string; proposedBy: string; bins: string[] }) =>
+    request<BatchDetail>("/production/batches", { method: "POST", body: JSON.stringify(b) }),
+  binBatch: (binCode: string) => request<{ batch: { batchCode: string; plannedKg: number } | null }>(`/production/bin-batch/${encodeURIComponent(binCode)}`),
+
+  // ── Production Phase 1, step 1: RCN Receipts. ──
+  listRcnReceipts: (batchCode?: string) =>
+    request<RcnReceipt[]>(`/production/rcn-receipts${batchCode ? `?batch=${encodeURIComponent(batchCode)}` : ""}`),
+  createRcnReceipt: (r: RcnReceiptInput) => request<RcnReceipt>("/production/rcn-receipts", { method: "POST", body: JSON.stringify(r) }),
+  submitMoistureCheck: (receiptId: string, c: MoistureCheckInput) =>
+    request<RcnReceipt>(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/moisture-checks`, { method: "POST", body: JSON.stringify(c) }),
+  approveMoistureCheck: (checkId: number) => request<RcnReceipt>(`/production/moisture-checks/${checkId}/approve`, { method: "POST" }),
+  rejectMoistureCheck: (checkId: number, reason: string) =>
+    request<RcnReceipt>(`/production/moisture-checks/${checkId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
 
   // ── Production — its own capability, not part of TrackingApi (see repository/api.ts's header:
   // same reasoning as dryingJobs/receiptLinks — a new hook, not a reshaped context). ─────────────

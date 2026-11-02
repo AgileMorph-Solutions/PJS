@@ -134,6 +134,7 @@ model Warehouse {
   transfersIn   JuteWarehouseTransferReceipt[] @relation("TransferDestination")
   aliases       WarehouseAlias[]
   users         User[]
+  productionBatches ProductionBatch[]
 
   @@index([kind])
   @@index([type])
@@ -149,6 +150,7 @@ model Bin {
   source        String?
   /// When the Bin was created in the app. NULL = it was already there (imported); no date is invented for those.
   createdAt     DateTime?
+  batchBins     ProductionBatchBin[]
 }
 
 model Origin {
@@ -2272,6 +2274,108 @@ model IssuedToProduction {
   @@index([btmNo])
 }
 
+// ── Production Phase 0: Batch ─────────────────────────────────────────────────────────────────
+// From the client's "Phase 1 — Batch & Intake" document (Oct 2026). These are the app's own records,
+// entered on its screens; the workbook-transcribed BtmIntake/BtmReceipt tables above are a separate,
+// earlier import model and are not reused, because their "BIN No" (ANA-01) is free text with no link
+// to a procurement Bin.
+
+/// One batch: the warehouse bins production will process together (~1 month, ~4,000 t). A plan —
+/// creating it moves no stock. The planned total and end date are derived from its bins' planned kg
+/// and the start date, never stored.
+model ProductionBatch {
+  /// The client's own name for it, e.g. ANA-03B ("production BIN" in their workbooks).
+  code         String    @id
+  /// The factory site whose bins it draws on.
+  warehouse    String
+  warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
+  startDate    String
+  /// Who on the warehouse team suggested the bins (a name, not a user: they may not have an account).
+  proposedBy   String?
+  createdById  String
+  createdBy    User      @relation("BatchCreator", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  bins        ProductionBatchBin[]
+  rcnReceipts RcnReceipt[]
+
+  @@index([warehouse])
+}
+
+/// One procurement warehouse bin in a batch. plannedKg is the bin's stock at the moment the batch was
+/// created — the plan as it was made, not a copy of a live value: the bin's stock moves on as loads
+/// leave it, and the plan must not move with it. A bin can be in only one open batch; that is checked
+/// in services/production/batches.ts (it depends on batch status, which a unique index can't see).
+model ProductionBatchBin {
+  batchCode String
+  batch     ProductionBatch @relation(fields: [batchCode], references: [code], onDelete: Cascade)
+  binCode   String
+  bin       Bin             @relation(fields: [binCode], references: [code])
+  plannedKg Decimal         @db.Decimal(14, 2)
+
+  rcnReceipts RcnReceipt[]
+
+  @@id([batchCode, binCode])
+  @@index([binCode])
+}
+
+/// Production Phase 1, step 1: one load that arrived on the production floor from one bin of a batch,
+/// with its BTM slip ("1 load = 1 receipt; 1 receipt = 1 bin"). The (batchCode, binCode) foreign key is
+/// what keeps a load to the bins of its own batch. Moisture and weights come in later steps.
+model RcnReceipt {
+  /// RR-<warehouse code>-<year of date>-NNNN (contract domain/ids.ts).
+  id          String             @id
+  batchCode   String
+  binCode     String
+  batchBin    ProductionBatchBin @relation(fields: [batchCode, binCode], references: [batchCode, binCode])
+  batch       ProductionBatch    @relation(fields: [batchCode], references: [code])
+  date        String
+  btmNo       String
+  createdById String
+  createdBy   User               @relation("RcnReceiptCreator", fields: [createdById], references: [id])
+  createdAt   DateTime           @default(now())
+  moistureChecks RcnMoistureCheck[]
+
+  @@index([batchCode])
+  @@index([batchCode, binCode, btmNo])
+}
+
+/// Phase 1, step 2: one moisture check of a load (client's "2. Input RCN Quality report" columns). A QFS
+/// Officer's check is "submitted" until the Warehouse Incharge approves or rejects it; an Incharge's or
+/// Admin's own is "approved" as saved. The receipt's status is derived from these (contract rcnReceipt.ts);
+/// a re-check after a hold is a new row, so the earlier one stays as history. Numbers kept as typed; KOR is
+/// calculated from the grams, never stored.
+model RcnMoistureCheck {
+  id            Int        @id @default(autoincrement())
+  rcnReceiptId  String
+  rcnReceipt    RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  moisture      String
+  nutCount      String
+  sampleG       String?
+  gkG           String?
+  spotG         String?
+  immatureG     String?
+  oilG          String?
+  rejectionG    String?
+  voidsG        String?
+  shellG        String?
+  fruitWasteG   String?
+  /// "ok" | "hold"
+  decision      String
+  /// "submitted" | "approved" | "rejected"
+  status        String
+  submittedById String
+  submittedBy   User       @relation("MoistureCheckAuthor", fields: [submittedById], references: [id])
+  submittedAt   DateTime   @default(now())
+  reviewedById  String?
+  reviewedBy    User?      @relation("MoistureCheckReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+
+  @@index([rcnReceiptId])
+}
+
+
 // ── User management ───────────────────────────────────────────────────────
 // Roles and who-may-write-what live in packages/contract's roles.ts; only identity, scope and the
 // approval workflow's own records live here.
@@ -2308,6 +2412,10 @@ model User {
   reviewedSubmissions FormSubmission[]        @relation("SubmissionReviewer")
   fieldChanges        StageFieldChange[]
   timeline            TimelineEntry[]
+  createdBatches      ProductionBatch[]       @relation("BatchCreator")
+  createdRcnReceipts  RcnReceipt[]            @relation("RcnReceiptCreator")
+  moistureChecks      RcnMoistureCheck[]      @relation("MoistureCheckAuthor")
+  reviewedMoisture    RcnMoistureCheck[]      @relation("MoistureCheckReviewer")
 
   @@index([role])
   @@index([warehouse])

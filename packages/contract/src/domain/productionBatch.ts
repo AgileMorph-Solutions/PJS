@@ -1,0 +1,187 @@
+/**
+ * Production Phase 0 (Batch): the rules both sides need.
+ * Source: the client's "Production module" and "Phase 1 — Batch & Intake" documents (Oct 2026).
+ *
+ * A batch is a PLAN: a group of the factory's warehouse bins to be processed together, about one
+ * month of work. Creating one moves no nuts and changes no stock.
+ */
+import type { ReceiptRecord } from "../types/receipt.js";
+import { GRN_QUANTITY_LABEL } from "./receiptStatus.js";
+import { isGrnComplete } from "./recordLock.js";
+import { parseQty } from "./receiptMath.js";
+
+/** The client's settings: about 150 t a day, so a month is 3,700–4,500 t (150 t × ~26 working days). */
+export const DAILY_CAPACITY_KG = 150_000;
+export const MONTHLY_GUIDE_KG = { min: 3_700_000, max: 4_500_000 } as const;
+
+// ── Warehouse bin stock, as procurement left it ────────────────────────────────────────────────
+
+/** Where one procurement Lot stands, as far as production is concerned. */
+export type LotBinState =
+  /** In the bin, procurement finished: counts toward the bin's stock. */
+  | "in_bin"
+  /** In the bin, but its GRN weight is blank (an imported row from a sheet with no GRN column): counted as a Lot, not as kg. */
+  | "weight_not_recorded"
+  /** The n-bin step names several bins ("BIN-01/BIN-02"): which share went where was never recorded, so no kg is attributed. */
+  | "split_across_bins";
+
+export interface LotInBin {
+  receiptId: string;
+  lotNo: string;
+  supplierName: string;
+  arrivalDate: string;
+  /** undefined unless state is "in_bin". */
+  kg?: number;
+  state: LotBinState;
+  /** True when the Lot came back from sun drying into this bin (its dried quantity is what counts). */
+  dried: boolean;
+}
+
+export interface WarehouseBinStock {
+  binCode: string;
+  kg: number;
+  lots: LotInBin[];
+}
+
+const filled = (v: string | undefined) => (v ?? "").trim() !== "";
+
+/** The n-bin step reads several bins separated by "/" or "," (see masters' createBin). */
+export function splitBinCodes(raw: string | undefined): string[] {
+  return (raw ?? "").split(/[/,]/).map((s) => s.trim().toUpperCase()).filter(Boolean);
+}
+
+/**
+ * Procurement is finished for a Lot only when nothing about it is still open — strict on purpose (team decision,
+ * Oct 2026): a Lot whose questions are unanswered is "not ready", never assumed to be staying.
+ *
+ * - Quality passed.
+ * - GRN complete: quantity and price, the rule that locks the record (recordLock.ts). An imported receipt only
+ *   needs a GRN row: its sheet had no GRN quantity column, the same exception deriveStatus makes.
+ * - Transfer decided "No — stays". Unanswered could still become "Yes — transfers out" after the bin is planned.
+ * - Drying decided: "No drying needed", or the drying step exists (warehouseBinStock then waits for the dried
+ *   quantity to come back). "Direct"/"Warehouse → Drying" chosen but not yet started is not ready either.
+ *
+ * Imported receipts never recorded the two decisions, so they don't qualify until someone answers them in the app.
+ */
+function procurementComplete(r: ReceiptRecord): boolean {
+  if (r.branches["n-qfs"] !== "pass") return false;
+  const grn = r.source === "imported" ? Boolean(r.stageData["n-grn"]) : isGrnComplete(r.stageData);
+  if (!grn) return false;
+  if (r.branches["n-xferdec"] !== "stays") return false;
+  return Boolean(r.stageData["n-drying"]) || r.branches["n-drying"] === "none";
+}
+
+/**
+ * The stock of each warehouse bin, worked out from the procurement receipts — never stored, so it
+ * can't drift from the Lots it is made of.
+ *
+ * - Only Lots whose procurement is finished (procurementComplete above) are in a bin at all; rejected and
+ *   transferred-out trucks never are.
+ * - The quantity is the GRN Weight: the quantity officially recognised into stock (recordLock.ts).
+ *   Net, GRN and Paid are kept apart on purpose (client, Oct 2026), so Net is never substituted.
+ * - A Lot sent to sun drying is out of its bin until the dried quantity is recorded as returned to a
+ *   bin ("Dried quantity returned to warehouse" + "New/assigned Bin"); from then it counts there, at
+ *   the dried quantity.
+ */
+export function warehouseBinStock(receipts: ReceiptRecord[]): Map<string, WarehouseBinStock> {
+  const bins = new Map<string, WarehouseBinStock>();
+  const add = (binCode: string, lot: LotInBin) => {
+    const bin = bins.get(binCode) ?? { binCode, kg: 0, lots: [] };
+    bin.lots.push(lot);
+    if (lot.kg !== undefined) bin.kg += lot.kg;
+    bins.set(binCode, bin);
+  };
+
+  for (const r of receipts) {
+    if (!procurementComplete(r)) continue;
+
+    const base = {
+      receiptId: r.id,
+      lotNo: r.lotNo || r.stageData["n-lot"]?.["Lot Number"] || "",
+      supplierName: r.supplierName,
+      arrivalDate: r.arrivalDate,
+    };
+
+    const drying = r.stageData["n-drying"];
+    let binCodes: string[];
+    let kg: number | undefined;
+    let dried = false;
+    if (drying) {
+      const returned = parseQty(drying["Dried quantity returned to warehouse"]);
+      const back = splitBinCodes(drying['New/assigned Bin (marked "dried stock")']);
+      if (returned === undefined || back.length === 0) continue; // still out for drying
+      binCodes = back;
+      kg = returned;
+      dried = true;
+    } else {
+      binCodes = splitBinCodes(r.stageData["n-bin"]?.["Bin Number"] || r.binNo);
+      kg = filled(r.stageData["n-grn"]?.[GRN_QUANTITY_LABEL]) ? parseQty(r.stageData["n-grn"]![GRN_QUANTITY_LABEL]) : undefined;
+    }
+    if (binCodes.length === 0) continue;
+
+    if (binCodes.length > 1) {
+      for (const code of binCodes) add(code, { ...base, state: "split_across_bins", dried });
+    } else if (kg === undefined) {
+      add(binCodes[0]!, { ...base, state: "weight_not_recorded", dried });
+    } else {
+      add(binCodes[0]!, { ...base, kg, state: "in_bin", dried });
+    }
+  }
+  for (const bin of bins.values()) bin.kg = Math.round(bin.kg * 100) / 100;
+  return bins;
+}
+
+// ── The batch plan ───────────────────────────────────────────────────────────────────────────
+
+export interface BatchPlan {
+  plannedKg: number;
+  /** Days at the daily capacity, rounded: 4,172.9 t ÷ 150 t ≈ 28. */
+  days: number;
+  /** ISO date: start + days. Undefined while the start date isn't a real date. */
+  endDate?: string;
+  /** Outside 3,700–4,500 t is a warning only; creating is never blocked. */
+  withinMonthlyGuide: boolean;
+}
+
+export function addDays(isoDate: string, days: number): string | undefined {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  if (!m) return undefined;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function planBatch(binKgs: number[], startDate: string): BatchPlan {
+  const plannedKg = Math.round(binKgs.reduce((a, b) => a + b, 0) * 100) / 100;
+  const days = Math.round(plannedKg / DAILY_CAPACITY_KG);
+  return {
+    plannedKg,
+    days,
+    endDate: addDays(startDate, days),
+    withinMonthlyGuide: plannedKg >= MONTHLY_GUIDE_KG.min && plannedKg <= MONTHLY_GUIDE_KG.max,
+  };
+}
+
+/** "ANA-" + the largest bin's own suffix: BIN-03B → ANA-03B, as the client names its batches. */
+export function suggestBatchCode(bins: { binCode: string; kg: number }[]): string {
+  if (bins.length === 0) return "";
+  const largest = bins.reduce((a, b) => (b.kg > a.kg ? b : a));
+  return `ANA-${largest.binCode.replace(/^BIN-?/i, "")}`;
+}
+
+/** Same shape as a Bin code: letters, digits and - _ . only. */
+export const BATCH_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]*$/;
+
+// ── Status ──────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Open → In process (first load received) → Closed. Derived from the batch's RCN Receipts, never
+ * typed. Closed doesn't exist until closing is built.
+ */
+export type BatchStatus = "open" | "in_process";
+
+export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = { open: "Open", in_process: "In process" };
+
+export function batchStatus(rcnReceiptCount: number): BatchStatus {
+  return rcnReceiptCount > 0 ? "in_process" : "open";
+}

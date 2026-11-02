@@ -15,7 +15,9 @@ import { PendingApprovalsProvider } from "./state/PendingApprovals";
 import { SiteLayout } from "./state/SiteContext";
 
 import { DashboardPage } from "./pages/DashboardPage";
-import { ProductionPage } from "./pages/ProductionPage";
+import { BatchesListPage } from "./pages/production/BatchesListPage";
+import { NewBatchPage } from "./pages/production/NewBatchPage";
+import { BatchDetailPage } from "./pages/production/BatchDetailPage";
 import { BtmListPage } from "./pages/production/BtmListPage";
 import { BtmDetailPage } from "./pages/production/BtmDetailPage";
 import { ProductionBinsListPage } from "./pages/production/ProductionBinsListPage";
@@ -164,9 +166,11 @@ function AppRoutes() {
               <Route path="/production/lots" element={<LotsListPage />} />
               <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
               <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
-              {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) - every
-                  route above still works if visited directly; only the sidebar entry point changed. */}
-              <Route path="/production" element={<ProductionPage />} />
+              {/* The workbook-import pages above are not linked from the sidebar; Batches is. */}
+              <Route path="/production" element={<Navigate to="/production/batches" replace />} />
+              <Route path="/production/batches" element={<BatchesListPage />} />
+              <Route path="/production/batches/new" element={<NewBatchPage />} />
+              <Route path="/production/batches/:code" element={<BatchDetailPage />} />
 
               <Route path="/masters/suppliers" element={<SuppliersPage />} />
               <Route path="/masters/suppliers/:code" element={<SupplierDetailPage />} />

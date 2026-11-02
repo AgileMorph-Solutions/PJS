@@ -16,6 +16,8 @@ import { dataQualityRoutes } from "./routes/dataQuality.js";
 import { importRoutes } from "./routes/imports.js";
 import { workbookRoutes } from "./routes/workbook.js";
 import { productionRoutes } from "./routes/production.js";
+import { productionBatchRoutes } from "./routes/productionBatches.js";
+import { rcnReceiptRoutes } from "./routes/rcnReceipts.js";
 import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
 import { dryingBatchRoutes } from "./routes/dryingBatches.js";
 import { dryingSortingReportRoutes } from "./routes/dryingSortingReports.js";
@@ -94,6 +96,8 @@ export function buildApp() {
   app.register(importRoutes);
   app.register(workbookRoutes);
   app.register(productionRoutes);
+  app.register(productionBatchRoutes);
+  app.register(rcnReceiptRoutes);
   app.register(warehouseDispatchRoutes);
   app.register(warehouseActivityLedgerRoutes);
   app.register(dryingBatchRoutes);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useTracking } from "../../state/TrackingContext";
 import { deriveStatus, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
@@ -11,6 +11,8 @@ import { StatBlock } from "../../components/ui/StatBlock";
 import type { ReceiptRecord } from "../../types/receipt";
 import type { ReceiptStatus } from "@anagroci/contract/types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { api } from "../../repository/api";
+import { formatTonnes } from "../../components/production/batchUi";
 
 export function BinDetailPage() {
   const { binNo = "" } = useParams();
@@ -20,6 +22,12 @@ export function BinDetailPage() {
   // Called unconditionally, ahead of the not-a-real-bin early return below — React's hooks-order
   // rule, same reason the `inBin` useMemo above it also sits ahead of that return.
   const search = useTableSearch(inBin, (r) => [r.lotNo, r.supplierName, r.vehicleNo]);
+  // The production batch this bin is planned into, if any — the procurement end of the batch → bin → Lot link.
+  const [batch, setBatch] = useState<{ batchCode: string; plannedKg: number } | null>(null);
+  useEffect(() => {
+    setBatch(null);
+    api.binBatch(binNo).then((r) => setBatch(r.batch)).catch(() => setBatch(null));
+  }, [binNo]);
 
   if (!masters.bins.includes(binNo)) return <Navigate to="/masters/bins" replace />;
 
@@ -52,6 +60,15 @@ export function BinDetailPage() {
         title={`Bin ${binNo}`}
         lede="Every receipt currently stored in this Bin."
       />
+
+      {batch && (
+        <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-[13px] text-brand-800 flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">precision_manufacturing</span>
+          Planned for production in batch
+          <Link to={`/production/batches/${encodeURIComponent(batch.batchCode)}`} className="font-mono font-bold hover:underline">{batch.batchCode}</Link>
+          ({formatTonnes(batch.plannedKg)} planned). Nothing has left the bin until loads are weighed in production.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatBlock icon="inventory_2" label="Lots stored" value={String(distinctLots)} sub="Distinct Lot numbers" />

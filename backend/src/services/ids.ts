@@ -1,5 +1,5 @@
 /**
- * Issues the system's business IDs (Receipt, Lot, Delivery Plan, Transfer). The formats live in
+ * Issues the system's business IDs (Receipt, Lot, Delivery Plan, Transfer, RCN Receipt). The formats live in
  * @anagroci/contract's domain/ids.ts; this file only decides the next number.
  *
  * The number is "highest issued so far + 1", scanned inside the caller's transaction — the same
@@ -10,7 +10,7 @@
 import { Prisma } from "@prisma/client";
 import type { SiteIdKind } from "@anagroci/contract/domain/ids";
 import {
-  formatDeliveryPlanId, formatLotNumber, formatReceiptId, formatTransferId, legacyLotSeq, legacyTransferSeq, normalizeLotNumber, normalizeTransferId, recodeSiteId,
+  formatDeliveryPlanId, formatLotNumber, formatRcnReceiptId, formatReceiptId, formatTransferId, legacyLotSeq, legacyTransferSeq, normalizeLotNumber, normalizeTransferId, recodeSiteId,
   parseSiteId, parseTransferId, siteIdPrefix, transferIdPrefix, yearOf,
 } from "@anagroci/contract/domain/ids";
 import { ValidationError } from "../domain/validation.js";
@@ -182,6 +182,14 @@ export async function nextDeliveryPlanId(tx: Tx, warehouse: string, expectedArri
   const site = (await siteOf(tx, warehouse))!;
   const year = requireYear(expectedArrivalDate, "The expected arrival date");
   return formatDeliveryPlanId(code, year, (await highestDeliveryPlanSeq(tx, site, year)) + 1);
+}
+
+/** RCN Receipts are numbered per factory site and year, over the loads of every batch at that site. */
+export async function nextRcnReceiptId(tx: Tx, site: string, date: string): Promise<string> {
+  const code = await warehouseCodeFor(tx, site);
+  const year = requireYear(date, "The receipt date");
+  const rows = await tx.rcnReceipt.findMany({ where: { batch: { warehouse: site } }, select: { id: true } });
+  return formatRcnReceiptId(code, year, highestSeq(rows.map((r) => r.id), sameKindYear("RR", year)) + 1);
 }
 
 export async function nextTransferId(tx: Tx, transferDate: string): Promise<string> {

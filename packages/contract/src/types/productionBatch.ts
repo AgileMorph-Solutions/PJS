@@ -1,0 +1,51 @@
+import type { BatchStatus, LotInBin } from "../domain/productionBatch.js";
+
+/** A factory warehouse bin offered on the New batch screen. */
+export interface AvailableBin {
+  binCode: string;
+  /** The store the Bin is in, from the Bin master; null when the master doesn't say. */
+  store: string | null;
+  /** Current stock (kg), worked out from the procurement Lots in it. */
+  kg: number;
+  lotCount: number;
+  /** Lots in the bin that add no kg: no GRN weight recorded, or split across bins without a share. */
+  lotsWithoutKg: number;
+  /** Set when the bin is already in a running batch — it can't be picked again. */
+  inBatch: string | null;
+  /** False when the code appears on receipts but not in Masters › Bins, so it can't be put in a batch. */
+  inMaster: boolean;
+}
+
+export interface BatchBinView {
+  binCode: string;
+  /** The bin's stock when the batch was created: the plan, kept as it was. */
+  plannedKg: number;
+  /** What procurement says is in the bin now. */
+  currentKg: number;
+  lots: LotInBin[];
+}
+
+export interface BatchSummary {
+  code: string;
+  warehouse: string;
+  startDate: string;
+  proposedBy: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  status: BatchStatus;
+  plannedKg: number;
+  days: number;
+  endDate: string | null;
+  binCodes: string[];
+}
+
+export interface BatchHistoryEntry {
+  at: string;
+  text: string;
+  actor: string | null;
+}
+
+export interface BatchDetail extends BatchSummary {
+  bins: BatchBinView[];
+  history: BatchHistoryEntry[];
+}

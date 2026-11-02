@@ -80,10 +80,11 @@ These apply in every package here, not just one:
 - **Comments explain *why*, not *what*.** The code already says what it does. A comment earns its
   place by recording a decision, a constraint, or a piece of real-world data that isn't visible in
   the code itself (e.g. "the workbook's own balance goes negative — that's real, don't clamp it").
-- **Don't add a dependency, table, or endpoint for something not asked for.** Production is
-  explicitly out of scope for this build (`frontend/src/pages/ProductionPage.tsx` is a placeholder
-  on purpose) — don't build toward it speculatively; keep the schema extensible instead (see how
-  `backend/prisma/schema.prisma`'s masters aren't hard-coded to only Procurement's needs).
+- **Don't add a dependency, table, or endpoint for something not asked for.** Production is being
+  built one step at a time from the client's "Phase 1 — Batch & Intake" doc: so far only batch
+  creation exists (`ProductionBatch`/`ProductionBatchBin`, contract's `domain/productionBatch.ts`).
+  Intake (RCN Receipt, moisture, weighing) comes next, only when asked — don't build toward later phases speculatively; keep the schema extensible
+  instead (see how `backend/prisma/schema.prisma`'s masters aren't hard-coded to only Procurement's needs).
 
 ## Commands
 
