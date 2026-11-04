@@ -129,6 +129,26 @@ describe("KOR from the cut test", () => {
   });
 });
 
+describe("sample and final moisture / nut count (Nov 2026)", () => {
+  it("MOIS. and NUT COUNT follow the final reading, not the sample", () => {
+    const out = computeDerivedFields({
+      "n-qfs": { "Sample moisture (%)": "12,4", "Sample nut count": "180", "Final moisture (%)": "10,2", "Final nut count": "172" },
+    })["n-qfs"];
+    expect(out).toEqual({ "MOIS. (moisture)": "10.2", "NUT COUNT": "172" });
+  });
+
+  it("a sample reading alone locks nothing and overwrites nothing", () => {
+    const sampleOnly = { "n-qfs": { "MOIS. (moisture)": "10.2", "Sample moisture (%)": "12.4", "Sample nut count": "180" } };
+    expect(computeDerivedFields(sampleOnly)["n-qfs"]).toBeUndefined();
+    expect(derivedRuleInForce(sampleOnly, "n-qfs", "MOIS. (moisture)")).toBeUndefined();
+    expect(derivedRuleInForce({ "n-qfs": { "Final moisture (%)": "10.2" } }, "n-qfs", "MOIS. (moisture)")).toBeDefined();
+  });
+
+  it("never flags an imported single reading that has no final reading behind it", () => {
+    expect(storedFormulaMismatches({ "n-qfs": { "MOIS. (moisture)": "10.2", "NUT COUNT": "172" } })).toEqual([]);
+  });
+});
+
 describe("GRN quantity is suggested from net, never forced", () => {
   const GRN = "GRN Weight (kept separate from Gross/Net/Paid)";
 

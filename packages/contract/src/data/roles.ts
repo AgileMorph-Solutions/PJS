@@ -70,6 +70,10 @@ export const ROLE_FORMS: RoleForm[] = [
       {
         stageId: "n-qfs",
         labels: [
+          "Sample moisture (%)",
+          "Sample nut count",
+          "Final moisture (%)",
+          "Final nut count",
           "MOIS. (moisture)",
           "NUT COUNT",
           "Sample – Good Kernel (g)",

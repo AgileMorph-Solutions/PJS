@@ -507,6 +507,10 @@ model StageQualityQfs {
   receiptId         String   @id
   moisture          String? /// MOIS. (moisture)
   nutCount          String? /// NUT COUNT
+  sampleMoisture    String? /// Sample moisture (%)
+  finalMoisture     String? /// Final moisture (%)
+  sampleNutCount    String? /// Sample nut count
+  finalNutCount     String? /// Final nut count
   kor               String? /// KOR
   finalKor          String? /// FINAL KOR
   sampleGoodKernelG String? /// Sample – Good Kernel (g)
