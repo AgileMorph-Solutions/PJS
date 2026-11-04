@@ -50,9 +50,9 @@ export function BinsPage() {
             <input id="bin-code" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BKE-001-BIN-004" className={inputCls} />
           </div>
           <div>
-            <label htmlFor="bin-store" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Store it is in</label>
+            <label htmlFor="bin-store" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Warehouse it is in</label>
             <select id="bin-store" required value={store} onChange={(e) => setStore(e.target.value)} className={inputCls}>
-              <option value="">Choose a store…</option>
+              <option value="">Choose a warehouse…</option>
               {stores.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
@@ -66,7 +66,7 @@ export function BinsPage() {
       </CollapsibleCard>
       <FilterBar>
         <input
-          placeholder="Search bin code or store…"
+          placeholder="Search bin code or warehouse…"
           value={search.q}
           onChange={(e) => search.setQ(e.target.value)}
           className="w-full sm:w-64"
