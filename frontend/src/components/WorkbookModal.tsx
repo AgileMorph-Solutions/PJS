@@ -4,6 +4,42 @@ import { DateRangeInputs, type DateRange } from "./ui/DateRangeInputs";
 import { api, ApiError } from "../repository/api";
 import type { WorkbookCommitResult, WorkbookInfo, WorkbookPreview } from "../repository/api";
 
+/**
+ * Where a workbook comes from and goes to, and the few sentences that differ. Reception's section workbook is
+ * the default; the production workbook passes its own (see productionWorkbookClient).
+ */
+export interface WorkbookClient {
+  info(warehouse: string): Promise<WorkbookInfo>;
+  download(warehouse: string, opts: { from?: string; to?: string; blank?: boolean }): Promise<{ blob: Blob; filename: string; exported: number; withoutDate: number }>;
+  preview(file: File, warehouse: string): Promise<WorkbookPreview>;
+  commit(token: string): Promise<WorkbookCommitResult>;
+  text: { newRow: string; exportNote: string; warnings: string };
+}
+
+export const sectionWorkbookClient: WorkbookClient = {
+  info: (w) => api.workbookInfo(w),
+  download: (w, o) => api.downloadWorkbook(w, o),
+  preview: (f, w) => api.previewWorkbook(f, w),
+  commit: (t) => api.commitWorkbook(t),
+  text: {
+    newRow: "To add a new row, leave its first column (Receipt ID / Row ID) empty. Nothing is ever deleted.",
+    exportNote: "Suppliers, bins, origins and warehouses are always complete.",
+    warnings: "the upload still goes through, and each is saved on its truck",
+  },
+};
+
+export const productionWorkbookClient: WorkbookClient = {
+  info: () => api.productionWorkbookInfo(),
+  download: (_w, o) => api.downloadProductionWorkbook(o),
+  preview: (f) => api.previewProductionWorkbook(f),
+  commit: (t) => api.commitProductionWorkbook(t),
+  text: {
+    newRow: "A new Batch Name creates a batch; leave RCN Receipt ID, Check ID or Pallet ID empty to add a new one. A check, pallet or final weight names its load by RCN Receipt ID or BTM No. Nothing is ever deleted.",
+    exportNote: "Checks, pallets and final weights are filtered on their load's date.",
+    warnings: "the upload still goes through",
+  },
+};
+
 interface Props {
   /** "export" downloads the workbook; "upload" takes the same file back. One format, both ways. */
   mode: "upload" | "export";
@@ -14,6 +50,8 @@ interface Props {
   onClose: () => void;
   /** After an upload is applied, so the host page can refresh its data. */
   onCommitted?: (result: WorkbookCommitResult) => void;
+  /** Which workbook; Reception's section workbook when omitted. */
+  client?: WorkbookClient;
 }
 
 const ghostBtn =
@@ -42,7 +80,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
  * it, Upload takes it back (and offers a blank copy). It differs only by section: which sheets it
  * carries and whose rows it holds (this warehouse's), both decided by the API.
  */
-export function WorkbookModal({ mode, warehouse, sectionLabel, onClose, onCommitted }: Props) {
+export function WorkbookModal({ mode, warehouse, sectionLabel, onClose, onCommitted, client = sectionWorkbookClient }: Props) {
   return (
     <Modal title={mode === "upload" ? "Upload workbook" : "Export workbook"} onClose={onClose} wide={mode === "upload"}>
       {mode === "export" ? (
@@ -51,21 +89,21 @@ export function WorkbookModal({ mode, warehouse, sectionLabel, onClose, onCommit
             The Excel file for <span className="font-semibold text-warmstone-800">{sectionLabel}</span>, with one sheet for each kind of
             record. You can edit it and upload it again - the same file works both ways.
           </p>
-          <ExportBody warehouse={warehouse} />
+          <ExportBody warehouse={warehouse} client={client} />
         </>
       ) : (
-        <UploadBody warehouse={warehouse} sectionLabel={sectionLabel} onCommitted={onCommitted} />
+        <UploadBody warehouse={warehouse} sectionLabel={sectionLabel} onCommitted={onCommitted} client={client} />
       )}
     </Modal>
   );
 }
 
-function useInfo(warehouse: string) {
+function useInfo(warehouse: string, client: WorkbookClient) {
   const [info, setInfo] = useState<WorkbookInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    api.workbookInfo(warehouse).then(setInfo).catch((e) => setError(msgOf(e)));
-  }, [warehouse]);
+    client.info(warehouse).then(setInfo).catch((e) => setError(msgOf(e)));
+  }, [warehouse, client]);
   return { info, error };
 }
 
@@ -81,8 +119,8 @@ function SheetChips({ info }: { info: WorkbookInfo }) {
   );
 }
 
-function ExportBody({ warehouse }: { warehouse: string }) {
-  const { info, error: infoError } = useInfo(warehouse);
+function ExportBody({ warehouse, client }: { warehouse: string; client: WorkbookClient }) {
+  const { info, error: infoError } = useInfo(warehouse, client);
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +135,7 @@ function ExportBody({ warehouse }: { warehouse: string }) {
     setError(null);
     setResult(null);
     try {
-      const { blob, filename, exported, withoutDate } = await api.downloadWorkbook(warehouse, { from: range.from, to: range.to });
+      const { blob, filename, exported, withoutDate } = await client.download(warehouse, { from: range.from, to: range.to });
       saveFile(blob, filename);
       setResult({ exported, withoutDate });
     } catch (e) {
@@ -128,7 +166,7 @@ function ExportBody({ warehouse }: { warehouse: string }) {
         {inverted && <p role="alert" className="mt-1.5 text-[12px] text-danger-700">"From" is after "To".</p>}
         <p className="mt-1.5 text-[12px] text-warmstone-500">
           Each dated sheet is filtered on its own date ({dated.map((s) => `${s.name}: ${s.dateLabel!.toLowerCase()}`).slice(0, 3).join("; ")}…), both ends included.
-          Suppliers, bins, origins and warehouses are always complete.
+          {client.text.exportNote}
           {hasRange && " Rows with no usable date are left out, and counted below."}
         </p>
       </div>
@@ -156,7 +194,7 @@ function ExportBody({ warehouse }: { warehouse: string }) {
   );
 }
 
-function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: string; sectionLabel: string; onCommitted?: (r: WorkbookCommitResult) => void }) {
+function UploadBody({ warehouse, sectionLabel, onCommitted, client }: { warehouse: string; sectionLabel: string; onCommitted?: (r: WorkbookCommitResult) => void; client: WorkbookClient }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -174,7 +212,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
   async function downloadBlank() {
     setError(null);
     try {
-      const { blob, filename } = await api.downloadWorkbook(warehouse, { blank: true });
+      const { blob, filename } = await client.download(warehouse, { blank: true });
       saveFile(blob, filename);
     } catch (e) {
       setError(msgOf(e));
@@ -189,7 +227,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
     if (!f) return;
     setPreviewing(true);
     try {
-      setPreview(await api.previewWorkbook(f, warehouse));
+      setPreview(await client.preview(f, warehouse));
     } catch (e) {
       setError(msgOf(e));
     } finally {
@@ -202,7 +240,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
     setApplying(true);
     setError(null);
     try {
-      const result = await api.commitWorkbook(preview.token);
+      const result = await client.commit(preview.token);
       setDone(result);
       onCommitted?.(result);
     } catch (e) {
@@ -284,7 +322,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
 
       {!preview && !done && (
         <p className="text-center text-[12px] text-warmstone-400">
-          To add a new row, leave its first column (Receipt ID / Row ID) empty. Nothing is ever deleted.
+          {client.text.newRow}
         </p>
       )}
 
@@ -350,7 +388,7 @@ function UploadBody({ warehouse, sectionLabel, onCommitted }: { warehouse: strin
           {preview.warningCount > 0 && (
             <div className="space-y-2">
               <h3 className="text-[12.5px] font-bold text-ambernut-700">
-                {plural(preview.warningCount, "thing")} to check - the upload still goes through, and each is saved on its truck
+                {plural(preview.warningCount, "thing")} to check - {client.text.warnings}
               </h3>
               <ul className="space-y-1 text-[12.5px] max-h-40 overflow-y-auto">
                 {preview.sheets.filter((s) => s.warningCount > 0).flatMap((s) => [

@@ -41,7 +41,14 @@ export function MoistureCard({ receipt, canEnter, canReview, direct, onChanged }
         <CheckDetails check={current} />
       ) : null}
 
-      {pending && (canReview ? <ReviewBar check={pending} onDone={onChanged} /> : (
+      {pending && (canReview ? (
+        <ReviewBar
+          applies={pending.decision === "ok" ? "the load moves to Waiting for weighing." : "the load goes On hold."}
+          onApprove={() => api.approveMoistureCheck(pending.id)}
+          onReject={(reason) => api.rejectMoistureCheck(pending.id, reason)}
+          onDone={onChanged}
+        />
+      ) : (
         <p className="rounded-xl border border-ambernut-200 bg-ambernut-50 text-ambernut-900 px-4 py-3 text-[12.5px]">Submitted. Waiting for the Warehouse Incharge to approve.</p>
       ))}
 
@@ -185,7 +192,14 @@ function CheckDetails({ check }: { check: MoistureCheck }) {
   );
 }
 
-function ReviewBar({ check, onDone }: { check: MoistureCheck; onDone: () => void }) {
+/** The Incharge's approve / reject of a submitted check; shared by the moisture check and QC-2 (SizingSection). */
+export function ReviewBar({ applies, onApprove, onReject, onDone }: {
+  /** What approving does, as the end of "Approving applies it: …". */
+  applies: string;
+  onApprove: () => Promise<unknown>;
+  onReject: (reason: string) => Promise<unknown>;
+  onDone: () => void;
+}) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -206,7 +220,7 @@ function ReviewBar({ check, onDone }: { check: MoistureCheck; onDone: () => void
   return (
     <div className="rounded-xl border-2 border-ambernut-300 bg-ambernut-50 p-4 space-y-3">
       <p className="text-[13px] text-ambernut-900">
-        <b>Needs your approval.</b> Approving applies it: {check.decision === "ok" ? "the load moves to Waiting for weighing." : "the load goes On hold."} Rejecting applies nothing.
+        <b>Needs your approval.</b> Approving applies it: {applies} Rejecting applies nothing.
       </p>
       {rejecting && (
         <input className={inputCls} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is it rejected? (required)" />
@@ -216,14 +230,14 @@ function ReviewBar({ check, onDone }: { check: MoistureCheck; onDone: () => void
         {rejecting ? (
           <>
             <button type="button" className={secondaryButton} onClick={() => setRejecting(false)} disabled={busy}>Cancel</button>
-            <button type="button" className={`${primaryButton} !bg-danger-700 hover:!bg-danger-800`} disabled={busy || !reason.trim()} onClick={() => run(() => api.rejectMoistureCheck(check.id, reason.trim()))}>
+            <button type="button" className={`${primaryButton} !bg-danger-700 hover:!bg-danger-800`} disabled={busy || !reason.trim()} onClick={() => run(() => onReject(reason.trim()))}>
               <span className="material-symbols-outlined text-[18px]">close</span>Reject
             </button>
           </>
         ) : (
           <>
             <button type="button" className={secondaryButton} onClick={() => setRejecting(true)} disabled={busy}>Reject…</button>
-            <button type="button" className={primaryButton} disabled={busy} onClick={() => run(() => api.approveMoistureCheck(check.id))}>
+            <button type="button" className={primaryButton} disabled={busy} onClick={() => run(onApprove)}>
               <span className="material-symbols-outlined text-[18px]">check</span>Approve
             </button>
           </>

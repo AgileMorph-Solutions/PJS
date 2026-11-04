@@ -12,6 +12,7 @@ import type {
 } from "@anagroci/contract/types/user";
 import type { BatchTruckRow } from "@anagroci/contract/data/batchEntry";
 import type { AvailableBin, BatchDetail, BatchSummary } from "@anagroci/contract/types/productionBatch";
+import type { BatchCalibration, CalibrationRunInput, ManualCalibrationInput, SizingCheck, SizingCheckInput } from "@anagroci/contract/types/calibration";
 import type { MoistureCheckInput, RcnFinalWeightInput, RcnPalletInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
 
 export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
@@ -78,6 +79,41 @@ const unwrap = <T>(r: Written<T> | T): Written<T> =>
 
 const withWarehouse = (path: string, warehouse?: string) =>
   warehouse ? `${path}${path.includes("?") ? "&" : "?"}warehouse=${encodeURIComponent(warehouse)}` : path;
+
+/** Downloads a workbook file. Returns it for the caller to save rather than pointing a link at the URL,
+ * so a 401/403 shows as a message instead of JSON in a new tab. */
+async function fetchWorkbookFile(path: string): Promise<{ blob: Blob; filename: string; exported: number; withoutDate: number }> {
+  const res = await fetch(`${BASE}${path}`, { credentials: "include" });
+  checkUnauthorized(res, path);
+  if (!res.ok) throw await errorFromResponse(res);
+  const filename = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "ANAGROCI workbook.xlsx";
+  return {
+    blob: await res.blob(),
+    filename,
+    exported: Number(res.headers.get("x-rows-exported") ?? 0),
+    withoutDate: Number(res.headers.get("x-rows-without-date") ?? 0),
+  };
+}
+
+/** Multipart upload — the calls here that aren't JSON, so they can't go through request(): a FormData
+ * body needs the browser's own multipart Content-Type (with boundary), never "application/json". Writes nothing. */
+async function postWorkbookFile(path: string, file: File, warehouse?: string): Promise<WorkbookPreview> {
+  const form = new FormData();
+  if (warehouse) form.append("warehouse", warehouse); // fields before the file, so the server has it when it reads the file
+  form.append("file", file);
+  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form, credentials: "include" });
+  checkUnauthorized(res, path);
+  if (!res.ok) throw await errorFromResponse(res);
+  return res.json();
+}
+
+/** The factory an admin chose on Production (state/productionFactory.tsx); undefined = the caller's own. */
+let productionFactory: string | undefined;
+export function setProductionFactory(name: string | undefined) {
+  productionFactory = name;
+}
+/** A Batch & Intake path, for the chosen factory. */
+const prod = (path: string) => withWarehouse(path, productionFactory);
 
 export const api = {
   // ── Identity, users, approvals — their own capability, not part of TrackingApi (see
@@ -298,67 +334,68 @@ export const api = {
   /** Downloads the workbook (or, with `blank`, the headers-only template). Returns the file for the
    * caller to save rather than pointing a link at the URL, so a 401/403 shows as a message instead
    * of JSON in a new tab. */
-  downloadWorkbook: async (
-    warehouse: string,
-    opts: { from?: string; to?: string; blank?: boolean } = {}
-  ): Promise<{ blob: Blob; filename: string; exported: number; withoutDate: number }> => {
+  downloadWorkbook: (warehouse: string, opts: { from?: string; to?: string; blank?: boolean } = {}) => {
     const q = new URLSearchParams({ warehouse });
     // Inclusive, either end optional — the backend validates and reports what it left out.
     if (opts.from) q.set("from", opts.from);
     if (opts.to) q.set("to", opts.to);
-    const path = `/workbook${opts.blank ? "/template" : ""}?${q}`;
-    const res = await fetch(`${BASE}${path}`, { credentials: "include" });
-    checkUnauthorized(res, path);
-    if (!res.ok) throw await errorFromResponse(res);
-    const filename = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "ANAGROCI workbook.xlsx";
-    return {
-      blob: await res.blob(),
-      filename,
-      exported: Number(res.headers.get("x-rows-exported") ?? 0),
-      withoutDate: Number(res.headers.get("x-rows-without-date") ?? 0),
-    };
+    return fetchWorkbookFile(`/workbook${opts.blank ? "/template" : ""}?${q}`);
   },
 
-  /** Multipart upload — the one call in this file that isn't JSON, so it can't go through
-   * request(): a FormData body needs the browser's own multipart Content-Type (with boundary),
-   * never the "application/json" header the JSON calls send. Writes nothing. */
-  previewWorkbook: async (file: File, warehouse: string): Promise<WorkbookPreview> => {
-    const form = new FormData();
-    form.append("warehouse", warehouse); // fields before the file, so the server has it when it reads the file
-    form.append("file", file);
-    const res = await fetch(`${BASE}/workbook/preview`, { method: "POST", body: form, credentials: "include" });
-    checkUnauthorized(res, "/workbook/preview");
-    if (!res.ok) throw await errorFromResponse(res);
-    return res.json();
-  },
+  previewWorkbook: (file: File, warehouse: string) => postWorkbookFile("/workbook/preview", file, warehouse),
 
   commitWorkbook: (token: string) =>
     request<WorkbookCommitResult>(`/workbook/${encodeURIComponent(token)}/commit`, { method: "POST" }),
 
+  // ── The production workbook: Batch & Intake as one .xlsx, the same three steps as the one above. ──
+  productionWorkbookInfo: () => request<WorkbookInfo>(prod("/production/workbook/info")),
+  downloadProductionWorkbook: (opts: { from?: string; to?: string; blank?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.blank) q.set("blank", "1");
+    if (opts.from) q.set("from", opts.from);
+    if (opts.to) q.set("to", opts.to);
+    return fetchWorkbookFile(prod(`/production/workbook${q.size ? `?${q}` : ""}`));
+  },
+  previewProductionWorkbook: (file: File) => postWorkbookFile("/production/workbook/preview", file, productionFactory),
+  commitProductionWorkbook: (token: string) =>
+    request<WorkbookCommitResult>(`/production/workbook/${encodeURIComponent(token)}/commit`, { method: "POST" }),
+
   // ── Production Phase 0: batches (client's "Phase 1 — Batch & Intake" doc). ──
-  listBatchBins: () => request<AvailableBin[]>("/production/batch-bins"),
-  listBatches: () => request<BatchSummary[]>("/production/batches"),
-  getBatch: (code: string) => request<BatchDetail>(`/production/batches/${encodeURIComponent(code)}`),
+  listBatchBins: () => request<AvailableBin[]>(prod("/production/batch-bins")),
+  listBatches: () => request<BatchSummary[]>(prod("/production/batches")),
+  getBatch: (code: string) => request<BatchDetail>(prod(`/production/batches/${encodeURIComponent(code)}`)),
   createBatch: (b: { code: string; startDate: string; proposedBy: string; bins: string[] }) =>
-    request<BatchDetail>("/production/batches", { method: "POST", body: JSON.stringify(b) }),
+    request<BatchDetail>(prod("/production/batches"), { method: "POST", body: JSON.stringify(b) }),
   binBatch: (binCode: string) => request<{ batch: { batchCode: string; plannedKg: number } | null }>(`/production/bin-batch/${encodeURIComponent(binCode)}`),
 
   // ── Production Phase 1, step 1: RCN Receipts. ──
   listRcnReceipts: (batchCode?: string) =>
-    request<RcnReceipt[]>(`/production/rcn-receipts${batchCode ? `?batch=${encodeURIComponent(batchCode)}` : ""}`),
-  createRcnReceipt: (r: RcnReceiptInput) => request<RcnReceipt>("/production/rcn-receipts", { method: "POST", body: JSON.stringify(r) }),
+    request<RcnReceipt[]>(prod(`/production/rcn-receipts${batchCode ? `?batch=${encodeURIComponent(batchCode)}` : ""}`)),
+  createRcnReceipt: (r: RcnReceiptInput) => request<RcnReceipt>(prod("/production/rcn-receipts"), { method: "POST", body: JSON.stringify(r) }),
   submitMoistureCheck: (receiptId: string, c: MoistureCheckInput) =>
-    request<RcnReceipt>(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/moisture-checks`, { method: "POST", body: JSON.stringify(c) }),
-  approveMoistureCheck: (checkId: number) => request<RcnReceipt>(`/production/moisture-checks/${checkId}/approve`, { method: "POST" }),
+    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/moisture-checks`), { method: "POST", body: JSON.stringify(c) }),
+  approveMoistureCheck: (checkId: number) => request<RcnReceipt>(prod(`/production/moisture-checks/${checkId}/approve`), { method: "POST" }),
   rejectMoistureCheck: (checkId: number, reason: string) =>
-    request<RcnReceipt>(`/production/moisture-checks/${checkId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+    request<RcnReceipt>(prod(`/production/moisture-checks/${checkId}/reject`), { method: "POST", body: JSON.stringify({ reason }) }),
   // ── Production Phase 1, steps 3–4: weighing. ──
   addRcnPallet: (receiptId: string, p: RcnPalletInput) =>
-    request<RcnReceipt>(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/pallets`, { method: "POST", body: JSON.stringify(p) }),
-  updateRcnPallet: (palletId: number, p: RcnPalletInput) => request<RcnReceipt>(`/production/rcn-pallets/${palletId}`, { method: "PUT", body: JSON.stringify(p) }),
-  deleteRcnPallet: (palletId: number) => request<RcnReceipt>(`/production/rcn-pallets/${palletId}`, { method: "DELETE" }),
+    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/pallets`), { method: "POST", body: JSON.stringify(p) }),
+  updateRcnPallet: (palletId: number, p: RcnPalletInput) => request<RcnReceipt>(prod(`/production/rcn-pallets/${palletId}`), { method: "PUT", body: JSON.stringify(p) }),
+  deleteRcnPallet: (palletId: number) => request<RcnReceipt>(prod(`/production/rcn-pallets/${palletId}`), { method: "DELETE" }),
   saveRcnFinalWeight: (receiptId: string, f: RcnFinalWeightInput) =>
-    request<RcnReceipt>(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/final-weight`, { method: "POST", body: JSON.stringify(f) }),
+    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/final-weight`), { method: "POST", body: JSON.stringify(f) }),
+
+  // ── Production Phase 2: calibration (sizing into the 9 silos, QC-2, manual re-sizing). ──
+  getBatchCalibration: (code: string) => request<BatchCalibration>(prod(`/production/batches/${encodeURIComponent(code)}/calibration`)),
+  addCalibrationRun: (receiptId: string, r: CalibrationRunInput) =>
+    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/calibration-runs`), { method: "POST", body: JSON.stringify(r) }),
+  deleteCalibrationRun: (runId: number) => request<RcnReceipt>(prod(`/production/calibration-runs/${runId}`), { method: "DELETE" }),
+  submitSizingCheck: (c: SizingCheckInput) => request<SizingCheck>(prod("/production/sizing-checks"), { method: "POST", body: JSON.stringify(c) }),
+  approveSizingCheck: (checkId: number) => request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/approve`), { method: "POST" }),
+  rejectSizingCheck: (checkId: number, reason: string) =>
+    request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/reject`), { method: "POST", body: JSON.stringify({ reason }) }),
+  addManualCalibration: (checkId: number, m: ManualCalibrationInput) =>
+    request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/manual-calibrations`), { method: "POST", body: JSON.stringify(m) }),
 
   // ── Production — its own capability, not part of TrackingApi (see repository/api.ts's header:
   // same reasoning as dryingJobs/receiptLinks — a new hook, not a reshaped context). ─────────────

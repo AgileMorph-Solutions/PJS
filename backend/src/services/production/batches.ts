@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import { arrivedLots, BATCH_CODE_PATTERN, batchStatus, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
 import { MOISTURE_DECISION_LABELS, type MoistureDecision } from "@anagroci/contract/domain/rcnReceipt";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
+import { SIZING_DECISION_LABELS, samplingPointLabel, siloLabel, sizesTotal, type SamplingPoint, type SiloSize, type SizingDecision } from "@anagroci/contract/domain/calibration";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
 import type { AvailableBin, BatchDetail, BatchHistoryEntry, BatchSummary } from "@anagroci/contract/types/productionBatch";
 import { prisma } from "../../db.js";
@@ -86,6 +87,16 @@ export interface CreateBatchInput {
 }
 
 export async function createBatch(site: string, actorId: string, input: CreateBatchInput) {
+  const stock = await procurementBinStock(site);
+  return prisma.$transaction((tx) => createBatchIn(tx, site, actorId, input, stock));
+}
+
+/**
+ * The batch rules, inside the caller's transaction: the New batch screen runs them in one of its own, the
+ * production workbook upload in the one that holds the whole file. `stock` is the site's bin stock as
+ * procurementBinStock gives it.
+ */
+export async function createBatchIn(tx: Prisma.TransactionClient, site: string, actorId: string, input: CreateBatchInput, stock: Map<string, WarehouseBinStock>) {
   const code = (input.code ?? "").trim().toUpperCase();
   if (!code) throw new ValidationError("A batch needs a name.");
   if (!BATCH_CODE_PATTERN.test(code)) throw new ValidationError(`"${code}" can only use letters, digits and - _ .`);
@@ -94,9 +105,7 @@ export async function createBatch(site: string, actorId: string, input: CreateBa
   const binCodes = [...new Set((input.bins ?? []).map((b) => String(b).trim().toUpperCase()).filter(Boolean))];
   if (binCodes.length === 0) throw new ValidationError("Pick at least one warehouse bin.");
 
-  const stock = await procurementBinStock(site);
-
-  return prisma.$transaction(async (tx) => {
+  {
     // Lock the chosen bins, so two batches created at the same moment can't both take the same bin.
     const locked = await tx.$queryRaw<{ code: string }[]>`SELECT code FROM "Bin" WHERE code IN (${Prisma.join(binCodes)}) FOR UPDATE`;
     const missing = binCodes.filter((c) => !locked.some((l) => l.code === c));
@@ -121,7 +130,7 @@ export async function createBatch(site: string, actorId: string, input: CreateBa
       },
     });
     return code;
-  });
+  }
 }
 
 const BATCH_INCLUDE = {
@@ -139,8 +148,21 @@ const BATCH_INCLUDE = {
       pallets: { select: { grossKg: true, bags: true } },
       emptyPallets: { select: { weightKg: true } },
       dustKg: true, voidsKg: true, finalisedAt: true, finalisedBy: { select: { displayName: true } },
+      calibrationRuns: {
+        select: {
+          date: true, createdAt: true, createdBy: { select: { displayName: true } },
+          kgApp: true, kgAp: true, kgA: true, kgAB: true, kgB: true, kgBC: true, kgC: true, kgD: true, kgE: true,
+        },
+      },
     },
     orderBy: { createdAt: "asc" },
+  },
+  sizingChecks: {
+    select: {
+      point: true, decision: true, status: true, submittedById: true, reviewedById: true, submittedAt: true, reviewedAt: true, rejectReason: true,
+      submittedBy: { select: { displayName: true } }, reviewedBy: { select: { displayName: true } },
+      manualCalibrations: { select: { fromSize: true, toSize: true, kg: true, createdAt: true, createdBy: { select: { displayName: true } } } },
+    },
   },
 } satisfies Prisma.ProductionBatchInclude;
 
@@ -194,6 +216,23 @@ export async function getBatch(site: string, code: string): Promise<BatchDetail 
       },
       ...r.moistureChecks.flatMap((c) => moistureHistory(r.btmNo, c)),
       ...(r.finalisedAt ? [weighedHistory(r)] : []),
+      ...r.calibrationRuns.map((c) => ({
+        at: c.createdAt.toISOString(),
+        text: `BTM ${r.btmNo} sized into silos: ${kgText(sizesTotal({ App: c.kgApp ?? undefined, Ap: c.kgAp ?? undefined, A: c.kgA ?? undefined, AB: c.kgAB ?? undefined, B: c.kgB ?? undefined, BC: c.kgBC ?? undefined, C: c.kgC ?? undefined, D: c.kgD ?? undefined, E: c.kgE ?? undefined }))}`,
+        actor: c.createdBy.displayName,
+      })),
+    ]),
+    ...row.sizingChecks.flatMap((c) => [
+      ...reviewedHistory(
+        `Sizing check (QC-2), ${samplingPointLabel(c.point as SamplingPoint)}: ${SIZING_DECISION_LABELS[c.decision as SizingDecision]}`,
+        "Sizing check",
+        c,
+      ),
+      ...c.manualCalibrations.map((m) => ({
+        at: m.createdAt.toISOString(),
+        text: `Re-sized by hand: ${kgText(Number(m.kg))} from silo ${siloLabel(m.fromSize as SiloSize)} to ${siloLabel(m.toSize as SiloSize)}`,
+        actor: m.createdBy.displayName,
+      })),
     ]),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
@@ -225,14 +264,20 @@ function weighedHistory(r: BatchRow["rcnReceipts"][number]): BatchHistoryEntry {
  * Only a direct entry is reviewed by its own author: a submitter can't approve.
  */
 function moistureHistory(btmNo: string, c: CheckForHistory): BatchHistoryEntry[] {
-  const what = `BTM ${btmNo} moisture ${c.moisture} %, ${MOISTURE_DECISION_LABELS[c.decision as MoistureDecision]}`;
+  return reviewedHistory(`BTM ${btmNo} moisture ${c.moisture} %, ${MOISTURE_DECISION_LABELS[c.decision as MoistureDecision]}`, `BTM ${btmNo} moisture check`, c);
+}
+
+type ReviewedForHistory = Pick<CheckForHistory, "status" | "submittedById" | "reviewedById" | "submittedAt" | "reviewedAt" | "rejectReason" | "submittedBy" | "reviewedBy">;
+
+/** A moisture check and a QC-2 sizing check read the same way in the history. */
+function reviewedHistory(what: string, name: string, c: ReviewedForHistory): BatchHistoryEntry[] {
   const direct = c.reviewedById === c.submittedById;
   if (direct) return [{ at: c.submittedAt.toISOString(), text: what, actor: c.submittedBy.displayName }];
   const entries: BatchHistoryEntry[] = [{ at: c.submittedAt.toISOString(), text: `${what}: submitted for approval`, actor: c.submittedBy.displayName }];
   if (c.reviewedAt) {
     entries.push({
       at: c.reviewedAt.toISOString(),
-      text: c.status === "approved" ? `BTM ${btmNo} moisture check approved` : `BTM ${btmNo} moisture check rejected: ${c.rejectReason ?? ""}`,
+      text: c.status === "approved" ? `${name} approved` : `${name} rejected: ${c.rejectReason ?? ""}`,
       actor: c.reviewedBy?.displayName ?? null,
     });
   }

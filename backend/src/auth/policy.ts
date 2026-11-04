@@ -45,6 +45,9 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
     { method: "GET", path: /^\/api\/production\/batches(\/[^/]+)?$/ },
     { method: "GET", path: /^\/api\/production\/rcn-receipts$/ },
     { method: "POST", path: /^\/api\/production\/rcn-receipts\/[^/]+\/moisture-checks$/ },
+    // Phase 2, step 3: QC-2 sizing checks, the same way.
+    { method: "GET", path: /^\/api\/production\/batches\/[^/]+\/calibration$/ },
+    { method: "POST", path: /^\/api\/production\/sizing-checks$/ },
   ],
 };
 

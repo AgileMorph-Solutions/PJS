@@ -2301,6 +2301,7 @@ model ProductionBatch {
 
   bins        ProductionBatchBin[]
   rcnReceipts RcnReceipt[]
+  sizingChecks SizingCheck[]
 
   @@index([warehouse])
 }
@@ -2347,6 +2348,7 @@ model RcnReceipt {
   finalisedById String?
   finalisedBy   User?     @relation("RcnReceiptFinaliser", fields: [finalisedById], references: [id], onDelete: SetNull)
   finalisedAt   DateTime?
+  calibrationRuns RcnCalibrationRun[]
 
   @@index([batchCode])
   @@index([batchCode, binCode, btmNo])
@@ -2417,6 +2419,93 @@ model RcnMoistureCheck {
 }
 
 
+// ── Production Phase 2: Calibration ──────────────────────────────────────────────────────────────
+// From the client's "Production module" document (Oct 2026), Phase 2, and its workbooks 4. Calibration Process
+// report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual Calibration (Sheet2). Silo stock is
+// calculated from these rows (contract domain/calibration.ts siloStock), never stored.
+
+/// One run of a load through the sizing machine: the kg that went into each of the 9 silos (A++ … E, the silo
+/// report's own columns). A load can take several runs over several days; their total can't pass its into-silo kg.
+model RcnCalibrationRun {
+  id           Int        @id @default(autoincrement())
+  rcnReceiptId String
+  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  date         String
+  kgApp        String?
+  kgAp         String?
+  kgA          String?
+  kgAB         String?
+  kgB          String?
+  kgBC         String?
+  kgC          String?
+  kgD          String?
+  kgE          String?
+  createdById  String
+  createdBy    User       @relation("CalibrationRunAuthor", fields: [createdById], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@index([rcnReceiptId])
+}
+
+/// QC-2: one sample from a silo (or of the RCN as received), sorted into grams per size — a row of the
+/// "24. Wholes Manual Calibration" Sheet2. Submitted / approved / rejected exactly like a moisture check.
+/// Correct-size % is calculated from the grams, never stored.
+model SizingCheck {
+  id            Int             @id @default(autoincrement())
+  batchCode     String
+  batch         ProductionBatch @relation(fields: [batchCode], references: [code])
+  /// The sheet's "BIN NO" (the warehouse bin the nuts came from); free of a foreign key like the sheet, but
+  /// checked against the batch's bins when given.
+  binCode       String?
+  date          String
+  /// "App" … "E" (a silo), or "received" (before calibration).
+  point         String
+  nutCount      String?
+  sampleG       String
+  gApp          String?
+  gAp           String?
+  gA            String?
+  gAB           String?
+  gB            String?
+  gBC           String?
+  gC            String?
+  gD            String?
+  gE            String?
+  /// The sheet's "< DE": what falls through the 18 mm screen.
+  gUnder        String?
+  /// "ok" | "fail"
+  decision      String
+  /// "submitted" | "approved" | "rejected"
+  status        String
+  submittedById String
+  submittedBy   User            @relation("SizingCheckAuthor", fields: [submittedById], references: [id])
+  submittedAt   DateTime        @default(now())
+  reviewedById  String?
+  reviewedBy    User?           @relation("SizingCheckReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+
+  manualCalibrations ManualCalibration[]
+
+  @@index([batchCode])
+}
+
+/// Wholes manual calibration: kg re-sized by hand from one silo to another, only after a failed, approved QC-2.
+model ManualCalibration {
+  id            Int         @id @default(autoincrement())
+  sizingCheckId Int
+  sizingCheck   SizingCheck @relation(fields: [sizingCheckId], references: [id], onDelete: Restrict)
+  date          String
+  fromSize      String
+  toSize        String
+  kg            String
+  createdById   String
+  createdBy     User        @relation("ManualCalibrationAuthor", fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@index([sizingCheckId])
+}
+
 // ── User management ───────────────────────────────────────────────────────
 // Roles and who-may-write-what live in packages/contract's roles.ts; only identity, scope and the
 // approval workflow's own records live here.
@@ -2459,6 +2548,10 @@ model User {
   reviewedMoisture    RcnMoistureCheck[]      @relation("MoistureCheckReviewer")
   weighedPallets      RcnPallet[]             @relation("RcnPalletWeigher")
   finalisedRcnReceipts RcnReceipt[]           @relation("RcnReceiptFinaliser")
+  calibrationRuns     RcnCalibrationRun[]     @relation("CalibrationRunAuthor")
+  sizingChecks        SizingCheck[]           @relation("SizingCheckAuthor")
+  reviewedSizingChecks SizingCheck[]          @relation("SizingCheckReviewer")
+  manualCalibrations  ManualCalibration[]     @relation("ManualCalibrationAuthor")
 
   @@index([role])
   @@index([warehouse])

@@ -4,8 +4,13 @@
  * "Phase 1 — Batch & Intake" document (Oct 2026). Weighing (steps 3–4) is in rcnWeighing.ts.
  */
 
-/** The doc's receipt statuses, moisture check then weighing; Intake done once the final weight is saved. */
-export type RcnReceiptStatus = "waiting_for_moisture" | "moisture_pending" | "on_hold" | "waiting_for_weighing" | "weighing" | "intake_done";
+/**
+ * The doc's receipt statuses, moisture check then weighing; Intake done once the final weight is saved. Phase 2
+ * (calibration.ts) carries it on: sized into the silos in one or more runs, then Calibrated.
+ */
+export type RcnReceiptStatus =
+  | "waiting_for_moisture" | "moisture_pending" | "on_hold" | "waiting_for_weighing" | "weighing" | "intake_done"
+  | "calibrating" | "calibrated";
 
 export const RCN_RECEIPT_STATUS_LABELS: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "Waiting for moisture",
@@ -14,6 +19,8 @@ export const RCN_RECEIPT_STATUS_LABELS: Record<RcnReceiptStatus, string> = {
   waiting_for_weighing: "Waiting for weighing",
   weighing: "Weighing in progress",
   intake_done: "Intake done",
+  calibrating: "Calibration in progress",
+  calibrated: "Calibrated",
 };
 
 /** "OK → after approval, Waiting for weighing; Hold → On hold; weighing stays locked until re-checked." */
@@ -28,17 +35,22 @@ export type MoistureCheckStatus = "submitted" | "approved" | "rejected";
  * Derived from the receipt's checks, never stored. A check waiting for approval wins (the doc: "Saved as
  * PENDING — receipt does NOT change yet", so the screen says who is next); otherwise the newest approved
  * check decides; a rejected one changes nothing. Past moisture, the weighing decides: a pallet weighed
- * means Weighing in progress, a saved final weight means Intake done.
+ * means Weighing in progress, a saved final weight means Intake done. Past Intake, the calibration runs decide:
+ * some kg sized means Calibration in progress, all of the into-silo kg sized means Calibrated.
  */
 export function rcnReceiptStatus(
   checks: { status: MoistureCheckStatus; decision: MoistureDecision }[],
-  weighing: { pallets: number; finalised: boolean } = { pallets: 0, finalised: false },
+  weighing: { pallets: number; finalised: boolean; calibration?: { sizedKg: number; leftKg: number } } = { pallets: 0, finalised: false },
 ): RcnReceiptStatus {
   if (checks.some((c) => c.status === "submitted")) return "moisture_pending";
   const approved = checks.filter((c) => c.status === "approved").at(-1); // checks are oldest first
   if (!approved) return "waiting_for_moisture";
   if (approved.decision !== "ok") return "on_hold";
-  if (weighing.finalised) return "intake_done";
+  if (weighing.finalised) {
+    const c = weighing.calibration;
+    if (!c || c.sizedKg <= 0) return "intake_done";
+    return c.leftKg <= 0 ? "calibrated" : "calibrating";
+  }
   return weighing.pallets > 0 ? "weighing" : "waiting_for_weighing";
 }
 
@@ -47,6 +59,12 @@ export const canTakeMoistureCheck = (status: RcnReceiptStatus): boolean => statu
 
 /** Pallets are weighed, changed and the final weight saved only after moisture is OK and until it is saved. */
 export const canWeigh = (status: RcnReceiptStatus): boolean => status === "waiting_for_weighing" || status === "weighing";
+
+/** Phase 2: a load is sized into the silos once its Intake is done, run by run, until all of it is. */
+export const canCalibrate = (status: RcnReceiptStatus): boolean => status === "intake_done" || status === "calibrating";
+
+/** Intake is over for the load: weighed and closed, whatever Phase 2 has done with it since. */
+export const isIntakeDone = (status: RcnReceiptStatus): boolean => status === "intake_done" || canCalibrate(status) || status === "calibrated";
 
 /** The cut-test parts, as in the client's "2. Input RCN Quality report" columns. */
 export const CUT_TEST_GRAMS = [

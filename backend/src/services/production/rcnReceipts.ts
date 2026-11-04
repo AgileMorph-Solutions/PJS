@@ -10,6 +10,9 @@ import {
   type CutTestGram, type MoistureCheckStatus, type MoistureDecision,
 } from "@anagroci/contract/domain/rcnReceipt";
 import type { MoistureCheck, MoistureCheckInput, RcnFinalWeight, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
+import type { RcnCalibration } from "@anagroci/contract/types/calibration";
+import { SILO_SIZE_KEYS, calibrationProgress, sizesTotal, type SizeValues } from "@anagroci/contract/domain/calibration";
+import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { prisma } from "../../db.js";
 import { ValidationError } from "../../domain/validation.js";
 import { nextRcnReceiptId } from "../ids.js";
@@ -23,12 +26,13 @@ const INCLUDE = {
   pallets: { include: { weighedBy: { select: { displayName: true } } }, orderBy: { id: "asc" } },
   emptyPallets: { orderBy: { id: "asc" } },
   finalisedBy: { select: { displayName: true } },
+  calibrationRuns: { include: { createdBy: { select: { displayName: true } } }, orderBy: { id: "asc" } },
 } satisfies Prisma.RcnReceiptInclude;
 
-type Row = Prisma.RcnReceiptGetPayload<{ include: typeof INCLUDE }>;
+export type Row = Prisma.RcnReceiptGetPayload<{ include: typeof INCLUDE }>;
 type CheckRow = Row["moistureChecks"][number];
 
-type Actor = { id: string; role: Role };
+export type Actor = { id: string; role: Role };
 
 function checkView(c: CheckRow): MoistureCheck {
   const grams: Partial<Record<CutTestGram, string>> = {};
@@ -61,15 +65,35 @@ function finalWeightView(r: Row): RcnFinalWeight | null {
   };
 }
 
+/** A run's kg per size, as typed; a blank size is left out. Shared with the silo stock (services/production/calibration.ts). */
+export function runSizes(run: Record<`kg${SiloSizeKey}`, string | null>): SizeValues {
+  const sizes: SizeValues = {};
+  for (const k of SILO_SIZE_KEYS) if (run[`kg${k}`] !== null) sizes[k] = run[`kg${k}`]!;
+  return sizes;
+}
+type SiloSizeKey = (typeof SILO_SIZE_KEYS)[number];
+
+/** Phase 2: what the load's runs have sized of its into-silo kg. Null before the final weight gives that kg. */
+function calibrationView(r: Row): RcnCalibration | null {
+  if (!r.finalisedAt) return null;
+  const toSilosKg = weighingTotals(r.pallets, { emptyPallets: r.emptyPallets, dustKg: r.dustKg ?? undefined, voidsKg: r.voidsKg ?? undefined }).toSilosKg;
+  const runs = r.calibrationRuns.map((c) => {
+    const sizes = runSizes(c);
+    return { id: c.id, date: c.date, sizes, totalKg: sizesTotal(sizes), createdBy: c.createdBy.displayName, createdAt: c.createdAt.toISOString() };
+  });
+  return { ...calibrationProgress(toSilosKg, runs), runs };
+}
+
 export function toView(r: Row): RcnReceipt {
   const moistureChecks = r.moistureChecks.map(checkView);
+  const calibration = calibrationView(r);
   return {
     id: r.id,
     batchCode: r.batchCode,
     date: r.date,
     btmNo: r.btmNo,
     binCode: r.binCode,
-    status: rcnReceiptStatus(moistureChecks, { pallets: r.pallets.length, finalised: r.finalisedAt !== null }),
+    status: rcnReceiptStatus(moistureChecks, { pallets: r.pallets.length, finalised: r.finalisedAt !== null, calibration: calibration ?? undefined }),
     moistureChecks,
     pallets: r.pallets.map((p, i) => ({
       id: p.id,
@@ -81,6 +105,7 @@ export function toView(r: Row): RcnReceipt {
       weighedAt: p.weighedAt.toISOString(),
     })),
     finalWeight: finalWeightView(r),
+    calibration,
     createdBy: r.createdBy.displayName,
     createdAt: r.createdAt.toISOString(),
   };
@@ -101,6 +126,12 @@ export async function listRcnReceipts(site: string, batchCode?: string): Promise
  * the same bin again is allowed: the doc makes it a warning, shown by the screen before saving.
  */
 export async function createRcnReceipt(site: string, actorId: string, input: RcnReceiptInput): Promise<RcnReceipt> {
+  const row = await prisma.$transaction((tx) => createRcnReceiptIn(tx, site, actorId, input));
+  return toView(row);
+}
+
+/** createRcnReceipt's rules inside the caller's transaction (the production workbook upload shares one). */
+export async function createRcnReceiptIn(tx: Prisma.TransactionClient, site: string, actorId: string, input: RcnReceiptInput): Promise<Row> {
   const batchCode = (input.batchCode ?? "").trim().toUpperCase();
   if (!batchCode) throw new ValidationError("Choose the batch the load is for.");
   const date = (input.date ?? "").trim();
@@ -110,7 +141,7 @@ export async function createRcnReceipt(site: string, actorId: string, input: Rcn
   const binCode = (input.binCode ?? "").trim().toUpperCase();
   if (!binCode) throw new ValidationError("Choose the warehouse bin the load came from.");
 
-  const row = await prisma.$transaction(async (tx) => {
+  {
     const batch = await tx.productionBatch.findFirst({ where: { code: batchCode, warehouse: site }, select: { bins: { select: { binCode: true } } } });
     if (!batch) throw new ValidationError(`Batch ${batchCode} doesn't exist at ${site}.`);
     if (!batch.bins.some((b) => b.binCode === binCode)) throw new ValidationError(`${binCode} is not in batch ${batchCode}.`);
@@ -119,8 +150,7 @@ export async function createRcnReceipt(site: string, actorId: string, input: Rcn
       data: { id: await nextRcnReceiptId(tx, site, date), batchCode, binCode, date, btmNo, createdById: actorId },
       include: INCLUDE,
     });
-  });
-  return toView(row);
+  }
 }
 
 export async function receiptAt(tx: Prisma.TransactionClient, site: string, id: string): Promise<Row> {
@@ -136,11 +166,17 @@ export const blankToNull = (v: string | undefined) => ((v ?? "").trim() === "" ?
  * an Incharge's or Admin's applies at once ("Incharge and Admin entries apply immediately — no approval").
  */
 export async function submitMoistureCheck(site: string, actor: Actor, receiptId: string, input: MoistureCheckInput): Promise<RcnReceipt> {
+  const row = await prisma.$transaction((tx) => submitMoistureCheckIn(tx, site, actor, receiptId, input));
+  return toView(row);
+}
+
+/** submitMoistureCheck's rules inside the caller's transaction (the production workbook upload shares one). */
+export async function submitMoistureCheckIn(tx: Prisma.TransactionClient, site: string, actor: Actor, receiptId: string, input: MoistureCheckInput): Promise<Row> {
   const values = { ...input, sampleG: blankToNull(input.sampleG) ?? undefined };
   const problem = moistureCheckError(values);
   if (problem) throw new ValidationError(problem);
 
-  const row = await prisma.$transaction(async (tx) => {
+  {
     const receipt = await receiptAt(tx, site, receiptId);
     const status = toView(receipt).status;
     if (!canTakeMoistureCheck(status)) throw new ValidationError(`${receipt.id} is ${RCN_RECEIPT_STATUS_LABELS[status]}; no moisture check is due.`);
@@ -161,8 +197,7 @@ export async function submitMoistureCheck(site: string, actor: Actor, receiptId:
       },
     });
     return receiptAt(tx, site, receipt.id);
-  });
-  return toView(row);
+  }
 }
 
 /** The Incharge's answer to a submitted check. A reject needs a reason and applies nothing. */

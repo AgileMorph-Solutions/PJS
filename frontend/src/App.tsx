@@ -13,6 +13,7 @@ import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 import { PendingApprovalsProvider } from "./state/PendingApprovals";
 import { SiteLayout } from "./state/SiteContext";
+import { ProductionFactoryLayout } from "./state/productionFactory";
 
 import { DashboardPage } from "./pages/DashboardPage";
 import { BatchesListPage } from "./pages/production/BatchesListPage";
@@ -168,9 +169,12 @@ function AppRoutes() {
               <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
               {/* The workbook-import pages above are not linked from the sidebar; Batches is. */}
               <Route path="/production" element={<Navigate to="/production/batches" replace />} />
-              <Route path="/production/batches" element={<BatchesListPage />} />
-              <Route path="/production/batches/new" element={<NewBatchPage />} />
-              <Route path="/production/batches/:code" element={<BatchDetailPage />} />
+              {/* Batch & Intake is for one factory: an admin's choice of it is held here for all three pages. */}
+              <Route element={<ProductionFactoryLayout />}>
+                <Route path="/production/batches" element={<BatchesListPage />} />
+                <Route path="/production/batches/new" element={<NewBatchPage />} />
+                <Route path="/production/batches/:code" element={<BatchDetailPage />} />
+              </Route>
 
               <Route path="/masters/suppliers" element={<SuppliersPage />} />
               <Route path="/masters/suppliers/:code" element={<SupplierDetailPage />} />

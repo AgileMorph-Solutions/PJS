@@ -4,10 +4,11 @@ import { StatBlock } from "../../components/ui/StatBlock";
 import { Pill } from "../../components/ui/Pill";
 import { BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
 import { BatchSteps } from "../../components/production/BatchSteps";
-import { useBatch } from "../../state/productionBatches";
+import { CalibrationSection } from "../../components/production/CalibrationSection";
+import { useBatch, useBatchCalibration } from "../../state/productionBatches";
 import { useRcnReceipts } from "../../state/rcnReceipts";
 import { useCanEditDirectly, useHasRole } from "../../state/AuthContext";
-import { RCN_RECEIPT_STATUS_LABELS, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
+import { RCN_RECEIPT_STATUS_LABELS, isIntakeDone, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import type { LotInBin } from "@anagroci/contract/domain/productionBatch";
 import type { BatchBinView } from "@anagroci/contract/types/productionBatch";
@@ -22,14 +23,16 @@ const LOT_NOTE: Record<LotInBin["state"], string | null> = {
 type Tab = "steps" | "overview" | "history";
 
 /** The doc's "next person" column, for what the batch's loads are waiting on. */
-const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing"];
+const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done", "calibrating"];
 const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "QFS Officer",
   moisture_pending: "Warehouse Incharge",
   on_hold: "QFS Officer, to re-check",
   waiting_for_weighing: "weighing team",
   weighing: "weighing team, to finish",
-  intake_done: "nobody, done",
+  intake_done: "calibration team",
+  calibrating: "calibration team, to finish",
+  calibrated: "nobody, done",
 };
 
 /**
@@ -41,6 +44,7 @@ export function BatchDetailPage() {
   const { code } = useParams<{ code: string }>();
   const { batch, loading, error, refetch } = useBatch(code);
   const receipts = useRcnReceipts(code, { enabled: Boolean(code) });
+  const calibration = useBatchCalibration(code);
   const canEdit = useCanEditDirectly();
   const isQfs = useHasRole("qfs_officer");
   const [tab, setTab] = useState<Tab>("steps");
@@ -53,7 +57,9 @@ export function BatchDetailPage() {
   const loads = receipts.rows.length;
   const waiting = WAITING_ORDER.map((st) => [st, receipts.rows.filter((r) => r.status === st).length] as const).filter(([, n]) => n > 0);
   // A saved receipt changes the batch too (status, history), so both are read again.
-  const onChanged = () => void Promise.all([refetch(), receipts.refetch()]);
+  const onChanged = () => void Promise.all([refetch(), receipts.refetch(), calibration.refetch()]);
+  // Phases overlap (loads keep arriving while earlier ones are sized), so the batch is "at" the furthest one reached.
+  const phase = receipts.rows.some((r) => isIntakeDone(r.status)) ? 2 : 1;
 
   return (
     <div className="space-y-5">
@@ -96,7 +102,7 @@ export function BatchDetailPage() {
             )}
           </div>
         </div>
-        <BatchPhaseStepper />
+        <BatchPhaseStepper current={phase} />
       </section>
 
       <div className="flex items-center gap-1 border-b border-warmstone-200 overflow-x-auto">
@@ -120,7 +126,20 @@ export function BatchDetailPage() {
       </div>
 
       {tab === "steps" && (
-        <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+        <div className="space-y-8">
+          <div>
+            <PhaseHeading n={1} title="Intake" text="receive each load, check its moisture, weigh it" />
+            <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+          </div>
+          <div>
+            <PhaseHeading n={2} title="Calibration" text="size each load into the 9 silos, check the silos (QC-2)" />
+            {calibration.calibration ? (
+              <CalibrationSection batch={batch} calibration={calibration.calibration} can={{ canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+            ) : (
+              <p className="text-[13px] text-warmstone-500">{calibration.error ?? "Loading…"}</p>
+            )}
+          </div>
+        </div>
       )}
 
       {tab === "overview" && (
@@ -183,6 +202,14 @@ export function BatchDetailPage() {
         </section>
       )}
     </div>
+  );
+}
+
+function PhaseHeading({ n, title, text }: { n: number; title: string; text: string }) {
+  return (
+    <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-warmstone-500">
+      Phase {n} · {title} <span className="normal-case font-normal tracking-normal">· {text}</span>
+    </p>
   );
 }
 

@@ -4,6 +4,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { DateInput } from "../../components/ui/DateInput";
 import { formatTonnes, inputCls, primaryButton, secondaryButton } from "../../components/production/batchUi";
 import { useBatchBins } from "../../state/productionBatches";
+import { useProductionFactory } from "../../state/productionFactory";
 import { api, ApiError } from "../../repository/api";
 import { DAILY_CAPACITY_KG, MONTHLY_GUIDE_KG, planBatch, suggestBatchCode } from "@anagroci/contract/domain/productionBatch";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
@@ -33,6 +34,8 @@ function unavailableReason(b: AvailableBin): string | undefined {
 export function NewBatchPage() {
   const navigate = useNavigate();
   const { rows: bins, loading, error: loadError } = useBatchBins();
+  // An admin picks the factory on Batches; with more than one, say which this batch is for.
+  const { factory, factories } = useProductionFactory();
   const [selected, setSelected] = useState<string[]>([]);
   const [code, setCode] = useState("");
   const [codeEdited, setCodeEdited] = useState(false);
@@ -66,7 +69,7 @@ export function NewBatchPage() {
   return (
     <form onSubmit={submit} className="space-y-5">
       <PageHeader
-        kicker="Production · Batches"
+        kicker={factories.length > 1 ? `Production · Batches · ${factory}` : "Production · Batches"}
         title="New production batch"
         lede="Pick the warehouse bins that will be processed together (about one month of work). The total is a guide, not a hard limit."
       />

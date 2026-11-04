@@ -27,6 +27,8 @@ const RCN_TONE: Record<RcnReceiptStatus, string> = {
   waiting_for_weighing: "entry",
   weighing: "entry",
   intake_done: "term",
+  calibrating: "entry",
+  calibrated: "term",
 };
 
 /** Kg as the tally sheet shows them: up to 2 decimals, thousands separated. */
@@ -54,9 +56,8 @@ export function transferHref(warehouse: string, transferId: string): string {
 /** The phases a batch walks through (Production module doc). Only Created and Intake's RCN Receipt exist so far. */
 export const BATCH_PHASES = ["Created", "Intake", "Calibration", "Cooking", "Shelling", "Colour sort", "Borma", "Peeling & grading", "Packing", "Closed"];
 
-export function BatchPhaseStepper() {
-  // Created is done the moment the batch exists; Intake is next.
-  const current = 1;
+/** `current` is the index in BATCH_PHASES of the phase the batch is at (1 = Intake, 2 = Calibration, …). */
+export function BatchPhaseStepper({ current }: { current: number }) {
   return (
     <ol className="flex items-start gap-0 overflow-x-auto pb-1">
       {BATCH_PHASES.map((label, i) => {

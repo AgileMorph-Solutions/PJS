@@ -1,3 +1,4 @@
+import type { RcnCalibration } from "./calibration.js";
 import type { CutTestGram, MoistureCheckStatus, MoistureDecision, RcnReceiptStatus } from "../domain/rcnReceipt.js";
 
 /** One moisture check of a load (Phase 1, step 2). Numbers are kept as typed; KOR is calculated. */
@@ -57,6 +58,8 @@ export interface RcnReceipt {
   pallets: RcnPallet[];
   /** Null until the final weight is saved. */
   finalWeight: RcnFinalWeight | null;
+  /** Phase 2. Null until the final weight is saved (there is no into-silo kg before it). */
+  calibration: RcnCalibration | null;
   createdBy: string | null;
   createdAt: string;
 }
