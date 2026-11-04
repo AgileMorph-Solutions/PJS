@@ -679,6 +679,8 @@ export interface ReceivePayload {
   bagsReceived: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
   korReceived?: number | string | null; moistureReceived?: number | string | null; nutCountReceived?: number | string | null;
   receivedComment?: string | null; receivedLotNoRaw?: string | null;
+  /** The bin each Lot was unloaded into at this site (required, one per Lot). */
+  lines: { receiptId: string; binCode: string }[];
 }
 
 /** What a plan can be created or corrected with — the writable subset of DeliveryPlan; everything else is derived. */

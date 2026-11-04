@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { StatBlock } from "../../components/ui/StatBlock";
 import { Pill } from "../../components/ui/Pill";
-import { BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref } from "../../components/production/batchUi";
+import { BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
 import { BatchSteps } from "../../components/production/BatchSteps";
 import { useBatch } from "../../state/productionBatches";
 import { useRcnReceipts } from "../../state/rcnReceipts";
@@ -16,6 +16,7 @@ const LOT_NOTE: Record<LotInBin["state"], string | null> = {
   in_bin: null,
   weight_not_recorded: "no GRN weight",
   split_across_bins: "split over several bins",
+  weighed_with_other_lots: "weighed with other Lots on the truck",
 };
 
 type Tab = "steps" | "overview" | "history";
@@ -207,10 +208,12 @@ function LotRows({ bin, warehouse }: { bin: BatchBinView; warehouse: string }) {
           </thead>
           <tbody>
             {bin.lots.map((l) => (
-              <tr key={l.receiptId} className="border-t border-warmstone-100">
+              <tr key={`${l.receiptId}-${l.transferId ?? ""}`} className="border-t border-warmstone-100">
                 <td className="py-1.5 font-mono">
-                  <Link to={receiptHref(warehouse, l.receiptId)} className="text-brand-700 hover:underline">{l.lotNo || l.receiptId}</Link>
+                  {/* A Lot that came on a BKT has its receipt at the sending site; the BKT is what this site can open. */}
+                  <Link to={l.transferId ? transferHref(warehouse, l.transferId) : receiptHref(warehouse, l.receiptId)} className="text-brand-700 hover:underline">{l.lotNo || l.receiptId}</Link>
                   {l.dried && <span className="ml-2"><Pill tone="system" label="dried" /></span>}
+                  {l.transferId && <span className="ml-2"><Pill tone="system" label={`via ${l.transferId}`} /></span>}
                 </td>
                 <td className="py-1.5">{l.supplierName || "-"}</td>
                 <td className="py-1.5">{formatDate(l.arrivalDate)}</td>

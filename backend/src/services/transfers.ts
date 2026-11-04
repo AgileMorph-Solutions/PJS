@@ -26,6 +26,7 @@ import { ValidationError } from "../domain/validation.js";
 import { toReceiptRecord } from "../serialize.js";
 import { nextTransferId, siteOf } from "./ids.js";
 import { applyBranch, loadReceiptRow, type WriteOpts } from "./receipts.js";
+import { resolveSite } from "../domain/site.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -76,6 +77,8 @@ export interface ReceiveInput {
   nutCountReceived?: number | string | null;
   receivedComment?: string | null;
   receivedLotNoRaw?: string | null;
+  /** The bin at the receiving site each Lot was unloaded into — one per Lot on the truck (required). */
+  lines?: { receiptId: string; binCode?: string | null }[];
 }
 
 const INCLUDE = {
@@ -112,6 +115,7 @@ function toWire(t: TransferRow): TransferRequest {
     kor: num(l.kor),
     nutCount: l.nutCount,
     binCode: l.binCode,
+    receivedBinCode: l.receivedBinCode,
   }));
   const facts = {
     status: t.status as TransferStatus,
@@ -321,6 +325,32 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
 }
 
 /**
+ * The bin each Lot was unloaded into at the receiving site. Every Lot needs one — without it the Lot is
+ * in no bin and production can't reach it — and it must be a bin in Masters (a production batch is made
+ * of master bins) that isn't in another site's store. Bins imported without a store are accepted, as
+ * they are everywhere else.
+ */
+async function receivingBins(
+  tx: Tx, toWarehouse: string,
+  lines: { receiptId: string; receipt: { lot: { lotNumber: string | null } | null } }[],
+  given: { receiptId: string; binCode?: string | null }[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const l of lines) {
+    const code = text(given.find((g) => g.receiptId === l.receiptId)?.binCode)?.toUpperCase();
+    if (!code) throw new ValidationError(`Choose the bin Lot ${l.receipt.lot?.lotNumber ?? l.receiptId} was unloaded into.`);
+    out.set(l.receiptId, code);
+  }
+  const codes = [...new Set(out.values())];
+  const [bins, site] = await Promise.all([tx.bin.findMany({ where: { code: { in: codes } }, select: { code: true, warehouseName: true } }), resolveSite(toWarehouse)]);
+  const missing = codes.filter((c) => !bins.some((b) => b.code === c));
+  if (missing.length) throw new ValidationError(`Not in Masters › Bins: ${missing.join(", ")}. Add the bin there first.`);
+  const elsewhere = bins.filter((b) => b.warehouseName && !site.includes(b.warehouseName));
+  if (elsewhere.length) throw new ValidationError(elsewhere.map((b) => `${b.code} is in ${b.warehouseName}, not at ${toWarehouse}`).join("; ") + ".");
+  return out;
+}
+
+/**
  * The receiving warehouse records what actually arrived — bags and gross weight are required, since
  * they are what the variance is. Only a dispatched truck can be received, and only once.
  */
@@ -335,11 +365,15 @@ export async function receiveTransfer(id: string, input: ReceiveInput, opts: Wri
   if (!whReceiptNo) throw new ValidationError("Enter the warehouse receipt number of this arrival.");
 
   const row = await prisma.$transaction(async (tx) => {
-    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { receiptId: true, bags: true, netWeightKg: true } } } });
+    const t = await tx.transferRequest.findUnique({
+      where: { id },
+      include: { lines: { select: { id: true, receiptId: true, bags: true, netWeightKg: true, receipt: { select: { lot: { select: { lotNumber: true } } } } } } },
+    });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
     if (t.status === "requested") throw new ValidationError(`Transfer ${id} hasn't been dispatched yet — there is nothing to receive.`);
     if (t.status === "received") throw new ValidationError(`Transfer ${id} was already received.`);
     if (damaged !== null && damaged > bags) throw new ValidationError("More damaged bags than bags received.");
+    const binOf = await receivingBins(tx, t.toWarehouse, t.lines, input.lines ?? []);
     // What arrived has to match what left, or the receiving warehouse says why: the reason is what a discrepancy is reviewed by.
     const arrival: TransferFacts = {
       status: "received", lines: t.lines.map((l) => ({ bags: l.bags, netWeightKg: num(l.netWeightKg) })),
@@ -360,7 +394,10 @@ export async function receiveTransfer(id: string, input: ReceiveInput, opts: Wri
         receivedAt: new Date(), receivedBy: opts.actor?.id ?? null,
       },
     });
-    for (const l of t.lines) await timeline(tx, l.receiptId, `Received at ${t.toWarehouse} on ${id}`, opts);
+    for (const l of t.lines) {
+      await tx.transferRequestLine.update({ where: { id: l.id }, data: { receivedBinCode: binOf.get(l.receiptId)! } });
+      await timeline(tx, l.receiptId, `Received at ${t.toWarehouse} on ${id}, into ${binOf.get(l.receiptId)}`, opts);
+    }
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return toWire(row);

@@ -19,7 +19,7 @@ export function TransferDetailPage() {
   const { id = "" } = useParams();
   const site = useSite();
   const canEdit = useCanEditDirectly();
-  const { receipts, refresh } = useTracking();
+  const { receipts, refresh, masters } = useTracking();
   const { transfers, loading, refetch } = useTransfers(site.warehouseName);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -33,6 +33,16 @@ export function TransferDetailPage() {
     const q = receipts.find((r) => r.id === receiptId)?.stageData["n-qfs"];
     return { moisture: q?.["MOIS. (moisture)"] ?? "", kor: q?.["FINAL KOR"] || q?.["KOR"] || "", nutCount: q?.["NUT COUNT"] ?? "" };
   };
+  // This site's bins: those created in one of its stores, plus bins imported without a store (the server accepts both).
+  const binOptions = useMemo(() => {
+    const stores = masters.warehouses.filter((w) => w.site);
+    const mine = new Set([site.warehouseName, ...stores.filter((w) => w.site === site.warehouseName).map((w) => w.name)]);
+    const storeNames = new Set(stores.map((w) => w.name));
+    return (masters.binInfo ?? [])
+      .filter((b) => !storeNames.has(b.code) && (b.store === null || mine.has(b.store)))
+      .sort((a, b) => Number(a.store === null) - Number(b.store === null) || a.code.localeCompare(b.code))
+      .map((b) => b.code);
+  }, [masters.binInfo, masters.warehouses, site.warehouseName]);
   const lotLink = (l: TransferRequest["lines"][number]) => <TransferLotLink key={l.receiptId} line={l} siteSlug={site.slug} canOpen={visible.has(l.receiptId)} />;
 
   async function run(action: () => Promise<unknown>) {
@@ -58,7 +68,7 @@ export function TransferDetailPage() {
       <PageHeader kicker={`${site.label} · ${site.sublabel}`} title={t.id} lede={`${t.fromWarehouse} → ${t.toWarehouse} · ${formatDate(t.transferDate)}${t.remarks ? ` · ${t.remarks}` : ""}`} />
       {error && <p role="alert" className="px-1 text-[13px] text-danger-700">{error}</p>}
       <TransferPanel
-        key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} saving={saving} lotLink={lotLink} qualityOf={qualityOf}
+        key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} saving={saving} lotLink={lotLink} qualityOf={qualityOf} binOptions={binOptions}
         onDispatch={(p) => run(() => api.dispatchTransfer(t.id, p))} onReceive={(p) => run(() => api.receiveTransfer(t.id, p))}
       />
     </div>

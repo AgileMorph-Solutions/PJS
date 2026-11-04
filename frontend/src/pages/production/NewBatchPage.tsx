@@ -92,7 +92,8 @@ export function NewBatchPage() {
               <p className="text-[12px] text-warmstone-500 mt-0.5">
                 Bins at the factory holding Lots whose procurement is complete: quality passed, GRN quantity and price recorded, drying
                 answered (no drying, or dried and returned) and transfer answered "No — stays". A Lot with any of these open is not counted.
-                Stock is the Lots' GRN weight.
+                Stock is the Lots' GRN weight. Lots received here on a transfer (BKT) count in the bin they were unloaded into, at the net
+                weighed on arrival.
               </p>
             </div>
             {loadError && <p className="px-5 pb-4 text-[13px] text-danger-700">{loadError}</p>}

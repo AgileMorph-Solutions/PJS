@@ -389,7 +389,14 @@ describe("Transfer Request", () => {
     await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
     expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300 })).status).toBe("dispatched");
     await expect(dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
-    expect((await receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).status).toBe("received");
+    await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test" }, update: {} });
+    try {
+      const lines = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, binCode: "SYSIDS-TEST-BIN" }));
+      expect((await receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300, lines })).status).toBe("received");
+    } finally {
+      await prisma.transferRequestLine.updateMany({ where: { receivedBinCode: "SYSIDS-TEST-BIN" }, data: { receivedBinCode: null } });
+      await prisma.bin.delete({ where: { code: "SYSIDS-TEST-BIN" } });
+    }
     await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/already received/);
     await expect(addTransferLines(id, [{ receiptId: lotted }])).rejects.toThrow(/already received/);
     expect((await getTransfer(id))!.status).toBe("received");

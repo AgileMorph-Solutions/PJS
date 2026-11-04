@@ -9,7 +9,8 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
-import { createTransfer, dispatchTransfer, receiveTransfer, getTransfer, addTransferLines } from "../src/services/transfers.js";
+import { createTransfer, dispatchTransfer, receiveTransfer as receiveInto, getTransfer, addTransferLines, type ReceiveInput } from "../src/services/transfers.js";
+import { procurementBinStock } from "../src/services/production/batches.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -20,6 +21,8 @@ const C = "BKTTEST-C";
 const BIN1 = "BKTTEST-A-STORE-BIN-001";
 const BIN2 = "BKTTEST-A-STORE-BIN-002";
 const D = "2033-03-03";
+const B_STORE = "BKTTEST-B-STORE";
+const B_BIN = "BKTTEST-B-STORE-BIN-001";
 const cookies: Record<string, string> = {};
 const as = (u: string, method: "GET" | "POST", url: string, payload?: unknown) =>
   app.inject({ method, url, payload: payload as any, headers: { cookie: cookies[u]! } });
@@ -28,10 +31,17 @@ async function cleanup() {
   await prisma.transferRequest.deleteMany({ where: { OR: [{ fromWarehouse: { in: [A, B, C] } }, { toWarehouse: { in: [A, B, C] } }] } });
   await prisma.receipt.deleteMany({ where: { warehouse: { in: [A, B, C] } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "bkttest-" } } });
-  await prisma.bin.deleteMany({ where: { code: { in: [BIN1, BIN2] } } });
+  await prisma.bin.deleteMany({ where: { code: { in: [BIN1, BIN2, B_BIN] } } });
   await prisma.warehouse.deleteMany({ where: { site: { in: [A, B, C] } } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [A, B, C] } } });
 }
+
+/** Receive with every Lot unloaded into one bin — the bin rule has its own tests below. */
+async function receiveTransfer(id: string, input: ReceiveInput) {
+  const t = await getTransfer(id);
+  return receiveInto(id, { lines: (t?.lines ?? []).map((l) => ({ receiptId: l.receiptId, binCode: B_BIN })), ...input });
+}
+const bins = async (id: string) => (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, binCode: B_BIN }));
 
 /** A Lot that passed quality at A, with 100 bags — ready to put on a truck. */
 async function lot(bin?: string, bags = 100): Promise<string> {
@@ -50,6 +60,8 @@ beforeAll(async () => {
   await prisma.warehouse.create({ data: { name: B, kind: "FACTORY", type: "CENTRAL", code: "BKB1" } });
   await prisma.warehouse.create({ data: { name: C, kind: "FACTORY", type: "CENTRAL", code: "BKC1" } });
   await prisma.bin.createMany({ data: [{ code: BIN1, source: "test" }, { code: BIN2, source: "test" }] });
+  await prisma.warehouse.create({ data: { name: B_STORE, site: B } });
+  await prisma.bin.create({ data: { code: B_BIN, warehouseName: B_STORE, source: "test" } });
   for (const [key, role, wh] of [["sender", "warehouse_incharge", A], ["receiver", "warehouse_incharge", B], ["stranger", "warehouse_incharge", C], ["bm", "branch_manager", A], ["admin", "admin", null]] as const) {
     await prisma.user.create({ data: { username: `bkttest-${key}`, displayName: key, role, warehouse: wh, passwordHash: hashPassword(PW) } });
     const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: `bkttest-${key}`, password: PW } });
@@ -131,7 +143,7 @@ describe("a BKT is one truck, sent and then received", () => {
     await dispatchTransfer(t.id, { whReceiptNo: "WR-D", truckNo: "TL-RIG" });
     await receiveTransfer(t.id, { whReceiptNo: "WR-R", bagsReceived: 10, receivedGrossKg: 10 });
     const notes = (await prisma.timelineEntry.findMany({ where: { receiptId: id }, orderBy: { id: "asc" } })).map((e) => e.note);
-    expect(notes.slice(-3)).toEqual([`Added to transfer ${t.id}`, `Dispatched on ${t.id} (truck TL-RIG)`, `Received at ${B} on ${t.id}`]);
+    expect(notes.slice(-3)).toEqual([`Added to transfer ${t.id}`, `Dispatched on ${t.id} (truck TL-RIG)`, `Received at ${B} on ${t.id}, into ${B_BIN}`]);
   });
 
   it("can't take more Lots once it has left", async () => {
@@ -157,7 +169,7 @@ describe("each warehouse writes only its own half", () => {
   });
 
   it("only the destination records the arrival — the sender can't fill in what 'arrived'", async () => {
-    const body = { whReceiptNo: "WR-R", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short" };
+    const body = { whReceiptNo: "WR-R", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short", lines: await bins(id) };
     expect((await as("sender", "POST", `/api/transfers/${id}/receive`, body)).statusCode).toBe(403);
     expect((await as("stranger", "POST", `/api/transfers/${id}/receive`, body)).statusCode).toBe(403);
     const ok = await as("receiver", "POST", `/api/transfers/${id}/receive`, body);
@@ -184,7 +196,7 @@ describe("each warehouse writes only its own half", () => {
     const r = await as("admin", "POST", "/api/transfers", { transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: await lot(), bags: 5 }] });
     const t = r.json().id;
     expect((await as("admin", "POST", `/api/transfers/${t}/dispatch`, { whReceiptNo: "WR-D", truckNo: "ADMIN-RIG" })).statusCode).toBe(200);
-    expect((await as("admin", "POST", `/api/transfers/${t}/receive`, { whReceiptNo: "WR-R", bagsReceived: 5, receivedGrossKg: 5 })).statusCode).toBe(200);
+    expect((await as("admin", "POST", `/api/transfers/${t}/receive`, { whReceiptNo: "WR-R", bagsReceived: 5, receivedGrossKg: 5, lines: await bins(t) })).statusCode).toBe(200);
     expect((await as("bm", "GET", "/api/transfers")).statusCode).toBe(403);
     expect((await as("bm", "POST", `/api/transfers/${t}/dispatch`, { whReceiptNo: "WR-D", truckNo: "X" })).statusCode).toBe(403);
   });
@@ -242,3 +254,59 @@ describe("dispatch carries quality and the warehouse receipt number; receiving e
   });
 });
 
+describe("receiving puts each Lot in a bin here, which is what production draws on", () => {
+  const send = async (n = 1) => {
+    const lines = [];
+    for (let i = 0; i < n; i++) lines.push({ receiptId: await lot(BIN1), bags: 100 });
+    const t = await createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines });
+    await dispatchTransfer(t.id, { whReceiptNo: "WR-BIN", truckNo: `BIN-RIG-${t.id}`, dispatchedGrossKg: 100 * n * 100 + 100 * n });
+    return t;
+  };
+
+  it("won't record an arrival until every Lot has a bin, and nothing is half-written", async () => {
+    const t = await send(2);
+    const [first] = t.lines;
+    const body = { whReceiptNo: "Y-BIN", bagsReceived: 200, receivedGrossKg: 20200 };
+    await expect(receiveInto(t.id, body)).rejects.toThrow(/Choose the bin Lot .* was unloaded into/);
+    await expect(receiveInto(t.id, { ...body, lines: [{ receiptId: first!.receiptId, binCode: B_BIN }] })).rejects.toThrow(/Choose the bin/);
+    expect((await getTransfer(t.id))!.status).toBe("dispatched");
+  });
+
+  it("refuses a bin that isn't in Masters, or that is in another site's store", async () => {
+    const t = await send();
+    const body = (binCode: string) => ({ whReceiptNo: "Y-BIN", bagsReceived: 100, receivedGrossKg: 10100, lines: [{ receiptId: t.lines[0]!.receiptId, binCode }] });
+    await expect(receiveInto(t.id, body("NO-SUCH-BIN-XYZ"))).rejects.toThrow(/Not in Masters › Bins: NO-SUCH-BIN-XYZ/);
+    await prisma.warehouse.create({ data: { name: "BKTTEST-A-STORE", site: A } });
+    await prisma.bin.update({ where: { code: BIN2 }, data: { warehouseName: "BKTTEST-A-STORE" } });
+    try {
+      await expect(receiveInto(t.id, body(BIN2))).rejects.toThrow(new RegExp(`${BIN2} is in BKTTEST-A-STORE, not at ${B}`));
+    } finally {
+      await prisma.bin.update({ where: { code: BIN2 }, data: { warehouseName: null } });
+      await prisma.warehouse.delete({ where: { name: "BKTTEST-A-STORE" } });
+    }
+    const got = await receiveInto(t.id, body(B_BIN.toLowerCase()));
+    expect(got.lines[0]!.receivedBinCode).toBe(B_BIN);
+  });
+
+  it("puts a Lot alone on its truck into the bin at the net weighed on arrival — at the destination, not the sender", async () => {
+    const t = await send();
+    await receiveInto(t.id, { whReceiptNo: "Y-BIN", bagsReceived: 100, receivedGrossKg: 10100, lines: await bins(t.id) });
+    const lot = (await procurementBinStock(B)).get(B_BIN)!.lots.find((l) => l.transferId === t.id);
+    expect(lot).toMatchObject({ receiptId: t.lines[0]!.receiptId, kg: 10000, state: "in_bin", lotNo: t.lines[0]!.lotNumber });
+    // Transferred out of A: in no bin there.
+    expect([...(await procurementBinStock(A)).values()].flatMap((b) => b.lots).some((l) => l.receiptId === t.lines[0]!.receiptId)).toBe(false);
+  });
+
+  it("doesn't split a truck's arrival weight between the Lots on it — nobody weighed them apart", async () => {
+    const t = await send(2);
+    await receiveInto(t.id, { whReceiptNo: "Y-BIN", bagsReceived: 200, receivedGrossKg: 20200, lines: await bins(t.id) });
+    const lots = (await procurementBinStock(B)).get(B_BIN)!.lots.filter((l) => l.transferId === t.id);
+    expect(lots).toHaveLength(2);
+    expect(lots.every((l) => l.kg === undefined && l.state === "weighed_with_other_lots")).toBe(true);
+  });
+
+  it("a truck still on the road puts nothing in a bin", async () => {
+    const t = await send();
+    expect([...(await procurementBinStock(B)).values()].flatMap((b) => b.lots).some((l) => l.transferId === t.id)).toBe(false);
+  });
+});

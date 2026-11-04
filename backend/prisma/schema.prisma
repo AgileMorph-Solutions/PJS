@@ -384,6 +384,9 @@ model TransferRequestLine {
   /// Where the Lot was loaded from — its Bin(s) when it was added. A record, so a BKT that loads one
   /// truck from several Bins shows them all.
   binCode     String?
+  /// The RECEIVING site's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN Receiving at
+  /// Factory sheet). Entered on arrival only; it is what puts the Lot in that site's bin stock for production.
+  receivedBinCode String?
 
   @@unique([transferId, receiptId])
   @@index([receiptId])

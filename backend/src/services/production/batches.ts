@@ -6,7 +6,7 @@
  * batch bin leads back to the Lots in it, their trucks and suppliers.
  */
 import { Prisma } from "@prisma/client";
-import { BATCH_CODE_PATTERN, batchStatus, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { arrivedLots, BATCH_CODE_PATTERN, batchStatus, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
 import { MOISTURE_DECISION_LABELS, type MoistureDecision } from "@anagroci/contract/domain/rcnReceipt";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
@@ -15,6 +15,7 @@ import { prisma } from "../../db.js";
 import { resolveSite } from "../../domain/site.js";
 import { ValidationError } from "../../domain/validation.js";
 import { listReceipts } from "../receipts.js";
+import { listTransfers } from "../transfers.js";
 
 /**
  * The factory site production works at. Production happens only at a FACTORY site (Yakro); a user
@@ -32,9 +33,11 @@ export async function productionSite(scoped: string | undefined): Promise<string
   return factories[0]!.name;
 }
 
-/** Stock of every bin at the site, from its procurement receipts. */
+/** Stock of every bin at the site: its own procurement receipts, plus the Lots other sites sent here on a BKT. */
 export async function procurementBinStock(site: string): Promise<Map<string, WarehouseBinStock>> {
-  return warehouseBinStock(await listReceipts(await resolveSite(site)));
+  const names = await resolveSite(site);
+  const [receipts, transfers] = await Promise.all([listReceipts(names), listTransfers(names)]);
+  return warehouseBinStock(receipts, arrivedLots(transfers.filter((t) => names.includes(t.toWarehouse))));
 }
 
 /**

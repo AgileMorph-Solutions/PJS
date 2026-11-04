@@ -38,10 +38,17 @@ export function RcnReceiptStatusPill({ status }: { status: RcnReceiptStatus }) {
   return <Pill tone={RCN_TONE[status]} label={RCN_RECEIPT_STATUS_LABELS[status]} />;
 }
 
+const siteSlugOf = (warehouse: string) =>
+  (SITE_LIST.find((s) => s.warehouseName === warehouse || s.aliases.includes(warehouse)) ?? SITE_LIST.find((s) => s.slug === "central")!).slug;
+
 /** Where a procurement receipt of `warehouse` opens, so a batch's Lots link back to their trucks. */
 export function receiptHref(warehouse: string, receiptId: string): string {
-  const site = SITE_LIST.find((s) => s.warehouseName === warehouse || s.aliases.includes(warehouse)) ?? SITE_LIST.find((s) => s.slug === "central")!;
-  return `/${site.slug}/receipts/${encodeURIComponent(receiptId)}`;
+  return `/${siteSlugOf(warehouse)}/receipts/${encodeURIComponent(receiptId)}`;
+}
+
+/** Where a BKT that brought a Lot to `warehouse` opens. */
+export function transferHref(warehouse: string, transferId: string): string {
+  return `/${siteSlugOf(warehouse)}/transfers/${encodeURIComponent(transferId)}`;
 }
 
 /** The phases a batch walks through (Production module doc). Only Created and Intake's RCN Receipt exist so far. */

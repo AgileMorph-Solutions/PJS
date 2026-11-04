@@ -5,10 +5,11 @@
  * A batch is a PLAN: a group of the factory's warehouse bins to be processed together, about one
  * month of work. Creating one moves no nuts and changes no stock.
  */
-import type { ReceiptRecord } from "../types/receipt.js";
+import type { ReceiptRecord, TransferRequest } from "../types/receipt.js";
 import { GRN_QUANTITY_LABEL } from "./receiptStatus.js";
 import { isGrnComplete } from "./recordLock.js";
 import { parseQty } from "./receiptMath.js";
+import { transferVariance } from "./transfers.js";
 
 /** The client's settings: about 150 t a day, so a month is 3,700–4,500 t (150 t × ~26 working days). */
 export const DAILY_CAPACITY_KG = 150_000;
@@ -23,7 +24,9 @@ export type LotBinState =
   /** In the bin, but its GRN weight is blank (an imported row from a sheet with no GRN column): counted as a Lot, not as kg. */
   | "weight_not_recorded"
   /** The n-bin step names several bins ("BIN-01/BIN-02"): which share went where was never recorded, so no kg is attributed. */
-  | "split_across_bins";
+  | "split_across_bins"
+  /** Came on a BKT carrying several Lots: the arrival was weighed per truck, not per Lot, so no kg is attributed. */
+  | "weighed_with_other_lots";
 
 export interface LotInBin {
   receiptId: string;
@@ -35,6 +38,49 @@ export interface LotInBin {
   state: LotBinState;
   /** True when the Lot came back from sun drying into this bin (its dried quantity is what counts). */
   dried: boolean;
+  /** Set when the Lot reached this site on a transfer (BKT): its receipt belongs to the sending site. */
+  transferId?: string;
+}
+
+/**
+ * A Lot another site sent here on a BKT, unloaded into one of this site's bins. The client's own sheets
+ * chain it: "Bouake RCN Receiving at Factory" records the Yakro BIN NO. per Lot, and the bins in
+ * "Issued to Production" (Source Bin) are those same bins.
+ */
+export interface ArrivedLot {
+  transferId: string;
+  receiptId: string;
+  lotNo: string;
+  supplierName: string;
+  /** The day it arrived HERE (the BKT's receipt), not the supplier truck's arrival at the sending site. */
+  arrivalDate: string;
+  binCode: string;
+  /** Net at arrival, from this site's scale. Undefined when the truck carried several Lots. */
+  kg?: number;
+}
+
+/**
+ * The Lots received into a bin on these transfers. The net at arrival is weighed per truck, so it is a
+ * Lot's own weight only when the Lot was alone on the truck; splitting it between Lots would invent a
+ * figure nobody weighed.
+ */
+export function arrivedLots(transfers: TransferRequest[]): ArrivedLot[] {
+  return transfers
+    .filter((t) => t.status === "received")
+    .flatMap((t) => {
+      const net = transferVariance(t).netAtArrivalKg;
+      return t.lines
+        .filter((l) => l.receivedBinCode)
+        .map((l) => ({
+          transferId: t.id,
+          receiptId: l.receiptId,
+          lotNo: l.lotNumber ?? "",
+          supplierName: l.supplierName,
+          arrivalDate: (t.receivedAt ?? "").slice(0, 10),
+          binCode: l.receivedBinCode!.trim().toUpperCase(),
+          kg: t.lines.length === 1 && net !== null ? net : undefined,
+        }));
+    });
 }
 
 export interface WarehouseBinStock {
@@ -83,7 +129,7 @@ function procurementComplete(r: ReceiptRecord): boolean {
  *   bin ("Dried quantity returned to warehouse" + "New/assigned Bin"); from then it counts there, at
  *   the dried quantity.
  */
-export function warehouseBinStock(receipts: ReceiptRecord[]): Map<string, WarehouseBinStock> {
+export function warehouseBinStock(receipts: ReceiptRecord[], arrivals: ArrivedLot[] = []): Map<string, WarehouseBinStock> {
   const bins = new Map<string, WarehouseBinStock>();
   const add = (binCode: string, lot: LotInBin) => {
     const bin = bins.get(binCode) ?? { binCode, kg: 0, lots: [] };
@@ -126,6 +172,12 @@ export function warehouseBinStock(receipts: ReceiptRecord[]): Map<string, Wareho
     } else {
       add(binCodes[0]!, { ...base, kg, state: "in_bin", dried });
     }
+  }
+  // The sending site's receipt says "transferred out", so procurementComplete above never counts it there:
+  // a Lot is in one site's bins or the other's, never both.
+  for (const a of arrivals) {
+    const lot = { receiptId: a.receiptId, lotNo: a.lotNo, supplierName: a.supplierName, arrivalDate: a.arrivalDate, dried: false, transferId: a.transferId };
+    add(a.binCode, a.kg === undefined ? { ...lot, state: "weighed_with_other_lots" } : { ...lot, kg: a.kg, state: "in_bin" });
   }
   for (const bin of bins.values()) bin.kg = Math.round(bin.kg * 100) / 100;
   return bins;

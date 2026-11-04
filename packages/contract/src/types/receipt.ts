@@ -249,6 +249,12 @@ export interface TransferLine {
   nutCount: number | null;
   /** Where the Lot was loaded from; a truck loading from several Bins shows them all. */
   binCode: string | null;
+  /**
+   * The receiving warehouse's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN
+   * Receiving at Factory sheet). It is what puts the Lot into that site's bin stock, and so within
+   * reach of a production batch. Null until received, and on BKTs received before it was asked.
+   */
+  receivedBinCode: string | null;
 }
 
 /**
