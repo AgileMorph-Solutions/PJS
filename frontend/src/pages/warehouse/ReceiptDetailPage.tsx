@@ -31,6 +31,8 @@ import { FieldHistory } from "../../components/receipt/FieldHistory";
 import { StageAuthor } from "../../components/receipt/StageAuthor";
 import { PricePanel } from "../../components/receipt/PricePanel";
 import { originFieldProps } from "../../components/receipt/originPicker";
+import { binProblemMessage } from "../../components/receipt/binPicker";
+import { binNumberProblems } from "@anagroci/contract/domain/binNumber";
 import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
@@ -80,20 +82,34 @@ export function ReceiptDetailPage() {
   // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself: the store codes the master
   // also holds are left out, and the bins of this truck's own store come first.
   const store = receipt?.stageData["n-gate"]?.["WH NO."]?.trim();
+  const storeNames = useMemo(() => masters.warehouses.filter((w) => w.site).map((w) => w.name), [masters.warehouses]);
   const binOptions = useMemo(() => {
-    const stores = new Set(masters.warehouses.filter((w) => w.site).map((w) => w.name));
+    const stores = new Set(storeNames);
     const bins = masters.bins.filter((b) => !stores.has(b)).sort();
     if (!store) return bins;
     // The Bins of this truck's own store come first: by the store each Bin was created in, or, for Bins imported without one, by its code.
     const storeOf = new Map((masters.binInfo ?? []).map((b) => [b.code, b.store]));
     const mine = (b: string) => storeOf.get(b) === store || (!storeOf.get(b) && b.startsWith(`${store}-`));
     return [...bins.filter(mine), ...bins.filter((b) => !mine(b))];
-  }, [masters.bins, masters.binInfo, masters.warehouses, store]);
+  }, [masters.bins, masters.binInfo, storeNames, store]);
+  // Bin Number as typed but not yet a Bin the server would accept. Every field saves as you type, and the
+  // server refuses a Bin that isn't in the master — so "B", "BK", ... were each refused and the reload put the
+  // empty saved value back over the typing. Held here instead, and saved the moment it names real Bins.
+  const [binDraft, setBinDraft] = useState<{ receiptId: string; value: string } | null>(null);
   const plan = plans.find((p) => p.id === receipt?.deliveryPlanId);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
   const isAdmin = me.role === "admin";
   const binFinalised = (receipt.stageData["n-bin"]?.["Bin allocation date"] ?? "").trim() !== "";
+  const pendingBin = binDraft?.receiptId === receipt.id ? binDraft.value : undefined;
+  const binWarning = pendingBin !== undefined ? binProblemMessage(binNumberProblems(pendingBin, binOptions, storeNames)) : undefined;
+  const onFieldChange = (stageId: string, fieldName: string, value: string) => {
+    if (stageId === "n-bin" && fieldName === "Bin Number") {
+      if (binNumberProblems(value, binOptions, storeNames).length) { setBinDraft({ receiptId: receipt.id, value }); return; }
+      setBinDraft(null);
+    }
+    setStageField(receipt.id, stageId, fieldName, value);
+  };
   // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
   if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
 
@@ -375,22 +391,30 @@ export function ReceiptDetailPage() {
                     ) : (
                       <StageForm
                         stage={stage}
-                        values={values}
+                        values={stage.id === "n-bin" && pendingBin !== undefined ? { ...values, "Bin Number": pendingBin } : values}
                         derived={derived[stage.id]}
                         suggestions={suggestionsFor(stage.id, values)}
                         options={stage.id === "n-bin" ? { "Bin Number": binOptions } : originFieldProps(stage.id, values, masters.origins).options}
-                        warnings={originFieldProps(stage.id, values, masters.origins).warnings}
-                        onFieldChange={(fieldName, value) => setStageField(receipt.id, stage.id, fieldName, value)}
+                        warnings={stage.id === "n-bin" ? (binWarning ? { "Bin Number": binWarning } : undefined) : originFieldProps(stage.id, values, masters.origins).warnings}
+                        onFieldChange={(fieldName, value) => onFieldChange(stage.id, fieldName, value)}
                         onFieldBlur={() => flushStage(receipt.id, stage.id)}
-                        readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_STAGES.has(stage.id)) || (stage.id === "n-bin" && binFinalised)}
+                        readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_STAGES.has(stage.id)) || (stage.id === "n-bin" && (binFinalised || !receipt.lotNo))}
                         hidden={stage.fields.filter((f) => !canSeeField(me.role, stage.id, f.n)).map((f) => f.n)}
                       />
+                    )}
+                    {/* The server refuses a Bin before a Lot (assertLotBeforeBin), and a refused save reloads over the pick —
+                        so the field is locked until the Lot exists, and says why instead of silently emptying. */}
+                    {stage.id === "n-bin" && canEdit && !receipt.lotNo && (
+                      <p className="mt-3 text-[12.5px] text-ambernut-700 font-semibold">
+                        A Bin can only be allocated once this truck has a Lot Number. The Lot is issued when the truck passes the quality check (QFS).
+                      </p>
                     )}
                     {/* The Branch Manager sets the price here directly; an Admin edits it in the form above like any field. */}
                     {stage.id === "n-grn" && canSetPrice(me.role) && !canEdit && (
                       <PricePanel receipt={receipt} onSaved={() => void refresh()} />
                     )}
-                    {stage.id === "n-bin" && canEdit && !binFinalised && !receipt.lockedAt && Boolean(receipt.lotNo && receipt.stageData["n-bin"]?.["Bin Number"]) && (
+                    {/* Hidden while a typed Bin is held back: Finalise would close the previously saved Bin, not the one on screen. */}
+                    {stage.id === "n-bin" && canEdit && !binFinalised && !receipt.lockedAt && pendingBin === undefined && Boolean(receipt.lotNo && receipt.stageData["n-bin"]?.["Bin Number"]) && (
                       <div className="mt-4 flex items-center gap-3">
                         <button
                           type="button" disabled={lockBusy}
