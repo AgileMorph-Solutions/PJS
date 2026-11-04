@@ -21,12 +21,14 @@ const LOT_NOTE: Record<LotInBin["state"], string | null> = {
 type Tab = "steps" | "overview" | "history";
 
 /** The doc's "next person" column, for what the batch's loads are waiting on. */
-const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing"];
+const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing"];
 const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "QFS Officer",
   moisture_pending: "Warehouse Incharge",
   on_hold: "QFS Officer, to re-check",
-  waiting_for_weighing: "weighing (not built yet)",
+  waiting_for_weighing: "weighing team",
+  weighing: "weighing team, to finish",
+  intake_done: "nobody, done",
 };
 
 /**

@@ -12,7 +12,7 @@ import type {
 } from "@anagroci/contract/types/user";
 import type { BatchTruckRow } from "@anagroci/contract/data/batchEntry";
 import type { AvailableBin, BatchDetail, BatchSummary } from "@anagroci/contract/types/productionBatch";
-import type { MoistureCheckInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
+import type { MoistureCheckInput, RcnFinalWeightInput, RcnPalletInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
 
 export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -352,6 +352,13 @@ export const api = {
   approveMoistureCheck: (checkId: number) => request<RcnReceipt>(`/production/moisture-checks/${checkId}/approve`, { method: "POST" }),
   rejectMoistureCheck: (checkId: number, reason: string) =>
     request<RcnReceipt>(`/production/moisture-checks/${checkId}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+  // ── Production Phase 1, steps 3–4: weighing. ──
+  addRcnPallet: (receiptId: string, p: RcnPalletInput) =>
+    request<RcnReceipt>(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/pallets`, { method: "POST", body: JSON.stringify(p) }),
+  updateRcnPallet: (palletId: number, p: RcnPalletInput) => request<RcnReceipt>(`/production/rcn-pallets/${palletId}`, { method: "PUT", body: JSON.stringify(p) }),
+  deleteRcnPallet: (palletId: number) => request<RcnReceipt>(`/production/rcn-pallets/${palletId}`, { method: "DELETE" }),
+  saveRcnFinalWeight: (receiptId: string, f: RcnFinalWeightInput) =>
+    request<RcnReceipt>(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/final-weight`, { method: "POST", body: JSON.stringify(f) }),
 
   // ── Production — its own capability, not part of TrackingApi (see repository/api.ts's header:
   // same reasoning as dryingJobs/receiptLinks — a new hook, not a reshaped context). ─────────────

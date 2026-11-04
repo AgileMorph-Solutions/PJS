@@ -8,6 +8,7 @@
 import { Prisma } from "@prisma/client";
 import { BATCH_CODE_PATTERN, batchStatus, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
 import { MOISTURE_DECISION_LABELS, type MoistureDecision } from "@anagroci/contract/domain/rcnReceipt";
+import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
 import type { AvailableBin, BatchDetail, BatchHistoryEntry, BatchSummary } from "@anagroci/contract/types/productionBatch";
 import { prisma } from "../../db.js";
@@ -132,6 +133,9 @@ const BATCH_INCLUDE = {
           submittedBy: { select: { displayName: true } }, reviewedBy: { select: { displayName: true } },
         },
       },
+      pallets: { select: { grossKg: true, bags: true } },
+      emptyPallets: { select: { weightKg: true } },
+      dustKg: true, voidsKg: true, finalisedAt: true, finalisedBy: { select: { displayName: true } },
     },
     orderBy: { createdAt: "asc" },
   },
@@ -186,6 +190,7 @@ export async function getBatch(site: string, code: string): Promise<BatchDetail 
         actor: r.createdBy.displayName,
       },
       ...r.moistureChecks.flatMap((c) => moistureHistory(r.btmNo, c)),
+      ...(r.finalisedAt ? [weighedHistory(r)] : []),
     ]),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
@@ -199,6 +204,18 @@ export async function batchOfBin(binCode: string): Promise<{ batchCode: string; 
 }
 
 type CheckForHistory = BatchRow["rcnReceipts"][number]["moistureChecks"][number];
+
+const kgText = (kg: number) => `${kg.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`;
+
+/** One entry when the final weight is saved, not one per pallet: 50–100 pallet rows would drown the history. */
+function weighedHistory(r: BatchRow["rcnReceipts"][number]): BatchHistoryEntry {
+  const t = weighingTotals(r.pallets, { emptyPallets: r.emptyPallets, dustKg: r.dustKg ?? undefined, voidsKg: r.voidsKg ?? undefined });
+  return {
+    at: r.finalisedAt!.toISOString(),
+    text: `BTM ${r.btmNo} weighed: ${t.pallets} pallet${t.pallets === 1 ? "" : "s"}, net ${kgText(t.netKg)}, ${kgText(t.toSilosKg)} to silos`,
+    actor: r.finalisedBy?.displayName ?? null,
+  };
+}
 
 /**
  * A check is one entry when the Incharge/Admin entered it directly, two (submitted, then reviewed) otherwise.

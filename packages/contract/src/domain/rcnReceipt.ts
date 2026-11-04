@@ -1,17 +1,19 @@
 /**
  * Production Phase 1, steps 1–2 (RCN Receipt, Moisture check): one load arriving on the production floor
  * from one bin of a batch, with its BTM slip, then checked for moisture. Source: the client's
- * "Phase 1 — Batch & Intake" document (Oct 2026). Weighing (steps 3–4) is not built yet.
+ * "Phase 1 — Batch & Intake" document (Oct 2026). Weighing (steps 3–4) is in rcnWeighing.ts.
  */
 
-/** The doc's receipt statuses up to the moisture check; weighing adds its own when it is built. */
-export type RcnReceiptStatus = "waiting_for_moisture" | "moisture_pending" | "on_hold" | "waiting_for_weighing";
+/** The doc's receipt statuses, moisture check then weighing; Intake done once the final weight is saved. */
+export type RcnReceiptStatus = "waiting_for_moisture" | "moisture_pending" | "on_hold" | "waiting_for_weighing" | "weighing" | "intake_done";
 
 export const RCN_RECEIPT_STATUS_LABELS: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "Waiting for moisture",
   moisture_pending: "Moisture · waiting for approval",
   on_hold: "On hold",
   waiting_for_weighing: "Waiting for weighing",
+  weighing: "Weighing in progress",
+  intake_done: "Intake done",
 };
 
 /** "OK → after approval, Waiting for weighing; Hold → On hold; weighing stays locked until re-checked." */
@@ -25,17 +27,26 @@ export type MoistureCheckStatus = "submitted" | "approved" | "rejected";
 /**
  * Derived from the receipt's checks, never stored. A check waiting for approval wins (the doc: "Saved as
  * PENDING — receipt does NOT change yet", so the screen says who is next); otherwise the newest approved
- * check decides; a rejected one changes nothing.
+ * check decides; a rejected one changes nothing. Past moisture, the weighing decides: a pallet weighed
+ * means Weighing in progress, a saved final weight means Intake done.
  */
-export function rcnReceiptStatus(checks: { status: MoistureCheckStatus; decision: MoistureDecision }[]): RcnReceiptStatus {
+export function rcnReceiptStatus(
+  checks: { status: MoistureCheckStatus; decision: MoistureDecision }[],
+  weighing: { pallets: number; finalised: boolean } = { pallets: 0, finalised: false },
+): RcnReceiptStatus {
   if (checks.some((c) => c.status === "submitted")) return "moisture_pending";
   const approved = checks.filter((c) => c.status === "approved").at(-1); // checks are oldest first
   if (!approved) return "waiting_for_moisture";
-  return approved.decision === "ok" ? "waiting_for_weighing" : "on_hold";
+  if (approved.decision !== "ok") return "on_hold";
+  if (weighing.finalised) return "intake_done";
+  return weighing.pallets > 0 ? "weighing" : "waiting_for_weighing";
 }
 
 /** A new check is taken while the load waits for one, or after it was put on hold to dry. */
 export const canTakeMoistureCheck = (status: RcnReceiptStatus): boolean => status === "waiting_for_moisture" || status === "on_hold";
+
+/** Pallets are weighed, changed and the final weight saved only after moisture is OK and until it is saved. */
+export const canWeigh = (status: RcnReceiptStatus): boolean => status === "waiting_for_weighing" || status === "weighing";
 
 /** The cut-test parts, as in the client's "2. Input RCN Quality report" columns. */
 export const CUT_TEST_GRAMS = [

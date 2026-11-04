@@ -2,8 +2,9 @@ import { Fragment, useState } from "react";
 import { RcnReceiptStatusPill, primaryButton, secondaryButton } from "./batchUi";
 import { RcnReceiptForm } from "./RcnReceiptForm";
 import { MoistureCard } from "./MoistureCard";
+import { WeighingCard } from "./WeighingCard";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
-import type { RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
+import { canWeigh, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
 import type { BatchDetail } from "@anagroci/contract/types/productionBatch";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 
@@ -21,12 +22,37 @@ function actionLabel(status: RcnReceiptStatus, can: StepPermissions): string {
   if (status === "waiting_for_moisture" && can.canEnterMoisture) return "Enter moisture";
   if (status === "moisture_pending" && can.canReview) return "Review moisture";
   if (status === "on_hold" && can.canEnterMoisture) return "Re-check moisture";
+  if (canWeigh(status) && can.canReceive) return "Weigh pallets";
   return "View";
+}
+
+/** The receipt's current step, opened in place: moisture while it's due, then the weighing. */
+function ReceiptWork({ receipt, can, onChanged }: { receipt: RcnReceipt; can: StepPermissions; onChanged: () => void }) {
+  const ok = receipt.moistureChecks.filter((c) => c.status === "approved").at(-1);
+  const pastMoisture = canWeigh(receipt.status) || receipt.status === "intake_done";
+
+  if (!pastMoisture || !ok) {
+    return (
+      <>
+        <h4 className="text-[13px] font-bold text-warmstone-900 mb-3">Moisture check</h4>
+        <MoistureCard receipt={receipt} canEnter={can.canEnterMoisture} canReview={can.canReview} direct={can.canReview} onChanged={onChanged} />
+      </>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <p className="text-[12.5px] text-warmstone-700 flex items-center gap-1.5">
+        <span className="material-symbols-outlined text-[17px] text-success-700">check_circle</span>
+        <b>Moisture OK</b> · {ok.moisture} %, nut count {ok.nutCount}{ok.kor !== null ? `, KOR ${ok.kor.toFixed(2)}` : ""} · {ok.submittedBy}
+      </p>
+      <WeighingCard receipt={receipt} canEdit={can.canReceive} onChanged={onChanged} />
+    </div>
+  );
 }
 
 /**
  * Intake on one page: the batch's RCN Receipts (one per load / BTM slip), a button to add one, and each
- * receipt's moisture check opened in place. Batch facts and later phases are in the page header, not here.
+ * receipt's current step opened in place. Batch facts and later phases are in the page header, not here.
  */
 export function BatchSteps({ batch, receipts, can, onChanged }: { batch: BatchDetail; receipts: RcnReceipt[]; can: StepPermissions; onChanged: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
@@ -37,7 +63,7 @@ export function BatchSteps({ batch, receipts, can, onChanged }: { batch: BatchDe
       <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="text-[15px] font-bold text-warmstone-900">RCN Receipts ({receipts.length})</h3>
-          <p className="text-[12px] text-warmstone-500 mt-0.5">One receipt for each load brought from a bin. Click a receipt to do its moisture check.</p>
+          <p className="text-[12px] text-warmstone-500 mt-0.5">One receipt for each load brought from a bin. Click a receipt to do its next step: moisture check, then weighing.</p>
         </div>
         {can.canReceive && !adding && (
           <button type="button" className={primaryButton} onClick={() => setAdding(true)}>
@@ -94,8 +120,7 @@ export function BatchSteps({ batch, receipts, can, onChanged }: { batch: BatchDe
                   {open && (
                     <tr className="bg-warmstone-50/70">
                       <td colSpan={6} className="px-5 py-4">
-                        <h4 className="text-[13px] font-bold text-warmstone-900 mb-3">Moisture check</h4>
-                        <MoistureCard receipt={r} canEnter={can.canEnterMoisture} canReview={can.canReview} direct={can.canReview} onChanged={onChanged} />
+                        <ReceiptWork receipt={r} can={can} onChanged={onChanged} />
                       </td>
                     </tr>
                   )}

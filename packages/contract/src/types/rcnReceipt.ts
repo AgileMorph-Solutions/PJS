@@ -19,6 +19,27 @@ export interface MoistureCheck {
   rejectReason: string | null;
 }
 
+/** One pallet of a load on the scale (Phase 1, step 3). Its number is its place in the load, not stored. */
+export interface RcnPallet {
+  id: number;
+  no: number;
+  grossKg: string;
+  bags: string;
+  factoryBin: string;
+  weighedBy: string | null;
+  weighedAt: string;
+}
+
+/** The load's closing figures (Phase 1, step 4). Totals come from domain/rcnWeighing.weighingTotals. */
+export interface RcnFinalWeight {
+  emptyPallets: { weightKg: string; count: string }[];
+  /** Blank when not recorded. */
+  dustKg: string;
+  voidsKg: string;
+  finalisedBy: string | null;
+  finalisedAt: string;
+}
+
 /** One load that arrived at production from one bin of a batch. */
 export interface RcnReceipt {
   id: string;
@@ -32,8 +53,24 @@ export interface RcnReceipt {
   status: RcnReceiptStatus;
   /** Oldest first. */
   moistureChecks: MoistureCheck[];
+  /** In the order weighed. */
+  pallets: RcnPallet[];
+  /** Null until the final weight is saved. */
+  finalWeight: RcnFinalWeight | null;
   createdBy: string | null;
   createdAt: string;
+}
+
+export interface RcnPalletInput {
+  grossKg?: string;
+  bags?: string;
+  factoryBin?: string;
+}
+
+export interface RcnFinalWeightInput {
+  emptyPallets?: { weightKg?: string; count?: string }[];
+  dustKg?: string;
+  voidsKg?: string;
 }
 
 export interface RcnReceiptInput {

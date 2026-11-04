@@ -19,13 +19,20 @@ export function BatchStatusPill({ status }: { status: BatchStatus }) {
   return <Pill tone={status === "in_process" ? "term" : "system"} label={BATCH_STATUS_LABELS[status]} />;
 }
 
-/** Every status so far waits on someone's next step; On hold is the one that went wrong, Waiting for weighing the one that went right. */
+/** Amber waits on someone, red went wrong (On hold), green is moving on or done. */
 const RCN_TONE: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "decision",
   moisture_pending: "decision",
   on_hold: "gap",
   waiting_for_weighing: "entry",
+  weighing: "entry",
+  intake_done: "term",
 };
+
+/** Kg as the tally sheet shows them: up to 2 decimals, thousands separated. */
+export function formatKg(kg: number): string {
+  return `${kg.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`;
+}
 
 export function RcnReceiptStatusPill({ status }: { status: RcnReceiptStatus }) {
   return <Pill tone={RCN_TONE[status]} label={RCN_RECEIPT_STATUS_LABELS[status]} />;

@@ -2335,9 +2335,47 @@ model RcnReceipt {
   createdBy   User               @relation("RcnReceiptCreator", fields: [createdById], references: [id])
   createdAt   DateTime           @default(now())
   moistureChecks RcnMoistureCheck[]
+  pallets        RcnPallet[]
+  emptyPallets   RcnEmptyPalletStack[]
+  /// Phase 1, step 4 (Final weight), from the tally sheet's Print form. Blank dust/voids = not recorded.
+  /// The final weight is saved when finalisedAt is set; the totals are calculated (contract rcnWeighing.ts).
+  dustKg        String?
+  voidsKg       String?
+  finalisedById String?
+  finalisedBy   User?     @relation("RcnReceiptFinaliser", fields: [finalisedById], references: [id], onDelete: SetNull)
+  finalisedAt   DateTime?
 
   @@index([batchCode])
   @@index([batchCode, binCode, btmNo])
+}
+
+/// Phase 1, step 3: one pallet of a load on the scale — a row of the client's "RCN Receipts Tally Sheet"
+/// (Online sheet: gross kg, no. of bags, factory bin). Numbers kept as typed; bags weight and net are
+/// calculated. The pallet's number is its order in the load, not stored.
+model RcnPallet {
+  id           Int        @id @default(autoincrement())
+  rcnReceiptId String
+  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  grossKg      String
+  bags         String
+  factoryBin   String
+  weighedById  String
+  weighedBy    User       @relation("RcnPalletWeigher", fields: [weighedById], references: [id])
+  weighedAt    DateTime   @default(now())
+
+  @@index([rcnReceiptId])
+}
+
+/// Phase 1, step 4: one weighing of a load's empty pallets (the Print form's "Empty pallets weight (kg) /
+/// NO of pallets" table). The Online sheet keeps no count, so count is optional.
+model RcnEmptyPalletStack {
+  id           Int        @id @default(autoincrement())
+  rcnReceiptId String
+  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  weightKg     String
+  count        String?
+
+  @@index([rcnReceiptId])
 }
 
 /// Phase 1, step 2: one moisture check of a load (client's "2. Input RCN Quality report" columns). A QFS
@@ -2416,6 +2454,8 @@ model User {
   createdRcnReceipts  RcnReceipt[]            @relation("RcnReceiptCreator")
   moistureChecks      RcnMoistureCheck[]      @relation("MoistureCheckAuthor")
   reviewedMoisture    RcnMoistureCheck[]      @relation("MoistureCheckReviewer")
+  weighedPallets      RcnPallet[]             @relation("RcnPalletWeigher")
+  finalisedRcnReceipts RcnReceipt[]           @relation("RcnReceiptFinaliser")
 
   @@index([role])
   @@index([warehouse])

@@ -1,6 +1,6 @@
 /**
  * Production Phase 1, steps 1–2: RCN Receipts — a load arriving on the production floor from one bin of a
- * batch, with its BTM slip — and each load's moisture check. No weights yet; those are steps 3–4.
+ * batch, with its BTM slip — and each load's moisture check. Weighing (steps 3–4) is rcnWeighing.ts.
  */
 import type { Prisma } from "@prisma/client";
 import { canWriteStageDirectly, type Role } from "@anagroci/contract/data/roles";
@@ -9,7 +9,7 @@ import {
   CUT_TEST_GRAMS, RCN_RECEIPT_STATUS_LABELS, canTakeMoistureCheck, moistureCheckError, moistureKor, rcnReceiptStatus,
   type CutTestGram, type MoistureCheckStatus, type MoistureDecision,
 } from "@anagroci/contract/domain/rcnReceipt";
-import type { MoistureCheck, MoistureCheckInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
+import type { MoistureCheck, MoistureCheckInput, RcnFinalWeight, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
 import { prisma } from "../../db.js";
 import { ValidationError } from "../../domain/validation.js";
 import { nextRcnReceiptId } from "../ids.js";
@@ -20,6 +20,9 @@ const INCLUDE = {
     include: { submittedBy: { select: { displayName: true } }, reviewedBy: { select: { displayName: true } } },
     orderBy: { id: "asc" },
   },
+  pallets: { include: { weighedBy: { select: { displayName: true } } }, orderBy: { id: "asc" } },
+  emptyPallets: { orderBy: { id: "asc" } },
+  finalisedBy: { select: { displayName: true } },
 } satisfies Prisma.RcnReceiptInclude;
 
 type Row = Prisma.RcnReceiptGetPayload<{ include: typeof INCLUDE }>;
@@ -47,7 +50,18 @@ function checkView(c: CheckRow): MoistureCheck {
   };
 }
 
-function toView(r: Row): RcnReceipt {
+function finalWeightView(r: Row): RcnFinalWeight | null {
+  if (!r.finalisedAt) return null;
+  return {
+    emptyPallets: r.emptyPallets.map((s) => ({ weightKg: s.weightKg, count: s.count ?? "" })),
+    dustKg: r.dustKg ?? "",
+    voidsKg: r.voidsKg ?? "",
+    finalisedBy: r.finalisedBy?.displayName ?? null,
+    finalisedAt: r.finalisedAt.toISOString(),
+  };
+}
+
+export function toView(r: Row): RcnReceipt {
   const moistureChecks = r.moistureChecks.map(checkView);
   return {
     id: r.id,
@@ -55,8 +69,18 @@ function toView(r: Row): RcnReceipt {
     date: r.date,
     btmNo: r.btmNo,
     binCode: r.binCode,
-    status: rcnReceiptStatus(moistureChecks),
+    status: rcnReceiptStatus(moistureChecks, { pallets: r.pallets.length, finalised: r.finalisedAt !== null }),
     moistureChecks,
+    pallets: r.pallets.map((p, i) => ({
+      id: p.id,
+      no: i + 1,
+      grossKg: p.grossKg,
+      bags: p.bags,
+      factoryBin: p.factoryBin,
+      weighedBy: p.weighedBy.displayName,
+      weighedAt: p.weighedAt.toISOString(),
+    })),
+    finalWeight: finalWeightView(r),
     createdBy: r.createdBy.displayName,
     createdAt: r.createdAt.toISOString(),
   };
@@ -99,13 +123,13 @@ export async function createRcnReceipt(site: string, actorId: string, input: Rcn
   return toView(row);
 }
 
-async function receiptAt(tx: Prisma.TransactionClient, site: string, id: string): Promise<Row> {
+export async function receiptAt(tx: Prisma.TransactionClient, site: string, id: string): Promise<Row> {
   const row = await tx.rcnReceipt.findFirst({ where: { id, batch: { warehouse: site } }, include: INCLUDE });
   if (!row) throw new ValidationError(`RCN Receipt ${id} doesn't exist at ${site}.`);
   return row;
 }
 
-const blankToNull = (v: string | undefined) => ((v ?? "").trim() === "" ? null : v!.trim());
+export const blankToNull = (v: string | undefined) => ((v ?? "").trim() === "" ? null : v!.trim());
 
 /**
  * Step 2. A QFS Officer's check waits for the Incharge ("Saved as PENDING — receipt does NOT change yet");
@@ -118,7 +142,7 @@ export async function submitMoistureCheck(site: string, actor: Actor, receiptId:
 
   const row = await prisma.$transaction(async (tx) => {
     const receipt = await receiptAt(tx, site, receiptId);
-    const status = rcnReceiptStatus(receipt.moistureChecks.map(checkView));
+    const status = toView(receipt).status;
     if (!canTakeMoistureCheck(status)) throw new ValidationError(`${receipt.id} is ${RCN_RECEIPT_STATUS_LABELS[status]}; no moisture check is due.`);
 
     const direct = canWriteStageDirectly(actor.role);

@@ -1,12 +1,14 @@
 /**
- * Production Phase 1, steps 1–2: RCN Receipts and their moisture checks. Thin, like productionBatches.ts.
- * Creating a receipt is Admin / Warehouse Incharge for now (the Data Entry role comes later); a QFS
- * Officer may read and submit a moisture check — auth/policy.ts lists exactly those routes for them.
+ * Production Phase 1, steps 1–4: RCN Receipts, their moisture checks and their weighing. Thin, like
+ * productionBatches.ts. Creating a receipt and weighing it are Admin / Warehouse Incharge for now (the Data
+ * Entry role comes later); a QFS Officer may read and submit a moisture check — auth/policy.ts lists exactly
+ * those routes for them.
  */
 import type { FastifyInstance } from "fastify";
-import type { MoistureCheckInput, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
+import type { MoistureCheckInput, RcnFinalWeightInput, RcnPalletInput, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
 import { currentUser, requireRole } from "../auth/plugin.js";
 import { createRcnReceipt, listRcnReceipts, reviewMoistureCheck, submitMoistureCheck } from "../services/production/rcnReceipts.js";
+import { addPallet, deletePallet, saveFinalWeight, updatePallet } from "../services/production/rcnWeighing.js";
 import { siteFor } from "./productionBatches.js";
 
 export async function rcnReceiptRoutes(app: FastifyInstance) {
@@ -37,5 +39,26 @@ export async function rcnReceiptRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const { reason } = (req.body ?? {}) as { reason?: string };
     return reviewMoistureCheck(await siteFor(req), currentUser(req).id, Number(id), false, reason);
+  });
+
+  app.post("/api/production/rcn-receipts/:id/pallets", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const receipt = await addPallet(await siteFor(req), currentUser(req).id, id, (req.body ?? {}) as RcnPalletInput);
+    return reply.code(201).send(receipt);
+  });
+
+  app.put("/api/production/rcn-pallets/:id", async (req) => {
+    const { id } = req.params as { id: string };
+    return updatePallet(await siteFor(req), Number(id), (req.body ?? {}) as RcnPalletInput);
+  });
+
+  app.delete("/api/production/rcn-pallets/:id", async (req) => {
+    const { id } = req.params as { id: string };
+    return deletePallet(await siteFor(req), Number(id));
+  });
+
+  app.post("/api/production/rcn-receipts/:id/final-weight", async (req) => {
+    const { id } = req.params as { id: string };
+    return saveFinalWeight(await siteFor(req), currentUser(req).id, id, (req.body ?? {}) as RcnFinalWeightInput);
   });
 }

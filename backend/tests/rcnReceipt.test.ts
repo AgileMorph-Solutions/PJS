@@ -16,6 +16,8 @@ const GRN = "GRN Weight (kept separate from Gross/Net/Paid)";
 const cookies: Record<string, string> = {};
 
 async function cleanup() {
+  await prisma.rcnPallet.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
+  await prisma.rcnEmptyPalletStack.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
   await prisma.rcnMoistureCheck.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
   await prisma.rcnReceipt.deleteMany({ where: { batch: { warehouse: SITE } } });
   await prisma.productionBatch.deleteMany({ where: { warehouse: SITE } });
@@ -40,7 +42,7 @@ async function lotInBin(bin: string, kg: string) {
   await setBranch(r.id, "n-xferdec", "stays");
 }
 
-const call = (who: string, method: "GET" | "POST", url: string, payload?: unknown) =>
+const call = (who: string, method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: unknown) =>
   app.inject({ method, url, payload: payload as object | undefined, headers: { cookie: cookies[who]!, ...(payload ? { "content-type": "application/json" } : {}) } });
 
 beforeAll(async () => {
@@ -181,5 +183,76 @@ describe("Moisture check (Phase 1, step 2)", () => {
       "BTM 108 moisture 12.5 %, Fail · hold for re-check · wi",
       "BTM 108 moisture 9.1 %, OK · wi",
     ]));
+  });
+});
+
+describe("Weighing (Phase 1, steps 3–4)", () => {
+  // The first pallets of BTM 130 in the client's tally sheet (BIN-10 → ANA-10), and its empty-pallet weighings.
+  const id = "RR-RRT-2026-0001"; // moisture OK above, so waiting for weighing
+  const pallet = (grossKg: string, bags: string, factoryBin = "ana-10") => ({ grossKg, bags, factoryBin });
+  const receipt = async () =>
+    (await call("wi", "GET", "/api/production/rcn-receipts?batch=RRT-ANA-03B")).json().find((r: { id: string }) => r.id === id);
+
+  it("is refused before moisture is OK, and to a QFS Officer", async () => {
+    const waiting = (await call("wi", "GET", "/api/production/rcn-receipts?batch=RRT-ANA-03B")).json().find((r: { status: string }) => r.status === "waiting_for_moisture");
+    const res = await call("wi", "POST", `/api/production/rcn-receipts/${waiting.id}/pallets`, pallet("2308.9", "30"));
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/Waiting for moisture; it can't be weighed now/);
+    expect((await call("qfs", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet("2308.9", "30"))).statusCode).toBe(403);
+  });
+
+  it("adds pallets in order, keeps them as typed, and the load is Weighing in progress", async () => {
+    for (const [g, b] of [["2308.9", "30"], ["2270.3", "31"], ["964.8", "12"]]) {
+      expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet(g!, b!))).statusCode).toBe(201);
+    }
+    const r = await receipt();
+    expect(r.status).toBe("weighing");
+    expect(r.pallets.map((p: { no: number; grossKg: string; bags: string; factoryBin: string }) => [p.no, p.grossKg, p.bags, p.factoryBin])).toEqual([
+      [1, "2308.9", "30", "ANA-10"],
+      [2, "2270.3", "31", "ANA-10"],
+      [3, "964.8", "12", "ANA-10"],
+    ]);
+    expect(r.finalWeight).toBeNull();
+
+    const bad = await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet("2300", "30.5"));
+    expect(bad.statusCode).toBe(422);
+    expect(bad.json().error).toMatch(/whole number/);
+  });
+
+  it("corrects and removes a pallet until the final weight is saved; the others renumber", async () => {
+    const [, second, third] = (await receipt()).pallets;
+    expect((await call("wi", "PUT", `/api/production/rcn-pallets/${second.id}`, pallet("2270.3", "31", "ana-03b"))).json().pallets[1].factoryBin).toBe("ANA-03B");
+    await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet("9999", "1"));
+    const typo = (await receipt()).pallets[3];
+    const after = (await call("wi", "DELETE", `/api/production/rcn-pallets/${typo.id}`)).json();
+    expect(after.pallets.map((p: { id: number; no: number }) => [p.id, p.no])).toEqual([[expect.any(Number), 1], [second.id, 2], [third.id, 3]]);
+  });
+
+  it("needs the empty pallets' weight; saving the final weight makes it Intake done and closes the weighing", async () => {
+    const missing = await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, { emptyPallets: [], dustKg: "925.7" });
+    expect(missing.statusCode).toBe(422);
+    expect(missing.json().error).toMatch(/empty pallets' weight/);
+
+    const saved = await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, {
+      emptyPallets: [{ weightKg: "374.3", count: "" }, { weightKg: "211.2", count: "3" }, { weightKg: "", count: "" }],
+      dustKg: "925.7",
+      voidsKg: "",
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({
+      status: "intake_done",
+      finalWeight: { emptyPallets: [{ weightKg: "374.3", count: "" }, { weightKg: "211.2", count: "3" }], dustKg: "925.7", voidsKg: "", finalisedBy: "wi" },
+    });
+
+    const [first] = saved.json().pallets;
+    expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet("2000", "30"))).statusCode).toBe(422);
+    expect((await call("wi", "PUT", `/api/production/rcn-pallets/${first.id}`, pallet("2000", "30"))).statusCode).toBe(422);
+    expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, { emptyPallets: [{ weightKg: "1" }] })).statusCode).toBe(422);
+  });
+
+  it("writes the weighed load to the batch history, with its totals", async () => {
+    // gross 2308.9 + 2270.3 + 964.8 = 5544; bags 73 × 0.65 = 47.45; pallets 585.5 → net 4911.05; − dust 925.7 → 3985.35
+    const texts = (await call("wi", "GET", "/api/production/batches/RRT-ANA-03B")).json().history.map((h: { text: string; actor: string }) => `${h.text} · ${h.actor}`);
+    expect(texts).toContain("BTM 108 weighed: 3 pallets, net 4,911.05 kg, 3,985.35 kg to silos · wi");
   });
 });
