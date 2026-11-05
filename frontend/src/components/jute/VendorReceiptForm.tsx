@@ -3,18 +3,23 @@ import { parseBags, shortQuantity, shortQuantityLabel, vendorReceiptProblems } f
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { api } from "../../repository/api";
 import { DateInput } from "../ui/DateInput";
-import { field, inputCls } from "./receiptFormParts";
+import { field, inputCls, receivingWarehouseField } from "./receiptFormParts";
 
 const blank = () => ({ vendorName: "", deliveryNoteNo: "", date: todayIso(), invoicedQty: "", receivedQty: "", remarks: "" });
 
 interface Props {
-  /** Where the bags are received: their warehouse stock goes up here. */
+  /** Where the bags are received: their warehouse stock goes up here. Blank until one is chosen. */
   warehouse: string;
+  /** Every warehouse in the master. */
+  warehouses: string[];
+  /** The person is assigned to `warehouse`, so it isn't theirs to change. */
+  fixed: boolean;
+  onWarehouseChange: (warehouse: string) => void;
   onSaved: () => void;
 }
 
 /** Records one delivery from a vendor. The rules shown are the ones the server applies (vendorReceiptProblems). */
-export function VendorReceiptForm({ warehouse, onSaved }: Props) {
+export function VendorReceiptForm({ warehouse, warehouses, fixed, onWarehouseChange, onSaved }: Props) {
   const [v, setV] = useState(blank);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +32,7 @@ export function VendorReceiptForm({ warehouse, onSaved }: Props) {
   const invoiced = parseBags(v.invoicedQty);
   const received = parseBags(v.receivedQty);
   const short = invoiced !== null && received !== null ? shortQuantityLabel(shortQuantity(invoiced, received)) : "";
-  const problems = vendorReceiptProblems(v);
+  const problems = [...(warehouse ? [] : ["Choose the warehouse receiving the bags."]), ...vendorReceiptProblems(v)];
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -48,6 +53,7 @@ export function VendorReceiptForm({ warehouse, onSaved }: Props) {
   return (
     <form onSubmit={(e) => void save(e)} className="space-y-4 pt-3">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
         {field("Vendor name *", <input value={v.vendorName} onChange={(e) => set("vendorName", e.target.value)} className={inputCls} />)}
         {field("Delivery note no. *", <input value={v.deliveryNoteNo} onChange={(e) => set("deliveryNoteNo", e.target.value)} className={inputCls} />)}
         {field("Date *", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />)}

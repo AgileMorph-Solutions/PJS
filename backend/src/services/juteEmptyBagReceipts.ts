@@ -9,7 +9,6 @@
 import { JUTE_TRANSFER_IN_ACTIVITY, emptyBagReceiptProblems, type EmptyBagReceiptInput } from "@anagroci/contract/domain/juteEmptyBagReceipt";
 import { parseBags } from "@anagroci/contract/domain/juteVendorReceipt";
 import { prisma } from "../db.js";
-import { resolveSite } from "../domain/site.js";
 import { ValidationError } from "../domain/validation.js";
 import { categoriseActivity } from "./imports.js";
 import { nextMovementNumbers } from "./ledgers.js";
@@ -48,8 +47,6 @@ export async function createEmptyBagReceipt(input: EmptyBagReceiptInput, warehou
   const problems = emptyBagReceiptProblems(input, warehouse);
   if (problems.length) throw new ValidationError(problems.join(" "));
   const fromWarehouse = input.fromWarehouse!.trim();
-  // A store of the receiving site is that same site's stock, so moving bags from it isn't a transfer in.
-  if ((await resolveSite(warehouse)).includes(fromWarehouse)) throw new ValidationError("The bags must come from a different warehouse.");
 
   const id = await prisma.$transaction(async (tx) => {
     for (const name of [warehouse, fromWarehouse]) {

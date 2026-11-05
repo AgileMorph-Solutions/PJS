@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { openingBalanceProblems } from "@anagroci/contract/domain/juteOpeningBalance";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
-import { SITE_LIST, type SiteSlug } from "../../config/sites";
 import { api, type OpeningBalanceRow } from "../../repository/api";
 import { useCanEditDirectly, useHasRole } from "../../state/AuthContext";
 import { useOpeningBalances } from "../../state/TrackingContext";
@@ -21,7 +20,9 @@ const summary = (o: OpeningBalanceRow) => (
 interface Props {
   /** The warehouse selected. Undefined is the "All warehouses" view, where nothing can be entered. */
   warehouse?: string;
-  onSelectWarehouse: (slug: SiteSlug) => void;
+  /** Every warehouse in the master. */
+  warehouses: string[];
+  onSelectWarehouse: (warehouse: string) => void;
   onSaved: () => void;
 }
 
@@ -29,10 +30,10 @@ interface Props {
  * Opening stock, inside the Warehouse stock section. It always belongs to one warehouse, so it is only entered with one
  * selected: "All warehouses" lists each one's figure instead of guessing where a number should go.
  */
-export function OpeningStockField({ warehouse, onSelectWarehouse, onSaved }: Props) {
+export function OpeningStockField({ warehouse, warehouses, onSelectWarehouse, onSaved }: Props) {
   const { rows, loading, refetch } = useOpeningBalances();
   if (loading) return null;
-  if (!warehouse) return <AllWarehouses rows={rows} onSelectWarehouse={onSelectWarehouse} />;
+  if (!warehouse) return <AllWarehouses rows={rows} warehouses={warehouses} onSelectWarehouse={onSelectWarehouse} />;
   return (
     <OneWarehouse
       warehouse={warehouse}
@@ -42,19 +43,19 @@ export function OpeningStockField({ warehouse, onSelectWarehouse, onSaved }: Pro
   );
 }
 
-function AllWarehouses({ rows, onSelectWarehouse }: { rows: OpeningBalanceRow[]; onSelectWarehouse: (slug: SiteSlug) => void }) {
+function AllWarehouses({ rows, warehouses, onSelectWarehouse }: { rows: OpeningBalanceRow[]; warehouses: string[]; onSelectWarehouse: (warehouse: string) => void }) {
   return (
     <div className={boxCls}>
       <p className="text-[13px] font-bold text-warmstone-900">Opening stock</p>
       <p className="mt-0.5 mb-2 text-[12.5px] text-warmstone-500">Each warehouse has its own. Select a warehouse to set or change it.</p>
       <ul className="space-y-1.5">
-        {SITE_LIST.map((s) => {
-          const opening = rows.find((r) => r.warehouse === s.warehouseName);
+        {warehouses.map((name) => {
+          const opening = rows.find((r) => r.warehouse === name);
           return (
-            <li key={s.slug} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-warmstone-600">
-              <span className="font-semibold text-warmstone-800">{s.warehouseName}</span>
+            <li key={name} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-warmstone-600">
+              <span className="font-semibold text-warmstone-800">{name}</span>
               <span>{opening ? summary(opening) : "Not set yet"}</span>
-              <button type="button" onClick={() => onSelectWarehouse(s.slug)} className="text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">
+              <button type="button" onClick={() => onSelectWarehouse(name)} className="text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">
                 Select
               </button>
             </li>

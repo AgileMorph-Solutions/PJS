@@ -12,6 +12,10 @@ describe("emptyBagReceiptProblems", () => {
     expect(emptyBagReceiptProblems(GOOD, "BOUAKE")).toEqual(["The bags must come from a different warehouse."]);
   });
 
+  it("asks for the receiving warehouse until one is chosen", () => {
+    expect(emptyBagReceiptProblems(GOOD, "")).toEqual(["Choose the warehouse receiving the bags."]);
+  });
+
   it.each([
     [{ fromWarehouse: " " }, "came from"],
     [{ date: "2026-02-31" }, "date"],

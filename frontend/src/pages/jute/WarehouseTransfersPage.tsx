@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { LedgerSection } from "../../components/LedgerSection";
-import { SiteSwitcher } from "../../components/SiteSwitcher";
+import { WarehouseFilter } from "../../components/jute/WarehouseFilter";
 import { juteLedgers } from "../../data/juteBags";
 import { useJuteLedgerEntries } from "../../state/TrackingContext";
-import { SITES, SITE_LIST, siteSlugForWarehouse, type SiteSlug } from "../../config/sites";
+import { useWarehouseChoices } from "../../state/useWarehouseChoices";
 
 const ledger = juteLedgers.find((l) => l.id === "warehouse-to-warehouse-movement")!;
 
@@ -18,21 +18,23 @@ const ledger = juteLedgers.find((l) => l.id === "warehouse-to-warehouse-movement
  * a warehouse column to the client — see api.ts's listLedgerEntries comment). */
 export function WarehouseTransfersPage() {
   const [params] = useSearchParams();
-  const [site, setSite] = useState<SiteSlug | "">(() => siteSlugForWarehouse(params.get("warehouse") ?? "") ?? "");
-  const warehouseName = site ? SITES[site].warehouseName : undefined;
-  const filtered = useJuteLedgerEntries(ledger.id, warehouseName);
+  const { own, all } = useWarehouseChoices();
+  const [picked, setPicked] = useState(() => params.get("warehouse") ?? "");
+  const filtered = useJuteLedgerEntries(ledger.id, picked || undefined);
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-        <SiteSwitcher value={site} onChange={setSite} allowAll />
-      </div>
+      {!own && (
+        <div className="flex justify-end">
+          <WarehouseFilter value={picked} onChange={setPicked} warehouses={all} />
+        </div>
+      )}
       {/* Always a choice, never filled from the selected warehouse: the warehouse selected may be the one receiving this transfer. */}
       <LedgerSection
         ledger={ledger}
-        rows={site ? filtered.rows : undefined}
-        onEntryAdded={() => site && filtered.refetch()}
-        warehouse={{ column: "Transfer -Bouake", options: SITE_LIST.map((s) => s.warehouseName) }}
+        rows={picked ? filtered.rows : undefined}
+        onEntryAdded={() => picked && filtered.refetch()}
+        warehouse={{ column: "Transfer -Bouake", options: all }}
       />
     </div>
   );

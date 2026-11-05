@@ -24,6 +24,7 @@ export interface EmptyBagReceiptInput {
 /** What is wrong with an entry, in plain words, or an empty list. One place, for the form and for the server. */
 export function emptyBagReceiptProblems(input: EmptyBagReceiptInput, receivingWarehouse: string): string[] {
   const out: string[] = [];
+  if (!receivingWarehouse) out.push("Choose the warehouse receiving the bags.");
   const from = input.fromWarehouse?.trim();
   if (!from) out.push("Choose the warehouse the bags came from.");
   else if (from === receivingWarehouse) out.push("The bags must come from a different warehouse.");

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { EmptyBagReceiptForm } from "../../components/jute/EmptyBagReceiptForm";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
@@ -6,11 +7,10 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
 import { useTableSearch } from "../../components/ui/useTableSearch";
-import { SITE_LIST } from "../../config/sites";
 import type { EmptyBagReceiptRow } from "../../repository/api";
 import { useCanEditDirectly } from "../../state/AuthContext";
-import { useActiveSite } from "../../state/SiteContext";
 import { useEmptyBagReceipts, useTracking } from "../../state/TrackingContext";
+import { useWarehouseChoices } from "../../state/useWarehouseChoices";
 
 const columns: Column<EmptyBagReceiptRow>[] = [
   { label: "Date", filter: { value: (r) => r.date, kind: "date" }, nowrap: true, render: (r) => formatDate(r.date) || "-" },
@@ -24,22 +24,25 @@ const columns: Column<EmptyBagReceiptRow>[] = [
 ];
 
 export function EmptyBagReceivingPage() {
-  const site = useActiveSite();
   const canEdit = useCanEditDirectly();
   const { refresh } = useTracking();
-  const { rows, loading, refetch } = useEmptyBagReceipts(site.warehouseName);
+  const { own, all } = useWarehouseChoices();
+  // The list follows the choice, so what was just saved is on screen; with none chosen it shows every warehouse.
+  const [picked, setPicked] = useState("");
+  const receiving = own ?? picked;
+  const { rows, loading, refetch } = useEmptyBagReceipts(receiving || undefined);
   const dateFilter = useDateRangeFilter(rows, (r) => r.date ?? undefined);
   const search = useTableSearch(dateFilter.filtered, (r) => [r.fromWarehouse, r.truckNumber ?? "", r.warehouseReceiptNo ?? "", r.responsibleParty]);
 
   return (
     <div className="space-y-5">
       {canEdit && (
-        <CollapsibleCard title="Record empty bags received" meta={`at ${site.warehouseName}`}>
+        <CollapsibleCard title="Record empty bags received" meta={receiving ? `at ${receiving}` : "choose a warehouse"}>
           <EmptyBagReceiptForm
-            // A different warehouse has different places the bags can come from, so start its form afresh.
-            key={site.warehouseName}
-            warehouse={site.warehouseName}
-            fromOptions={SITE_LIST.map((s) => s.warehouseName).filter((w) => w !== site.warehouseName)}
+            warehouse={receiving}
+            warehouses={all}
+            fixed={own !== null}
+            onWarehouseChange={setPicked}
             // The new stock row belongs to the shared ledger list too, so the Warehouse Stock tab shows it straight away.
             onSaved={() => { void refetch(); void refresh(); }}
           />

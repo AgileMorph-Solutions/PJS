@@ -3,21 +3,28 @@ import { emptyBagReceiptProblems } from "@anagroci/contract/domain/juteEmptyBagR
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { api } from "../../repository/api";
 import { DateInput } from "../ui/DateInput";
-import { field, inputCls } from "./receiptFormParts";
+import { field, inputCls, receivingWarehouseField } from "./receiptFormParts";
 
 interface Props {
-  /** Where the bags are received: their warehouse stock goes up here. */
+  /** Where the bags are received: their warehouse stock goes up here. Blank until one is chosen. */
   warehouse: string;
-  /** The warehouses they can have come from. */
-  fromOptions: string[];
+  /** Every warehouse in the master. */
+  warehouses: string[];
+  /** The person is assigned to `warehouse`, so it isn't theirs to change. */
+  fixed: boolean;
+  onWarehouseChange: (warehouse: string) => void;
   onSaved: () => void;
 }
 
+const othersThan = (warehouses: string[], warehouse: string) => warehouses.filter((w) => w !== warehouse);
+// With only one other warehouse there is nothing to choose.
+const defaultFrom = (others: string[]) => (others.length === 1 ? others[0]! : "");
+
 /** Records empty bags arriving from another warehouse. The rules shown are the ones the server applies (emptyBagReceiptProblems). */
-export function EmptyBagReceiptForm({ warehouse, fromOptions, onSaved }: Props) {
+export function EmptyBagReceiptForm({ warehouse, warehouses, fixed, onWarehouseChange, onSaved }: Props) {
+  const fromOptions = othersThan(warehouses, warehouse);
   const blank = () => ({
-    // With only one other warehouse there is nothing to choose.
-    fromWarehouse: fromOptions.length === 1 ? fromOptions[0]! : "",
+    fromWarehouse: defaultFrom(fromOptions),
     date: todayIso(),
     truckNumber: "",
     warehouseReceiptNo: "",
@@ -34,6 +41,14 @@ export function EmptyBagReceiptForm({ warehouse, fromOptions, onSaved }: Props) 
   };
 
   const problems = emptyBagReceiptProblems(v, warehouse);
+
+  function chooseWarehouse(next: string) {
+    onWarehouseChange(next);
+    setNotice(null);
+    // The rest of the entry stays; only a source that has just become the destination has to change.
+    const others = othersThan(warehouses, next);
+    setV((s) => (others.includes(s.fromWarehouse) ? s : { ...s, fromWarehouse: defaultFrom(others) }));
+  }
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -60,7 +75,7 @@ export function EmptyBagReceiptForm({ warehouse, fromOptions, onSaved }: Props) 
             {fromOptions.map((w) => <option key={w} value={w}>{w}</option>)}
           </select>
         ))}
-        {field("Receiving warehouse", <input readOnly tabIndex={-1} value={warehouse} className={`${inputCls} bg-warmstone-50`} />)}
+        {receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
         {field("Date received *", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />)}
         {field("Bags received *", <input inputMode="numeric" value={v.bagsReceived} onChange={(e) => set("bagsReceived", e.target.value)} className={inputCls} />)}
         {field("Truck number", <input value={v.truckNumber} onChange={(e) => set("truckNumber", e.target.value)} className={inputCls} />)}

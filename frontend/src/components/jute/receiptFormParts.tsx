@@ -9,3 +9,25 @@ export const field = (label: string, el: ReactNode) => (
     {el}
   </label>
 );
+
+interface ReceivingWarehouseProps {
+  value: string;
+  options: string[];
+  /** Assigned to one warehouse: shown, not chosen. */
+  fixed: boolean;
+  onChange: (warehouse: string) => void;
+}
+
+/** Where received bags go: the person's own warehouse, or a choice from the master when they have none. */
+export const receivingWarehouseField = ({ value, options, fixed, onChange }: ReceivingWarehouseProps) =>
+  field(
+    fixed ? "Receiving warehouse" : "Receiving warehouse *",
+    fixed ? (
+      <input readOnly tabIndex={-1} value={value} className={`${inputCls} bg-warmstone-50! cursor-not-allowed focus:border-warmstone-200! focus:ring-0!`} />
+    ) : (
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={inputCls}>
+        <option value="">Choose a warehouse…</option>
+        {options.map((w) => <option key={w} value={w}>{w}</option>)}
+      </select>
+    ),
+  );

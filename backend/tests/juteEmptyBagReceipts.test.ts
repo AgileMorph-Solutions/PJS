@@ -19,7 +19,7 @@ const cookies: Record<string, string> = {};
 
 async function cleanup() {
   await prisma.juteEmptyBagReceipt.deleteMany({ where: { fromWarehouse: { in: [A, B, STORE_OF_A] } } });
-  await prisma.juteWarehouseMovement.deleteMany({ where: { whLocation: { in: [A, B] } } });
+  await prisma.juteWarehouseMovement.deleteMany({ where: { whLocation: { in: [A, B, STORE_OF_A] } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "jeb-" } } });
   await prisma.warehouse.deleteMany({ where: { name: STORE_OF_A } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [A, B] } } });
@@ -38,6 +38,7 @@ beforeAll(async () => {
   await login("other", "warehouse_incharge", B);
   await login("bm", "branch_manager", A);
   await login("qfs", "qfs_officer", A);
+  await login("admin", "admin", A);
 });
 afterAll(async () => {
   await cleanup();
@@ -105,11 +106,43 @@ describe("receiving empty bags from another warehouse", () => {
   });
 });
 
+describe("a store of the master, which is a warehouse like any other", () => {
+  it("can send bags to another warehouse of the same site, and keeps a balance of its own", async () => {
+    const before = Number(await balanceOf(A));
+    const res = await post("wi", { ...GOOD, fromWarehouse: STORE_OF_A, bagsReceived: "3" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ warehouse: A, fromWarehouse: STORE_OF_A, bagsReceived: 3 });
+    expect(Number(await balanceOf(A))).toBe(before + 3);
+  });
+
+  it("can receive bags itself", async () => {
+    const res = await post("admin", { ...GOOD, warehouse: STORE_OF_A, fromWarehouse: B, bagsReceived: "4" });
+    expect(res.statusCode).toBe(201);
+    expect((await listLedgerRows("warehouse-stock", [STORE_OF_A])).at(-1)).toMatchObject({ "WH location": STORE_OF_A, Balance: "4" });
+  });
+});
+
+describe("an Admin, who isn't tied to a warehouse", () => {
+  it("can record a receipt at either warehouse, and it goes to the one chosen", async () => {
+    const before = Number((await balanceOf(A)) ?? 0);
+    const res = await post("admin", { ...GOOD, warehouse: B, fromWarehouse: A, bagsReceived: "7" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ warehouse: B, fromWarehouse: A, bagsReceived: 7 });
+    expect(Number(await balanceOf(A))).toBe(before);
+    expect((await get("admin", `?warehouse=${B}`)).json()).toHaveLength(1);
+    await prisma.juteEmptyBagReceipt.delete({ where: { id: res.json().id } });
+  });
+
+  it("must say which warehouse, rather than having one guessed", async () => {
+    expect((await post("admin", GOOD)).statusCode).toBe(400);
+  });
+});
+
 describe("what it refuses", () => {
   it("writes nothing to the stock ledger when an entry is wrong", async () => {
     const before = (await listLedgerRows("warehouse-stock", [A])).length;
     for (const bad of [
-      { fromWarehouse: "" }, { fromWarehouse: A }, { fromWarehouse: STORE_OF_A }, { fromWarehouse: "NO-SUCH-WAREHOUSE" },
+      { fromWarehouse: "" }, { fromWarehouse: A }, { fromWarehouse: "NO-SUCH-WAREHOUSE" },
       { date: "2026-02-31" }, { bagsReceived: "0" }, { bagsReceived: "1,000" }, { responsibleParty: " " },
     ]) {
       expect((await post("wi", { ...GOOD, ...bad })).statusCode, JSON.stringify(bad)).toBe(422);

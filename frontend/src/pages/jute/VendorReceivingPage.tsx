@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { shortQuantityLabel } from "@anagroci/contract/domain/juteVendorReceipt";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { VendorReceiptForm } from "../../components/jute/VendorReceiptForm";
@@ -9,8 +10,8 @@ import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import type { VendorReceiptRow } from "../../repository/api";
 import { useCanEditDirectly } from "../../state/AuthContext";
-import { useActiveSite } from "../../state/SiteContext";
 import { useTracking, useVendorReceipts } from "../../state/TrackingContext";
+import { useWarehouseChoices } from "../../state/useWarehouseChoices";
 
 const columns: Column<VendorReceiptRow>[] = [
   { label: "Date", filter: { value: (r) => r.date, kind: "date" }, nowrap: true, render: (r) => formatDate(r.date) || "-" },
@@ -24,19 +25,25 @@ const columns: Column<VendorReceiptRow>[] = [
 ];
 
 export function VendorReceivingPage() {
-  const site = useActiveSite();
   const canEdit = useCanEditDirectly();
   const { refresh } = useTracking();
-  const { rows, loading, refetch } = useVendorReceipts(site.warehouseName);
+  const { own, all } = useWarehouseChoices();
+  // The list follows the choice, so what was just saved is on screen; with none chosen it shows every warehouse.
+  const [picked, setPicked] = useState("");
+  const receiving = own ?? picked;
+  const { rows, loading, refetch } = useVendorReceipts(receiving || undefined);
   const dateFilter = useDateRangeFilter(rows, (r) => r.date ?? undefined);
   const search = useTableSearch(dateFilter.filtered, (r) => [r.vendorName, r.deliveryNoteNo, r.remarks]);
 
   return (
     <div className="space-y-5">
       {canEdit && (
-        <CollapsibleCard title="Record bags received" meta={`at ${site.warehouseName}`}>
+        <CollapsibleCard title="Record bags received" meta={receiving ? `at ${receiving}` : "choose a warehouse"}>
           <VendorReceiptForm
-            warehouse={site.warehouseName}
+            warehouse={receiving}
+            warehouses={all}
+            fixed={own !== null}
+            onWarehouseChange={setPicked}
             // The new stock row belongs to the shared ledger list too, so the Warehouse Stock tab shows it straight away.
             onSaved={() => { void refetch(); void refresh(); }}
           />
