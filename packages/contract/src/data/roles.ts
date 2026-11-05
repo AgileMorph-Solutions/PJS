@@ -74,8 +74,6 @@ export const ROLE_FORMS: RoleForm[] = [
           "Sample nut count",
           "Final moisture (%)",
           "Final nut count",
-          "MOIS. (moisture)",
-          "NUT COUNT",
           "Sample – Good Kernel (g)",
           "Sample – Immature (g)",
           "Sample – Spotted (g)",

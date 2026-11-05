@@ -288,12 +288,12 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
       const given = input.lines?.find((x) => x.receiptId === l.receiptId);
       const r = await tx.receipt.findUnique({
         where: { id: l.receiptId },
-        select: { lot: { select: { lotNumber: true } }, qfs: { select: { moistureNum: true, korNum: true, finalKorNum: true, nutCountNum: true } } },
+        select: { lot: { select: { lotNumber: true } }, qfs: { select: { finalMoistureNum: true, korNum: true, finalKorNum: true, finalNutCountNum: true } } },
       });
       const lot = r?.lot?.lotNumber ?? l.receiptId;
-      const moisture = decimal(given?.moisture, "Moisture") ?? r?.qfs?.moistureNum ?? null;
+      const moisture = decimal(given?.moisture, "Moisture") ?? r?.qfs?.finalMoistureNum ?? null;
       const kor = decimal(given?.kor, "KOR") ?? r?.qfs?.finalKorNum ?? r?.qfs?.korNum ?? null;
-      const nutCount = whole(given?.nutCount, "Nut count") ?? (r?.qfs?.nutCountNum === null || r?.qfs?.nutCountNum === undefined ? null : Math.round(Number(r.qfs.nutCountNum)));
+      const nutCount = whole(given?.nutCount, "Nut count") ?? (r?.qfs?.finalNutCountNum === null || r?.qfs?.finalNutCountNum === undefined ? null : Math.round(Number(r.qfs.finalNutCountNum)));
       if (moisture === null || kor === null) {
         throw new ValidationError(`Lot ${lot} has no ${moisture === null ? "moisture" : "KOR"} on record from its quality check. Enter the ${moisture === null ? "moisture" : "KOR"} for the dispatch.`);
       }

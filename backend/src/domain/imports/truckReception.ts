@@ -111,7 +111,7 @@ function parse(workbook: ExcelJS.Workbook): ParsedRow<OffloadingRow>[] {
     }
     if (any(moisturePct, nutCount, kor, finalKor)) {
       stageData["n-qfs"] = {
-        "MOIS. (moisture)": moisturePct, "NUT COUNT": nutCount, "KOR": kor, "FINAL KOR": finalKor,
+        "Final moisture (%)": moisturePct, "Final nut count": nutCount, "KOR": kor, "FINAL KOR": finalKor,
       };
     }
     if (has(grossWt)) {

@@ -297,7 +297,7 @@ describe("QFS Officer submission and terminal rejection", () => {
 describe("QFS Officer quality analysis", () => {
   let receiptId: string;
   let submissionId: string;
-  const quality = { "MOIS. (moisture)": "10.3", "NUT COUNT": "165", KOR: "40.03599", "FINAL KOR": "40.1" };
+  const quality = { "Final moisture (%)": "10.3", "Final nut count": "165", KOR: "40.03599", "FINAL KOR": "40.1" };
 
   beforeAll(async () => {
     receiptId = (await createReceipt("BOUAKE")).id;
@@ -334,7 +334,7 @@ describe("QFS Officer quality analysis", () => {
     await setStageFields(id, "n-gate", { "VEHICLE NO.": "QFS-2" });
     await setStageFields(id, "n-verify", { "LBA CODE": SUPPLIER });
     const grams = { "Sample – Good Kernel (g)": "270", "Sample – Immature (g)": "30", "Sample – Spotted (g)": "20", "Sample – Void (g)": "12" };
-    const res = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { "MOIS. (moisture)": "10.3", ...grams } } });
+    const res = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { "Final moisture (%)": "10.3", ...grams } } });
     expect(res.statusCode).toBe(201);
     expect((await as(P + "wi", "POST", `/api/submissions/${res.json().id}/approve`)).statusCode).toBe(200);
     const after = (await as(P + "wi", "GET", `/api/receipts/${id}`)).json();

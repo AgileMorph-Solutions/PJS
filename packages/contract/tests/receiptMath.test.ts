@@ -130,22 +130,21 @@ describe("KOR from the cut test", () => {
 });
 
 describe("sample and final moisture / nut count (Nov 2026)", () => {
-  it("MOIS. and NUT COUNT follow the final reading, not the sample", () => {
-    const out = computeDerivedFields({
-      "n-qfs": { "Sample moisture (%)": "12,4", "Sample nut count": "180", "Final moisture (%)": "10,2", "Final nut count": "172" },
-    })["n-qfs"];
-    expect(out).toEqual({ "MOIS. (moisture)": "10.2", "NUT COUNT": "172" });
+  const allReadings = {
+    "n-qfs": { "Sample moisture (%)": "12,4", "Sample nut count": "180", "Final moisture (%)": "10,2", "Final nut count": "172" },
+  };
+
+  it("all four are typed by hand: nothing calculates, overwrites or locks them", () => {
+    expect(computeDerivedFields(allReadings)["n-qfs"]).toBeUndefined();
+    for (const label of Object.keys(allReadings["n-qfs"])) expect(derivedRuleInForce(allReadings, "n-qfs", label)).toBeUndefined();
+    expect(storedFormulaMismatches(allReadings)).toEqual([]);
   });
 
-  it("a sample reading alone locks nothing and overwrites nothing", () => {
-    const sampleOnly = { "n-qfs": { "MOIS. (moisture)": "10.2", "Sample moisture (%)": "12.4", "Sample nut count": "180" } };
-    expect(computeDerivedFields(sampleOnly)["n-qfs"]).toBeUndefined();
-    expect(derivedRuleInForce(sampleOnly, "n-qfs", "MOIS. (moisture)")).toBeUndefined();
-    expect(derivedRuleInForce({ "n-qfs": { "Final moisture (%)": "10.2" } }, "n-qfs", "MOIS. (moisture)")).toBeDefined();
-  });
-
-  it("never flags an imported single reading that has no final reading behind it", () => {
-    expect(storedFormulaMismatches({ "n-qfs": { "MOIS. (moisture)": "10.2", "NUT COUNT": "172" } })).toEqual([]);
+  it("the final reading is the truck's only moisture / nut count: MOIS. and NUT COUNT are gone", () => {
+    const labels = STAGE_FIELD_MAP["n-qfs"]!.fields.map((f) => f.label);
+    expect(labels).toEqual(expect.arrayContaining(["Final moisture (%)", "Final nut count"]));
+    expect(labels).not.toContain("MOIS. (moisture)");
+    expect(labels).not.toContain("NUT COUNT");
   });
 });
 

@@ -505,8 +505,6 @@ model StageVerifyDocs {
 /// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageQualityQfs {
   receiptId         String   @id
-  moisture          String? /// MOIS. (moisture)
-  nutCount          String? /// NUT COUNT
   sampleMoisture    String? /// Sample moisture (%)
   finalMoisture     String? /// Final moisture (%)
   sampleNutCount    String? /// Sample nut count
@@ -527,8 +525,8 @@ model StageQualityQfs {
   finalVoidG        String? /// Final – Void (g)
   finalOilG         String? /// Final – Oil (g)
   finalShellG       String? /// Final – Shell (g)
-  moistureNum       Decimal? /// typed shadow of moisture, for reporting/DQ only — never round-tripped
-  nutCountNum       Decimal? /// typed shadow of nutCount, for reporting/DQ only — never round-tripped
+  finalMoistureNum  Decimal? /// typed shadow of finalMoisture, for reporting/DQ only — never round-tripped
+  finalNutCountNum  Decimal? /// typed shadow of finalNutCount, for reporting/DQ only — never round-tripped
   korNum            Decimal? /// typed shadow of kor, for reporting/DQ only — never round-tripped
   finalKorNum       Decimal? /// typed shadow of finalKor, for reporting/DQ only — never round-tripped
   receipt           Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)

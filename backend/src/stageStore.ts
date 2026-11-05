@@ -79,7 +79,7 @@ const SHADOW_COLS: Record<string, string[]> = {
   "n-gross": ["loadedTruckWtKgs", "tareWtKgs", "grossWtKgs"],
   "n-netwt": ["netWtKgs", "paidWt"],
   "n-unload": ["sacs", "bonSacs", "humidSacs", "sacsDechires", "refraction"],
-  "n-qfs": ["moisture", "nutCount", "kor", "finalKor"],
+  "n-qfs": ["finalMoisture", "finalNutCount", "kor", "finalKor"],
   "n-grn": ["price", "amount", "grnWeight"],
 };
 

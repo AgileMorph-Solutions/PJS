@@ -76,10 +76,6 @@ const PRICE: FieldRef = ["n-grn", "PRICE"];
 const AMOUNT: FieldRef = ["n-grn", "AMOUNT"];
 const KOR: FieldRef = ["n-qfs", "KOR"];
 const FINAL_KOR: FieldRef = ["n-qfs", "FINAL KOR"];
-const MOISTURE: FieldRef = ["n-qfs", "MOIS. (moisture)"];
-const NUT_COUNT: FieldRef = ["n-qfs", "NUT COUNT"];
-const FINAL_MOISTURE: FieldRef = ["n-qfs", "Final moisture (%)"];
-const FINAL_NUT_COUNT: FieldRef = ["n-qfs", "Final nut count"];
 const panel = (name: "Sample" | "Final"): FieldRef[] =>
   (["Good Kernel", "Immature", "Spotted"] as const).map((g) => ["n-qfs", `${name} – ${g} (g)`] as const);
 /** KOR from a cut test's grams: (good kernel + ½ × (immature + spotted)) × KOR_FACTOR. Used at QFS and at every drying check. */
@@ -101,10 +97,6 @@ export const DERIVED_RULES: readonly DerivedRule[] = [
   { target: AMOUNT, inputs: [PRICE, PAID], compute: ([p, w]) => p! * w!, formula: "Price × paid weight" },
   korRule(KOR, "Sample"),
   korRule(FINAL_KOR, "Final"),
-  // The truck's moisture / nut count — what dispatches, the Lot overview and upload checks read — is
-  // the reading taken after unloading. Typed until it exists: the 2026 sheet held one reading only.
-  { target: MOISTURE, inputs: [FINAL_MOISTURE], compute: ([m]) => m!, formula: "Final moisture (after unloading)", fallbackToTyped: true },
-  { target: NUT_COUNT, inputs: [FINAL_NUT_COUNT], compute: ([n]) => n!, formula: "Final nut count (after unloading)", fallbackToTyped: true },
 ];
 
 /**

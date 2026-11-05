@@ -134,7 +134,7 @@ export async function applyApplicationView(data: ApplicationViewSeed, opts: { no
       select: {
         id: true, vehicleNo: true, arrivalDate: true, warehouse: true, deliveryPlanId: true, exceptionApprovedAt: true,
         verify: { select: { fiche: true } }, gross: { select: { grossWtKgs: true } }, grn: { select: { grnWeight: true } },
-        qfs: { select: { moisture: true, nutCount: true, kor: true } },
+        qfs: { select: { finalMoisture: true, finalNutCount: true, kor: true } },
         bin: { select: { binNumber: true } }, lot: { select: { lotNumber: true } }, branches: { where: { stageId: "n-qfs" }, select: { branchId: true } },
       },
     });
@@ -150,7 +150,7 @@ export async function applyApplicationView(data: ApplicationViewSeed, opts: { no
       if (candidates.length > 1 && v.key.grossKg !== null) candidates = candidates.filter((c) => parseQty(c.gross?.grossWtKgs) === v.key.grossKg);
       // Still two (rejected loads weigh nothing): the quality readings taken on each are what tell them apart.
       if (candidates.length > 1) {
-        const reading = (c: (typeof candidates)[number]) => [parseQty(c.qfs?.moisture), parseQty(c.qfs?.nutCount), parseQty(c.qfs?.kor)];
+        const reading = (c: (typeof candidates)[number]) => [parseQty(c.qfs?.finalMoisture), parseQty(c.qfs?.finalNutCount), parseQty(c.qfs?.kor)];
         candidates = candidates.filter((c) => reading(c).every((x, i) => x === [v.key.moisture, v.key.nutCount, v.key.kor][i]));
       }
       if (candidates.length === 0) { report.unmatched.push(v.clientReceiptId); continue; }

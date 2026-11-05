@@ -55,7 +55,7 @@ Every changed field — a Warehouse Incharge's direct edit or an approval — is
 | Form | Stage → field |
 |---|---|
 | Branch Manager | `n-gate` VEHICLE NO. · `n-verify` SUPPLIERS NAME, LBA CODE, FICHE (the price is set directly: `PUT /api/receipts/:id/price`) |
-| QFS Officer | `n-qfs` MOIS. (moisture), NUT COUNT, KOR, FINAL KOR · `n-unload` BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) — the total SACS is calculated from these three |
+| QFS Officer | `n-qfs` Final moisture (%), Final nut count, KOR, FINAL KOR · `n-unload` BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) — the total SACS is calculated from these three |
 
 The QFS **Pass / Fail** decision is not part of the form: the Warehouse Incharge records it, because a
 Fail rejects the truck. Approving the QFS form writes the four measurements only — it sets no

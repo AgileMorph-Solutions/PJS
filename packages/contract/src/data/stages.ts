@@ -75,17 +75,16 @@ export const stages: Stage[] = [
     kind: "decision",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "A sample is cut and scored. Fail here and the truck is turned away before it ever enters — see the reject branch, which now must keep a record (doc §3). Oct 2026: Pass is the \"accepted reception\" moment — it issues the truck's Lot Number automatically (see n-lot). Oct 2026 (client APPLICATION VIEW workbook, \"Quality… where the cut analysis details are available, the system calculates KOR automatically instead of the user entering only the final KOR\"): record the cut-test grams of the sample and of the final panel, and KOR = (Good kernel + ½ × (Immature + Spotted)) × 0.17637 — the same formula their Warehouse Receiving sheet uses — with FINAL KOR from the final panel. It needs all three of Good kernel, Immature and Spotted; until they are recorded KOR and FINAL KOR stay typed, because the 2026 Truck Reception sheet only ever held the two final numbers. The other grams (Rejection, Void, Oil, Shell) are recorded as the sheet records them; nothing is calculated from them here. Nov 2026 client request: moisture and nut count are each recorded twice — Sample (from the sample cut when the truck arrives) and Final (measured after the truck is unloaded). MOIS. and NUT COUNT take the Final reading once it is recorded and stay typed until then, because the 2026 Truck Reception sheet only ever held one reading of each.",
+    note: "A sample is cut and scored. Fail here and the truck is turned away before it ever enters — see the reject branch, which now must keep a record (doc §3). Oct 2026: Pass is the \"accepted reception\" moment — it issues the truck's Lot Number automatically (see n-lot). Oct 2026 (client APPLICATION VIEW workbook, \"Quality… where the cut analysis details are available, the system calculates KOR automatically instead of the user entering only the final KOR\"): record the cut-test grams of the sample and of the final panel, and KOR = (Good kernel + ½ × (Immature + Spotted)) × 0.17637 — the same formula their Warehouse Receiving sheet uses — with FINAL KOR from the final panel. It needs all three of Good kernel, Immature and Spotted; until they are recorded KOR and FINAL KOR stay typed, because the 2026 Truck Reception sheet only ever held the two final numbers. The other grams (Rejection, Void, Oil, Shell) are recorded as the sheet records them; nothing is calculated from them here. Nov 2026 client request: moisture and nut count are each recorded twice — Sample (from the sample cut when the truck arrives) and Final (measured after the truck is unloaded). Final is the truck's moisture and nut count everywhere else in the app; the one reading the 2026 Truck Reception sheet held (its MOIS. and NUT COUNT columns) is stored as Final. All four are typed by hand, never calculated.",
     fields: [
-      { n: "MOIS. (moisture)", v: "10.2" , col: "moisture"},
-      { n: "NUT COUNT", v: "172" , col: "nutCount"},
-      // v: "" — Nov 2026 client request, no workbook column: the arrival sample's readings and the
-      // readings once the truck is unloaded, kept separately. MOIS. / NUT COUNT follow the final ones
-      // (domain/receiptMath.ts), the way FINAL KOR follows the final panel.
+      // Nov 2026 client request: the arrival sample's readings and the readings once the truck is
+      // unloaded, kept separately. The final ones are the truck's moisture / nut count, and hold what the
+      // workbook's MOIS. and NUT COUNT columns held (imports and tools/extract-seed.py map them here).
+      // The sample ones have no workbook column: v: "".
       { n: "Sample moisture (%)", v: "" , col: "sampleMoisture"},
-      { n: "Final moisture (%)", v: "" , col: "finalMoisture"},
+      { n: "Final moisture (%)", v: "10.2" , col: "finalMoisture"},
       { n: "Sample nut count", v: "" , col: "sampleNutCount"},
-      { n: "Final nut count", v: "" , col: "finalNutCount"},
+      { n: "Final nut count", v: "172" , col: "finalNutCount"},
       { n: "KOR", v: "47.69" , col: "kor"},
       { n: "FINAL KOR", v: "48.4" , col: "finalKor"},
       { n: "Sample – Good Kernel (g)", v: "" , col: "sampleGoodKernelG"},
