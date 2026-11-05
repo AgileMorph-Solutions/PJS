@@ -8,6 +8,8 @@
  * per-field service API (`setStageFields`/`createReceipt`), which is correct for a single
  * PATCH from the UI but would mean thousands of wasted full-relation reloads at this volume.
  */
+import { JUTE_TRANSFER_IN_ACTIVITY } from "@anagroci/contract/domain/juteEmptyBagReceipt";
+import { JUTE_OPENING_ACTIVITY } from "@anagroci/contract/domain/juteOpeningBalance";
 import ExcelJS from "exceljs";
 import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -635,6 +637,8 @@ async function commitDryingSorting(rows: ParsedRow<DryingSortingRow>[], filename
 export function categoriseActivity(v: string): string | null {
   const s = v.toUpperCase();
   if (!s) return null;
+  if (s === JUTE_OPENING_ACTIVITY) return "OPENING";
+  if (s === JUTE_TRANSFER_IN_ACTIVITY) return "TRANSFER_IN";
   if (s.includes("TRANSFF") || s.includes("TRANSFER")) return "TRANSFER_OUT";
   if (s.includes("PURCHAS") || s.includes("UNLOADING")) return "PURCHASE";
   if (s.includes("REBAGGING")) return "REBAGGING";

@@ -43,6 +43,8 @@ import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect }
 import { JuteBagManagementLayout } from "./pages/jute/JuteBagManagementLayout";
 import { WarehouseStockPage } from "./pages/jute/WarehouseStockPage";
 import { SupplierMovementPage } from "./pages/jute/SupplierMovementPage";
+import { VendorReceivingPage } from "./pages/jute/VendorReceivingPage";
+import { EmptyBagReceivingPage } from "./pages/jute/EmptyBagReceivingPage";
 import { ProductionIssuePage } from "./pages/jute/ProductionIssuePage";
 import { WarehouseTransfersPage } from "./pages/jute/WarehouseTransfersPage";
 import { WarehouseActivityLedgerPage } from "./pages/jute/WarehouseActivityLedgerPage";
@@ -154,9 +156,11 @@ function AppRoutes() {
               <Route path="/jute" element={<JuteBagManagementLayout />}>
                 <Route index element={<Navigate to="warehouse-stock" replace />} />
                 <Route path="warehouse-stock" element={<WarehouseStockPage />} />
+                <Route path="vendor-receiving" element={<VendorReceivingPage />} />
                 <Route path="suppliers" element={<SupplierMovementPage />} />
                 <Route path="production" element={<ProductionIssuePage />} />
                 <Route path="transfers" element={<WarehouseTransfersPage />} />
+                <Route path="empty-bag-receiving" element={<EmptyBagReceivingPage />} />
                 <Route path="warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
               </Route>
 

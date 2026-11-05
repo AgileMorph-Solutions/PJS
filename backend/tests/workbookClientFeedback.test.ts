@@ -60,7 +60,7 @@ beforeAll(async () => {
     const r = await createReceipt(A, "2035-05-10", against);
     await setStageFields(r.id, "n-gate", { "VEHICLE NO.": veh, "WH NO.": STORE });
     await setStageFields(r.id, "n-verify", { "SUPPLIERS NAME": "WB Supplier", "LBA CODE": "LBA-WB", ORIGIN: origin });
-    await setStageFields(r.id, "n-qfs", { "MOIS. (moisture)": "10.2", KOR: "47.5" });
+    await setStageFields(r.id, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5" });
     await setBranch(r.id, "n-qfs", "pass");
     await setStageFields(r.id, "n-unload", { "BON SACS (good bags)": "100" });
     await setStageFields(r.id, "n-grn", { [GRN]: grn });

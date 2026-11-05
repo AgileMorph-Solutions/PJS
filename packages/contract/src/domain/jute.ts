@@ -1,5 +1,6 @@
 import type { JuteLedger } from "../types/stage.js";
 import type { LedgerRow } from "../types/receipt.js";
+import { parseBags } from "./juteVendorReceipt.js";
 
 /**
  * Sample rows are hardcoded demo data in juteBags.ts. Once the backend seeds the real workbook
@@ -17,11 +18,51 @@ export function lastBalance(rows: LedgerRow[]): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-export const DERIVED_COLUMNS = new Set(["S N", "Balance"]);
+export const SUPPLIER_PENDING_COLUMN = "Bags still with supplier";
+
+export const DERIVED_COLUMNS = new Set(["S N", "Balance", SUPPLIER_PENDING_COLUMN]);
+
+export interface SupplierMovementAmounts {
+  supplierCode: string;
+  issued: number | null;
+  returned: number | null;
+}
+
+/**
+ * The bags each supplier still holds after each row, in the order given: everything issued to that supplier so far, minus
+ * everything returned through their deliveries (the client's Q&A, section 3.2: "how many bags are currently with each
+ * supplier"). Negative when a supplier has returned more than was issued: that is reported, never clamped. Damaged and
+ * reusable bags don't change it, since those bags did come back. A row with no supplier has no balance to belong to (null).
+ */
+export function supplierPendingBalances(rows: SupplierMovementAmounts[]): (number | null)[] {
+  const running = new Map<string, number>();
+  return rows.map((r) => {
+    const code = r.supplierCode.trim();
+    if (!code) return null;
+    const balance = (running.get(code) ?? 0) + (r.issued ?? 0) - (r.returned ?? 0);
+    running.set(code, balance);
+    return balance;
+  });
+}
 
 export interface ReconciliationInput {
   opening: number; receipts: number; transfersIn: number;
   issues: number; damagedOrDiscarded: number; transfersOut: number; closing: number;
+}
+
+/**
+ * What a supplier's balance will be once a draft row is saved, for the form to show. Empty until there is a supplier and the
+ * counts are numbers. A preview from the rows this person can see: the server works out the figure that is kept.
+ */
+export function supplierPendingPreview(existingRows: LedgerRow[], draft: LedgerRow): string {
+  const code = (draft["Supplier code"] ?? "").trim();
+  if (!code) return "";
+  const count = (label: string) => ((draft[label] ?? "").trim() === "" ? 0 : parseBags(draft[label]));
+  const issued = count("Bags issued to supplier");
+  const returned = count("Returned through RCN deliveries");
+  if (issued === null || returned === null) return "";
+  const last = existingRows.filter((r) => (r["Supplier code"] ?? "").trim() === code).at(-1);
+  return String(Number(last?.[SUPPLIER_PENDING_COLUMN] || 0) + issued - returned);
 }
 
 /**

@@ -31,7 +31,7 @@ export function TransferDetailPage() {
   // A Lot's own quality-check result: what each line of a dispatch starts from.
   const qualityOf = (receiptId: string) => {
     const q = receipts.find((r) => r.id === receiptId)?.stageData["n-qfs"];
-    return { moisture: q?.["MOIS. (moisture)"] ?? "", kor: q?.["FINAL KOR"] || q?.["KOR"] || "", nutCount: q?.["NUT COUNT"] ?? "" };
+    return { moisture: q?.["Final moisture (%)"] ?? "", kor: q?.["FINAL KOR"] || q?.["KOR"] || "", nutCount: q?.["Final nut count"] ?? "" };
   };
   // This site's bins: those created in one of its stores, plus bins imported without a store (the server accepts both).
   const binOptions = useMemo(() => {

@@ -27,17 +27,19 @@ interface Props {
 }
 
 /**
- * A "Sample – X" field and its "Final – X" twin (the QFS cut test of the sample and of the final panel) go on one row, sample on
- * the left and final on the right, so the two readings of the same thing are read across. Layout only: the stage's field order
- * stays the spec's (stages.ts). A field without its twin stays in the ordinary grid.
+ * A "Sample X" field and its "Final X" twin (QFS moisture, nut count and cut test), plus KOR and FINAL KOR, go on one row, sample
+ * on the left and final on the right, so the two readings of the same thing are read across under one Sample / Final header. Layout
+ * only: the stage's field order stays the spec's (stages.ts). A field without its twin stays in the ordinary grid.
  */
 function pairSampleFinal<F extends { n: string }>(fields: F[]) {
-  const SAMPLE = "Sample – ", FINAL = "Final – ";
+  // KOR is the sample's reading but its label doesn't say so, so it can't be matched by prefix.
+  const finalTwinOf = (n: string) => (n === "KOR" ? "FINAL KOR" : n.startsWith("Sample ") ? `Final ${n.slice("Sample ".length)}` : undefined);
   const byName = new Map(fields.map((f) => [f.n, f]));
   const pairs: [F, F][] = [];
   const paired = new Set<string>();
   for (const f of fields) {
-    const twin = f.n.startsWith(SAMPLE) ? byName.get(FINAL + f.n.slice(SAMPLE.length)) : undefined;
+    const twinName = finalTwinOf(f.n);
+    const twin = twinName ? byName.get(twinName) : undefined;
     if (twin) { pairs.push([f, twin]); paired.add(f.n).add(twin.n); }
   }
   return { single: fields.filter((f) => !paired.has(f.n)), pairs };
@@ -98,14 +100,16 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
           {stage.sheet ? ` · ${stage.sheet}` : ""}
         </span>
       )}
-      <div className="grid sm:grid-cols-2 gap-4">
-        {single.map(render)}
-      </div>
       {pairs.length > 0 && (
         <div className="grid sm:grid-cols-2 gap-x-4 gap-y-4">
           <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wide text-warmstone-500">Sample</p>
           <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wide text-warmstone-500">Final</p>
           {pairs.flatMap(([a, b]) => [render(a), render(b)])}
+        </div>
+      )}
+      {single.length > 0 && (
+        <div className="grid sm:grid-cols-2 gap-4">
+          {single.map(render)}
         </div>
       )}
     </div>

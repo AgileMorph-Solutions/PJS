@@ -45,7 +45,7 @@ const warn = (column: string | undefined, message: string): UploadWarning => ({ 
 
 const NUMERIC: [stage: string, label: string][] = [
   ["n-gross", "Loaded truck weight (kg)"], ["n-gross", "Tare / empty truck weight (kg)"],
-  ["n-qfs", "MOIS. (moisture)"], ["n-qfs", "KOR"], ["n-qfs", "FINAL KOR"],
+  ["n-qfs", "Final moisture (%)"], ["n-qfs", "KOR"], ["n-qfs", "FINAL KOR"],
   ["n-unload", "BON SACS (good bags)"], ["n-unload", "HUMID SACS (damp bags)"], ["n-unload", "Sacs déchirés (torn bags)"], ["n-unload", "Refraction"],
   ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"], ["n-grn", "PRICE"],
 ];
@@ -61,8 +61,8 @@ const notANumberOrNegative: UploadCheck = (i) =>
 
 const percentOutOfRange: UploadCheck = (i) => {
   const out: UploadWarning[] = [];
-  const mois = num(value(i, "n-qfs", "MOIS. (moisture)"));
-  if (mois !== undefined && mois > 100) out.push(warn("MOIS. (moisture)", `moisture ${mois}% is over 100%`));
+  const mois = num(value(i, "n-qfs", "Final moisture (%)"));
+  if (mois !== undefined && mois > 100) out.push(warn("Final moisture (%)", `moisture ${mois}% is over 100%`));
   // KOR is pounds of kernel per 80 lb of nuts, so it cannot exceed 80.
   for (const label of ["KOR", "FINAL KOR"]) {
     const k = num(value(i, "n-qfs", label));

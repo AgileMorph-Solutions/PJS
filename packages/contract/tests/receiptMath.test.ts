@@ -129,6 +129,25 @@ describe("KOR from the cut test", () => {
   });
 });
 
+describe("sample and final moisture / nut count (Nov 2026)", () => {
+  const allReadings = {
+    "n-qfs": { "Sample moisture (%)": "12,4", "Sample nut count": "180", "Final moisture (%)": "10,2", "Final nut count": "172" },
+  };
+
+  it("all four are typed by hand: nothing calculates, overwrites or locks them", () => {
+    expect(computeDerivedFields(allReadings)["n-qfs"]).toBeUndefined();
+    for (const label of Object.keys(allReadings["n-qfs"])) expect(derivedRuleInForce(allReadings, "n-qfs", label)).toBeUndefined();
+    expect(storedFormulaMismatches(allReadings)).toEqual([]);
+  });
+
+  it("the final reading is the truck's only moisture / nut count: MOIS. and NUT COUNT are gone", () => {
+    const labels = STAGE_FIELD_MAP["n-qfs"]!.fields.map((f) => f.label);
+    expect(labels).toEqual(expect.arrayContaining(["Final moisture (%)", "Final nut count"]));
+    expect(labels).not.toContain("MOIS. (moisture)");
+    expect(labels).not.toContain("NUT COUNT");
+  });
+});
+
 describe("GRN quantity is suggested from net, never forced", () => {
   const GRN = "GRN Weight (kept separate from Gross/Net/Paid)";
 

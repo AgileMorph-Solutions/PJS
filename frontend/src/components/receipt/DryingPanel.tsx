@@ -153,9 +153,9 @@ export function DryingPanel({ receipt, batches, dryTypes, bins, canEdit, onChang
 
   return (
     <div className="space-y-4">
-      {qfs && (qfs["MOIS. (moisture)"] || qfs["KOR"] || qfs["FINAL KOR"]) && (
+      {qfs && (qfs["Final moisture (%)"] || qfs["KOR"] || qfs["FINAL KOR"]) && (
         <p className="text-[12.5px] text-warmstone-600">
-          Reception quality (QFS sample, kept separate): moisture <b>{qfs["MOIS. (moisture)"] || "-"}%</b> · KOR <b>{qfs["FINAL KOR"] || qfs["KOR"] || "-"}</b> · nut count <b>{qfs["NUT COUNT"] || "-"}</b>
+          Reception quality (QFS sample, kept separate): moisture <b>{qfs["Final moisture (%)"] || "-"}%</b> · KOR <b>{qfs["FINAL KOR"] || qfs["KOR"] || "-"}</b> · nut count <b>{qfs["Final nut count"] || "-"}</b>
         </p>
       )}
       {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}

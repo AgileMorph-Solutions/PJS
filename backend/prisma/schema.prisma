@@ -130,6 +130,7 @@ model Warehouse {
   transfersTo   TransferRequest[]              @relation("TransferRequestTo")
   dryingJobs    DryingJob[]
   juteMovements JuteWarehouseMovement[]
+  emptyBagsSent JuteEmptyBagReceipt[]
   transfersOut  JuteWarehouseTransferReceipt[] @relation("TransferSource")
   transfersIn   JuteWarehouseTransferReceipt[] @relation("TransferDestination")
   aliases       WarehouseAlias[]
@@ -510,8 +511,10 @@ model StageVerifyDocs {
 /// Source: ANAGROCI DATA PROCUREMENT 2026.xlsx · Truck Reception · 28 columns
 model StageQualityQfs {
   receiptId         String   @id
-  moisture          String? /// MOIS. (moisture)
-  nutCount          String? /// NUT COUNT
+  sampleMoisture    String? /// Sample moisture (%)
+  finalMoisture     String? /// Final moisture (%)
+  sampleNutCount    String? /// Sample nut count
+  finalNutCount     String? /// Final nut count
   kor               String? /// KOR
   finalKor          String? /// FINAL KOR
   sampleGoodKernelG String? /// Sample – Good Kernel (g)
@@ -528,8 +531,8 @@ model StageQualityQfs {
   finalVoidG        String? /// Final – Void (g)
   finalOilG         String? /// Final – Oil (g)
   finalShellG       String? /// Final – Shell (g)
-  moistureNum       Decimal? /// typed shadow of moisture, for reporting/DQ only — never round-tripped
-  nutCountNum       Decimal? /// typed shadow of nutCount, for reporting/DQ only — never round-tripped
+  finalMoistureNum  Decimal? /// typed shadow of finalMoisture, for reporting/DQ only — never round-tripped
+  finalNutCountNum  Decimal? /// typed shadow of finalNutCount, for reporting/DQ only — never round-tripped
   korNum            Decimal? /// typed shadow of kor, for reporting/DQ only — never round-tripped
   finalKorNum       Decimal? /// typed shadow of finalKor, for reporting/DQ only — never round-tripped
   receipt           Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
@@ -713,7 +716,8 @@ model StageRejection {
 model JuteWarehouseMovement {
   id       String @id @default(uuid())
   /// Dense 1..N import order. This, not `sn`, is the ordering key: the sheet's S N column has
-  /// duplicates (99-108 repeat) so it cannot identify a row.
+  /// duplicates (99-108 repeat) so it cannot identify a row. An opening balance row takes a seq
+  /// below 1, so it sorts first in its warehouse however late it is entered.
   seq      Int    @unique
   /// The sheet's own S N value, kept verbatim. Not unique — see `seq`.
   sn       Int?
@@ -756,11 +760,65 @@ model JuteWarehouseMovement {
   /// Links a bag movement back to the RCN delivery that caused it, where known.
   receiptId String?
 
+  /// Set when this row came from the Vendor Receiving tab.
+  vendorReceipt JuteVendorReceipt?
+  /// Set when this row came from the Empty Bag Receiving tab.
+  emptyBagReceipt JuteEmptyBagReceipt?
+  /// Set on a warehouse's opening balance row.
+  openingBalance JuteOpeningBalance?
+
   createdAt DateTime @default(now())
 
   @@index([whLocation, seq])
   @@index([supplierCode])
   @@index([receiptId])
+}
+
+/// Jute bags received from a vendor (client trial observations, 02-11-2026, point 7). The bags, date and warehouse are on
+/// `movement`, so the running balance has one source; short quantity is derived (contract domain/juteVendorReceipt.ts).
+model JuteVendorReceipt {
+  id             String                @id @default(uuid())
+  movementId     String                @unique
+  movement       JuteWarehouseMovement @relation(fields: [movementId], references: [id])
+  vendorName     String
+  deliveryNoteNo String
+  invoicedQty    Int
+  remarks        String?
+  createdById    String?
+  createdBy      User?                 @relation("JuteVendorReceiptAuthor", fields: [createdById], references: [id])
+  createdAt      DateTime              @default(now())
+}
+
+/// Empty jute bags received from another warehouse (client observations list, point 8). The bags, date, truck, receipt no. and
+/// receiving warehouse are on `movement`, so the running balance has one source; this holds what that ledger has no column for.
+model JuteEmptyBagReceipt {
+  id               String                @id @default(uuid())
+  movementId       String                @unique
+  movement         JuteWarehouseMovement @relation(fields: [movementId], references: [id])
+  fromWarehouse    String
+  from             Warehouse             @relation(fields: [fromWarehouse], references: [name])
+  responsibleParty String
+  createdById      String?
+  createdBy        User?                 @relation("JuteEmptyBagReceiptAuthor", fields: [createdById], references: [id])
+  createdAt        DateTime              @default(now())
+
+  @@index([fromWarehouse])
+}
+
+/// A warehouse's opening jute bag count (client trial observations, 02-11-2026, point 7). The bags and date are on `movement`,
+/// the first row of that warehouse's ledger by seq, so the running balance starts from it. One per warehouse, enforced by a
+/// partial unique index on JuteWarehouseMovement (see the jute_opening_balance migration).
+model JuteOpeningBalance {
+  id          String                @id @default(uuid())
+  movementId  String                @unique
+  movement    JuteWarehouseMovement @relation(fields: [movementId], references: [id])
+  remarks     String?
+  createdById String?
+  createdBy   User?                 @relation("JuteOpeningAuthor", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?                 @relation("JuteOpeningEditor", fields: [updatedById], references: [id])
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @default(now()) @updatedAt
 }
 
 /// Ledger 2 — supplier-level movement. Intentionally created empty: every column is a gap, and the
@@ -775,6 +833,7 @@ model JuteSupplierMovement {
 
   bagsIssuedToSupplier  Int?
   returnedViaDeliveries Int?
+  /// Not read or written: the balance is calculated (contract's supplierPendingBalances). Kept so the ledger's column map holds.
   pendingWithSupplier   Int?
   damaged               Int?
   reusable              Int?
@@ -2527,6 +2586,10 @@ model User {
   approvedExceptions  Receipt[]               @relation("ExceptionApprover")
   lockedReceipts      Receipt[]               @relation("ReceiptLocker")
   activityEntries     WarehouseActivityLedgerEntry[] @relation("ActivityEntryAuthor")
+  juteVendorReceipts  JuteVendorReceipt[] @relation("JuteVendorReceiptAuthor")
+  juteEmptyBagReceipts JuteEmptyBagReceipt[] @relation("JuteEmptyBagReceiptAuthor")
+  juteOpeningsCreated JuteOpeningBalance[] @relation("JuteOpeningAuthor")
+  juteOpeningsEdited  JuteOpeningBalance[] @relation("JuteOpeningEditor")
   createdSuppliers    Supplier[]              @relation("SupplierCreator")
   updatedSuppliers    Supplier[]              @relation("SupplierUpdater")
   uploadIssues        UploadIssue[]           @relation("UploadIssueUploader")

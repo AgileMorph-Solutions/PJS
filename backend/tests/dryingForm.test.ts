@@ -81,14 +81,14 @@ describe("answering Yes: sun drying in rounds", () => {
   it("issues round 1 with its weight and its own quality before drying, answers the decision, and moves the truck to 'in drying'", async () => {
     id = await acceptedTruck();
     // A QFS reception sample exists; the drying form must not copy it (it is a separate measurement).
-    await setStageFields(id, "n-qfs", { "MOIS. (moisture)": "13.4", KOR: "46.1" });
+    await setStageFields(id, "n-qfs", { "Final moisture (%)": "13.4", KOR: "46.1" });
     const res = await call("wi", "POST", `/api/receipts/${id}/drying`, { ...START, inputNutCount: 182, inputGoodKernelG: 230, inputImmatureG: 13, inputSpottedG: 12, inputKor: 50 });
     expect(res.statusCode).toBe(201);
     const r = res.json();
     expect(r.status).toBe("in_drying");
     expect(r.branches["n-drying"]).toBe("direct");
     expect(r.timeline.at(-1).note).toMatch(/issued for sun drying \(round 1\): 10000 kg at 11.8% moisture/);
-    expect(r.stageData["n-qfs"]).toMatchObject({ "MOIS. (moisture)": "13.4", KOR: "46.1" }); // QFS untouched
+    expect(r.stageData["n-qfs"]).toMatchObject({ "Final moisture (%)": "13.4", KOR: "46.1" }); // QFS untouched
 
     const b = await prisma.dryingBatch.findFirstOrThrow({ where: { warehouseSite: A } });
     round1 = b.id;

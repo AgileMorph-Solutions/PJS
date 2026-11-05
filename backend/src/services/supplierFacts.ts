@@ -18,7 +18,7 @@ export const SUPPLIER_TRUCK_SELECT = {
   branches: { where: { stageId: "n-qfs" }, select: { branchId: true } },
   grn: { select: { grnWeightNum: true } },
   netwt: { select: { netWtKgsNum: true, paidWtNum: true } },
-  qfs: { select: { finalKorNum: true, korNum: true, moistureNum: true } },
+  qfs: { select: { finalKorNum: true, korNum: true, finalMoistureNum: true } },
   unload: { select: { sacsNum: true, bonSacsNum: true, humidSacsNum: true, sacsDechiresNum: true } },
 } as const satisfies Prisma.ReceiptSelect;
 
@@ -33,7 +33,7 @@ export function toSupplierTruckFacts(r: SupplierTruckRow): SupplierTruckFacts {
     paidKg: num(r.netwt?.paidWtNum),
     // The final KOR when the cut test was repeated, otherwise the first one.
     kor: num(r.qfs?.finalKorNum) ?? num(r.qfs?.korNum),
-    moisture: num(r.qfs?.moistureNum),
+    moisture: num(r.qfs?.finalMoistureNum),
     bags: num(r.unload?.sacsNum),
     goodBags: num(r.unload?.bonSacsNum),
     dampBags: num(r.unload?.humidSacsNum),

@@ -1,28 +1,43 @@
 import { useState } from "react";
 import { LedgerSection } from "../../components/LedgerSection";
-import { SiteSwitcher } from "../../components/SiteSwitcher";
+import { OpeningStockField } from "../../components/jute/OpeningStockField";
+import { WarehouseFilter } from "../../components/jute/WarehouseFilter";
 import { juteLedgers, juteReconciliationRule } from "../../data/juteBags";
-import { useJuteLedgerEntries } from "../../state/TrackingContext";
-import { SITES, type SiteSlug } from "../../config/sites";
+import { useJuteLedgerEntries, useTracking } from "../../state/TrackingContext";
+import { useWarehouseChoices } from "../../state/useWarehouseChoices";
 
 const ledger = juteLedgers.find((l) => l.id === "warehouse-stock")!;
 
-/** This ledger is 298 real rows (JUTE BAGS ISSUED), all "BOUAKE" today (Yakro has no
- * warehouse-stock ledger of its own — see the `transfer_in_has_no_ledger1_counterpart` finding),
- * but the filter still applies generically rather than being hardcoded to one site: a site column
- * genuinely exists on this ledger's own rows (WH location), unlike ledgers 2/3 below which have no
- * per-row site data at all yet (still a hand-tallied summary — see juteBags.ts's own flag text). */
+/** The warehouses come from the master (useWarehouseChoices): someone assigned to one sees that one, anyone else can filter
+ * by any of them or see them all. */
 export function WarehouseStockPage() {
-  const [site, setSite] = useState<SiteSlug | "">("");
-  const warehouseName = site ? SITES[site].warehouseName : undefined;
-  const filtered = useJuteLedgerEntries(ledger.id, warehouseName);
+  const { own, all } = useWarehouseChoices();
+  const [picked, setPicked] = useState("");
+  const selectedWarehouse = own ?? (picked || undefined);
+  const filtered = useJuteLedgerEntries(ledger.id, selectedWarehouse);
+  const { refresh } = useTracking();
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-        <SiteSwitcher value={site} onChange={setSite} allowAll />
-      </div>
-      <LedgerSection ledger={ledger} rows={site ? filtered.rows : undefined} onEntryAdded={() => site && filtered.refetch()} />
+      {!own && (
+        <div className="flex justify-end">
+          <WarehouseFilter value={picked} onChange={setPicked} warehouses={all} />
+        </div>
+      )}
+      <LedgerSection
+        ledger={ledger}
+        rows={selectedWarehouse ? filtered.rows : undefined}
+        onEntryAdded={() => selectedWarehouse && filtered.refetch()}
+        warehouse={{ column: "WH location", selected: selectedWarehouse, options: all }}
+        aboveEntry={(
+          <OpeningStockField
+            warehouse={selectedWarehouse}
+            warehouses={all}
+            onSelectWarehouse={setPicked}
+            onSaved={() => { void refresh(); if (selectedWarehouse) void filtered.refetch(); }}
+          />
+        )}
+      />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[17px] font-bold text-warmstone-900 mb-2">Reconciliation rule</h3>
         <p className="text-[13px] leading-relaxed text-warmstone-500">{juteReconciliationRule}</p>

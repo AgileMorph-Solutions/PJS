@@ -345,6 +345,25 @@ export const CHECKS: Check[] = [
     },
   },
   {
+    // The Add entry form refuses these now, but an Excel upload can still write one, and the existing rows stay as they are.
+    id: "jute_movement_both_directions",
+    async run({ prisma }) {
+      const rows = await prisma.juteWarehouseMovement.findMany({
+        where: { bagsIssued: { gt: 0 }, bagsReceived: { gt: 0 } }, select: { seq: true }, orderBy: { seq: "asc" },
+      });
+      if (!rows.length) return null;
+      return {
+        id: "jute_movement_both_directions", severity: "warning",
+        title: "A jute bag line records both bags issued and bags received",
+        entity: "JuteWarehouseMovement", affectedCount: rows.length,
+        sampleIds: rows.slice(0, 5).map((r) => `seq ${r.seq}`),
+        evidence:
+          "Every row of the source sheet moves bags one way. A line with both nets out in the running balance, so the " +
+          "balance looks right while one of the two movements may be wrong. Kept as entered, for someone to check.",
+      };
+    },
+  },
+  {
     id: "activities_type_overloaded",
     async run({ prisma }) {
       const rows = await prisma.juteWarehouseMovement.findMany({

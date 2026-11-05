@@ -101,8 +101,8 @@ const RECEIPT: Pair[] = [
   ["StageVerifyDocs.ficheCode", "Fiche Code"],
   ["StageVerifyDocs.fiche", "Fiche No"],
   ["Receipt.origin", "Origin"],
-  ["StageQualityQfs.moisture", "Moisture (%)"],
-  ["StageQualityQfs.nutCount", "Nut Count"],
+  ["StageQualityQfs.finalMoisture", "Moisture (%)"],
+  ["StageQualityQfs.finalNutCount", "Nut Count"],
   ["StageQualityQfs.kor", "KOR"],
   ["StageQualityQfs.finalKor", "Final KOR"],
   // The cut test behind KOR (client, Oct 2026: the system calculates KOR when these are recorded).

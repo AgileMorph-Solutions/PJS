@@ -13,6 +13,17 @@ import type { LedgerRow } from "@anagroci/contract/types/receipt";
 import { listLedgerRows, addLedgerRow } from "../services/ledgers.js";
 import { reconciliation, jsonSafe } from "../domain/juteBalance.js";
 import { scopedSite } from "../auth/scope.js";
+import { ForbiddenError } from "../domain/validation.js";
+
+/**
+ * The column that says whose row it is. Ledger 4 is left out on purpose: its one warehouse column is the source, and the
+ * receiving warehouse records those rows too.
+ */
+const OWNING_WAREHOUSE_COLUMN: Record<string, string> = {
+  "warehouse-stock": "WH location",
+  "supplier-movement": "Warehouse",
+  "factory-production-tracking": "Warehouse",
+};
 
 function requireLedger(ledgerId: string, reply: FastifyReply): boolean {
   if (LEDGER_COLUMN_MAP[ledgerId]) return true;
@@ -42,6 +53,9 @@ export async function ledgerRoutes(app: FastifyInstance) {
     if (!requireLedger(ledgerId, reply)) return;
     const { row } = (req.body ?? {}) as { row?: LedgerRow };
     if (!row || typeof row !== "object") return reply.code(400).send({ error: "body.row is required" });
+    const owner = (row[OWNING_WAREHOUSE_COLUMN[ledgerId] ?? ""] ?? "").trim();
+    const mine = await scopedSite(req);
+    if (owner && mine && !mine.includes(owner)) throw new ForbiddenError("That warehouse isn't yours.");
     const created = await addLedgerRow(ledgerId, row);
     return reply.code(201).send({ data: created, warnings: [] });
   });

@@ -152,7 +152,7 @@ describe("figures worked out from the supplier's transactions", () => {
     const truck = async (date: string, opts: { plan?: boolean; pass: boolean; grn?: string; kor?: string; mois?: string }) => {
       const r = await createReceipt(A, date, opts.plan ? plan.id : undefined);
       await setStageFields(r.id, "n-verify", { "LBA CODE": "SUPC-PERF", "SUPPLIERS NAME": "SUPC PERF" });
-      await setStageFields(r.id, "n-qfs", { ...(opts.kor ? { KOR: opts.kor } : {}), ...(opts.mois ? { "MOIS. (moisture)": opts.mois } : {}) });
+      await setStageFields(r.id, "n-qfs", { ...(opts.kor ? { KOR: opts.kor } : {}), ...(opts.mois ? { "Final moisture (%)": opts.mois } : {}) });
       if (opts.pass) {
         await setBranch(r.id, "n-qfs", "pass");
         await setStageFields(r.id, "n-unload", { "BON SACS (good bags)": "100" });
@@ -166,7 +166,7 @@ describe("figures worked out from the supplier's transactions", () => {
     // Weighed on arrival (net weight), GRN not entered yet.
     const weighed = await createReceipt(A, "2026-05-08");
     await setStageFields(weighed.id, "n-verify", { "LBA CODE": "SUPC-PERF", "SUPPLIERS NAME": "SUPC PERF" });
-    await setStageFields(weighed.id, "n-qfs", { KOR: "46", "MOIS. (moisture)": "10" });
+    await setStageFields(weighed.id, "n-qfs", { KOR: "46", "Final moisture (%)": "10" });
     await setBranch(weighed.id, "n-qfs", "pass");
     await setStageFields(weighed.id, "n-gross", { "Loaded truck weight (kg)": "30000" });
     await setStageFields(weighed.id, "n-gross", { "Tare / empty truck weight (kg)": "20000" });
