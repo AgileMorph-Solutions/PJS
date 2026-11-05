@@ -624,12 +624,12 @@ model StageGrn {
   receipt      Receipt  @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
-/// Stage n-stock (system) — Update warehouse RCN stock (System)
+/// Stage n-stock (system) — Add this truck to warehouse stock
 model StageStockUpdate {
   receiptId           String  @id
-  stockLedgerEntry    String? /// Warehouse stock ledger entry
+  stockLedgerEntry    String? /// Added to stock from this truck (kg)
   warehouseType       String? /// Warehouse type (Village/Regional/Factory)
-  currentStockBalance String? /// Current stock balance
+  currentStockBalance String? /// Total warehouse stock after this truck (kg)
   receipt             Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 

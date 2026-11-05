@@ -168,9 +168,9 @@ export const STAGE_FIELD_MAP: Record<string, StageTableSpec> = {
     cardinality: "one",
     kind: "system",
     fields: [
-      { label: "Warehouse stock ledger entry", col: "stockLedgerEntry" },
+      { label: "Added to stock from this truck (kg)", col: "stockLedgerEntry" },
       { label: "Warehouse type (Village/Regional/Factory)", col: "warehouseType" },
-      { label: "Current stock balance", col: "currentStockBalance" },
+      { label: "Total warehouse stock after this truck (kg)", col: "currentStockBalance" },
     ],
   },
   "n-drying": {

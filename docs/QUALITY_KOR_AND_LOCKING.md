@@ -51,4 +51,4 @@ A truck's reception record **locks automatically when its GRN is complete**: the
 One Reception page lists every truck; its status filter has a **Reception** and an **Offloading** choice for these two parts.
 
 - **Reception**: Truck arrives at warehouse (Gate entry) → Verify supplier documents → Weight truck (Gross weight) → Quality analysis (QFS) → Reject / Hold and inform procurement in charge
-- **Offloading**: Unload RCN at warehouse → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Update warehouse RCN stock (System)
+- **Offloading**: Unload RCN at warehouse → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Add this truck to warehouse stock

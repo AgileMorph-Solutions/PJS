@@ -188,14 +188,14 @@ export const stages: Stage[] = [
   {
     id: "n-stock",
     num: 9,
-    title: "Update warehouse RCN stock (System)",
+    title: "Add this truck to warehouse stock",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
     note: "Automatic. Stock ledger increments from the completed GRN row.",
     fields: [
-      { n: "Warehouse stock ledger entry", v: "" , col: "stockLedgerEntry"},
+      { n: "Added to stock from this truck (kg)", v: "" , col: "stockLedgerEntry"},
       { n: "Warehouse type (Village/Regional/Factory)", v: "" , col: "warehouseType"},
-      { n: "Current stock balance", v: "" , col: "currentStockBalance"},
+      { n: "Total warehouse stock after this truck (kg)", v: "" , col: "currentStockBalance"},
     ],
   },
   {
