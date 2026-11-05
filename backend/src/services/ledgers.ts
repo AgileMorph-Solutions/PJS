@@ -126,9 +126,9 @@ async function assertKnownWarehouse(warehouse: string) {
 function assertOneDirection(data: Record<string, unknown>) {
   const issued = Number(data.bagsIssued ?? 0);
   const received = Number(data.bagsReceived ?? 0);
-  if (issued > 0 && received > 0) throw new ValidationError("Enter bags issued or bags received on one line, not both.");
+  if (issued > 0 && received > 0) throw new ValidationError("Please fill in only one: Bags issued (bags going out) or Bags received (bags coming in). If both happened, save them as two separate entries.");
   const hasSplit = [data.goodBagsAvailable, data.completelyDamaged, data.damagedRepairable].some((v) => v !== null && v !== undefined);
-  if (issued === 0 && received === 0 && !hasSplit) throw new ValidationError("Enter bags issued or bags received.");
+  if (issued === 0 && received === 0 && !hasSplit) throw new ValidationError("Please fill in Bags issued (bags going out) or Bags received (bags coming in).");
 }
 
 /** Both are foreign keys, so the database would refuse them anyway; this says which one is wrong, in words. */

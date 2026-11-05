@@ -97,11 +97,11 @@ describe("what it refuses in the bag counts", () => {
   it("wants one direction on a line, but allows a line that only records the good/damaged split", async () => {
     const both = await post({ "Bags issued": "100", "Bags received": "100" });
     expect(both.statusCode).toBe(422);
-    expect(both.json().error).toMatch(/not both/);
+    expect(both.json().error).toMatch(/fill in only one/);
 
     const neither = await post({ "Bags received": "" });
     expect(neither.statusCode).toBe(422);
-    expect(neither.json().error).toMatch(/Enter bags issued or bags received/);
+    expect(neither.json().error).toMatch(/Please fill in Bags issued/);
 
     expect((await post({ "Bags received": "", "Completely damaged/discarded": "3" })).statusCode).toBe(201);
     expect((await post({ "Bags received": "1 000" })).statusCode).toBe(201);
