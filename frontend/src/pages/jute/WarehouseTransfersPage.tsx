@@ -4,7 +4,7 @@ import { LedgerSection } from "../../components/LedgerSection";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { juteLedgers } from "../../data/juteBags";
 import { useJuteLedgerEntries } from "../../state/TrackingContext";
-import { SITES, siteSlugForWarehouse, type SiteSlug } from "../../config/sites";
+import { SITES, SITE_LIST, siteSlugForWarehouse, type SiteSlug } from "../../config/sites";
 
 const ledger = juteLedgers.find((l) => l.id === "warehouse-to-warehouse-movement")!;
 
@@ -27,7 +27,13 @@ export function WarehouseTransfersPage() {
       <div className="flex justify-end">
         <SiteSwitcher value={site} onChange={setSite} allowAll />
       </div>
-      <LedgerSection ledger={ledger} rows={site ? filtered.rows : undefined} onEntryAdded={() => site && filtered.refetch()} />
+      {/* Always a choice, never filled from the selected warehouse: the warehouse selected may be the one receiving this transfer. */}
+      <LedgerSection
+        ledger={ledger}
+        rows={site ? filtered.rows : undefined}
+        onEntryAdded={() => site && filtered.refetch()}
+        warehouse={{ column: "Transfer -Bouake", options: SITE_LIST.map((s) => s.warehouseName) }}
+      />
     </div>
   );
 }

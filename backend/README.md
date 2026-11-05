@@ -126,6 +126,8 @@ Fifteen findings ship against the real data, including:
 | GET | `/api/receipts/:id/activities` | Full 1:N history for `n-otheract` / `n-ledger` |
 | GET | `/api/receipts/:id/links` | Cross-site by design — deliberately does **not** accept `?warehouse=` (see below) |
 | GET/POST | `/api/jute-ledgers[/:id/entries]` | Server assigns `S N` and the running balance. GET accepts `?warehouse=` |
+| GET/POST | `/api/jute-vendor-receipts` | Bags received from a vendor. POST also adds the bags to the warehouse stock ledger. GET accepts `?warehouse=` |
+| GET/PUT | `/api/jute-opening-balances` | A warehouse's opening bag count, the first row of its stock ledger. Set once by the Warehouse Incharge; only an admin can change it. GET accepts `?warehouse=` |
 | GET | `/api/jute-ledgers/reconciliation` | Per warehouse and period. Accepts `?warehouse=` |
 | GET | `/api/masters`, POST `/api/masters/{suppliers,warehouses,bins}` | `warehouses` is `{name, kind, site}[]`, not a bare string list — see "Sites, not just warehouses" below |
 | GET/POST | `/api/drying-jobs` | Rejects a job with no Lot. GET accepts `?warehouse=` |

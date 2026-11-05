@@ -14,6 +14,12 @@ const TABS: (TabItem & { lede: string })[] = [
     lede: "Running balance continues from the existing ledger.",
   },
   {
+    to: "/jute/vendor-receiving",
+    label: "Vendor Receiving",
+    icon: "local_shipping",
+    lede: "Bags bought from a vendor. What is received is added to the warehouse stock.",
+  },
+  {
     to: "/jute/suppliers",
     label: "Supplier Movement",
     icon: "swap_horiz",

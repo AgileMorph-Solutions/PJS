@@ -6,6 +6,7 @@
  * contract; LEDGER_COLUMN_MAP (generated from juteBags.ts) is what maps them onto real columns, so
  * the schema never has to carry a typo and the UI never has to stop showing one.
  */
+import { JUTE_OPENING_ACTIVITY } from "@anagroci/contract/domain/juteOpeningBalance";
 import { LEDGER_COLUMN_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
 import { prisma } from "../db.js";
@@ -93,14 +94,57 @@ const INT_COLS = new Set([
   "damagedRepairable", "bagsIssuedToSupplier", "returnedViaDeliveries", "pendingWithSupplier",
   "damaged", "reusable", "issuedToProduction", "goodBagsRecovered", "partiallyDamaged",
   "returnedToWarehouse", "closingBalance", "bagsDispatched", "damagedBags", "newBagsUsed",
-  "recondition", "reportedDifference",
+  "recondition", "reportedDifference", "finalBagsAfterRebagging", "reportedDiff", "fullyLoadedTruckWeight",
+  "emptyTruckTareWeight", "grossWeightReceived", "netWeightAtArrival", "netWeightDispatched", "weightDifference",
 ]);
+/** The ones that are a difference or a balance, so can really be below zero. */
+const SIGNED_COLS = new Set(["reportedDifference", "reportedDiff", "weightDifference", "pendingWithSupplier", "closingBalance"]);
+/** Ledger 4's readings with a *Raw twin: a value that isn't a number is kept there as written, as its importer does. */
+const DECIMAL_WITH_RAW = ["korReceived", "korDispatched", "moistureReceived", "moistureDispatched"];
 
-function toInt(v: string): number | null {
-  const s = (v ?? "").trim();
+/** A whole number from a form, or null for a blank. Anything else is refused: storing it as blank would lose it without a word. */
+function toInt(label: string, col: string, v: string): number | null {
+  const s = (v ?? "").replace(/\s/g, "");
   if (s === "") return null;
-  const n = Number(s.replace(",", "."));
-  return Number.isFinite(n) ? Math.round(n) : null;
+  if (!/^-?\d+$/.test(s)) throw new ValidationError(`"${label}" must be a whole number, not "${v}".`);
+  const n = Number(s);
+  if (n < 0 && !SIGNED_COLS.has(col)) throw new ValidationError(`"${label}" can't be negative.`);
+  if (Math.abs(n) > 2_147_483_647) throw new ValidationError(`"${label}" is too large.`);
+  return n;
+}
+
+async function assertKnownWarehouse(warehouse: string) {
+  if (!(await prisma.warehouse.findUnique({ where: { name: warehouse }, select: { name: true } }))) {
+    throw new ValidationError(`Warehouse "${warehouse}" isn't in the warehouse master.`);
+  }
+}
+
+/**
+ * Every one of the 298 real rows moves bags one way, so a line with both is a mistake that leaves the balance looking
+ * right. A row with neither is allowed only when it records the good/damaged split instead.
+ */
+function assertOneDirection(data: Record<string, unknown>) {
+  const issued = Number(data.bagsIssued ?? 0);
+  const received = Number(data.bagsReceived ?? 0);
+  if (issued > 0 && received > 0) throw new ValidationError("Enter bags issued or bags received on one line, not both.");
+  const hasSplit = [data.goodBagsAvailable, data.completelyDamaged, data.damagedRepairable].some((v) => v !== null && v !== undefined);
+  if (issued === 0 && received === 0 && !hasSplit) throw new ValidationError("Enter bags issued or bags received.");
+}
+
+/** Both are foreign keys, so the database would refuse them anyway; this says which one is wrong, in words. */
+async function assertWarehouseStockReferences(warehouse: string, supplierCode: string | null | undefined) {
+  if (!warehouse) throw new ValidationError("Choose the warehouse this entry is for.");
+  await assertKnownWarehouse(warehouse);
+  if (supplierCode && !(await prisma.supplier.findUnique({ where: { code: supplierCode }, select: { code: true } }))) {
+    throw new ValidationError(`Supplier code "${supplierCode}" isn't in the Suppliers list.`);
+  }
+}
+
+/** The next row's place in the warehouse stock ledger, for every writer of it. `seq` is unique, so two writers racing get
+ * a refused write, never a shared number. */
+export async function nextMovementNumbers(db: Pick<typeof prisma, "juteWarehouseMovement"> = prisma) {
+  const last = await db.juteWarehouseMovement.findFirst({ orderBy: { seq: "desc" }, select: { seq: true, sn: true } });
+  return { seq: (last?.seq ?? 0) + 1, sn: (last?.sn ?? 0) + 1 };
 }
 
 /**
@@ -111,22 +155,25 @@ export async function addLedgerRow(ledgerId: string, row: LedgerRow): Promise<Le
   const spec = LEDGER_COLUMN_MAP[ledgerId];
   if (!spec) throw new Error(`Unknown ledger "${ledgerId}"`);
   const owned = new Set(SERVER_OWNED[ledgerId] ?? []);
+  // A row typed here would sort last, and the balance before it would no longer start from the opening.
+  if (ledgerId === "warehouse-stock" && (row["Activities type"] ?? "").trim().toUpperCase() === JUTE_OPENING_ACTIVITY) {
+    throw new ValidationError("Enter the opening stock in the Opening stock field at the top of Warehouse Stock.");
+  }
 
   const data: Record<string, unknown> = {};
   for (const c of spec.columns) {
     if (owned.has(c.label)) continue;
     if (!(c.label in row)) continue;
     const raw = row[c.label];
-    data[c.col] = INT_COLS.has(c.col) ? toInt(raw) : raw === "" ? null : raw;
+    data[c.col] = INT_COLS.has(c.col) ? toInt(c.label, c.col, raw) : raw === "" ? null : raw;
   }
 
   if (ledgerId === "warehouse-stock") {
-    const last = await prisma.juteWarehouseMovement.findFirst({ orderBy: { seq: "desc" }, select: { seq: true, sn: true } });
-    const seq = (last?.seq ?? 0) + 1;
-    data.seq = seq;
-    data.sn = (last?.sn ?? 0) + 1;
+    Object.assign(data, await nextMovementNumbers());
     data.activitiesType = (row["Activities type"] ?? "").trim();
     data.whLocation = (row["WH location"] ?? "").trim();
+    await assertWarehouseStockReferences(data.whLocation as string, data.supplierCode as string | null | undefined);
+    assertOneDirection(data);
     const d = (row["Date"] ?? "").trim();
     const parsed = d ? new Date(d) : null;
     if (parsed && !Number.isNaN(parsed.getTime())) data.movementDate = parsed;
@@ -140,9 +187,17 @@ export async function addLedgerRow(ledgerId: string, row: LedgerRow): Promise<Le
     // No fallback to "BOUAKE": that was only ever correct while every import truly was
     // Bouaké -> Yakro. Now that a second site exists, guessing the source here is exactly the
     // wrong kind of silent default (ground rule §4) — require the caller to say which warehouse.
-    const sourceWarehouse = (row["Transfer -Bouake "] ?? row["WH location"] ?? "").trim();
+    const sourceWarehouse = (row["Transfer -Bouake"] ?? "").trim();
     if (!sourceWarehouse) throw new ValidationError("Source warehouse is required for a warehouse-to-warehouse transfer row.");
+    await assertKnownWarehouse(sourceWarehouse);
     data.sourceWarehouse = sourceWarehouse;
+    for (const col of DECIMAL_WITH_RAW) {
+      const raw = data[col];
+      if (raw === null || raw === undefined) continue;
+      const n = Number(String(raw).trim().replace(",", "."));
+      data[col] = Number.isFinite(n) ? n : null;
+      if (!Number.isFinite(n)) data[`${col}Raw`] = raw;
+    }
     const d = (row["Date"] ?? "").trim();
     const parsed = d ? new Date(d) : null;
     if (parsed && !Number.isNaN(parsed.getTime())) data.receivedDate = parsed;

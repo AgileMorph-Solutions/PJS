@@ -710,7 +710,8 @@ model StageRejection {
 model JuteWarehouseMovement {
   id       String @id @default(uuid())
   /// Dense 1..N import order. This, not `sn`, is the ordering key: the sheet's S N column has
-  /// duplicates (99-108 repeat) so it cannot identify a row.
+  /// duplicates (99-108 repeat) so it cannot identify a row. An opening balance row takes a seq
+  /// below 1, so it sorts first in its warehouse however late it is entered.
   seq      Int    @unique
   /// The sheet's own S N value, kept verbatim. Not unique — see `seq`.
   sn       Int?
@@ -753,11 +754,47 @@ model JuteWarehouseMovement {
   /// Links a bag movement back to the RCN delivery that caused it, where known.
   receiptId String?
 
+  /// Set when this row came from the Vendor Receiving tab.
+  vendorReceipt JuteVendorReceipt?
+  /// Set on a warehouse's opening balance row.
+  openingBalance JuteOpeningBalance?
+
   createdAt DateTime @default(now())
 
   @@index([whLocation, seq])
   @@index([supplierCode])
   @@index([receiptId])
+}
+
+/// Jute bags received from a vendor (client trial observations, 02-11-2026, point 7). The bags, date and warehouse are on
+/// `movement`, so the running balance has one source; short quantity is derived (contract domain/juteVendorReceipt.ts).
+model JuteVendorReceipt {
+  id             String                @id @default(uuid())
+  movementId     String                @unique
+  movement       JuteWarehouseMovement @relation(fields: [movementId], references: [id])
+  vendorName     String
+  deliveryNoteNo String
+  invoicedQty    Int
+  remarks        String?
+  createdById    String?
+  createdBy      User?                 @relation("JuteVendorReceiptAuthor", fields: [createdById], references: [id])
+  createdAt      DateTime              @default(now())
+}
+
+/// A warehouse's opening jute bag count (client trial observations, 02-11-2026, point 7). The bags and date are on `movement`,
+/// the first row of that warehouse's ledger by seq, so the running balance starts from it. One per warehouse, enforced by a
+/// partial unique index on JuteWarehouseMovement (see the jute_opening_balance migration).
+model JuteOpeningBalance {
+  id          String                @id @default(uuid())
+  movementId  String                @unique
+  movement    JuteWarehouseMovement @relation(fields: [movementId], references: [id])
+  remarks     String?
+  createdById String?
+  createdBy   User?                 @relation("JuteOpeningAuthor", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?                 @relation("JuteOpeningEditor", fields: [updatedById], references: [id])
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @default(now()) @updatedAt
 }
 
 /// Ledger 2 — supplier-level movement. Intentionally created empty: every column is a gap, and the
@@ -2295,6 +2332,9 @@ model User {
   approvedExceptions  Receipt[]               @relation("ExceptionApprover")
   lockedReceipts      Receipt[]               @relation("ReceiptLocker")
   activityEntries     WarehouseActivityLedgerEntry[] @relation("ActivityEntryAuthor")
+  juteVendorReceipts  JuteVendorReceipt[] @relation("JuteVendorReceiptAuthor")
+  juteOpeningsCreated JuteOpeningBalance[] @relation("JuteOpeningAuthor")
+  juteOpeningsEdited  JuteOpeningBalance[] @relation("JuteOpeningEditor")
   createdSuppliers    Supplier[]              @relation("SupplierCreator")
   updatedSuppliers    Supplier[]              @relation("SupplierUpdater")
   uploadIssues        UploadIssue[]           @relation("UploadIssueUploader")

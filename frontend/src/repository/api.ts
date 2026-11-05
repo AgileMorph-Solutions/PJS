@@ -276,6 +276,10 @@ export const api = {
   /** Records an "other warehouse activity" (stacking, triage, ...) in one of the fixed categories. */
   createActivityEntry: (body: Record<string, unknown>) => request<WarehouseActivityLedgerEntry>("/warehouse-activity-ledger", { method: "POST", body: JSON.stringify(body) }),
   listWarehouseActivityLedger: () => request<WarehouseActivityLedgerEntry[]>("/warehouse-activity-ledger"),
+  listOpeningBalances: (warehouse?: string) => request<OpeningBalanceRow[]>(withWarehouse("/jute-opening-balances", warehouse)),
+  setOpeningBalance: (body: Record<string, unknown>) => request<OpeningBalanceRow>("/jute-opening-balances", { method: "PUT", body: JSON.stringify(body) }),
+  listVendorReceipts: (warehouse?: string) => request<VendorReceiptRow[]>(withWarehouse("/jute-vendor-receipts", warehouse)),
+  createVendorReceipt: (body: Record<string, unknown>) => request<VendorReceiptRow>("/jute-vendor-receipts", { method: "POST", body: JSON.stringify(body) }),
   /** WarehouseDischarge — the raw rows behind both DISCHARGEMENT and Warehouse Receiving, shown on
    * Lots & Bins alongside the derived Receipt.stageData view that page already had. */
   listWarehouseDischarges: (warehouse?: string) =>
@@ -886,6 +890,32 @@ export interface IssuedToProductionRow {
   sheetRow: number | null;
   source: string | null;
   createdAt: string;
+}
+
+/** A warehouse's opening jute bag count (backend's services/juteOpeningBalances.ts). */
+export interface OpeningBalanceRow {
+  id: string;
+  warehouse: string;
+  date: string | null;
+  bags: number;
+  remarks: string | null;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+/** Jute bags received from a vendor (backend's services/juteVendorReceipts.ts). */
+export interface VendorReceiptRow {
+  id: string;
+  sn: number | null;
+  date: string | null;
+  warehouse: string;
+  vendorName: string;
+  deliveryNoteNo: string;
+  invoicedQty: number;
+  receivedQty: number;
+  shortQty: number;
+  remarks: string | null;
+  createdBy: string | null;
 }
 
 /** Warehouse activity Ledger (backend/prisma/schema.prisma's WarehouseActivityLedgerEntry) — no
