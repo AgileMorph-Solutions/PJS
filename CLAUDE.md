@@ -86,6 +86,12 @@ These apply in every package here, not just one:
   Intake (RCN Receipt, moisture, weighing) comes next, only when asked — don't build toward later phases speculatively; keep the schema extensible
   instead (see how `backend/prisma/schema.prisma`'s masters aren't hard-coded to only Procurement's needs).
 
+## UI consistency
+
+Before writing or changing any frontend UI, load the `ui-consistency` skill
+(`.claude/skills/ui-consistency/SKILL.md`). It is the single rulebook for headings, text, font
+sizes, colours, spacing and reusable components.
+
 ## Commands
 
 ```bash
