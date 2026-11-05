@@ -7,6 +7,7 @@ import { FilterBar } from "./ui/FilterBar";
 import { DateRangeInputs } from "./ui/DateRangeInputs";
 import { DateInput } from "./ui/DateInput";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { DERIVED_COLUMNS } from "@anagroci/contract/domain/jute";
 import { useDateRangeFilter } from "./ui/useDateRangeFilter";
 // NOTE: allRowsFor() is deliberately NOT used any more. It prepended juteBags.ts's hardcoded
 // sampleRows to the entered rows, which was right when the ledger was empty demo data. The API now
@@ -26,8 +27,6 @@ const KNOWN_ACTIVITY_TYPES = [
   "REBAGGING DURING DRYING",
   "TRANSFFER TO YAMOUSSOUKRO",
 ];
-
-const DERIVED_COLUMNS = new Set(["S N", "Balance"]);
 
 function blankRow(columns: JuteLedgerColumn[]): Row {
   return Object.fromEntries(columns.filter((c) => !DERIVED_COLUMNS.has(c.label)).map((c) => [c.label, ""]));
@@ -51,11 +50,13 @@ interface Props {
   /** A ledger column that must name a warehouse in the master. Filled from `selected`, or picked from `options` when no
    * single warehouse is selected, so it is never free text the server would refuse. */
   warehouse?: { column: string; selected?: string; options: string[] };
+  /** A calculated column to show in the form, read-only: what it will be if the draft is saved. Others stay out of the form. */
+  calculatedField?: { column: string; preview: (rows: Row[], draft: Row) => string; hint: string };
 }
 
-export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, warehouse }: Props) {
+export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, warehouse, calculatedField }: Props) {
   const { ledgerEntries, addLedgerEntry } = useTracking();
-  const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label));
+  const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label) || c.label === calculatedField?.column);
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -121,7 +122,17 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                       {c.label}
                     </label>
                   </div>
-                  {c.label === warehouse?.column ? (
+                  {c.label === calculatedField?.column ? (
+                    <input
+                      id={id}
+                      readOnly
+                      tabIndex={-1}
+                      value={calculatedField.preview(allRows, draft)}
+                      placeholder="Calculated automatically"
+                      aria-describedby={`${id}-hint`}
+                      className={`${inputCls} cursor-not-allowed`}
+                    />
+                  ) : c.label === warehouse?.column ? (
                     warehouse.selected ? (
                       <input id={id} readOnly value={warehouse.selected} className={`${inputCls} cursor-not-allowed`} />
                     ) : (
@@ -162,6 +173,9 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                       placeholder={c.real ? "" : "Not recorded yet"}
                       className={inputCls}
                     />
+                  )}
+                  {c.label === calculatedField?.column && (
+                    <p id={`${id}-hint`} className="mt-1.5 text-[11.5px] leading-snug text-warmstone-500">{calculatedField.hint}</p>
                   )}
                 </div>
               );

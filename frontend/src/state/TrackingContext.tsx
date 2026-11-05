@@ -404,6 +404,14 @@ export function useVendorReceipts(warehouse?: string) {
   return { rows, loading, refetch };
 }
 
+export function useEmptyBagReceipts(warehouse?: string) {
+  const [rows, setRows] = useState<import("../repository/api").EmptyBagReceiptRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listEmptyBagReceipts(warehouse).then(setRows).catch(() => {}), [warehouse]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
 /** WarehouseDischarge — the raw rows DISCHARGEMENT/Warehouse Receiving actually store, shown on
  * Lots & Bins alongside the page's existing derived-from-Receipt.stageData view. */
 export function useWarehouseDischarges(warehouse?: string) {

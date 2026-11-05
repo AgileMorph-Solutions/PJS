@@ -286,7 +286,7 @@ export const LEDGER_COLUMN_MAP: Record<string, { ledgerId: string; model: string
       { label: "Activity", col: "activity", real: false },
       { label: "Bags issued to supplier", col: "bagsIssuedToSupplier", real: false },
       { label: "Returned through RCN deliveries", col: "returnedViaDeliveries", real: false },
-      { label: "Pending/balance with supplier", col: "pendingWithSupplier", real: false },
+      { label: "Bags still with supplier", col: "pendingWithSupplier", real: false },
       { label: "Damaged", col: "damaged", real: false },
       { label: "Reusable/reconditionable", col: "reusable", real: false },
       { label: "Movement Type", col: "movementType", real: false },

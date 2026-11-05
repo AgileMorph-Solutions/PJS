@@ -280,6 +280,8 @@ export const api = {
   setOpeningBalance: (body: Record<string, unknown>) => request<OpeningBalanceRow>("/jute-opening-balances", { method: "PUT", body: JSON.stringify(body) }),
   listVendorReceipts: (warehouse?: string) => request<VendorReceiptRow[]>(withWarehouse("/jute-vendor-receipts", warehouse)),
   createVendorReceipt: (body: Record<string, unknown>) => request<VendorReceiptRow>("/jute-vendor-receipts", { method: "POST", body: JSON.stringify(body) }),
+  listEmptyBagReceipts: (warehouse?: string) => request<EmptyBagReceiptRow[]>(withWarehouse("/jute-empty-bag-receipts", warehouse)),
+  createEmptyBagReceipt: (body: Record<string, unknown>) => request<EmptyBagReceiptRow>("/jute-empty-bag-receipts", { method: "POST", body: JSON.stringify(body) }),
   /** WarehouseDischarge — the raw rows behind both DISCHARGEMENT and Warehouse Receiving, shown on
    * Lots & Bins alongside the derived Receipt.stageData view that page already had. */
   listWarehouseDischarges: (warehouse?: string) =>
@@ -901,6 +903,20 @@ export interface OpeningBalanceRow {
   remarks: string | null;
   createdBy: string | null;
   updatedBy: string | null;
+}
+
+/** Empty jute bags received from another warehouse (backend's services/juteEmptyBagReceipts.ts). */
+export interface EmptyBagReceiptRow {
+  id: string;
+  sn: number | null;
+  date: string | null;
+  fromWarehouse: string;
+  warehouse: string;
+  truckNumber: string | null;
+  warehouseReceiptNo: string | null;
+  bagsReceived: number;
+  responsibleParty: string;
+  createdBy: string | null;
 }
 
 /** Jute bags received from a vendor (backend's services/juteVendorReceipts.ts). */

@@ -130,6 +130,7 @@ model Warehouse {
   transfersTo   TransferRequest[]              @relation("TransferRequestTo")
   dryingJobs    DryingJob[]
   juteMovements JuteWarehouseMovement[]
+  emptyBagsSent JuteEmptyBagReceipt[]
   transfersOut  JuteWarehouseTransferReceipt[] @relation("TransferSource")
   transfersIn   JuteWarehouseTransferReceipt[] @relation("TransferDestination")
   aliases       WarehouseAlias[]
@@ -756,6 +757,8 @@ model JuteWarehouseMovement {
 
   /// Set when this row came from the Vendor Receiving tab.
   vendorReceipt JuteVendorReceipt?
+  /// Set when this row came from the Empty Bag Receiving tab.
+  emptyBagReceipt JuteEmptyBagReceipt?
   /// Set on a warehouse's opening balance row.
   openingBalance JuteOpeningBalance?
 
@@ -779,6 +782,22 @@ model JuteVendorReceipt {
   createdById    String?
   createdBy      User?                 @relation("JuteVendorReceiptAuthor", fields: [createdById], references: [id])
   createdAt      DateTime              @default(now())
+}
+
+/// Empty jute bags received from another warehouse (client observations list, point 8). The bags, date, truck, receipt no. and
+/// receiving warehouse are on `movement`, so the running balance has one source; this holds what that ledger has no column for.
+model JuteEmptyBagReceipt {
+  id               String                @id @default(uuid())
+  movementId       String                @unique
+  movement         JuteWarehouseMovement @relation(fields: [movementId], references: [id])
+  fromWarehouse    String
+  from             Warehouse             @relation(fields: [fromWarehouse], references: [name])
+  responsibleParty String
+  createdById      String?
+  createdBy        User?                 @relation("JuteEmptyBagReceiptAuthor", fields: [createdById], references: [id])
+  createdAt        DateTime              @default(now())
+
+  @@index([fromWarehouse])
 }
 
 /// A warehouse's opening jute bag count (client trial observations, 02-11-2026, point 7). The bags and date are on `movement`,
@@ -809,6 +828,7 @@ model JuteSupplierMovement {
 
   bagsIssuedToSupplier  Int?
   returnedViaDeliveries Int?
+  /// Not read or written: the balance is calculated (contract's supplierPendingBalances). Kept so the ledger's column map holds.
   pendingWithSupplier   Int?
   damaged               Int?
   reusable              Int?
@@ -2333,6 +2353,7 @@ model User {
   lockedReceipts      Receipt[]               @relation("ReceiptLocker")
   activityEntries     WarehouseActivityLedgerEntry[] @relation("ActivityEntryAuthor")
   juteVendorReceipts  JuteVendorReceipt[] @relation("JuteVendorReceiptAuthor")
+  juteEmptyBagReceipts JuteEmptyBagReceipt[] @relation("JuteEmptyBagReceiptAuthor")
   juteOpeningsCreated JuteOpeningBalance[] @relation("JuteOpeningAuthor")
   juteOpeningsEdited  JuteOpeningBalance[] @relation("JuteOpeningEditor")
   createdSuppliers    Supplier[]              @relation("SupplierCreator")

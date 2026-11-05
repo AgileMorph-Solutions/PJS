@@ -6,6 +6,7 @@
  * contract; LEDGER_COLUMN_MAP (generated from juteBags.ts) is what maps them onto real columns, so
  * the schema never has to carry a typo and the UI never has to stop showing one.
  */
+import { SUPPLIER_PENDING_COLUMN, supplierPendingBalances } from "@anagroci/contract/domain/jute";
 import { JUTE_OPENING_ACTIVITY } from "@anagroci/contract/domain/juteOpeningBalance";
 import { LEDGER_COLUMN_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
@@ -23,6 +24,7 @@ const DELEGATE: Record<string, string> = {
 /** Columns the server owns. A client cannot set these; they are computed or assigned on write. */
 const SERVER_OWNED: Record<string, string[]> = {
   "warehouse-stock": ["S N", "Balance"],
+  "supplier-movement": [SUPPLIER_PENDING_COLUMN],
   "warehouse-to-warehouse-movement": ["SN"],
 };
 
@@ -56,6 +58,18 @@ function toLedgerRow(ledgerId: string, row: Record<string, unknown>): LedgerRow 
   return out;
 }
 
+/** Every supplier movement with its calculated balance, oldest first. Worked out over all warehouses and only then narrowed
+ * by the caller: the bags a supplier holds don't depend on which warehouse is looking. */
+async function supplierMovementRows() {
+  const rows = await prisma.juteSupplierMovement.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const pending = supplierPendingBalances(rows.map((r) => ({ supplierCode: r.supplierCode, issued: r.bagsIssuedToSupplier, returned: r.returnedViaDeliveries })));
+  return rows.map((r, i) => ({
+    id: r.id,
+    whLocation: r.whLocation,
+    wire: { ...toLedgerRow("supplier-movement", r), [SUPPLIER_PENDING_COLUMN]: fmt(pending[i]) },
+  }));
+}
+
 /** `site` is a resolved list of names (domain/site.ts's resolveSite). Ledger 4 rows span two
  * warehouses (source and destination), so a transfer matches if EITHER side is in scope — it's
  * genuinely relevant to both sections, unlike the single-warehouse ledgers. */
@@ -72,6 +86,11 @@ export async function listLedgerRows(ledgerId: string, site?: string[]): Promise
       wire["Balance"] = fmt((r as any).computed_balance);
       return wire;
     });
+  }
+
+  if (ledgerId === "supplier-movement") {
+    const rows = await supplierMovementRows();
+    return rows.filter((r) => !site || (r.whLocation !== null && site.includes(r.whLocation))).map((r) => r.wire);
   }
 
   const model = (prisma as any)[DELEGATE[ledgerId]];
@@ -91,14 +110,14 @@ export function ledgerSiteWhere(ledgerId: string, site?: string[]) {
 
 const INT_COLS = new Set([
   "bagsIssued", "bagsReceived", "reportedBalance", "goodBagsAvailable", "completelyDamaged",
-  "damagedRepairable", "bagsIssuedToSupplier", "returnedViaDeliveries", "pendingWithSupplier",
+  "damagedRepairable", "bagsIssuedToSupplier", "returnedViaDeliveries",
   "damaged", "reusable", "issuedToProduction", "goodBagsRecovered", "partiallyDamaged",
   "returnedToWarehouse", "closingBalance", "bagsDispatched", "damagedBags", "newBagsUsed",
   "recondition", "reportedDifference", "finalBagsAfterRebagging", "reportedDiff", "fullyLoadedTruckWeight",
   "emptyTruckTareWeight", "grossWeightReceived", "netWeightAtArrival", "netWeightDispatched", "weightDifference",
 ]);
 /** The ones that are a difference or a balance, so can really be below zero. */
-const SIGNED_COLS = new Set(["reportedDifference", "reportedDiff", "weightDifference", "pendingWithSupplier", "closingBalance"]);
+const SIGNED_COLS = new Set(["reportedDifference", "reportedDiff", "weightDifference", "closingBalance"]);
 /** Ledger 4's readings with a *Raw twin: a value that isn't a number is kept there as written, as its importer does. */
 const DECIMAL_WITH_RAW = ["korReceived", "korDispatched", "moistureReceived", "moistureDispatched"];
 
@@ -220,6 +239,10 @@ export async function addLedgerRow(ledgerId: string, row: LedgerRow): Promise<Le
 
   const model = (prisma as any)[DELEGATE[ledgerId]];
   const created = await model.create({ data });
+
+  if (ledgerId === "supplier-movement") {
+    return (await supplierMovementRows()).find((r) => r.id === created.id)!.wire;
+  }
 
   const rows = await listLedgerRows(ledgerId);
   return rows.find((r) => r["S N"] === String(created.sn) || r["SN"] === String(created.sn)) ?? toLedgerRow(ledgerId, created);
