@@ -3,6 +3,7 @@ import { CalibrationReportsStep } from "./CalibrationReports";
 import { SortLoadsStep } from "./CalibrationLoads";
 import { CheckSilosStep, FixSiloStep, silosToCheck, type CalibrationPermissions } from "./SizingChecks";
 import { StepCard } from "./StepCard";
+import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { DataTable, type Column } from "../ui/DataTable";
 import { Pill } from "../ui/Pill";
@@ -22,12 +23,13 @@ const silos = (n: number) => `${n} silo${n === 1 ? "" : "s"}`;
  * then numbered steps with only the current one open. The forms open in a dialog, so the page itself stays short.
  * The client's "pick a reconciled load" and "kg into each silo" are one step here: picking a load opens its form.
  */
-export function CalibrationSection({ batch, receipts, calibration, can, onChanged }: {
+export function CalibrationSection({ batch, receipts, calibration, can, onChanged, onGoToCooking }: {
   batch: BatchDetail;
   receipts: RcnReceipt[];
   calibration: BatchCalibration;
   can: CalibrationPermissions;
   onChanged: () => void;
+  onGoToCooking: () => void;
 }) {
   const toSort = receipts.filter((r) => canCalibrate(r.status));
   const anyReady = receipts.some((r) => isIntakeDone(r.status));
@@ -54,10 +56,11 @@ export function CalibrationSection({ batch, receipts, calibration, can, onChange
 
   return (
     <div className="max-w-5xl space-y-3">
-      <p className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold text-warmstone-900 ${allDone ? "border-success-200 bg-success-50" : "border-brand-200 bg-brand-50"}`}>
+      <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${allDone ? "border-success-200 bg-success-50" : "border-brand-200 bg-brand-50"}`}>
         <span className={`material-symbols-outlined text-[18px] ${allDone ? "text-success-700" : "text-brand-700"}`}>{allDone ? "check_circle" : "arrow_forward"}</span>
-        <span>{nextText}</span>
-      </p>
+        <p className="min-w-0 flex-1 text-[13px] font-semibold text-warmstone-900">{nextText}</p>
+        {allDone && <Button variant="secondary" icon="arrow_forward" onClick={onGoToCooking}>Go to Cooking</Button>}
+      </div>
       <Progress receipts={receipts} />
       <SortLoadsStep receipts={receipts} canEdit={can.canSize} active={next === "sort"} onChanged={onChanged} />
       <CheckSilosStep
@@ -99,6 +102,7 @@ function SiloStockStep({ calibration }: { calibration: BatchCalibration }) {
     { label: "Sorted in, all batches", align: "right", nowrap: true, render: (s) => formatKg(s.sizedInKg) },
     { label: "Of which this batch", align: "right", nowrap: true, render: (s) => formatKg(calibration.batchSizedKg[s.size]) },
     { label: "Moved by hand", align: "right", nowrap: true, render: moved },
+    { label: "Cooked", align: "right", nowrap: true, render: (s) => (s.cookedKg > 0 ? `− ${formatKg(s.cookedKg)}` : "-") },
     { label: "Kg in the silo", align: "right", nowrap: true, render: (s) => <b className="font-semibold">{formatKg(s.stockKg)}</b> },
     { label: "Check", nowrap: true, render: (s) => {
       const c = calibration.siloChecks[s.size];
@@ -108,7 +112,7 @@ function SiloStockStep({ calibration }: { calibration: BatchCalibration }) {
   ];
   return (
     <StepCard n={4} title="Silo stock" status={`${formatKg(total)} in all silos · worked out by the app`} active={false} done={false}>
-      <p className="text-[13px] text-warmstone-800 mb-3">The silos belong to the factory, so they hold the nuts of every batch. Kg in the silo = sorted in, plus or minus what was moved by hand.</p>
+      <p className="text-[13px] text-warmstone-800 mb-3">The silos belong to the factory, so they hold the nuts of every batch. Kg in the silo = sorted in, plus or minus what was moved by hand, minus what was cooked.</p>
       <DataTable columns={columns} rows={calibration.silos} keyFn={(s) => s.size} />
     </StepCard>
   );

@@ -279,7 +279,6 @@ export interface SiloStock {
   sizedInKg: number;
   manualInKg: number;
   manualOutKg: number;
-  /** Phase 3 (Cooking) takes nuts out of the silos; 0 until it exists. */
   cookedKg: number;
   stockKg: number;
 }
@@ -288,12 +287,13 @@ export interface SiloStock {
 export function siloStock(
   runs: { sizes: SizeValues }[],
   moves: { fromSize: string; toSize: string; kg: string }[],
+  cooks: { sizes: SizeValues }[] = [],
 ): SiloStock[] {
   return SILO_SIZE_KEYS.map((size) => {
     const sizedInKg = kg2(runs.reduce((n, r) => n + (num(r.sizes[size]) || 0), 0));
     const manualInKg = kg2(moves.filter((m) => m.toSize === size).reduce((n, m) => n + (num(m.kg) || 0), 0));
     const manualOutKg = kg2(moves.filter((m) => m.fromSize === size).reduce((n, m) => n + (num(m.kg) || 0), 0));
-    const cookedKg = 0;
+    const cookedKg = kg2(cooks.reduce((n, c) => n + (num(c.sizes[size]) || 0), 0));
     return { size, sizedInKg, manualInKg, manualOutKg, cookedKg, stockKg: kg2(sizedInKg + manualInKg - manualOutKg - cookedKg) };
   });
 }
@@ -307,9 +307,8 @@ export interface SiloDay {
   date: string;
   openingKg: number;
   sizedKg: number;
-  /** Phase 3 (Cooking) takes nuts out of the silos; 0 until it exists. */
   cookedKg: number;
-  /** Net kg added to each size that day: sized in, plus moved in, minus moved out. */
+  /** Net kg added to each size that day: sized in, plus moved in, minus moved out, minus cooked. */
   sizes: Record<SiloSize, number>;
   movedKg: number;
   closingKg: number;
@@ -318,20 +317,23 @@ export interface SiloDay {
 export function siloDailyStock(
   runs: { date: string; sizes: SizeValues }[],
   moves: { date: string; fromSize: string; toSize: string; kg: string }[],
+  cooks: { date: string; sizes: SizeValues }[] = [],
 ): SiloDay[] {
-  const dates = [...new Set([...runs.map((r) => r.date), ...moves.map((m) => m.date)])].sort();
+  const dates = [...new Set([...runs.map((r) => r.date), ...moves.map((m) => m.date), ...cooks.map((c) => c.date)])].sort();
   let closing = 0;
   return dates.map((date) => {
     const dayRuns = runs.filter((r) => r.date === date);
     const dayMoves = moves.filter((m) => m.date === date);
+    const dayCooks = cooks.filter((c) => c.date === date);
     const sizedKg = kg2(dayRuns.reduce((n, r) => n + sizesTotal(r.sizes), 0));
     const sizes = Object.fromEntries(SILO_SIZE_KEYS.map((k) => {
       const sized = dayRuns.reduce((n, r) => n + (num(r.sizes[k]) || 0), 0);
       const moved = dayMoves.reduce((n, m) => n + (m.toSize === k ? num(m.kg) || 0 : 0) - (m.fromSize === k ? num(m.kg) || 0 : 0), 0);
-      return [k, kg2(sized + moved)];
+      const cooked = dayCooks.reduce((n, c) => n + (num(c.sizes[k]) || 0), 0);
+      return [k, kg2(sized + moved - cooked)];
     })) as Record<SiloSize, number>;
     const openingKg = closing;
-    const cookedKg = 0;
+    const cookedKg = kg2(dayCooks.reduce((n, c) => n + sizesTotal(c.sizes), 0));
     closing = kg2(openingKg + sizedKg - cookedKg);
     return { date, openingKg, sizedKg, cookedKg, sizes, movedKg: kg2(dayMoves.reduce((n, m) => n + (num(m.kg) || 0), 0)), closingKg: closing };
   });

@@ -12,6 +12,7 @@ import type {
 } from "@anagroci/contract/types/user";
 import type { BatchTruckRow } from "@anagroci/contract/data/batchEntry";
 import type { AvailableBin, BatchDetail, BatchSummary } from "@anagroci/contract/types/productionBatch";
+import type { BatchLots, BoilerInput, BoilerReadingView, CoolingInput, CookRunInput, LotEntryInput, LotView, ShellingDayInput, TruckInput, TruckView } from "@anagroci/contract/types/lots";
 import type { BatchCalibration, CalibrationRunInput, ManualCalibrationInput, SizingCheck, SizingCheckInput } from "@anagroci/contract/types/calibration";
 import type { MoistureCheckInput, RcnFinalWeightInput, RcnPalletInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
 
@@ -400,6 +401,23 @@ export const api = {
   approveSizingCheck: (checkId: number) => request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/approve`), { method: "POST" }),
   rejectSizingCheck: (checkId: number, reason: string) =>
     request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/reject`), { method: "POST", body: JSON.stringify({ reason }) }),
+  // ── Production Phases 3–4: Lots, by-products and the boiler. ──
+  getBatchLots: (code: string) => request<BatchLots>(prod(`/production/batches/${encodeURIComponent(code)}/lots`)),
+  cookFactoryLot: (r: CookRunInput) => request<LotView>(prod("/production/factory-lots"), { method: "POST", body: JSON.stringify(r) }),
+  deleteCookRun: (id: number) => request<void>(prod(`/production/lot-cook-runs/${id}`), { method: "DELETE" }),
+  moveLotToCooling: (code: string, c: CoolingInput) => request<LotView>(prod(`/production/factory-lots/${encodeURIComponent(code)}/cooling`), { method: "POST", body: JSON.stringify(c) }),
+  addLotEntry: (code: string, e: LotEntryInput) => request<LotView>(prod(`/production/factory-lots/${encodeURIComponent(code)}/entries`), { method: "POST", body: JSON.stringify(e) }),
+  approveLotEntry: (id: number) => request<LotView>(prod(`/production/lot-entries/${id}/approve`), { method: "POST" }),
+  rejectLotEntry: (id: number, reason: string) => request<LotView>(prod(`/production/lot-entries/${id}/reject`), { method: "POST", body: JSON.stringify({ reason }) }),
+  approveAllLotEntries: (code: string, kind: string) => request<LotView>(prod(`/production/factory-lots/${encodeURIComponent(code)}/entries/approve-all`), { method: "POST", body: JSON.stringify({ kind }) }),
+  deleteLotEntry: (id: number) => request<void>(prod(`/production/lot-entries/${id}`), { method: "DELETE" }),
+  addShellingDay: (code: string, d: ShellingDayInput) => request<LotView>(prod(`/production/factory-lots/${encodeURIComponent(code)}/shelling-days`), { method: "POST", body: JSON.stringify(d) }),
+  deleteShellingDay: (id: number) => request<void>(prod(`/production/shelling-days/${id}`), { method: "DELETE" }),
+  addTruck: (t: TruckInput) => request<TruckView>(prod("/production/trucks"), { method: "POST", body: JSON.stringify(t) }),
+  updateTruck: (id: number, t: TruckInput) => request<TruckView>(prod(`/production/trucks/${id}`), { method: "PUT", body: JSON.stringify(t) }),
+  deleteTruck: (id: number) => request<void>(prod(`/production/trucks/${id}`), { method: "DELETE" }),
+  addBoilerReading: (b: BoilerInput) => request<BoilerReadingView>(prod("/production/boiler"), { method: "POST", body: JSON.stringify(b) }),
+  deleteBoilerReading: (id: number) => request<void>(prod(`/production/boiler/${id}`), { method: "DELETE" }),
   addManualCalibration: (checkId: number, m: ManualCalibrationInput) =>
     request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/manual-calibrations`), { method: "POST", body: JSON.stringify(m) }),
 

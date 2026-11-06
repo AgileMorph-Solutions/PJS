@@ -35,16 +35,23 @@ const gramColumns = (grams: SizingGrams | undefined) =>
 
 /** Every run and manual move at the site: the silos are the factory's, shared by all its batches. */
 async function siloMovements(tx: Tx | typeof prisma, site: string) {
-  const [runs, moves] = await Promise.all([
+  const [runs, moves, cooks] = await Promise.all([
     tx.rcnCalibrationRun.findMany({ where: { rcnReceipt: { batch: { warehouse: site } } }, include: { rcnReceipt: { select: { batchCode: true } } } }),
     tx.manualCalibration.findMany({ where: { sizingCheck: { batch: { warehouse: site } } } }),
+    tx.lotCookRun.findMany({ where: { lot: { batch: { warehouse: site } } } }),
   ]);
-  return { runs: runs.map((r) => ({ batchCode: r.rcnReceipt.batchCode, date: r.date, sizes: runSizes(r) })), moves };
+  return { runs: runs.map((r) => ({ batchCode: r.rcnReceipt.batchCode, date: r.date, sizes: runSizes(r) })), moves, cooks: cooks.map((c) => ({ date: c.date, sizes: runSizes(c) })) };
 }
 
 async function stockOf(tx: Tx, site: string, size: SiloSize): Promise<number> {
-  const { runs, moves } = await siloMovements(tx, site);
-  return siloStock(runs, moves).find((s) => s.size === size)!.stockKg;
+  const { runs, moves, cooks } = await siloMovements(tx, site);
+  return siloStock(runs, moves, cooks).find((s) => s.size === size)!.stockKg;
+}
+
+/** Each silo's kg now: what Phase 3 may cook from. */
+export async function siloStockBySize(tx: Tx, site: string): Promise<Record<SiloSize, number>> {
+  const { runs, moves, cooks } = await siloMovements(tx, site);
+  return Object.fromEntries(siloStock(runs, moves, cooks).map((s) => [s.size, s.stockKg])) as Record<SiloSize, number>;
 }
 
 // ── Step 2 · Kg into each silo ──────────────────────────────────────────────────────────────────
@@ -75,9 +82,9 @@ export async function deleteCalibrationRun(site: string, runId: number): Promise
     const run = await tx.rcnCalibrationRun.findFirst({ where: { id: runId, rcnReceipt: { batch: { warehouse: site } } } });
     if (!run) throw new ValidationError(`Calibration run ${runId} doesn't exist at ${site}.`);
     await tx.rcnCalibrationRun.delete({ where: { id: run.id } });
-    const { runs, moves } = await siloMovements(tx, site);
-    const short = siloStock(runs, moves).find((s) => s.stockKg < 0);
-    if (short) throw new ValidationError(`Removing this run would leave silo ${siloLabel(short.size)} at ${short.stockKg.toLocaleString("en-US")} kg: nuts were moved out of it since.`);
+    const { runs, moves, cooks } = await siloMovements(tx, site);
+    const short = siloStock(runs, moves, cooks).find((s) => s.stockKg < 0);
+    if (short) throw new ValidationError(`Removing this run would leave silo ${siloLabel(short.size)} at ${short.stockKg.toLocaleString("en-US")} kg: nuts were moved or cooked out of it since.`);
     return receiptAt(tx, site, run.rcnReceiptId);
   });
   return toView(row);
@@ -233,15 +240,15 @@ export async function listSizingChecks(site: string): Promise<SizingCheck[]> {
 export async function batchCalibration(site: string, batchCode: string): Promise<BatchCalibration | null> {
   const batch = await prisma.productionBatch.findFirst({ where: { code: batchCode, warehouse: site }, select: { code: true } });
   if (!batch) return null;
-  const [{ runs, moves }, siteChecks] = await Promise.all([siloMovements(prisma, site), listSizingChecks(site)]);
+  const [{ runs, moves, cooks }, siteChecks] = await Promise.all([siloMovements(prisma, site), listSizingChecks(site)]);
   const own = siloStock(runs.filter((r) => r.batchCode === batchCode), []);
   const standing = siloChecks(siteChecks.map((c) => ({ ...c, moves: c.manualCalibrations.length })));
   const stillDeciding = new Set(Object.values(standing).filter((c) => c.state === "failed" || c.state === "re_sized").map((c) => c.checkId));
   return {
-    silos: siloStock(runs, moves),
+    silos: siloStock(runs, moves, cooks),
     batchSizedKg: Object.fromEntries(own.map((s) => [s.size, s.sizedInKg])) as Record<SiloSize, number>,
     siloChecks: standing,
     sizingChecks: siteChecks.filter((c) => c.batchCode === batchCode || stillDeciding.has(c.id)).reverse(),
-    daily: siloDailyStock(runs, moves),
+    daily: siloDailyStock(runs, moves, cooks),
   };
 }

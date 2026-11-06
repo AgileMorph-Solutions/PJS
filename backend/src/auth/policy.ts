@@ -48,6 +48,10 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
     // Phase 2, step 3: QC-2 sizing checks, the same way.
     { method: "GET", path: /^\/api\/production\/batches\/[^/]+\/calibration$/ },
     { method: "POST", path: /^\/api\/production\/sizing-checks$/ },
+    // Phases 3–4: a QFS Officer reads a batch's Lots and submits their checks. The service refuses them the floor's
+    // own records (cooker log, line runs), which share this route.
+    { method: "GET", path: /^\/api\/production\/batches\/[^/]+\/lots$/ },
+    { method: "POST", path: /^\/api\/production\/factory-lots\/[^/]+\/entries$/ },
   ],
 };
 

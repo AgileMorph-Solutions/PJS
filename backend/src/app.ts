@@ -20,6 +20,7 @@ import { productionBatchRoutes } from "./routes/productionBatches.js";
 import { productionWorkbookRoutes } from "./routes/productionWorkbook.js";
 import { rcnReceiptRoutes } from "./routes/rcnReceipts.js";
 import { calibrationRoutes } from "./routes/calibration.js";
+import { factoryLotRoutes } from "./routes/factoryLots.js";
 import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
 import { dryingBatchRoutes } from "./routes/dryingBatches.js";
 import { dryingSortingReportRoutes } from "./routes/dryingSortingReports.js";
@@ -105,6 +106,7 @@ export function buildApp() {
   app.register(productionWorkbookRoutes);
   app.register(rcnReceiptRoutes);
   app.register(calibrationRoutes);
+  app.register(factoryLotRoutes);
   app.register(warehouseDispatchRoutes);
   app.register(warehouseActivityLedgerRoutes);
   app.register(juteVendorReceiptRoutes);

@@ -10,6 +10,8 @@ import { arrivedLots, BATCH_CODE_PATTERN, batchStatus, keptLotsByBin, planBatch,
 import { MOISTURE_DECISION_LABELS, type MoistureDecision } from "@anagroci/contract/domain/rcnReceipt";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { SIZING_DECISION_LABELS, samplingPointLabel, siloLabel, sizesTotal, type SamplingPoint, type SiloSize, type SizingDecision } from "@anagroci/contract/domain/calibration";
+import { ENTRY_DEFS, entryFieldText, type EntryKind } from "@anagroci/contract/domain/lotEntries";
+import { shellingFigures } from "@anagroci/contract/domain/shelling";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
 import type { AvailableBin, BatchDetail, BatchHistoryEntry, BatchSummary } from "@anagroci/contract/types/productionBatch";
 import { prisma } from "../../db.js";
@@ -166,6 +168,19 @@ const BATCH_INCLUDE = {
       manualCalibrations: { select: { fromSize: true, toSize: true, kg: true, createdAt: true, createdBy: { select: { displayName: true } } } },
     },
   },
+  lots: {
+    select: {
+      code: true, coolingSilo: true, coolingAt: true, createdAt: true, createdBy: { select: { displayName: true } },
+      runs: { select: { createdAt: true, createdBy: { select: { displayName: true } }, kgApp: true, kgAp: true, kgA: true, kgAB: true, kgB: true, kgBC: true, kgC: true, kgD: true, kgE: true } },
+      entries: {
+        select: {
+          kind: true, values: true, decision: true, status: true, submittedById: true, reviewedById: true, submittedAt: true, reviewedAt: true, rejectReason: true,
+          submittedBy: { select: { displayName: true } }, reviewedBy: { select: { displayName: true } },
+        },
+      },
+      shellingDays: { select: { inputKg: true, wholesKg: true, piecesKg: true, rejectionKg: true, oilKg: true, blackRejectionKg: true, createdAt: true, createdBy: { select: { displayName: true } } } },
+    },
+  },
 } satisfies Prisma.ProductionBatchInclude;
 
 type BatchRow = Prisma.ProductionBatchGetPayload<{ include: typeof BATCH_INCLUDE }>;
@@ -236,6 +251,7 @@ export async function getBatch(site: string, code: string): Promise<BatchDetail 
         actor: m.createdBy.displayName,
       })),
     ]),
+    ...row.lots.flatMap(lotHistory),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
   return { ...summary, bins, history };
@@ -248,6 +264,29 @@ export async function batchOfBin(binCode: string): Promise<{ batchCode: string; 
 }
 
 type CheckForHistory = BatchRow["rcnReceipts"][number]["moistureChecks"][number];
+
+/** A floor record is one line; a check reads like any other. Machine samples run to hundreds, so only checks with a decision are told one by one. */
+function lotHistory(l: BatchRow["lots"][number]): BatchHistoryEntry[] {
+  return [
+    ...l.runs.map((r) => ({
+      at: r.createdAt.toISOString(),
+      text: `Lot ${l.code} cooked: ${kgText(sizesTotal({ App: r.kgApp ?? undefined, Ap: r.kgAp ?? undefined, A: r.kgA ?? undefined, AB: r.kgAB ?? undefined, B: r.kgB ?? undefined, BC: r.kgBC ?? undefined, C: r.kgC ?? undefined, D: r.kgD ?? undefined, E: r.kgE ?? undefined }))}`,
+      actor: r.createdBy.displayName,
+    })),
+    ...(l.coolingAt ? [{ at: l.createdAt.toISOString(), text: `Lot ${l.code} in cooling silo ${l.coolingSilo} from ${l.coolingAt.replace("T", " ")}`, actor: l.createdBy.displayName }] : []),
+    ...l.entries.filter((e) => ENTRY_DEFS[e.kind as EntryKind].decision).flatMap((e) => {
+      const def = ENTRY_DEFS[e.kind as EntryKind];
+      const size = def.fields.find((f) => f.type === "size");
+      const about = size ? `, ${entryFieldText(size, (e.values as Record<string, string>)[size.key])}` : "";
+      const said = e.decision === "ok" ? def.decision!.ok : def.decision!.no;
+      return reviewedHistory(`Lot ${l.code} ${def.check}${about}: ${said}`, `Lot ${l.code} ${def.check}`, e);
+    }),
+    ...l.shellingDays.map((d) => {
+      const f = shellingFigures({ inputKg: d.inputKg, wholesKg: d.wholesKg ?? "", piecesKg: d.piecesKg ?? "", rejectionKg: d.rejectionKg ?? "", oilKg: d.oilKg ?? "", blackRejectionKg: d.blackRejectionKg ?? "" });
+      return { at: d.createdAt.toISOString(), text: `Lot ${l.code} shelled: ${kgText(Number(d.inputKg))} in, ${kgText(f.finalKg)} kernels (${f.yieldPct.toFixed(2)} % good), ${kgText(f.shellKg)} shell`, actor: d.createdBy.displayName };
+    }),
+  ];
+}
 
 const kgText = (kg: number) => `${kg.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`;
 

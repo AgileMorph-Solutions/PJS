@@ -4,11 +4,15 @@
  * the batch page shows.
  */
 import { SILO_SIZES, SIZING_GRADES, type SiloSize } from "@anagroci/contract/domain/calibration";
+import { TRUCK_STATUS_LABELS, streamLabel } from "@anagroci/contract/domain/byProducts";
+import { ENTRY_DEFS, ENTRY_KINDS, sizeWord } from "@anagroci/contract/domain/lotEntries";
 import { BATCH_STATUS_LABELS } from "@anagroci/contract/domain/productionBatch";
 import { RCN_RECEIPT_STATUS_LABELS } from "@anagroci/contract/domain/rcnReceipt";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { listBatches } from "../../services/production/batches.js";
+import { listBoilerReadings, listTrucks } from "../../services/production/byProducts.js";
 import { listSizingChecks } from "../../services/production/calibration.js";
+import { listLots } from "../../services/production/factoryLots.js";
 import { listRcnReceipts } from "../../services/production/rcnReceipts.js";
 import { gramKey, joinList, runKgKey, type Tab } from "./tabs.js";
 
@@ -18,7 +22,7 @@ const CHECK_STATUS = { submitted: "Waiting for approval", approved: "Approved", 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function exportRows(site: string): Promise<Record<Tab["id"], TabRow[]>> {
-  const [batches, receipts, sizingChecks] = await Promise.all([listBatches(site), listRcnReceipts(site), listSizingChecks(site)]);
+  const [batches, receipts, sizingChecks, lots, trucks, boiler] = await Promise.all([listBatches(site), listRcnReceipts(site), listSizingChecks(site), listLots(site), listTrucks(site), listBoilerReadings(site)]);
   const word = (size: SiloSize) => SILO_SIZES.find((s) => s.key === size)!.sheet;
   // Oldest first, the order the loads happened in, as on the client's sheets.
   const loads = [...receipts].reverse();
@@ -56,5 +60,25 @@ export async function exportRows(site: string): Promise<Record<Tab["id"], TabRow
       decision: c.decision === "ok" ? "OK" : "Fail", correctPct: c.correctPct === null ? null : round2(c.correctPct), status: CHECK_STATUS[c.status],
     })),
     siloMoves: sizingChecks.flatMap((c) => c.manualCalibrations.map((m) => ({ id: m.id, date: m.date, fromSize: word(m.fromSize), toSize: word(m.toSize), kg: m.kg }))),
+    cooking: lots.flatMap((l) => l.runs.map((r) => ({
+      id: r.id, batchCode: l.batchCode, lotCode: l.code, date: r.date, totalKg: r.totalKg, bags: round2(r.totalKg / 80),
+      ...Object.fromEntries(SILO_SIZES.map((s) => [runKgKey(s.key), r.sizes[s.key]])),
+    }))),
+    cooling: lots.filter((l) => l.coolingAt).map((l) => ({ lotCode: l.code, silo: l.coolingSilo, date: l.coolingAt!.slice(0, 10), time: l.coolingAt!.slice(11) })),
+    shellingDays: lots.flatMap((l) => l.shellingDays.map((d) => ({
+      id: d.id, lotCode: l.code, date: d.date, inputKg: d.inputKg, ...d.kg,
+      shellDustKg: d.figures.shellDustKg, shellKg: d.figures.shellKg, goodKg: d.figures.goodKg, finalKg: d.figures.finalKg, shotLbs: round2(d.figures.shotLbs),
+      yieldPct: round2(d.figures.yieldPct), realisationPct: round2(d.figures.realisationPct), wholesPct: round2(d.figures.wholesPct), uncutPct: round2(d.figures.uncutPct),
+    }))),
+    boiler: [...boiler].reverse().map((b) => ({ id: b.id, date: b.date, shellKg: b.shellKg, runningHours: b.runningHours })),
+    trucks: [...trucks].reverse().map((t) => ({
+      id: t.id, stream: streamLabel(t.stream), date: t.date, truckNo: t.truckNo, driver: t.driver, documentsChecked: t.documentsChecked ? "Yes" : "No", slipNo: t.slipNo, tareKg: t.tareKg, grossKg: t.grossKg,
+      buyer: t.buyer, category: t.category, price: t.price, gatePassNo: t.gatePassNo, netKg: t.netKg, status: TRUCK_STATUS_LABELS[t.status],
+    })),
+    ...(Object.fromEntries(ENTRY_KINDS.map((kind) => [`entry:${kind}`, lots.flatMap((l) => l.entries.filter((e) => e.kind === kind).map((e) => ({
+      id: e.id, lotCode: l.code, date: e.date, status: CHECK_STATUS[e.status],
+      decision: e.decision === null ? null : e.decision === "ok" ? "OK" : e.decision === "wait" ? "Wait" : "No",
+      ...Object.fromEntries(ENTRY_DEFS[kind].fields.map((f) => [`v_${f.key}`, f.type === "size" ? sizeWord(e.values[f.key]) : e.values[f.key]])),
+    })))])) as unknown as Record<`entry:${(typeof ENTRY_KINDS)[number]}`, TabRow[]>),
   };
 }

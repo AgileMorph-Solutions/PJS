@@ -1,6 +1,6 @@
 /**
- * The production workbook's tabs: Phase 1 (Batch & Intake) and Phase 2 (Calibration), one tab per thing a person
- * records, in the order they happen. A later phase (cooking, …) is a new tab here when it is built.
+ * The production workbook's tabs: Phases 1 to 4, one tab per thing a person records, in the order they happen. A
+ * later phase (colour sorting, …) is a new tab here when it is built; a Lot's small records come from its definitions.
  *
  * Column words follow the client's own sheets — "2. Input RCN Quality report" for a moisture check, the
  * "RCN Receipts Tally Sheet" for pallets, "5. Calibrated RCN Silos Stock report" for the sizes, "24. Wholes Manual
@@ -13,17 +13,20 @@
  * arrive in the same file, before the app has issued the load an ID.
  */
 import { SILO_SIZES, SIZING_GRADES, type SizingGrade } from "@anagroci/contract/domain/calibration";
+import { ENTRY_DEFS, ENTRY_KINDS, type EntryKind } from "@anagroci/contract/domain/lotEntries";
 
 export interface TabField {
   key: string;
   label: string;
   derived?: boolean;
+  /** Excel hands a time cell back as a date; this column keeps its HH:MM. */
+  time?: boolean;
   /** A cell comment on the header: how to fill the column in. */
   note?: string;
 }
 
 export interface Tab {
-  id: "batches" | "receipts" | "checks" | "pallets" | "final" | "runs" | "siloChecks" | "siloMoves";
+  id: "batches" | "receipts" | "checks" | "pallets" | "final" | "runs" | "siloChecks" | "siloMoves" | "cooking" | "cooling" | "shellingDays" | "trucks" | "boiler" | `entry:${EntryKind}`;
   title: string;
   /** The column that names an existing row; blank in it means "add a new one". */
   key: string;
@@ -46,6 +49,30 @@ const RUN_SIZES: TabField[] = SILO_SIZES.map((s) => ({ key: runKgKey(s.key), lab
 export const gramKey = (g: SizingGrade) => `g_${g}`;
 const GRADE_WORD = (g: SizingGrade) => (g === "under" ? "< DE" : SILO_SIZES.find((s) => s.key === g)!.sheet);
 const SAMPLE_GRAMS: TabField[] = SIZING_GRADES.map((g) => ({ key: gramKey(g), label: `${GRADE_WORD(g)} (g)` }));
+
+const LOT_LINK: TabField = { key: "lotCode", label: "Lot No" };
+
+function entryTab(kind: EntryKind): Tab {
+  const def = ENTRY_DEFS[kind];
+  return {
+    id: `entry:${kind}`,
+    title: def.sheet,
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Entry ID" },
+      LOT_LINK,
+      { key: "date", label: "Date" },
+      ...def.fields.map((f) => ({
+        key: `v_${f.key}`, label: f.label, time: f.type === "time",
+        note: f.type === "size" ? "The size: A++, A+, A, AB, B, BC, C, D or DE." : f.options ? f.options.join(", ") : undefined,
+      })),
+      ...(def.decision ? [{ key: "decision", label: "Result", note: `${def.decision.ok}, or ${def.decision.noValue === "wait" ? "Wait" : "No"}.` }] : []),
+      ...(def.who === "qfs" ? [{ key: "status", label: "Approval", derived: true }] : []),
+    ],
+  };
+}
 
 export const TABS: Tab[] = [
   {
@@ -182,7 +209,113 @@ export const TABS: Tab[] = [
       { key: "kg", label: "Kg Moved" },
     ],
   },
+  {
+    id: "cooking",
+    title: "Cooking",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Cooking ID" },
+      { key: "batchCode", label: "Batch Name" },
+      { ...LOT_LINK, note: "A new number makes the Lot, e.g. ANG26G16." },
+      { key: "date", label: "Date" },
+      ...RUN_SIZES,
+      { key: "totalKg", label: "Total Qty", derived: true },
+      { key: "bags", label: "No of Bags", derived: true },
+    ],
+  },
+  entryTab("cooker_log"),
+  entryTab("qc3"),
+  entryTab("waste_water"),
+  {
+    id: "cooling",
+    title: "Cooling",
+    key: "lotCode",
+    dateKey: "date",
+    dateLabel: "Date in",
+    fields: [
+      LOT_LINK,
+      { key: "silo", label: "Cooling Silo" },
+      { key: "date", label: "Date In" },
+      { key: "time", label: "Time In", time: true },
+    ],
+  },
+  entryTab("qc4"),
+  {
+    id: "shellingDays",
+    title: "Shelling Days",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Day ID" },
+      LOT_LINK,
+      { key: "date", label: "Date" },
+      { key: "inputKg", label: "Input Quantity (Kg's)" },
+      { key: "wholesKg", label: "Wholes (kg's)" },
+      { key: "piecesKg", label: "Pieces (kg's)" },
+      { key: "rejectionKg", label: "Rejection (kg's)" },
+      { key: "oilKg", label: "Oil (kg's)" },
+      { key: "blackRejectionKg", label: "Black Rejection (Kg's)" },
+      { key: "firstPassUncutKg", label: "First Pass Uncut (kg's)" },
+      { key: "finalUncutKg", label: "Final Uncut (kg's)" },
+      { key: "shellDustKg", label: "Shell Dust", derived: true },
+      { key: "shellKg", label: "Shell", derived: true },
+      { key: "goodKg", label: "Good Kernels (kg's)", derived: true },
+      { key: "finalKg", label: "Final Kernels (kg's)", derived: true },
+      { key: "shotLbs", label: "SHOT (lbs)", derived: true },
+      { key: "yieldPct", label: "Good Kernels Yield %", derived: true },
+      { key: "realisationPct", label: "Final Realisation (%)", derived: true },
+      { key: "wholesPct", label: "Wholes%", derived: true },
+      { key: "uncutPct", label: "Uncut %", derived: true },
+    ],
+  },
+  entryTab("line_run"),
+  entryTab("qc5_frequency"),
+  entryTab("qc5_capacity"),
+  entryTab("qty1"),
+  entryTab("qc6"),
+  {
+    id: "boiler",
+    title: "Boiler",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Reading ID" },
+      { key: "date", label: "DATE" },
+      { key: "shellKg", label: "QTY Consumed (Kg's)" },
+      { key: "runningHours", label: "Running Hours" },
+    ],
+  },
+  {
+    id: "trucks",
+    title: "Trucks",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Truck ID" },
+      { key: "stream", label: "Stream", note: "Dust & voids, Cooking waste water, Shell or Shell dust." },
+      { key: "date", label: "DATE" },
+      { key: "truckNo", label: "TRUCK NO" },
+      { key: "driver", label: "Driver" },
+      { key: "documentsChecked", label: "Documents Checked", note: "Yes or No. A truck is weighed only after its documents are checked." },
+      { key: "slipNo", label: "Weighment Slip" },
+      { key: "tareKg", label: "TARE WEIGHT" },
+      { key: "grossKg", label: "GROSS WEIGHT" },
+      { key: "buyer", label: "Vendor" },
+      { key: "category", label: "Category" },
+      { key: "price", label: "Price (HT)" },
+      { key: "gatePassNo", label: "Gate Pass No", note: "Filling this in closes the truck, and takes its net weight out of the store." },
+      { key: "netKg", label: "NET WEIGHT (KGS)", derived: true },
+      { key: "status", label: "Status", derived: true },
+    ],
+  },
 ];
+// A guard for `ENTRY_KINDS`: every kind has its tab above, or its records could never be uploaded or exported.
+for (const kind of ENTRY_KINDS) if (!TABS.some((t) => t.id === `entry:${kind}`)) throw new Error(`No workbook tab for ${kind}`);
 
 /**
  * A header as this workbook matches it. Keeps + < > where the shared normalizeHeader drops them: the client's size

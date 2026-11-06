@@ -1,11 +1,14 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { StatBlock } from "../../components/ui/StatBlock";
 import { Pill } from "../../components/ui/Pill";
-import { BATCH_PHASES, BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
+import { BATCH_PHASES, BUILT_PHASES, BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
 import { BatchSteps } from "../../components/production/BatchSteps";
 import { CalibrationSection } from "../../components/production/CalibrationSection";
-import { useBatch, useBatchCalibration } from "../../state/productionBatches";
+import { CookingSection } from "../../components/production/CookingSection";
+import { ShellingSection } from "../../components/production/ShellingSection";
+import { useBatch, useBatchCalibration, useBatchLots } from "../../state/productionBatches";
 import { useRcnReceipts } from "../../state/rcnReceipts";
 import { useCanEditDirectly, useHasRole } from "../../state/AuthContext";
 import { RCN_RECEIPT_STATUS_LABELS, isIntakeDone, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
@@ -24,7 +27,16 @@ type Tab = "steps" | "overview" | "history";
 
 /** The doc's "next person" column, for what the batch's loads are waiting on. */
 const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done", "calibrating"];
-const PHASE_TEXT = ["receive each load, check its moisture, weigh it", "sort each weighed load by size into the 9 silos"];
+const PHASE_TEXT = [
+  "receive each load, check its moisture, weigh it",
+  "sort each weighed load by size into the 9 silos",
+  "steam-cook each size, then rest the Lot 24 hours in a cooling silo",
+  "cut the shells open: kernels, uncut, shell and shell dust",
+  "a camera machine splits the kernels: wholes, pieces, rejection + oil, black rejection",
+  "dry the kernels in the ovens, trolley by trolley",
+  "humidify, peel and grade the kernels",
+  "pack, check and dispatch the finished goods",
+];
 const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "QFS Officer",
   moisture_pending: "Warehouse Incharge",
@@ -37,8 +49,8 @@ const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
 };
 
 /**
- * The batch page, the one place a batch is worked on, like a truck's Reception page. Steps & entry holds one
- * phase at a time, the one the batch has reached unless the stepper picks another. Bins & Lots leads back to
+ * The batch page, the one place a batch is worked on, like a truck's Reception page. Steps & entry holds every
+ * phase, one under the other, and the stepper takes the person to one. Bins & Lots leads back to
  * procurement: bins → Lots → each Lot's truck (the link the Phase 1 doc asks for). History is what happened when.
  */
 export function BatchDetailPage() {
@@ -46,11 +58,24 @@ export function BatchDetailPage() {
   const { batch, loading, error, refetch } = useBatch(code);
   const receipts = useRcnReceipts(code, { enabled: Boolean(code) });
   const calibration = useBatchCalibration(code);
+  const lots = useBatchLots(code);
   const canEdit = useCanEditDirectly();
   const isQfs = useHasRole("qfs_officer");
   const [tab, setTab] = useState<Tab>("steps");
   const [open, setOpen] = useState<string | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
+  const [scrollTo, setScrollTo] = useState<number | null>(null);
+  // After the render, as coming from another tab has only then put the phase on the page.
+  useEffect(() => {
+    if (scrollTo === null || tab !== "steps") return;
+    document.getElementById(`phase-${scrollTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setScrollTo(null);
+  }, [scrollTo, tab]);
+  const goToPhase = (n: number) => {
+    setPicked(n);
+    setTab("steps");
+    setScrollTo(n);
+  };
 
   if (loading) return <div className="p-10 text-warmstone-400 text-sm">Loading…</div>;
   if (!batch) return <div className="p-10 text-warmstone-400 text-sm">{error ?? `Batch "${code}" not found.`}</div>;
@@ -59,11 +84,13 @@ export function BatchDetailPage() {
   const loads = receipts.rows.length;
   const waiting = WAITING_ORDER.map((st) => [st, receipts.rows.filter((r) => r.status === st).length] as const).filter(([, n]) => n > 0);
   // A saved receipt changes the batch too (status, history), so both are read again.
-  const onChanged = () => void Promise.all([refetch(), receipts.refetch(), calibration.refetch()]);
+  const onChanged = () => void Promise.all([refetch(), receipts.refetch(), calibration.refetch(), lots.refetch()]);
   // Phases overlap (loads keep arriving while earlier ones are sized), so the batch is "at" the furthest one reached.
-  const phase = receipts.rows.some((r) => isIntakeDone(r.status)) ? 2 : 1;
+  const lotList = lots.data?.lots ?? [];
+  const phase = lotList.some((l) => l.status === "ready" || l.status === "shelled") ? 4 : lotList.length > 0 ? 3 : receipts.rows.some((r) => isIntakeDone(r.status)) ? 2 : 1;
   const shown = picked ?? phase;
-  const checksWaiting = calibration.calibration?.sizingChecks.filter((c) => c.status === "submitted").length ?? 0;
+  const checksWaiting = (calibration.calibration?.sizingChecks.filter((c) => c.status === "submitted").length ?? 0)
+    + lotList.flatMap((l) => l.entries).filter((e) => e.status === "submitted").length;
 
   return (
     <div className="space-y-5">
@@ -96,16 +123,14 @@ export function BatchDetailPage() {
                   <WaitingLine key={st} n={n} what={RCN_RECEIPT_STATUS_LABELS[st].toLowerCase()} who={NEXT_PERSON[st]} />
                 ))}
                 {checksWaiting > 0 && (
-                  <WaitingLine n={checksWaiting} what={`silo check${checksWaiting === 1 ? "" : "s"} waiting for approval`} who="Warehouse Incharge" />
+                  <WaitingLine n={checksWaiting} what={`quality check${checksWaiting === 1 ? "" : "s"} waiting for approval`} who="Warehouse Incharge" />
                 )}
               </ul>
             )}
-            {tab !== "steps" && (
-              <button type="button" onClick={() => setTab("steps")} className="mt-2 text-[12px] text-brand-700 font-semibold hover:underline">Go to Steps & entry</button>
-            )}
+            <button type="button" onClick={() => goToPhase(phase)} className="mt-2 text-[12px] text-brand-700 font-semibold hover:underline">Go to {BATCH_PHASES[phase - 1]}</button>
           </div>
         </div>
-        <BatchPhaseStepper current={phase} shown={shown} onShow={(n) => { setPicked(n); setTab("steps"); }} />
+        <BatchPhaseStepper current={phase} shown={shown} onShow={goToPhase} />
       </section>
 
       <div className="flex items-center gap-1 border-b border-warmstone-200 overflow-x-auto">
@@ -129,13 +154,35 @@ export function BatchDetailPage() {
       </div>
 
       {tab === "steps" && (
-        <div>
-          <PhaseHeading n={shown} title={BATCH_PHASES[shown - 1]!} text={PHASE_TEXT[shown - 1]!} />
-          {shown === 1 && <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />}
-          {shown === 2 && (calibration.calibration ? (
-            <CalibrationSection batch={batch} receipts={receipts.rows} calibration={calibration.calibration} can={{ canSize: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
-          ) : (
-            <p className="text-[13px] text-warmstone-500">{calibration.error ?? "Loading…"}</p>
+        <div className="space-y-10">
+          <PhaseSection n={1} current={phase}>
+            <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+          </PhaseSection>
+          <PhaseSection n={2} current={phase}>
+            {calibration.calibration ? (
+              <CalibrationSection batch={batch} receipts={receipts.rows} calibration={calibration.calibration} can={{ canSize: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} onGoToCooking={() => goToPhase(3)} />
+            ) : (
+              <p className="text-[13px] text-warmstone-500">{calibration.error ?? "Loading…"}</p>
+            )}
+          </PhaseSection>
+          <PhaseSection n={3} current={phase}>
+            {lots.data && calibration.calibration ? (
+              <CookingSection batchCode={batch.code} data={lots.data} calibration={calibration.calibration} can={{ canFloor: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} onGoToShelling={() => goToPhase(4)} />
+            ) : (
+              <p className="text-[13px] text-warmstone-500">{lots.error ?? calibration.error ?? "Loading…"}</p>
+            )}
+          </PhaseSection>
+          <PhaseSection n={4} current={phase}>
+            {lots.data ? (
+              <ShellingSection data={lots.data} can={{ canFloor: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+            ) : (
+              <p className="text-[13px] text-warmstone-500">{lots.error ?? "Loading…"}</p>
+            )}
+          </PhaseSection>
+          {BATCH_PHASES.map((_, i) => i + 1).filter((n) => n > BUILT_PHASES).map((n) => (
+            <PhaseSection key={n} n={n} current={phase}>
+              <p className="max-w-5xl rounded-2xl border border-dashed border-warmstone-300 bg-warmstone-50/60 px-5 py-4 text-[13px] text-warmstone-500">Not built yet.</p>
+            </PhaseSection>
           ))}
         </div>
       )}
@@ -212,11 +259,17 @@ function WaitingLine({ n, what, who }: { n: number; what: string; who: string })
   );
 }
 
-function PhaseHeading({ n, title, text }: { n: number; title: string; text: string }) {
+function PhaseSection({ n, current, children }: { n: number; current: number; children: ReactNode }) {
   return (
-    <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-warmstone-500">
-      Phase {n} · {title} <span className="normal-case font-normal tracking-normal">· {text}</span>
-    </p>
+    // The scroll margin keeps the heading clear of the page's fixed top bar.
+    <section id={`phase-${n}`} className="scroll-mt-24">
+      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warmstone-200 pb-2">
+        <h2 className="text-[17px] font-bold text-warmstone-900">Phase {n} · {BATCH_PHASES[n - 1]}</h2>
+        {n === current && <Pill tone="term" label="Current phase" />}
+        <p className="w-full text-[12px] text-warmstone-500">{PHASE_TEXT[n - 1]}</p>
+      </div>
+      {children}
+    </section>
   );
 }
 

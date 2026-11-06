@@ -17,7 +17,10 @@
  */
 import type { Prisma } from "@prisma/client";
 import type { WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { streamFromWord } from "@anagroci/contract/domain/byProducts";
 import { SILO_SIZES, SIZING_GRADES, samplingPointFromWord, siloFromWord, siloLabel, type SizingGrams } from "@anagroci/contract/domain/calibration";
+import { ENTRY_DEFS, normalizeEntryValues, type EntryKind } from "@anagroci/contract/domain/lotEntries";
+import { SHELLING_KG_FIELDS } from "@anagroci/contract/domain/shelling";
 import { CUT_TEST_GRAMS, sameBtmAndBin } from "@anagroci/contract/domain/rcnReceipt";
 import type { MoistureCheckInput } from "@anagroci/contract/types/rcnReceipt";
 import { ValidationError } from "../validation.js";
@@ -26,7 +29,9 @@ import { normalizeHeader } from "../workbook/fields.js";
 import type { Change, ParsedSheet, ParsedWorkbook, RowError, RowWarning, Sample } from "../workbook/types.js";
 import { SAMPLE_LIMIT } from "../workbook/types.js";
 import { createBatchIn } from "../../services/production/batches.js";
+import { addBoilerReadingIn, addTruckIn, updateTruckIn } from "../../services/production/byProducts.js";
 import { addCalibrationRunIn, addManualCalibrationIn, submitSizingCheckIn } from "../../services/production/calibration.js";
+import { addLotEntryIn, addShellingDayIn, cookLotIn, moveToCoolingIn } from "../../services/production/factoryLots.js";
 import { createRcnReceiptIn, runSizes, submitMoistureCheckIn, type Actor } from "../../services/production/rcnReceipts.js";
 import { addPalletIn, saveFinalWeightIn, updatePalletIn } from "../../services/production/rcnWeighing.js";
 import { gramKey, runKgKey, splitList, tabHeader, TABS, type Tab } from "./tabs.js";
@@ -312,11 +317,137 @@ async function siloMoveRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
   return "created";
 }
 
+// ── Phases 3–4: Lots, by-products and the boiler ─────────────────────────────────────────────────
+
+async function cookingRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  const sizes = sizesOfFile(cells);
+  const date = (cells.get("date") ?? "").trim();
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.lotCookRun.findFirst({ where: { id, lot: { batch: { warehouse: ctx.site } } } }) : null;
+    if (!saved) return refuse(`Cooking row ${raw} doesn't exist at ${ctx.site}. Leave the Cooking ID blank to add a new row.`);
+    if (!same(date, saved.date) || !sameSizes(sizes, runSizes(saved))) refuse(`Cooking row ${raw} is already saved, and the file can't change it. Remove it on the batch page and add it again.`);
+    return "unchanged";
+  }
+  const code = upper(cells.get("lotCode") ?? null);
+  const twins = code ? await ctx.tx.lotCookRun.findMany({ where: { lotCode: code, date, lot: { batch: { warehouse: ctx.site } } } }) : [];
+  if (twins.some((r) => sameSizes(sizes, runSizes(r)))) return "unchanged";
+  await cookLotIn(ctx.tx, ctx.site, ctx.actor.id, { batchCode: cells.get("batchCode") ?? undefined, code, date, sizes });
+  return "created";
+}
+
+async function coolingRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const code = upper(cells.get("lotCode") ?? null);
+  if (!code) return refuse("Give the Lot No.");
+  const lot = await ctx.tx.factoryLot.findFirst({ where: { code, batch: { warehouse: ctx.site } } });
+  if (!lot) return refuse(`Lot ${code} doesn't exist at ${ctx.site}.`);
+  const [date, time, silo] = [(cells.get("date") ?? "").trim(), (cells.get("time") ?? "").trim(), (cells.get("silo") ?? "").trim()];
+  if (lot.coolingAt === `${date}T${time}` && lot.coolingSilo === silo) return "unchanged";
+  await moveToCoolingIn(ctx.tx, ctx.site, code, { silo, date, time });
+  return lot.coolingAt ? "changed" : "created";
+}
+
+/** OK and the kind's other answer; the screen's words are accepted too. Anything else goes to the rule's own check. */
+const entryDecisionOf = (kind: EntryKind, v: string | null) => {
+  const d = (v ?? "").trim().toLowerCase();
+  const no = ENTRY_DEFS[kind].decision?.noValue;
+  return d === "ok" ? "ok" : no && ["no", "wait", "fail"].includes(d) ? no : d;
+};
+
+async function entryRow(ctx: ProductionCtx, kind: EntryKind, cells: Cells): Promise<Outcome> {
+  const def = ENTRY_DEFS[kind];
+  const raw = (cells.get("id") ?? "").trim();
+  const date = (cells.get("date") ?? "").trim();
+  const values = normalizeEntryValues(kind, Object.fromEntries(def.fields.map((f) => [f.key, cells.get(`v_${f.key}`) ?? undefined])));
+  const decision = def.decision ? entryDecisionOf(kind, cells.get("decision") ?? null) : undefined;
+  const sameEntry = (e: { date: string; values: unknown; decision: string | null }) =>
+    same(date, e.date) && (e.decision ?? undefined) === decision && def.fields.every((f) => sameNumber(values[f.key], (e.values as Record<string, string>)[f.key]));
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.lotEntry.findFirst({ where: { id, kind, lot: { batch: { warehouse: ctx.site } } } }) : null;
+    if (!saved) return refuse(`${def.title} ${raw} doesn't exist at ${ctx.site}. Leave the Entry ID blank to add a new one.`);
+    if (!sameEntry(saved)) refuse(`${def.title} ${raw} is already saved, and the file can't change it.`);
+    return "unchanged";
+  }
+  const code = upper(cells.get("lotCode") ?? null);
+  if (!code) return refuse("Give the Lot No.");
+  const twins = await ctx.tx.lotEntry.findMany({ where: { lotCode: code, kind, date, lot: { batch: { warehouse: ctx.site } } } });
+  if (twins.some(sameEntry)) return "unchanged";
+  await addLotEntryIn(ctx.tx, ctx.site, ctx.actor, code, { kind, date, values, decision });
+  return "created";
+}
+
+async function shellingDayRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  const date = (cells.get("date") ?? "").trim();
+  const input = (cells.get("inputKg") ?? "").trim();
+  const kg = Object.fromEntries(SHELLING_KG_FIELDS.map(([k]) => [k, cells.get(k) ?? undefined]));
+  const sameDay = (d: { date: string; inputKg: string } & Record<string, unknown>) =>
+    same(date, d.date) && sameNumber(input, d.inputKg) && SHELLING_KG_FIELDS.every(([k]) => sameNumber(kg[k], d[k] as string | null));
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.shellingDay.findFirst({ where: { id, lot: { batch: { warehouse: ctx.site } } } }) : null;
+    if (!saved) return refuse(`Day record ${raw} doesn't exist at ${ctx.site}. Leave the Day ID blank to add a new one.`);
+    if (!sameDay(saved)) refuse(`Day record ${raw} is already saved, and the file can't change it. Remove it on the batch page and add it again.`);
+    return "unchanged";
+  }
+  const code = upper(cells.get("lotCode") ?? null);
+  if (!code) return refuse("Give the Lot No.");
+  const twins = await ctx.tx.shellingDay.findMany({ where: { lotCode: code, date, lot: { batch: { warehouse: ctx.site } } } });
+  if (twins.some(sameDay)) return "unchanged";
+  await addShellingDayIn(ctx.tx, ctx.site, ctx.actor.id, code, { date, inputKg: input, ...kg });
+  return "created";
+}
+
+async function boilerRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  const [date, shellKg, runningHours] = [(cells.get("date") ?? "").trim(), (cells.get("shellKg") ?? "").trim(), (cells.get("runningHours") ?? "").trim()];
+  const sameReading = (b: { date: string; shellKg: string; runningHours: string | null }) => same(date, b.date) && sameNumber(shellKg, b.shellKg) && sameNumber(runningHours, b.runningHours);
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.boilerReading.findFirst({ where: { id, warehouse: ctx.site } }) : null;
+    if (!saved) return refuse(`Boiler reading ${raw} doesn't exist at ${ctx.site}. Leave the Reading ID blank to add a new one.`);
+    if (!sameReading(saved)) refuse(`Boiler reading ${raw} is already saved, and the file can't change it.`);
+    return "unchanged";
+  }
+  const twins = await ctx.tx.boilerReading.findMany({ where: { warehouse: ctx.site, date } });
+  if (twins.some(sameReading)) return "unchanged";
+  await addBoilerReadingIn(ctx.tx, ctx.site, ctx.actor.id, { date, shellKg, runningHours });
+  return "created";
+}
+
+/** The file fills a truck in as it moves through the gate, as the screen does, until its gate pass closes it. */
+async function truckRow(ctx: ProductionCtx, tab: Tab, cells: Cells, sample: (key: string, changes: Change[]) => void): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  const text = (k: string) => (cells.get(k) ?? "").trim();
+  const input = {
+    stream: streamFromWord(cells.get("stream")) ?? undefined, date: text("date"), truckNo: text("truckNo"), driver: text("driver"), documentsChecked: text("documentsChecked").toLowerCase() === "yes",
+    tareKg: text("tareKg"), grossKg: text("grossKg"), slipNo: text("slipNo"), buyer: text("buyer"), category: text("category"), price: text("price"), gatePassNo: text("gatePassNo"),
+  };
+  if (!raw) {
+    const twins = await ctx.tx.truckMovement.findMany({ where: { warehouse: ctx.site, date: input.date, truckNo: input.truckNo, stream: input.stream ?? "" } });
+    if (twins.some((t) => same(t.slipNo, input.slipNo) && sameNumber(t.tareKg, input.tareKg) && sameNumber(t.grossKg, input.grossKg) && same(t.gatePassNo, input.gatePassNo))) return "unchanged";
+    await addTruckIn(ctx.tx, ctx.site, ctx.actor.id, input);
+    return "created";
+  }
+  const id = Number(raw);
+  const saved = Number.isInteger(id) ? await ctx.tx.truckMovement.findFirst({ where: { id, warehouse: ctx.site } }) : null;
+  if (!saved) return refuse(`Truck ${raw} doesn't exist at ${ctx.site}. Leave the Truck ID blank to add a new truck.`);
+  const now: Record<string, string> = { date: saved.date, truckNo: saved.truckNo, driver: saved.driver ?? "", slipNo: saved.slipNo ?? "", tareKg: saved.tareKg ?? "", grossKg: saved.grossKg ?? "", buyer: saved.buyer ?? "", category: saved.category ?? "", price: saved.price ?? "", gatePassNo: saved.gatePassNo ?? "", documentsChecked: saved.documentsChecked ? "Yes" : "No" };
+  const changes = Object.keys(now).filter((k) => cells.has(k) && !sameNumber(text(k), now[k])).map((k) => ({ column: label(tab, k), from: now[k]!, to: text(k) }));
+  if (!changes.length && input.stream === saved.stream) return "unchanged";
+  await updateTruckIn(ctx.tx, ctx.site, id, input);
+  sample(`Truck ${raw}`, changes);
+  return "changed";
+}
+
 // ── The file → tabs → rows ───────────────────────────────────────────────────────────────────────
 
 /** The uploaded sheet's headers → the tab's keys. Our own derived columns are skipped quietly; strangers are reported. */
 function cellsOf(tab: Tab, sheet: ParsedSheet, notices: string[]) {
   const byLabel = new Map(tab.fields.map((f) => [tabHeader(f.label), f]));
+  const timeKeys = new Set(tab.fields.filter((f) => f.time).map((f) => f.key));
   const unknown = sheet.headers.filter((h) => !byLabel.has(tabHeader(h)));
   if (unknown.length) notices.push(`${tab.title}: ${unknown.map((u) => `"${u}"`).join(", ")} ${unknown.length > 1 ? "aren't columns we use" : "isn't a column we use"} — ignored.`);
   const columns = sheet.headers.flatMap((h) => {
@@ -329,7 +460,10 @@ function cellsOf(tab: Tab, sheet: ParsedSheet, notices: string[]) {
       const cells: Cells = new Map();
       const bad: RowError[] = [];
       for (const [h, key] of columns) {
-        const p = parseCell(r.cells[h], "String");
+        const cell = r.cells[h];
+        // An Excel time cell comes back as a date on 1899-12-30; only its clock is the value.
+        if (timeKeys.has(key) && cell instanceof Date) { cells.set(key, cell.toISOString().slice(11, 16)); continue; }
+        const p = parseCell(cell, "String");
         if (p.ok) cells.set(key, p.value === null ? null : String(p.value).trim() || null);
         else bad.push({ row: r.rowNumber, column: label(tab, key), message: p.error });
       }
@@ -339,7 +473,8 @@ function cellsOf(tab: Tab, sheet: ParsedSheet, notices: string[]) {
 }
 
 /** Each tab's link column(s): without them every row would look new, or could name no load. */
-const NEEDS: Record<Tab["id"], string[][]> = {
+const NEEDS: Partial<Record<Tab["id"], string[][]>> = {
+  cooking: [["id"], ["lotCode"]], cooling: [["lotCode"]], shellingDays: [["id"], ["lotCode"]], boiler: [["id"], ["date"]], trucks: [["id"], ["truckNo"]],
   batches: [["code"]], receipts: [["id"]], checks: [["id"], ["receiptId", "btmNo"]], pallets: [["id"], ["receiptId", "btmNo"]], final: [["receiptId", "btmNo"]],
   runs: [["id"], ["receiptId", "btmNo"]], siloChecks: [["id"], ["batchCode"]], siloMoves: [["id"], ["fromSize"]],
 };
@@ -360,7 +495,9 @@ export async function runProductionWorkbook(ctx: ProductionCtx, wb: ParsedWorkbo
     const result: TabResult = { name: tab.title, rows: sheet.rows.length, created: 0, changed: 0, unchanged: 0, errors: [], warnings: [], samples: [] };
     tabs.push(result);
     const { keys, rows } = cellsOf(tab, sheet, notices);
-    const missing = NEEDS[tab.id].find((any) => !any.some((k) => keys.has(k)));
+    // A Lot's small records name their Lot, or their own row.
+    const needs = NEEDS[tab.id] ?? [["id"], ["lotCode"]];
+    const missing = needs.find((any) => !any.some((k) => keys.has(k)));
     if (missing) {
       result.errors.push({ row: 1, column: missing.map((k) => label(tab, k)).join(" or "), message: `the "${missing.map((k) => label(tab, k)).join('" or "')}" column is missing` });
       continue;
@@ -379,7 +516,13 @@ export async function runProductionWorkbook(ctx: ProductionCtx, wb: ParsedWorkbo
           : tab.id === "final" ? await finalRow(ctx, tab, cells)
           : tab.id === "runs" ? await runRow(ctx, cells)
           : tab.id === "siloChecks" ? await siloCheckRow(ctx, cells)
-          : await siloMoveRow(ctx, cells);
+          : tab.id === "siloMoves" ? await siloMoveRow(ctx, cells)
+          : tab.id === "cooking" ? await cookingRow(ctx, cells)
+          : tab.id === "cooling" ? await coolingRow(ctx, cells)
+          : tab.id === "shellingDays" ? await shellingDayRow(ctx, cells)
+          : tab.id === "boiler" ? await boilerRow(ctx, cells)
+          : tab.id === "trucks" ? await truckRow(ctx, tab, cells, sample)
+          : await entryRow(ctx, tab.id.slice("entry:".length) as EntryKind, cells);
         result[outcome]++;
       } catch (e) {
         // A rule's refusal is the row's problem; anything else (the database) stops the whole upload.

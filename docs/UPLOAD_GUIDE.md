@@ -69,6 +69,14 @@ Incharge approves them.
 | **Calibration Runs** | one run of a load through the sizing machine | Run ID (blank = new) | puts the kg of each size into the silos; the same load, date and kg again is not added twice |
 | **Silo Checks** | one QC-2 sample | Check ID (blank = new) | records the check, approved as it is saved. Sampling Point is the silo (`A++` … `D`, `DE`) or `Received RCN`; Result is `OK` or `Fail` |
 | **Silo Moves** | kg moved by hand after a failed check | Move ID (blank = new) | moves the kg out of From Silo, which must stand on a failed check, into To Silo |
+| **Cooking** | a Lot's kg per size | Cooking ID (blank = new) | takes the kg out of the silos; a new Lot No makes the Lot |
+| **Cooker Log, Cooking Checks, Waste Water** | a cooker run, a QC-3, a tank quantity | Entry ID (blank = new) | recorded on the Lot; a check is approved as it is saved |
+| **Cooling** | a Lot into its cooling silo | its Lot No | starts the 24 h clock, only after every cooked size has passed QC-3 |
+| **Cooling Checks** | a QC-4 | Entry ID (blank = new) | Result is `OK` or `Wait`; shelling opens on OK |
+| **Shelling Days** | a day's outputs | Day ID (blank = new) | the app works out good and final kernels, shell dust, shell and every % |
+| **Line Runs, Machine Frequency, Machine Samples, Uncut Checks, Shell Samples** | one row of each sheet | Entry ID (blank = new) | recorded on a Lot past QC-4 |
+| **Boiler** | a day's shell burned | Reading ID (blank = new) | takes the kg out of the shell silo |
+| **Trucks** | one truck at the gate | Truck ID (blank = new) | filled in as the truck moves; a Gate Pass No closes it and takes its net out of the store |
 
 - **Checks, pallets and the final weight name their load** by RCN Receipt ID or by BTM No. The BTM No is
   enough when one load has it, which is what lets a new load and its checks come in the same file. When two

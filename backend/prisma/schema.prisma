@@ -136,6 +136,8 @@ model Warehouse {
   aliases       WarehouseAlias[]
   users         User[]
   productionBatches ProductionBatch[]
+  truckMovements    TruckMovement[]
+  boilerReadings    BoilerReading[]
 
   @@index([kind])
   @@index([type])
@@ -2364,6 +2366,7 @@ model ProductionBatch {
   bins        ProductionBatchBin[]
   rcnReceipts RcnReceipt[]
   sizingChecks SizingCheck[]
+  lots        FactoryLot[]
 
   @@index([warehouse])
 }
@@ -2568,6 +2571,137 @@ model ManualCalibration {
   @@index([sizingCheckId])
 }
 
+/// A production Lot of the batch page: born at cooking (Phase 3), and everything downstream is tracked by it. Not the
+/// older workbook-import ProductionLot. Its status, totals and the silo stock are calculated from these rows, never stored.
+model FactoryLot {
+  /// The client's own number, e.g. ANG26G16.
+  code        String          @id
+  batchCode   String
+  batch       ProductionBatch @relation(fields: [batchCode], references: [code])
+  coolingSilo String?
+  /// "YYYY-MM-DDTHH:MM", factory time as typed: when the 24 h clock started.
+  coolingAt   String?
+  createdById String
+  createdBy   User            @relation("FactoryLotCreator", fields: [createdById], references: [id])
+  createdAt   DateTime        @default(now())
+
+  runs         LotCookRun[]
+  entries      LotEntry[]
+  shellingDays ShellingDay[]
+
+  @@index([batchCode])
+}
+
+/// One row of "6. Cooking Process Report": kg per size taken from the silos. A Lot can have more than one (ANG26F01).
+model LotCookRun {
+  id          Int        @id @default(autoincrement())
+  lotCode     String
+  lot         FactoryLot @relation(fields: [lotCode], references: [code], onDelete: Restrict)
+  date        String
+  kgApp       String?
+  kgAp        String?
+  kgA         String?
+  kgAB        String?
+  kgB         String?
+  kgBC        String?
+  kgC         String?
+  kgD         String?
+  kgE         String?
+  createdById String
+  createdBy   User       @relation("LotCookRunAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime   @default(now())
+
+  @@index([lotCode])
+}
+
+/// A Lot's small records: cooker log, QC-3, QC-4, waste water, line runs, QC-5, QTY-1, QC-6. One table because they
+/// differ only in their fields, which the contract's domain/lotEntries.ts defines; values are kept as typed.
+model LotEntry {
+  id            Int        @id @default(autoincrement())
+  lotCode       String
+  lot           FactoryLot @relation(fields: [lotCode], references: [code], onDelete: Restrict)
+  /// A contract EntryKind.
+  kind          String
+  date          String
+  values        Json
+  /// "ok" | "no" | "wait"; null where the doc asks for no decision.
+  decision      String?
+  /// "submitted" | "approved" | "rejected"
+  status        String
+  submittedById String
+  submittedBy   User       @relation("LotEntryAuthor", fields: [submittedById], references: [id])
+  submittedAt   DateTime   @default(now())
+  reviewedById  String?
+  reviewedBy    User?      @relation("LotEntryReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+
+  @@index([lotCode, kind])
+}
+
+/// A row of "7. Shelling process Report". Good kernels, shell, dust and every % are calculated, never stored.
+model ShellingDay {
+  id               Int        @id @default(autoincrement())
+  lotCode          String
+  lot              FactoryLot @relation(fields: [lotCode], references: [code], onDelete: Restrict)
+  date             String
+  inputKg          String
+  wholesKg         String?
+  piecesKg         String?
+  rejectionKg      String?
+  oilKg            String?
+  blackRejectionKg String?
+  firstPassUncutKg String?
+  finalUncutKg     String?
+  createdById      String
+  createdBy        User       @relation("ShellingDayAuthor", fields: [createdById], references: [id])
+  createdAt        DateTime   @default(now())
+
+  @@index([lotCode])
+}
+
+/// One truck through the common gate procedure, taking one by-product stream. Reduces its store once closed.
+model TruckMovement {
+  id               Int       @id @default(autoincrement())
+  warehouse        String
+  warehouseRef     Warehouse @relation(fields: [warehouse], references: [name])
+  /// A contract Stream.
+  stream           String
+  date             String
+  truckNo          String
+  driver           String?
+  documentsChecked Boolean   @default(false)
+  tareKg           String?
+  grossKg          String?
+  slipNo           String?
+  buyer            String?
+  category         String?
+  price            String?
+  /// Set = closed. Unique per factory, as the doc asks.
+  gatePassNo       String?
+  createdById      String
+  createdBy        User      @relation("TruckMovementAuthor", fields: [createdById], references: [id])
+  createdAt        DateTime  @default(now())
+
+  @@unique([warehouse, gatePassNo])
+  @@index([warehouse])
+}
+
+/// A day's shell burned in the boiler ("21. Boiler Consumption"), taken from the shell silo's balance.
+model BoilerReading {
+  id           Int       @id @default(autoincrement())
+  warehouse    String
+  warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
+  date         String
+  shellKg      String
+  runningHours String?
+  createdById  String
+  createdBy    User      @relation("BoilerReadingAuthor", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  @@index([warehouse])
+}
+
 // ── User management ───────────────────────────────────────────────────────
 // Roles and who-may-write-what live in packages/contract's roles.ts; only identity, scope and the
 // approval workflow's own records live here.
@@ -2618,6 +2752,13 @@ model User {
   sizingChecks        SizingCheck[]           @relation("SizingCheckAuthor")
   reviewedSizingChecks SizingCheck[]          @relation("SizingCheckReviewer")
   manualCalibrations  ManualCalibration[]     @relation("ManualCalibrationAuthor")
+  createdLots         FactoryLot[]            @relation("FactoryLotCreator")
+  lotCookRuns         LotCookRun[]            @relation("LotCookRunAuthor")
+  lotEntries          LotEntry[]              @relation("LotEntryAuthor")
+  reviewedLotEntries  LotEntry[]              @relation("LotEntryReviewer")
+  shellingDays        ShellingDay[]           @relation("ShellingDayAuthor")
+  truckMovements      TruckMovement[]         @relation("TruckMovementAuthor")
+  boilerReadings      BoilerReading[]         @relation("BoilerReadingAuthor")
 
   @@index([role])
   @@index([warehouse])
