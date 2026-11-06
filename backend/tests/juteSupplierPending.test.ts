@@ -1,6 +1,7 @@
 /**
- * "Bags still with supplier" is calculated, so a typed number must never be able to reach it. The same bags can pass
- * through two warehouses, so the guard here is also that narrowing the list to one warehouse doesn't change the balance.
+ * "Bags still with supplier" is calculated unless someone types over it on a row, and later rows continue from what was
+ * typed. The same bags can pass through two warehouses, so the guard here is also that narrowing the list to one warehouse
+ * doesn't change the balance, or the supplier's current figure.
  */
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -10,6 +11,7 @@ const prisma = new PrismaClient();
 const CODE = "JSP-SUPPLIER";
 const OTHER = "JSP-OTHER";
 const PENDING = "Bags still with supplier";
+const CURRENT = "Bags currently with supplier";
 
 const clean = () => prisma.juteSupplierMovement.deleteMany({ where: { supplierCode: { in: [CODE, OTHER, ""] }, activity: "JSP" } });
 beforeAll(clean);
@@ -30,11 +32,41 @@ describe("the supplier balance", () => {
     expect((await add({ "Returned through RCN deliveries": "1100" }))[PENDING]).toBe("-100");
   });
 
-  it("ignores a typed number, and stores nothing that could drift", async () => {
-    const row = await add({ "Bags issued to supplier": "10", [PENDING]: "99999" });
-    expect(row[PENDING]).toBe("10");
+  it("stores nothing when the figure was left to be calculated, so it can't drift", async () => {
+    await add({ "Bags issued to supplier": "10" });
+    await add({ "Bags issued to supplier": "5", [PENDING]: "" });
     const stored = await prisma.juteSupplierMovement.findMany({ where: { supplierCode: CODE, activity: "JSP" } });
-    expect(stored.map((r) => r.pendingWithSupplier)).toEqual([null]);
+    expect(stored.map((r) => r.pendingWithSupplier)).toEqual([null, null]);
+  });
+
+  it("takes a typed figure, and later entries continue from it", async () => {
+    await add({ "Bags issued to supplier": "1000" });
+    expect((await add({ "Bags issued to supplier": "1000", "Returned through RCN deliveries": "200", [PENDING]: "1500" }))[PENDING]).toBe("1500");
+    expect((await add({ "Returned through RCN deliveries": "100" }))[PENDING]).toBe("1400");
+  });
+
+  it("accepts a typed zero or minus, and refuses a typed figure that isn't a whole number", async () => {
+    expect((await add({ "Bags issued to supplier": "10", [PENDING]: "0" }))[PENDING]).toBe("0");
+    expect((await add({ [PENDING]: "-5" }))[PENDING]).toBe("-5");
+    await expect(add({ [PENDING]: "abc" })).rejects.toThrow(/whole number/);
+  });
+
+  it("refuses a typed figure on a row with no supplier, where it would never be shown", async () => {
+    await expect(add({ "Supplier code": "", [PENDING]: "50" })).rejects.toThrow(/Supplier code/);
+  });
+
+  it("gives every row the supplier's latest balance as the current figure", async () => {
+    await add({ "Bags issued to supplier": "1000" });
+    await add({ "Bags issued to supplier": "1000", "Returned through RCN deliveries": "200" });
+    await add({ "Supplier code": OTHER, "Bags issued to supplier": "7" });
+    const rows = await mine();
+    expect(rows.map((r) => [r[PENDING], r[CURRENT]])).toEqual([["1000", "1800"], ["1800", "1800"], ["7", "7"]]);
+  });
+
+  it("shows the true current figure to a warehouse that doesn't hold the supplier's newest row", async () => {
+    await add({ Warehouse: "JSP-WH-1", "Bags issued to supplier": "500" });
+    await add({ Warehouse: "JSP-WH-2", "Returned through RCN deliveries": "100" });
+    expect((await mine(["JSP-WH-1"])).map((r) => [r[PENDING], r[CURRENT]])).toEqual([["500", "400"]]);
   });
 
   it("doesn't count damaged or reusable bags", async () => {

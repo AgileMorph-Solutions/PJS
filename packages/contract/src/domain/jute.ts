@@ -20,29 +20,46 @@ export function lastBalance(rows: LedgerRow[]): number {
 
 export const SUPPLIER_PENDING_COLUMN = "Bags still with supplier";
 
+/** Not a ledger column: the server adds it to each row it sends, for the table. Nothing stores it. */
+export const SUPPLIER_CURRENT_COLUMN = "Bags currently with supplier";
+
+/** Left out of a blank entry. For the supplier balance that matters: a value only reaches the server if someone typed it. */
 export const DERIVED_COLUMNS = new Set(["S N", "Balance", SUPPLIER_PENDING_COLUMN]);
 
 export interface SupplierMovementAmounts {
   supplierCode: string;
   issued: number | null;
   returned: number | null;
+  /** A balance someone typed over the calculated one on this row, or null when they left it alone. */
+  corrected?: number | null;
 }
 
 /**
  * The bags each supplier still holds after each row, in the order given: everything issued to that supplier so far, minus
  * everything returned through their deliveries (the client's Q&A, section 3.2: "how many bags are currently with each
- * supplier"). Negative when a supplier has returned more than was issued: that is reported, never clamped. Damaged and
- * reusable bags don't change it, since those bags did come back. A row with no supplier has no balance to belong to (null).
+ * supplier"). A corrected row takes the typed figure and later rows continue from it, so a physical count can reset the
+ * balance without rewriting the movements before it. Negative when a supplier has returned more than was issued: that is
+ * reported, never clamped. Damaged and reusable bags don't change it, since those bags did come back. A row with no supplier
+ * has no balance to belong to (null).
  */
 export function supplierPendingBalances(rows: SupplierMovementAmounts[]): (number | null)[] {
   const running = new Map<string, number>();
   return rows.map((r) => {
     const code = r.supplierCode.trim();
     if (!code) return null;
-    const balance = (running.get(code) ?? 0) + (r.issued ?? 0) - (r.returned ?? 0);
+    const balance = r.corrected ?? (running.get(code) ?? 0) + (r.issued ?? 0) - (r.returned ?? 0);
     running.set(code, balance);
     return balance;
   });
+}
+
+/**
+ * Reads a row's current supplier balance from that supplier's newest row. The newest row is the one the server sent last, so
+ * saving an entry updates the supplier's older rows on screen too, without reloading them.
+ */
+export function supplierCurrentBalance(rows: LedgerRow[]): (row: LedgerRow) => string {
+  const latest = new Map(rows.map((r) => [(r["Supplier code"] ?? "").trim(), r[SUPPLIER_CURRENT_COLUMN] ?? ""]));
+  return (row) => latest.get((row["Supplier code"] ?? "").trim()) ?? "";
 }
 
 export interface ReconciliationInput {
