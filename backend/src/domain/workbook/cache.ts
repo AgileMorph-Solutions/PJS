@@ -11,6 +11,8 @@ export interface PreviewEntry {
   warehouse: string;
   filename: string;
   parsed: ParsedWorkbook;
+  /** Which workbook previewed it: a token can only be applied by the workbook that issued it. */
+  kind?: "section" | "production";
 }
 
 const TTL_MS = 15 * 60 * 1000;

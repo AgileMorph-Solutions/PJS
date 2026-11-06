@@ -135,6 +135,9 @@ model Warehouse {
   transfersIn   JuteWarehouseTransferReceipt[] @relation("TransferDestination")
   aliases       WarehouseAlias[]
   users         User[]
+  productionBatches ProductionBatch[]
+  truckMovements    TruckMovement[]
+  boilerReadings    BoilerReading[]
 
   @@index([kind])
   @@index([type])
@@ -150,6 +153,7 @@ model Bin {
   source        String?
   /// When the Bin was created in the app. NULL = it was already there (imported); no date is invented for those.
   createdAt     DateTime?
+  batchBins     ProductionBatchBin[]
 }
 
 model Origin {
@@ -319,6 +323,9 @@ model TransferRequest {
   fromRef       Warehouse             @relation("TransferRequestFrom", fields: [fromWarehouse], references: [name])
   toWarehouse   String
   toRef         Warehouse             @relation("TransferRequestTo", fields: [toWarehouse], references: [name])
+  /// The store chosen at the destination. `toWarehouse` stays its SITE, because that is what decides who
+  /// sees the BKT and who records its arrival. Null on BKTs created before a store could be chosen.
+  toStore       String?
   /// "requested" | "dispatched" | "received" — the STEP. What a person reads (in transit / closed /
   /// discrepancy) is derived with the variance (contract's domain/transfers.ts), never stored.
   status        String                @default("requested")
@@ -383,6 +390,9 @@ model TransferRequestLine {
   /// Where the Lot was loaded from — its Bin(s) when it was added. A record, so a BKT that loads one
   /// truck from several Bins shows them all.
   binCode     String?
+  /// The RECEIVING site's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN Receiving at
+  /// Factory sheet). Entered on arrival only; it is what puts the Lot in that site's bin stock for production.
+  receivedBinCode String?
 
   @@unique([transferId, receiptId])
   @@index([receiptId])
@@ -2331,6 +2341,367 @@ model IssuedToProduction {
   @@index([btmNo])
 }
 
+// ── Production Phase 0: Batch ─────────────────────────────────────────────────────────────────
+// From the client's "Phase 1 — Batch & Intake" document (Oct 2026). These are the app's own records,
+// entered on its screens; the workbook-transcribed BtmIntake/BtmReceipt tables above are a separate,
+// earlier import model and are not reused, because their "BIN No" (ANA-01) is free text with no link
+// to a procurement Bin.
+
+/// One batch: the warehouse bins production will process together (~1 month, ~4,000 t). A plan —
+/// creating it moves no stock. The planned total and end date are derived from its bins' planned kg
+/// and the start date, never stored.
+model ProductionBatch {
+  /// The client's own name for it, e.g. ANA-03B ("production BIN" in their workbooks).
+  code         String    @id
+  /// The factory site whose bins it draws on.
+  warehouse    String
+  warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
+  startDate    String
+  /// Who on the warehouse team suggested the bins (a name, not a user: they may not have an account).
+  proposedBy   String?
+  createdById  String
+  createdBy    User      @relation("BatchCreator", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  bins        ProductionBatchBin[]
+  rcnReceipts RcnReceipt[]
+  sizingChecks SizingCheck[]
+  lots        FactoryLot[]
+
+  @@index([warehouse])
+}
+
+/// One procurement warehouse bin in a batch. plannedKg is the bin's stock at the moment the batch was
+/// created — the plan as it was made, not a copy of a live value: the bin's stock moves on as loads
+/// leave it, and the plan must not move with it. A bin can be in only one open batch; that is checked
+/// in services/production/batches.ts (it depends on batch status, which a unique index can't see).
+model ProductionBatchBin {
+  batchCode String
+  batch     ProductionBatch @relation(fields: [batchCode], references: [code], onDelete: Cascade)
+  binCode   String
+  bin       Bin             @relation(fields: [binCode], references: [code])
+  plannedKg Decimal         @db.Decimal(14, 2)
+
+  rcnReceipts RcnReceipt[]
+
+  @@id([batchCode, binCode])
+  @@index([binCode])
+}
+
+/// Production Phase 1, step 1: one load that arrived on the production floor from one bin of a batch,
+/// with its BTM slip ("1 load = 1 receipt; 1 receipt = 1 bin"). The (batchCode, binCode) foreign key is
+/// what keeps a load to the bins of its own batch. Moisture and weights come in later steps.
+model RcnReceipt {
+  /// RR-<warehouse code>-<year of date>-NNNN (contract domain/ids.ts).
+  id          String             @id
+  batchCode   String
+  binCode     String
+  batchBin    ProductionBatchBin @relation(fields: [batchCode, binCode], references: [batchCode, binCode])
+  batch       ProductionBatch    @relation(fields: [batchCode], references: [code])
+  date        String
+  btmNo       String
+  createdById String
+  createdBy   User               @relation("RcnReceiptCreator", fields: [createdById], references: [id])
+  createdAt   DateTime           @default(now())
+  moistureChecks RcnMoistureCheck[]
+  pallets        RcnPallet[]
+  emptyPallets   RcnEmptyPalletStack[]
+  /// Phase 1, step 4 (Final weight), from the tally sheet's Print form. Blank dust/voids = not recorded.
+  /// The final weight is saved when finalisedAt is set; the totals are calculated (contract rcnWeighing.ts).
+  dustKg        String?
+  voidsKg       String?
+  finalisedById String?
+  finalisedBy   User?     @relation("RcnReceiptFinaliser", fields: [finalisedById], references: [id], onDelete: SetNull)
+  finalisedAt   DateTime?
+  calibrationRuns RcnCalibrationRun[]
+
+  @@index([batchCode])
+  @@index([batchCode, binCode, btmNo])
+}
+
+/// Phase 1, step 3: one pallet of a load on the scale — a row of the client's "RCN Receipts Tally Sheet"
+/// (Online sheet: gross kg, no. of bags, factory bin). Numbers kept as typed; bags weight and net are
+/// calculated. The pallet's number is its order in the load, not stored.
+model RcnPallet {
+  id           Int        @id @default(autoincrement())
+  rcnReceiptId String
+  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  grossKg      String
+  bags         String
+  factoryBin   String
+  weighedById  String
+  weighedBy    User       @relation("RcnPalletWeigher", fields: [weighedById], references: [id])
+  weighedAt    DateTime   @default(now())
+
+  @@index([rcnReceiptId])
+}
+
+/// Phase 1, step 4: one weighing of a load's empty pallets (the Print form's "Empty pallets weight (kg) /
+/// NO of pallets" table). The Online sheet keeps no count, so count is optional.
+model RcnEmptyPalletStack {
+  id           Int        @id @default(autoincrement())
+  rcnReceiptId String
+  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  weightKg     String
+  count        String?
+
+  @@index([rcnReceiptId])
+}
+
+/// Phase 1, step 2: one moisture check of a load (client's "2. Input RCN Quality report" columns). A QFS
+/// Officer's check is "submitted" until the Warehouse Incharge approves or rejects it; an Incharge's or
+/// Admin's own is "approved" as saved. The receipt's status is derived from these (contract rcnReceipt.ts);
+/// a re-check after a hold is a new row, so the earlier one stays as history. Numbers kept as typed; KOR is
+/// calculated from the grams, never stored.
+model RcnMoistureCheck {
+  id            Int        @id @default(autoincrement())
+  rcnReceiptId  String
+  rcnReceipt    RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  moisture      String
+  nutCount      String
+  sampleG       String?
+  gkG           String?
+  spotG         String?
+  immatureG     String?
+  oilG          String?
+  rejectionG    String?
+  voidsG        String?
+  shellG        String?
+  fruitWasteG   String?
+  /// "ok" | "hold"
+  decision      String
+  /// "submitted" | "approved" | "rejected"
+  status        String
+  submittedById String
+  submittedBy   User       @relation("MoistureCheckAuthor", fields: [submittedById], references: [id])
+  submittedAt   DateTime   @default(now())
+  reviewedById  String?
+  reviewedBy    User?      @relation("MoistureCheckReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+
+  @@index([rcnReceiptId])
+}
+
+
+// ── Production Phase 2: Calibration ──────────────────────────────────────────────────────────────
+// From the client's "Production module" document (Oct 2026), Phase 2, and its workbooks 4. Calibration Process
+// report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual Calibration (Sheet2). Silo stock is
+// calculated from these rows (contract domain/calibration.ts siloStock), never stored.
+
+/// One run of a load through the sizing machine: the kg that went into each of the 9 silos (A++ … E, the silo
+/// report's own columns). A load can take several runs over several days; their total can't pass its into-silo kg.
+model RcnCalibrationRun {
+  id           Int        @id @default(autoincrement())
+  rcnReceiptId String
+  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
+  date         String
+  kgApp        String?
+  kgAp         String?
+  kgA          String?
+  kgAB         String?
+  kgB          String?
+  kgBC         String?
+  kgC          String?
+  kgD          String?
+  kgE          String?
+  createdById  String
+  createdBy    User       @relation("CalibrationRunAuthor", fields: [createdById], references: [id])
+  createdAt    DateTime   @default(now())
+
+  @@index([rcnReceiptId])
+}
+
+/// QC-2: one sample from a silo (or of the RCN as received), sorted into grams per size — a row of the
+/// "24. Wholes Manual Calibration" Sheet2. Submitted / approved / rejected exactly like a moisture check.
+/// Correct-size % is calculated from the grams, never stored.
+model SizingCheck {
+  id            Int             @id @default(autoincrement())
+  batchCode     String
+  batch         ProductionBatch @relation(fields: [batchCode], references: [code])
+  /// The sheet's "BIN NO" (the warehouse bin the nuts came from); free of a foreign key like the sheet, but
+  /// checked against the batch's bins when given.
+  binCode       String?
+  date          String
+  /// "App" … "E" (a silo), or "received" (before calibration).
+  point         String
+  nutCount      String?
+  sampleG       String
+  gApp          String?
+  gAp           String?
+  gA            String?
+  gAB           String?
+  gB            String?
+  gBC           String?
+  gC            String?
+  gD            String?
+  gE            String?
+  /// The sheet's "< DE": what falls through the 18 mm screen.
+  gUnder        String?
+  /// "ok" | "fail"
+  decision      String
+  /// "submitted" | "approved" | "rejected"
+  status        String
+  submittedById String
+  submittedBy   User            @relation("SizingCheckAuthor", fields: [submittedById], references: [id])
+  submittedAt   DateTime        @default(now())
+  reviewedById  String?
+  reviewedBy    User?           @relation("SizingCheckReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+
+  manualCalibrations ManualCalibration[]
+
+  @@index([batchCode])
+}
+
+/// Wholes manual calibration: kg re-sized by hand from one silo to another, only after a failed, approved QC-2.
+model ManualCalibration {
+  id            Int         @id @default(autoincrement())
+  sizingCheckId Int
+  sizingCheck   SizingCheck @relation(fields: [sizingCheckId], references: [id], onDelete: Restrict)
+  date          String
+  fromSize      String
+  toSize        String
+  kg            String
+  createdById   String
+  createdBy     User        @relation("ManualCalibrationAuthor", fields: [createdById], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@index([sizingCheckId])
+}
+
+/// A production Lot of the batch page: born at cooking (Phase 3), and everything downstream is tracked by it. Not the
+/// older workbook-import ProductionLot. Its status, totals and the silo stock are calculated from these rows, never stored.
+model FactoryLot {
+  /// The client's own number, e.g. ANG26G16.
+  code        String          @id
+  batchCode   String
+  batch       ProductionBatch @relation(fields: [batchCode], references: [code])
+  coolingSilo String?
+  /// "YYYY-MM-DDTHH:MM", factory time as typed: when the 24 h clock started.
+  coolingAt   String?
+  createdById String
+  createdBy   User            @relation("FactoryLotCreator", fields: [createdById], references: [id])
+  createdAt   DateTime        @default(now())
+
+  runs         LotCookRun[]
+  entries      LotEntry[]
+  shellingDays ShellingDay[]
+
+  @@index([batchCode])
+}
+
+/// One row of "6. Cooking Process Report": kg per size taken from the silos. A Lot can have more than one (ANG26F01).
+model LotCookRun {
+  id          Int        @id @default(autoincrement())
+  lotCode     String
+  lot         FactoryLot @relation(fields: [lotCode], references: [code], onDelete: Restrict)
+  date        String
+  kgApp       String?
+  kgAp        String?
+  kgA         String?
+  kgAB        String?
+  kgB         String?
+  kgBC        String?
+  kgC         String?
+  kgD         String?
+  kgE         String?
+  createdById String
+  createdBy   User       @relation("LotCookRunAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime   @default(now())
+
+  @@index([lotCode])
+}
+
+/// A Lot's small records: cooker log, QC-3, QC-4, waste water, line runs, QC-5, QTY-1, QC-6. One table because they
+/// differ only in their fields, which the contract's domain/lotEntries.ts defines; values are kept as typed.
+model LotEntry {
+  id            Int        @id @default(autoincrement())
+  lotCode       String
+  lot           FactoryLot @relation(fields: [lotCode], references: [code], onDelete: Restrict)
+  /// A contract EntryKind.
+  kind          String
+  date          String
+  values        Json
+  /// "ok" | "no" | "wait"; null where the doc asks for no decision.
+  decision      String?
+  /// "submitted" | "approved" | "rejected"
+  status        String
+  submittedById String
+  submittedBy   User       @relation("LotEntryAuthor", fields: [submittedById], references: [id])
+  submittedAt   DateTime   @default(now())
+  reviewedById  String?
+  reviewedBy    User?      @relation("LotEntryReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+
+  @@index([lotCode, kind])
+}
+
+/// A row of "7. Shelling process Report". Good kernels, shell, dust and every % are calculated, never stored.
+model ShellingDay {
+  id               Int        @id @default(autoincrement())
+  lotCode          String
+  lot              FactoryLot @relation(fields: [lotCode], references: [code], onDelete: Restrict)
+  date             String
+  inputKg          String
+  wholesKg         String?
+  piecesKg         String?
+  rejectionKg      String?
+  oilKg            String?
+  blackRejectionKg String?
+  firstPassUncutKg String?
+  finalUncutKg     String?
+  createdById      String
+  createdBy        User       @relation("ShellingDayAuthor", fields: [createdById], references: [id])
+  createdAt        DateTime   @default(now())
+
+  @@index([lotCode])
+}
+
+/// One truck through the common gate procedure, taking one by-product stream. Reduces its store once closed.
+model TruckMovement {
+  id               Int       @id @default(autoincrement())
+  warehouse        String
+  warehouseRef     Warehouse @relation(fields: [warehouse], references: [name])
+  /// A contract Stream.
+  stream           String
+  date             String
+  truckNo          String
+  driver           String?
+  documentsChecked Boolean   @default(false)
+  tareKg           String?
+  grossKg          String?
+  slipNo           String?
+  buyer            String?
+  category         String?
+  price            String?
+  /// Set = closed. Unique per factory, as the doc asks.
+  gatePassNo       String?
+  createdById      String
+  createdBy        User      @relation("TruckMovementAuthor", fields: [createdById], references: [id])
+  createdAt        DateTime  @default(now())
+
+  @@unique([warehouse, gatePassNo])
+  @@index([warehouse])
+}
+
+/// A day's shell burned in the boiler ("21. Boiler Consumption"), taken from the shell silo's balance.
+model BoilerReading {
+  id           Int       @id @default(autoincrement())
+  warehouse    String
+  warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
+  date         String
+  shellKg      String
+  runningHours String?
+  createdById  String
+  createdBy    User      @relation("BoilerReadingAuthor", fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
+
+  @@index([warehouse])
+}
+
 // ── User management ───────────────────────────────────────────────────────
 // Roles and who-may-write-what live in packages/contract's roles.ts; only identity, scope and the
 // approval workflow's own records live here.
@@ -2371,6 +2742,23 @@ model User {
   reviewedSubmissions FormSubmission[]        @relation("SubmissionReviewer")
   fieldChanges        StageFieldChange[]
   timeline            TimelineEntry[]
+  createdBatches      ProductionBatch[]       @relation("BatchCreator")
+  createdRcnReceipts  RcnReceipt[]            @relation("RcnReceiptCreator")
+  moistureChecks      RcnMoistureCheck[]      @relation("MoistureCheckAuthor")
+  reviewedMoisture    RcnMoistureCheck[]      @relation("MoistureCheckReviewer")
+  weighedPallets      RcnPallet[]             @relation("RcnPalletWeigher")
+  finalisedRcnReceipts RcnReceipt[]           @relation("RcnReceiptFinaliser")
+  calibrationRuns     RcnCalibrationRun[]     @relation("CalibrationRunAuthor")
+  sizingChecks        SizingCheck[]           @relation("SizingCheckAuthor")
+  reviewedSizingChecks SizingCheck[]          @relation("SizingCheckReviewer")
+  manualCalibrations  ManualCalibration[]     @relation("ManualCalibrationAuthor")
+  createdLots         FactoryLot[]            @relation("FactoryLotCreator")
+  lotCookRuns         LotCookRun[]            @relation("LotCookRunAuthor")
+  lotEntries          LotEntry[]              @relation("LotEntryAuthor")
+  reviewedLotEntries  LotEntry[]              @relation("LotEntryReviewer")
+  shellingDays        ShellingDay[]           @relation("ShellingDayAuthor")
+  truckMovements      TruckMovement[]         @relation("TruckMovementAuthor")
+  boilerReadings      BoilerReading[]         @relation("BoilerReadingAuthor")
 
   @@index([role])
   @@index([warehouse])

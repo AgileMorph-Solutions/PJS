@@ -1,5 +1,107 @@
 import { describe, it, expect } from "vitest";
-import { transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+import { decisionBranchesFor, stageForSite } from "../src/domain/decisions.js";
+import { deriveStatus } from "../src/domain/receiptStatus.js";
+import { siteTypeOf } from "../src/domain/siteType.js";
+import { stageById } from "../src/data/stages.js";
+import { canTransferBetween, readyForTransfer, transferDestinationLabel, transferDestinations, transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+
+describe("the last decision depends on the site", () => {
+  const ids = (type: string | null) => decisionBranchesFor("n-xferdec", type)!.map((b) => b.id);
+
+  it("Unit asks about transfer; Central asks about production and can't transfer", () => {
+    expect(ids("UNIT")).toEqual(["stays", "transfer"]);
+    expect(ids("CENTRAL")).toEqual(["stays", "production"]);
+    expect(ids(null)).toEqual(["stays", "transfer"]);
+  });
+
+  it("names the same answer for what it means at each site", () => {
+    expect(decisionBranchesFor("n-xferdec", "UNIT")![0]!.label).toMatch(/stays/);
+    expect(decisionBranchesFor("n-xferdec", "CENTRAL")![0]!.label).toBe("Keep in warehouse");
+  });
+
+  it("drops the transfer wording and fields at Central only", () => {
+    const stage = stageById["n-xferdec"]!;
+    expect(stageForSite(stage, "CENTRAL")).toMatchObject({ title: "Send to production?", fields: [] });
+    expect(stageForSite(stage, "UNIT")).toBe(stage);
+  });
+
+  it("gives a Lot marked ready its own status, and leaves a kept Lot's status alone", () => {
+    const stageData = { "n-grn": {}, "n-drying": {} };
+    expect(deriveStatus({ stageData, branches: { "n-qfs": "pass", "n-xferdec": "production" } })).toBe("ready_for_production");
+    expect(deriveStatus({ stageData, branches: { "n-qfs": "pass", "n-xferdec": "stays" } })).toBe("in_drying");
+    expect(deriveStatus({ stageData, branches: { "n-qfs": "fail", "n-xferdec": "production" } })).toBe("rejected");
+  });
+});
+
+describe("a warehouse's site type", () => {
+  const warehouses = [
+    { name: "YAKRO FACTORY", kind: "FACTORY", type: "CENTRAL", site: null },
+    { name: "ANAGROCI-01", kind: null, type: null, site: "YAKRO FACTORY" },
+    { name: "BKE-04", kind: "FACTORY", type: null, site: null },
+  ];
+  const aliases = [{ alias: "YAMOUSSOUKRO", warehouseName: "YAKRO FACTORY" }];
+
+  it("reads from the site, whether given the site, one of its stores or an alias", () => {
+    for (const name of ["YAKRO FACTORY", "ANAGROCI-01", "YAMOUSSOUKRO"]) expect(siteTypeOf(warehouses, aliases, name), name).toBe("CENTRAL");
+  });
+
+  it("is null for a site with no type, or a name the master doesn't have", () => {
+    expect(siteTypeOf(warehouses, aliases, "BKE-04")).toBeNull();
+    expect(siteTypeOf(warehouses, aliases, "NOWHERE")).toBeNull();
+  });
+});
+
+describe("where a BKT can go", () => {
+  // The shape of the real master: two typed sites, their stores, and two sites with no type.
+  const master = [
+    { name: "BOUAKE", kind: "REGIONAL_CENTRAL", type: "UNIT", site: null },
+    { name: "BKE-001", kind: null, type: null, site: "BOUAKE" },
+    { name: "YAKRO FACTORY", kind: "FACTORY", type: "CENTRAL", site: null },
+    { name: "ANAGROCI-01", kind: null, type: null, site: "YAKRO FACTORY" },
+    { name: "BKE-06", kind: null, type: null, site: "YAKRO FACTORY" },
+    { name: "BKE-04", kind: "FACTORY", type: null, site: null },
+  ];
+
+  it("offers the stores of Central sites, never a Unit site's stores or a site with no type", () => {
+    expect(transferDestinations(master, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06"]);
+    expect(transferDestinations(master, "YAKRO FACTORY")).toEqual([]); // Central never sends RCN back
+  });
+
+  it("offers a Central site itself until it has stores, and its stores once it does", () => {
+    const added = [...master, { name: "FACTORY-2", kind: "FACTORY", type: "CENTRAL", site: null }];
+    expect(transferDestinations(added, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06", "FACTORY-2"]);
+    const withStore = [...added, { name: "F2-001", kind: null, type: null, site: "FACTORY-2" }];
+    expect(transferDestinations(withStore, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06", "F2-001"]);
+  });
+
+  it("only ever moves RCN from Unit to Central", () => {
+    expect(canTransferBetween("UNIT", "CENTRAL")).toBe(true);
+    for (const [from, to] of [["CENTRAL", "UNIT"], ["CENTRAL", "CENTRAL"], ["UNIT", "UNIT"], [null, "CENTRAL"], ["UNIT", null]] as const) {
+      expect(canTransferBetween(from, to), `${from} → ${to}`).toBe(false);
+    }
+  });
+
+  it("reads as the site plus the store, or the site alone on a BKT that named no store", () => {
+    expect(transferDestinationLabel({ toWarehouse: "YAKRO FACTORY", toStore: "ANAGROCI-01" })).toBe("YAKRO FACTORY · ANAGROCI-01");
+    expect(transferDestinationLabel({ toWarehouse: "YAKRO FACTORY", toStore: null })).toBe("YAKRO FACTORY");
+  });
+});
+
+describe("which Lots the Transfers page offers", () => {
+  const passed = { lotNo: "LOT-BKE-2026-0001" };
+
+  // The bug this guards: "Yes" hid the Lot and "No" showed it, the opposite of what the buttons say.
+  it("offers a Lot marked Yes, and not one marked No or not answered yet", () => {
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass", "n-xferdec": "transfer" } })).toBe(true);
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass", "n-xferdec": "stays" } })).toBe(false);
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass" } })).toBe(false);
+  });
+
+  it("never offers a rejected truck or one with no Lot, even marked Yes", () => {
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "fail", "n-xferdec": "transfer" } })).toBe(false);
+    expect(readyForTransfer({ lotNo: undefined, branches: { "n-xferdec": "transfer" } })).toBe(false);
+  });
+});
 
 const t = (over: Partial<TransferFacts> = {}): TransferFacts => ({
   status: "received",

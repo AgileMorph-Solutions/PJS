@@ -11,7 +11,7 @@
  * 48,290 dispatched, 48,820 − 574 bags = 48,246 at arrival, weight variance −44 kg.
  */
 import { BAG_WEIGHT_KG } from "./receiptMath.js";
-import type { TransferStatus } from "../types/receipt.js";
+import type { ReceiptRecord, TransferRequest, TransferStatus, WarehouseMaster } from "../types/receipt.js";
 
 /**
  * How far apart dispatch and arrival may be before a transfer reads as a discrepancy. Zero is the
@@ -19,6 +19,42 @@ import type { TransferStatus } from "../types/receipt.js";
  * decision they have not made, so it is one named constant here rather than a number buried in a query.
  */
 export const TRANSFER_TOLERANCE = { bags: 0, kg: 0 } as const;
+
+/**
+ * Whether a receipt's own record makes its Lot ready to go on a BKT: it passed quality and the
+ * warehouse answered "Yes — transfers out". "No — stays" or no answer yet keeps it off the Transfers
+ * page. Being on a BKT already isn't on the receipt, so whoever offers Lots checks that as well.
+ */
+export function readyForTransfer(r: Pick<ReceiptRecord, "lotNo" | "branches">): boolean {
+  return Boolean(r.lotNo?.trim()) && r.branches["n-qfs"] !== "fail" && r.branches["n-xferdec"] === "transfer";
+}
+
+/**
+ * RCN moves one way: from a Unit warehouse to a Central one. At Central a Lot stays in its bin or goes
+ * to production, and never goes back. The client's sheets only ever record Bouaké → Yakro.
+ */
+export const canTransferBetween = (fromType: string | null, toType: string | null): boolean => fromType === "UNIT" && toType === "CENTRAL";
+
+export const TRANSFER_DIRECTION_MESSAGE = "RCN can only be transferred from a Unit warehouse to a Central warehouse.";
+
+/**
+ * Where a BKT can go, from the warehouse master: the stores of every Central site, or the site itself
+ * until it has stores. A site with no type (BKE-04) can't have users assigned to it, so nobody there
+ * could record the truck arriving.
+ */
+export function transferDestinations(warehouses: WarehouseMaster[], from: string): string[] {
+  return warehouses
+    .filter((w) => !w.site && w.type === "CENTRAL" && w.name !== from)
+    .flatMap((site) => {
+      const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name);
+      return stores.length ? stores : [site.name];
+    });
+}
+
+/** How a BKT's destination reads: the site, plus the store when one was chosen. */
+export function transferDestinationLabel(t: Pick<TransferRequest, "toWarehouse" | "toStore">): string {
+  return t.toStore ? `${t.toWarehouse} · ${t.toStore}` : t.toWarehouse;
+}
 
 /** The client's four states. `status` (requested / dispatched / received) is the step; this is what a person reads. */
 export type TransferState = "requested" | "in_transit" | "closed" | "discrepancy";

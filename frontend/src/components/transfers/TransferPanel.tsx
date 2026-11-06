@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { TRANSFER_STATE_LABELS, transferState, type TransferFacts, type TransferState } from "@anagroci/contract/domain/transfers";
+import { TRANSFER_STATE_LABELS, transferDestinationLabel, transferState, type TransferFacts, type TransferState } from "@anagroci/contract/domain/transfers";
 import { Pill } from "../ui/Pill";
 import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
@@ -33,8 +33,12 @@ export function TransferLotLink({ line, siteSlug, canOpen }: { line: TransferReq
 
 /** One BKT in full: what is on the truck, what left, what arrived — and the form this warehouse is allowed to fill in. */
 export function TransferPanel({
-  t, siteWarehouse, canEdit, saving, lotLink, onDispatch, onReceive, qualityOf,
+  t, siteWarehouse, canEdit, canSend, saving, lotLink, onDispatch, onReceive, qualityOf, binOptions,
 }: {
+  /** False at a Central warehouse: RCN never leaves it on a BKT, so a BKT left over from before that rule can't be sent. */
+  canSend: boolean;
+  /** This site's bins, offered for "unloaded into" when receiving. */
+  binOptions: string[];
   /** A Lot's own quality-check result, to start each line's dispatch quality from. */
   qualityOf: (receiptId: string) => { moisture: string; kor: string; nutCount: string };
   t: TransferRequest;
@@ -45,11 +49,13 @@ export function TransferPanel({
   onDispatch: (p: Parameters<typeof api.dispatchTransfer>[1]) => Promise<boolean>;
   onReceive: (p: Parameters<typeof api.receiveTransfer>[1]) => Promise<boolean>;
 }) {
-  const sending = canEdit && t.status === "requested" && t.fromWarehouse === siteWarehouse;
+  const sending = canEdit && canSend && t.status === "requested" && t.fromWarehouse === siteWarehouse;
   const receiving = canEdit && t.status === "dispatched" && t.toWarehouse === siteWarehouse;
   const [d, setD] = useState({ truckNo: "", transporter: "", driver: "", driverPhone: "", gross: "", wr: "" });
   const [quality, setQuality] = useState<Record<string, { moisture: string; kor: string; nutCount: string }>>(() => Object.fromEntries(t.lines.map((l) => [l.receiptId, qualityOf(l.receiptId)])));
   const [r, setR] = useState({ bags: "", damaged: "", gross: "", kor: "", moisture: "", nuts: "", lot: "", comment: "", wr: "" });
+  const [bins, setBins] = useState<Record<string, string>>({});
+  const allBinned = t.lines.every((l) => (bins[l.receiptId] ?? "").trim() !== "");
   const v = t.variance;
   // The same test the server applies: if what arrived differs from what was sent, the receiving warehouse has to say why.
   const arrival: TransferFacts = {
@@ -62,7 +68,7 @@ export function TransferPanel({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <InfoCard icon="local_shipping" title={`${t.id} · what left`} badge={<Pill tone={TRANSFER_TONE[t.state]} label={TRANSFER_STATE_LABELS[t.state]} />}>
-        <InfoRow label="From → To" value={`${t.fromWarehouse} → ${t.toWarehouse}`} />
+        <InfoRow label="From → To" value={`${t.fromWarehouse} → ${transferDestinationLabel(t)}`} />
         <InfoRow label="Truck" strong value={t.truckNo} />
         <InfoRow label="Warehouse receipt no." value={t.dispatchWhReceiptNo} />
         <InfoRow label="Transporter" value={t.transporter} />
@@ -91,7 +97,7 @@ export function TransferPanel({
         {t.lines.map((l) => (
           <div key={l.receiptId} className="flex items-baseline justify-between gap-3 text-[13px]">
             <span className="min-w-0">{lotLink(l)} <span className="text-warmstone-500">{normalizeSupplierName(l.supplierName)}</span></span>
-            <span className="text-right tabular-nums text-warmstone-700 shrink-0">{n(l.bags)} bags{l.binCode ? <span className="block text-[11px] text-warmstone-400">{l.binCode}</span> : null}
+            <span className="text-right tabular-nums text-warmstone-700 shrink-0">{n(l.bags)} bags{(l.binCode || l.receivedBinCode) && <span className="block text-[11px] text-warmstone-400">{[l.binCode, l.receivedBinCode].filter(Boolean).join(" → ")}</span>}
               {(l.moisture !== null || l.kor !== null) && <span className="block text-[11px] text-warmstone-500">moisture {l.moisture ?? "-"}% · KOR {l.kor ?? "-"}{l.nutCount !== null ? ` · ${l.nutCount} nuts` : ""}</span>}</span>
           </div>
         ))}
@@ -135,7 +141,7 @@ export function TransferPanel({
 
       {receiving && (
         <form
-          onSubmit={(e) => { e.preventDefault(); void onReceive({ whReceiptNo: r.wr, bagsReceived: r.bags, receivedGrossKg: r.gross, damagedBags: r.damaged || null, korReceived: r.kor || null, moistureReceived: r.moisture || null, nutCountReceived: r.nuts || null, receivedLotNoRaw: r.lot || null, receivedComment: r.comment || null }); }}
+          onSubmit={(e) => { e.preventDefault(); void onReceive({ whReceiptNo: r.wr, bagsReceived: r.bags, receivedGrossKg: r.gross, damagedBags: r.damaged || null, korReceived: r.kor || null, moistureReceived: r.moisture || null, nutCountReceived: r.nuts || null, receivedLotNoRaw: r.lot || null, receivedComment: r.comment || null, lines: t.lines.map((l) => ({ receiptId: l.receiptId, binCode: bins[l.receiptId] ?? "" })) }); }}
           className="lg:col-span-3 bg-white border-2 border-brand-700 rounded-2xl p-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start"
         >
           <Field id="rc-wr" label="Warehouse receipt no." hint="Your own receipt for this arrival."><input id="rc-wr" required value={r.wr} onChange={(e) => setR({ ...r, wr: e.target.value })} className={inputClass} /></Field>
@@ -147,8 +153,23 @@ export function TransferPanel({
           <Field id="rc-moisture" label="Moisture (%)"><input id="rc-moisture" inputMode="decimal" value={r.moisture} onChange={(e) => setR({ ...r, moisture: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-nuts" label="Nut count"><input id="rc-nuts" inputMode="numeric" value={r.nuts} onChange={(e) => setR({ ...r, nuts: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-comment" label={differs ? "Why it differs *" : "Comment"} hint={differs ? "What arrived is not what was sent: say why (damaged bags, a short load, a weighing difference…)." : undefined}><input id="rc-comment" required={differs} value={r.comment} onChange={(e) => setR({ ...r, comment: e.target.value })} className={`${inputClass} ${differs ? "border-ambernut-300 bg-ambernut-50" : ""}`} /></Field>
+          <div className="sm:col-span-2 lg:col-span-4 space-y-2">
+            <p className="text-[12.5px] font-semibold text-warmstone-700">Bin each Lot was unloaded into <span className="font-normal text-warmstone-500">(this is what makes the Lot available to production)</span></p>
+            {t.lines.map((l) => (
+              <div key={l.receiptId} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)] gap-3 items-center">
+                <span className="text-[13px] font-mono text-warmstone-800 truncate">{l.lotNumber ?? l.receiptId}</span>
+                <select
+                  required aria-label={`Bin, ${l.lotNumber ?? l.receiptId}`} value={bins[l.receiptId] ?? ""}
+                  onChange={(e) => setBins({ ...bins, [l.receiptId]: e.target.value })} className={inputClass}
+                >
+                  <option value="">Choose a bin…</option>
+                  {binOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
           <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-3">
-            <button type="submit" disabled={saving || !r.bags.trim() || !r.gross.trim() || !r.wr.trim() || (differs && !r.comment.trim())} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
+            <button type="submit" disabled={saving || !r.bags.trim() || !r.gross.trim() || !r.wr.trim() || !allBinned || (differs && !r.comment.trim())} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
               <span className="material-symbols-outlined text-[17px]">inventory_2</span>
               Record arrival
             </button>

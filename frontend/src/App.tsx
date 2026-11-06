@@ -13,9 +13,12 @@ import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 import { PendingApprovalsProvider } from "./state/PendingApprovals";
 import { SiteLayout } from "./state/SiteContext";
+import { ProductionFactoryLayout } from "./state/productionFactory";
 
 import { DashboardPage } from "./pages/DashboardPage";
-import { ProductionPage } from "./pages/ProductionPage";
+import { BatchesListPage } from "./pages/production/BatchesListPage";
+import { NewBatchPage } from "./pages/production/NewBatchPage";
+import { BatchDetailPage } from "./pages/production/BatchDetailPage";
 import { BtmListPage } from "./pages/production/BtmListPage";
 import { BtmDetailPage } from "./pages/production/BtmDetailPage";
 import { ProductionBinsListPage } from "./pages/production/ProductionBinsListPage";
@@ -168,9 +171,11 @@ function AppRoutes() {
               <Route path="/production/lots" element={<LotsListPage />} />
               <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
               <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
-              {/* Not linked from nav right now (reverted to the "Soon" placeholder on request) - every
-                  route above still works if visited directly; only the sidebar entry point changed. */}
-              <Route path="/production" element={<ProductionPage />} />
+              {/* The workbook-import pages above are not linked from the sidebar; Batches is. */}
+              <Route path="/production" element={<Navigate to="/production/batches" replace />} />
+              <Route element={<ProductionFactoryLayout />}>
+                <Route path="/production/batches/new" element={<NewBatchPage />} />
+              </Route>
 
               <Route path="/masters/suppliers" element={<SuppliersPage />} />
               <Route path="/masters/suppliers/:code" element={<SupplierDetailPage />} />
@@ -180,6 +185,15 @@ function AppRoutes() {
               <Route path="/masters/origins" element={<OriginsPage />} />
               <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/supplier-assignment" element={<SupplierAssignmentPage />} />
+            </Route>
+
+            {/* The QFS Officer takes each load's moisture check and the silo checks on the batch page (auth/policy.ts). */}
+            <Route element={<RequireRole roles={[...REVIEWERS, "qfs_officer"]} />}>
+              {/* Batch & Intake is for one factory: an admin's choice of it is held here. */}
+              <Route element={<ProductionFactoryLayout />}>
+                <Route path="/production/batches" element={<BatchesListPage />} />
+                <Route path="/production/batches/:code" element={<BatchDetailPage />} />
+              </Route>
             </Route>
 
             <Route element={<RequireRole roles={["branch_manager"]} />}>

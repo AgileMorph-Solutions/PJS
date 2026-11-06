@@ -119,6 +119,9 @@ dependency before assuming a fresh setup.
 
 ## Styling — Tailwind v4, a warm terracotta/warmstone identity
 
+**Load the `ui-consistency` skill before any UI work.** It has the type scale, button/input/card
+classes, copy rules and the component ladder. This section explains why the theme is what it is.
+
 The app was rebuilt end to end (Sept 2026) on **Tailwind CSS v4** (`@tailwindcss/vite`, wired in
 `vite.config.ts`) with **Material Symbols Outlined** for icons, replacing the earlier hand-rolled
 CSS-custom-property system (`tokens.css` — deleted) and `lucide-react`. This is the current, only

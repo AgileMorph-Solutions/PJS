@@ -7,7 +7,9 @@ import { useSubmissions } from "../../state/userManagement";
 import { SubmissionCard } from "../../components/SubmissionCard";
 import { SubmissionReview } from "../../components/SubmissionReview";
 import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
-import { DECISION_BRANCHES } from "../../domain/decisions";
+import { decisionBranchesFor, stageForSite } from "../../domain/decisions";
+import { productionReadinessGaps, productionReadinessNotice } from "@anagroci/contract/domain/productionBatch";
+import { siteTypeOf } from "@anagroci/contract/domain/siteType";
 import { stages, rejectStage, RECEPTION_STEPS } from "../../data/stages";
 import { computeDerivedFields } from "../../domain/receiptMath";
 import { StageForm } from "../../components/StageForm";
@@ -125,7 +127,10 @@ export function ReceiptDetailPage() {
 
   const status = deriveStatus(receipt);
   const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
-  const journey = buildJourney(receipt, links);
+  // The receipt's own site decides its last question and how its journey ends, whichever section it is viewed from.
+  const siteType = siteTypeOf(masters.warehouses, masters.aliases, receipt.warehouse);
+  const journey = buildJourney(receipt, links, siteType);
+  const readinessGaps = siteType === "CENTRAL" ? productionReadinessGaps(receipt) : [];
 
   // Once a Lot exists, that's the record's real-world identity from here on — the receipt id
   // stays as the underlying record key, but the page leads with what a warehouse user actually
@@ -135,7 +140,7 @@ export function ReceiptDetailPage() {
   // The three decision stages sit in their natural position within `stages` (n-qfs between
   // n-verify and n-gross, etc.), so "the record's current stage is a decision" is exactly "there's
   // an unmade decision waiting right here" — no separate lookahead needed.
-  const pendingDecision = activeStage?.kind === "decision" ? activeStage : undefined;
+  const pendingDecision = activeStage?.kind === "decision" ? stageForSite(activeStage, siteType) : undefined;
 
   // The receipt's own site (r.warehouse) may not match the section it's being viewed from — a
   // linked/cross-site view is by design (see this page's own header comment), so the breadcrumb
@@ -302,7 +307,8 @@ export function ReceiptDetailPage() {
             </div>
           )}
 
-          {stages.map((stage, stageIndex) => {
+          {stages.map((rawStage, stageIndex) => {
+            const stage = stageForSite(rawStage, siteType);
             // The reception stages are grouped into the seven steps the team works through
             // (Arrival → Weight → Quality → Unloading → Lot → Bin → GRN); a heading marks where each
             // starts, and the stages after GRN carry on under their own.
@@ -313,7 +319,7 @@ export function ReceiptDetailPage() {
               !step && stageIndex > 0 && RECEPTION_STEPS.some((st) => st.stageIds.includes(stages[stageIndex - 1]!.id));
             const done = doneIds.has(stage.id);
             const isActive = stage.id === activeStage?.id;
-            const branchOptions = DECISION_BRANCHES[stage.id];
+            const branchOptions = decisionBranchesFor(stage.id, siteType);
             const chosen = receipt.branches[stage.id];
             const values = receipt.stageData[stage.id] ?? {};
             const blank = done && isStageBlank(values);
@@ -368,7 +374,7 @@ export function ReceiptDetailPage() {
                       )}
                       {stage.kind === "decision" && chosen && (
                         <span className="px-2 py-0.5 rounded-full bg-success-100 text-success-800 text-[11px] font-semibold">
-                          {DECISION_BRANCHES[stage.id]?.find((b) => b.id === chosen)?.label ?? chosen}
+                          {branchOptions?.find((b) => b.id === chosen)?.label ?? chosen}
                         </span>
                       )}
                     </div>
@@ -432,7 +438,12 @@ export function ReceiptDetailPage() {
                     )}
                     {branchOptions && stage.id !== "n-drying" && (
                       <div className="mt-4">
-                        <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)} readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))} />
+                        <DecisionBranch
+                          branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)}
+                          readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))}
+                          unavailable={stage.id === "n-xferdec" && readinessGaps.length ? ["production"] : undefined}
+                          notice={stage.id === "n-xferdec" && canEdit ? productionReadinessNotice(readinessGaps) : undefined}
+                        />
                       </div>
                     )}
                   </div>

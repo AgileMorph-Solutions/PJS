@@ -34,5 +34,5 @@ export function moduleOfStage(stageId: string): ReceivingModule | null {
  */
 export const MODULE_STATUSES: Record<ReceivingModule, readonly ReceiptStatus[]> = {
   reception: ["planned", "arrived", "pending_qa", "rejected"],
-  offloading: ["pending_unload", "unloaded", "grn_completed", "in_stock", "in_drying", "transferred_out"],
+  offloading: ["pending_unload", "unloaded", "grn_completed", "in_stock", "in_drying", "ready_for_production", "transferred_out"],
 };

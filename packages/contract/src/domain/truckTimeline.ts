@@ -13,7 +13,7 @@ import { deriveStatus } from "./receiptStatus.js";
 export type TimelineStepState = "done" | "rejected" | "next";
 
 export interface TruckTimelineStep {
-  id: "arrived" | "quality" | "unloaded" | "lot" | "grn" | "stock" | "drying" | "transfer";
+  id: "arrived" | "quality" | "unloaded" | "lot" | "grn" | "stock" | "drying" | "ready" | "transfer";
   label: string;
   state: TimelineStepState;
   /** YYYY-MM-DD (plus HH:mm when the system recorded a time); null when nothing was recorded. */
@@ -25,7 +25,7 @@ export interface TruckTimelineStep {
 
 /** How far along each status is. `rejected` stops the journey, so it has no place in this ordering. */
 const REACHED: Record<ReceiptStatus, number> = {
-  planned: 0, arrived: 1, pending_qa: 2, rejected: 2, pending_unload: 3, unloaded: 4, grn_completed: 5, in_stock: 6, in_drying: 7, transferred_out: 8,
+  planned: 0, arrived: 1, pending_qa: 2, rejected: 2, pending_unload: 3, unloaded: 4, grn_completed: 5, in_stock: 6, in_drying: 7, ready_for_production: 7, transferred_out: 8,
 };
 
 const GRN_LABEL = "GRN Weight (kept separate from Gross/Net/Paid)";
@@ -58,6 +58,7 @@ export function truckTimeline(r: ReceiptRecord): TruckTimelineStep[] {
     { id: "grn", label: "GRN recorded", at_: 5, state: "done", ...recorded("grn_completed"), detail: grnKg ? `${Number(grnKg.replace(/\s/g, "").replace(",", ".")).toLocaleString()} kg` : undefined },
     { id: "stock", label: "In stock", at_: 6, state: "done", ...recorded("in_stock"), detail: r.binNo },
     { id: "drying", label: "Drying", at_: 7, state: "done", ...recorded("in_drying") },
+    { id: "ready", label: "Ready for production", at_: 7, state: "done", ...recorded("ready_for_production") },
     { id: "transfer", label: "Transferred out", at_: 8, state: "done", ...recorded("transferred_out") },
   ];
 
@@ -67,10 +68,13 @@ export function truckTimeline(r: ReceiptRecord): TruckTimelineStep[] {
   let nextAdded = false;
   for (const { at_, ...step } of steps) {
     if (rejected && step.id !== "arrived" && step.id !== "quality") continue;
+    // Only a Lot marked ready has this step, and a Lot with no drying has no drying step to report.
+    if (step.id === "ready" && status !== "ready_for_production") continue;
+    if (step.id === "drying" && status === "ready_for_production" && !sd["n-drying"]) continue;
     // The rejection itself is the quality step happening, even though a rejected truck never reaches "pending unload".
     if (reached >= at_ || (rejected && step.id === "quality")) { out.push(step); continue; }
     // Drying is a branch, not a stage every truck passes through; only offer it once the truck is in stock.
-    if (!nextAdded && step.id !== "drying" && step.id !== "transfer") { out.push({ ...step, state: "next", at: null, atKind: null, detail: undefined }); nextAdded = true; }
+    if (!nextAdded && step.id !== "drying" && step.id !== "ready" && step.id !== "transfer") { out.push({ ...step, state: "next", at: null, atKind: null, detail: undefined }); nextAdded = true; }
   }
   return out;
 }

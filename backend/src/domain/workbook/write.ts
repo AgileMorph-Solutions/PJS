@@ -23,7 +23,29 @@ export interface BuiltWorkbook {
 
 const HEADER_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F5F4" } };
 
-export const sectionLabel = (type: WarehouseType) => (type === "UNIT" ? "Unit" : "Central");
+export const BLANK_ID_NOTE = "Leave this blank to add a new row. For an existing row, keep it as it is.";
+
+/**
+ * One tab in the house style: a bold, shaded header of plain labels, frozen with its first column, then the
+ * rows. Shared by the section workbook and the production workbook, so both files look and read the same.
+ * `firstColumnNote` explains the first column where it is the one nobody fills in.
+ */
+export function addTableSheet(
+  wb: ExcelJS.Workbook, title: string, fields: { key: string; label: string; note?: string }[], rows: Record<string, unknown>[], firstColumnNote?: string,
+) {
+  const ws = wb.addWorksheet(title.slice(0, 31));
+  const header = ws.addRow(fields.map((f) => f.label));
+  header.font = { bold: true };
+  header.eachCell((cell) => { cell.fill = HEADER_FILL; });
+  if (firstColumnNote) header.getCell(1).note = firstColumnNote;
+  fields.forEach((f, i) => { if (f.note && !(i === 0 && firstColumnNote)) header.getCell(i + 1).note = f.note; });
+  ws.views = [{ state: "frozen", ySplit: 1, xSplit: 1 }];
+  fields.forEach((f, i) => { ws.getColumn(i + 1).width = Math.min(Math.max(f.label.length + 4, 12), 40); });
+  for (const row of rows) ws.addRow(fields.map((f) => serializeCell(row[f.key])));
+  return ws;
+}
+
+export const sectionLabel =(type: WarehouseType) => (type === "UNIT" ? "Unit" : "Central");
 
 /**
  * `ANAGROCI - Unit Warehouse - Sample.xlsx`, or `… - Export 2026-10-01.xlsx` (the date, or the range
@@ -60,17 +82,7 @@ export async function buildWorkbookFile(args: {
       withoutDate += f.withoutDate;
     }
 
-    const ws = wb.addWorksheet(spec.title.slice(0, 31));
-    const header = ws.addRow(fields.map((f) => f.label));
-    header.font = { bold: true };
-    header.eachCell((cell) => { cell.fill = HEADER_FILL; });
-    // The one column nobody fills in: say what blank means, right where they'll look.
-    if (spec.kind === "receipt" || spec.key === "id") {
-      header.getCell(1).note = "Leave this blank to add a new row. For an existing row, keep it as it is.";
-    }
-    ws.views = [{ state: "frozen", ySplit: 1, xSplit: 1 }];
-    fields.forEach((f, i) => { ws.getColumn(i + 1).width = Math.min(Math.max(f.label.length + 4, 12), 40); });
-    for (const row of rows) ws.addRow(fields.map((f) => serializeCell(row[f.key])));
+    addTableSheet(wb, spec.title, fields, rows, spec.kind === "receipt" || spec.key === "id" ? BLANK_ID_NOTE : undefined);
     written.push({ name: spec.title, rows: rows.length });
   }
 

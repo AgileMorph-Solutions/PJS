@@ -53,6 +53,43 @@ in the file (a new origin town typed on Truck Reception is simply added).
 - **Scope.** A Warehouse Incharge works on their own warehouse; an admin picks one. A row must belong to
   that warehouse — before and after the change. Rows with no warehouse set aren't in a section's file.
 
+## The production workbook (Production → Batches → Upload / Export)
+
+The same idea for **Production Phase 1, Batch & Intake**: one `.xlsx`, the same dialog, the same preview →
+apply. Warehouse Incharge / admin only. A QFS Officer keeps entering moisture checks on screen, where the
+Incharge approves them.
+
+| Tab | One row is | Names an existing row by | What a new row does |
+|---|---|---|---|
+| **Batches** | a batch | Batch Name (typed, like ANA-03B) | creates the batch from its Bins (`BIN-03B / BIN-03C`) |
+| **RCN Receipts** | a load from one bin | RCN Receipt ID (blank = new) | receives the load (issues its RR- ID) |
+| **Moisture Checks** | one check | Check ID (blank = new) | records the check, approved as it is saved (OK, or Hold then a re-check row) |
+| **Pallets** | one pallet on the scale | Pallet ID (blank = new) | weighs the pallet; an existing pallet's values are corrected until the final weight is saved |
+| **Final Weight** | a load's closing weighing | its load | saves empty pallets (stacks as `374.3 / 211.2`), dust, voids, and closes the load |
+| **Calibration Runs** | one run of a load through the sizing machine | Run ID (blank = new) | puts the kg of each size into the silos; the same load, date and kg again is not added twice |
+| **Silo Checks** | one QC-2 sample | Check ID (blank = new) | records the check, approved as it is saved. Sampling Point is the silo (`A++` … `D`, `DE`) or `Received RCN`; Result is `OK` or `Fail` |
+| **Silo Moves** | kg moved by hand after a failed check | Move ID (blank = new) | moves the kg out of From Silo, which must stand on a failed check, into To Silo |
+| **Cooking** | a Lot's kg per size | Cooking ID (blank = new) | takes the kg out of the silos; a new Lot No makes the Lot |
+| **Cooker Log, Cooking Checks, Waste Water** | a cooker run, a QC-3, a tank quantity | Entry ID (blank = new) | recorded on the Lot; a check is approved as it is saved |
+| **Cooling** | a Lot into its cooling silo | its Lot No | starts the 24 h clock, only after every cooked size has passed QC-3 |
+| **Cooling Checks** | a QC-4 | Entry ID (blank = new) | Result is `OK` or `Wait`; shelling opens on OK |
+| **Shelling Days** | a day's outputs | Day ID (blank = new) | the app works out good and final kernels, shell dust, shell and every % |
+| **Line Runs, Machine Frequency, Machine Samples, Uncut Checks, Shell Samples** | one row of each sheet | Entry ID (blank = new) | recorded on a Lot past QC-4 |
+| **Boiler** | a day's shell burned | Reading ID (blank = new) | takes the kg out of the shell silo |
+| **Trucks** | one truck at the gate | Truck ID (blank = new) | filled in as the truck moves; a Gate Pass No closes it and takes its net out of the store |
+
+- **Checks, pallets and the final weight name their load** by RCN Receipt ID or by BTM No. The BTM No is
+  enough when one load has it, which is what lets a new load and its checks come in the same file. When two
+  loads share a BTM (the client's own file has repeats), the upload asks for the RCN Receipt ID.
+- **The tabs run in order, through the screens' own rules.** A batch row is checked exactly as the New batch
+  screen checks it, a check as the moisture form does, and so on, so a row may rely on the rows above it: a
+  batch made on Batches is there for its loads, an OK check makes its pallets weighable.
+- **Saved records aren't rewritten** except where the screens edit them (a pallet, until the load is
+  closed). A saved batch, load, check or final weight that differs in the file is reported, not changed.
+- Status, KOR, pallet no., net weight and "to silos" are shown and worked out; an upload never reads them.
+
+---
+
 Everything below this line documents the **earlier client-workbook importers** (Truck Reception,
 CHARGEMENT, Jute Bags movement, …). They are no longer offered in the UI; the code, the `/api/imports/*`
 routes and their tests remain because the real data came in through them.

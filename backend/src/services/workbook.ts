@@ -64,7 +64,8 @@ export async function previewWorkbook(user: Uploader, section: Section, buffer: 
 }
 
 export async function commitWorkbook(user: Uploader, token: string) {
-  const entry = cacheTake(token);
+  const taken = cacheTake(token);
+  const entry = taken?.kind === "production" ? undefined : taken;
   if (!entry) throw new ImportTokenError("That preview has expired — upload the file again.");
   if (entry.userId !== user.id) throw new ForbiddenError("That preview belongs to another user.");
   const section = await sectionFor(entry.warehouse);

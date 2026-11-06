@@ -3,7 +3,9 @@ import { stages, stageById, rejectStage, RECEPTION_STEPS } from "../../../data/s
 import { computeDerivedFields } from "../../../domain/receiptMath";
 import { StageForm } from "../../../components/StageForm";
 import { DecisionBranch } from "../../../components/DecisionBranch";
-import { DECISION_BRANCHES } from "../../../domain/decisions";
+import { decisionBranchesFor, stageForSite } from "../../../domain/decisions";
+import { productionReadinessGaps, productionReadinessNotice } from "@anagroci/contract/domain/productionBatch";
+import { siteTypeOf } from "@anagroci/contract/domain/siteType";
 import { useTracking } from "../../../state/TrackingContext";
 import { useSite } from "../../../state/SiteContext";
 import { useMe } from "../../../state/AuthContext";
@@ -66,13 +68,16 @@ export function IntakeWizardPage() {
     );
   }
 
-  const stage = stageById[stageId];
-  if (!stage) return <Navigate to={`${base}/new/${id}/${stages[0].id}`} replace />;
+  const siteType = siteTypeOf(masters.warehouses, masters.aliases, receipt.warehouse);
+  const rawStage = stageById[stageId];
+  if (!rawStage) return <Navigate to={`${base}/new/${id}/${stages[0].id}`} replace />;
+  const stage = stageForSite(rawStage, siteType);
+  const readinessGaps = stageId === "n-xferdec" && siteType === "CENTRAL" ? productionReadinessGaps(receipt) : [];
 
   const idx = stages.findIndex((s) => s.id === stageId);
   const prev = idx > 0 ? stages[idx - 1] : null;
   const next = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
-  const branchOptions = DECISION_BRANCHES[stageId];
+  const branchOptions = decisionBranchesFor(stageId, siteType);
   const chosen = receipt.branches[stageId];
   const values = receipt.stageData[stageId] ?? {};
   // Calculated fields show what the readings so far add up to, before the server has saved them.
@@ -115,7 +120,10 @@ export function IntakeWizardPage() {
         />
         {branchOptions && (
           <div className="mt-4">
-            <DecisionBranch branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(id, stageId, b)} />
+            <DecisionBranch
+              branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(id, stageId, b)}
+              unavailable={readinessGaps.length ? ["production"] : undefined} notice={productionReadinessNotice(readinessGaps)}
+            />
           </div>
         )}
       </div>

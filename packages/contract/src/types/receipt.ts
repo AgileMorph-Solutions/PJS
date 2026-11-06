@@ -10,6 +10,7 @@ export type ReceiptStatus =
   | "grn_completed"
   | "in_stock"
   | "in_drying"
+  | "ready_for_production"
   | "transferred_out";
 
 export interface TimelineEntry {
@@ -249,6 +250,12 @@ export interface TransferLine {
   nutCount: number | null;
   /** Where the Lot was loaded from; a truck loading from several Bins shows them all. */
   binCode: string | null;
+  /**
+   * The receiving warehouse's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN
+   * Receiving at Factory sheet). It is what puts the Lot into that site's bin stock, and so within
+   * reach of a production batch. Null until received, and on BKTs received before it was asked.
+   */
+  receivedBinCode: string | null;
 }
 
 /**
@@ -261,7 +268,10 @@ export interface TransferRequest {
   id: string;
   transferDate: string;
   fromWarehouse: string;
+  /** The destination SITE: it decides who sees this BKT and who records its arrival. */
   toWarehouse: string;
+  /** The store chosen at that site, from Masters. Null when the BKT named only the site. */
+  toStore: string | null;
   /** The step: requested → dispatched → received. `state` is what a person reads. */
   status: TransferStatus;
   remarks: string | null;

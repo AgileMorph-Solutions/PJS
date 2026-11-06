@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 
 interface Props {
@@ -12,7 +13,10 @@ interface Props {
 
 /** Generic centered dialog — backdrop click and Escape both close it, matching AppNav's mobile
  * drawer convention (backdrop click closes) plus the one keyboard affordance a modal needs that a
- * drawer doesn't. No domain knowledge here; callers own everything in `children`. */
+ * drawer doesn't. No domain knowledge here; callers own everything in `children`.
+ *
+ * Rendered on the page's body, not where it is called: a dialog opened from a step's card must stay
+ * up when saving moves the job on and that card closes behind it (`display: none` hides a fixed child too). */
 export function Modal({ title, onClose, children, wide }: Props) {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -22,7 +26,7 @@ export function Modal({ title, onClose, children, wide }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
       <div className="fixed inset-0 bg-warmstone-900/40" onClick={onClose} aria-hidden="true" />
       <div
@@ -44,6 +48,7 @@ export function Modal({ title, onClose, children, wide }: Props) {
         </div>
         <div className="p-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

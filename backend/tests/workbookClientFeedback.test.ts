@@ -72,6 +72,7 @@ beforeAll(async () => {
   await approveException(offPlan, approver, "Called the supplier");
 
   const onTruck = await truck(undefined, "VAVOUA", "48000", "WBCF-T4"); // the Lot that goes to the other warehouse
+  await setBranch(onTruck, "n-xferdec", "transfer");
   const t = await createTransfer({ transferDate: "2035-05-20", fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: onTruck, bags: 590 }] });
   bkt = t.id;
   await dispatchTransfer(bkt, { whReceiptNo: "WR-D", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880 });

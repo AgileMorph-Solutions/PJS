@@ -14,7 +14,7 @@ export interface NavLeaf {
   /** Match this route exactly, not by prefix — only the root "/" needs this. */
   end?: boolean;
   /** Short pill shown after the label, e.g. "Soon" for a page that's an intentional placeholder
-   * (see ProductionPage.tsx) — so clicking into it isn't mistaken for a broken link. */
+   * (the Production section once used one) — so clicking into it isn't mistaken for a broken link. */
   badge?: string;
   /** A live number shown after the label (AppNav reads it); hidden while 0 or not yet loaded. */
   count?: "pendingApprovals";
@@ -71,14 +71,13 @@ export const NAV: NavSection[] = [
     items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2", roles: ["admin", "warehouse_incharge"] }],
   },
   {
-    // Reverted to the single placeholder entry on request — the BTM/Bin/Lot pages, backend
-    // services, and seeded real data behind this section all still exist and work (see
-    // frontend/src/pages/production/, backend/src/routes/production.ts); they're just not linked
-    // from the sidebar while this is revisited. Un-reverting is: swap this one item back for the
-    // list that was here (git history has it), no other code changes needed.
+    // The client's "Phase 1 — Batch & Intake" doc. One leaf: every step after creating a batch (an RCN Receipt, ...) is
+    // entered on that batch's own page, like a truck's stages on its Reception page. The older workbook-import pages (BTM/Bin/Lot under pages/production/) still exist
+    // and still route; they are not linked here.
     label: "Production",
     items: [
-      { label: "Production", to: "/production", icon: "precision_manufacturing", badge: "Soon", roles: ["admin", "warehouse_incharge"] },
+      // The QFS Officer opens a batch to do its loads' moisture checks (Phase 1, step 2).
+      { label: "Batches", to: "/production/batches", icon: "precision_manufacturing", roles: ["admin", "warehouse_incharge", "qfs_officer"] },
     ],
   },
   {
