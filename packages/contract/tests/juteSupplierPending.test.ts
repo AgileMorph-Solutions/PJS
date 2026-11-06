@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DERIVED_COLUMNS, SUPPLIER_PENDING_COLUMN, supplierPendingBalances, supplierPendingPreview } from "../src/domain/jute.js";
+import { DERIVED_COLUMNS, SUPPLIER_CURRENT_COLUMN, SUPPLIER_PENDING_COLUMN, supplierCurrentBalance, supplierPendingBalances, supplierPendingPreview } from "../src/domain/jute.js";
 
 const row = (supplierCode: string, issued: number | null, returned: number | null) => ({ supplierCode, issued, returned });
 
@@ -20,8 +20,25 @@ describe("supplierPendingBalances", () => {
     expect(supplierPendingBalances([row("A", 10, null), row(" ", 500, null), row("A", 10, null)])).toEqual([10, null, 20]);
   });
 
-  it("treats the column as calculated, so no form offers it for typing", () => {
+  it("continues from a corrected row, and a corrected zero counts as a correction", () => {
+    expect(supplierPendingBalances([row("A", 1000, null), { ...row("A", 1000, 200), corrected: 1500 }, row("A", null, 100)])).toEqual([1000, 1500, 1400]);
+    expect(supplierPendingBalances([row("A", 1000, null), { ...row("A", null, null), corrected: 0 }, row("A", 5, null)])).toEqual([1000, 0, 5]);
+  });
+
+  it("keeps the column out of a blank entry, so only a typed figure is ever sent", () => {
     expect(DERIVED_COLUMNS.has(SUPPLIER_PENDING_COLUMN)).toBe(true);
+  });
+});
+
+describe("supplierCurrentBalance", () => {
+  it("reads every row's figure from the supplier's newest row", () => {
+    const rows = [
+      { "Supplier code": "A", [SUPPLIER_CURRENT_COLUMN]: "1000" },
+      { "Supplier code": "B", [SUPPLIER_CURRENT_COLUMN]: "7" },
+      { "Supplier code": "A", [SUPPLIER_CURRENT_COLUMN]: "1800" },
+    ];
+    const current = supplierCurrentBalance(rows);
+    expect(rows.map(current)).toEqual(["1800", "7", "1800"]);
   });
 });
 

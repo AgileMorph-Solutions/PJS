@@ -6,7 +6,7 @@
  * contract; LEDGER_COLUMN_MAP (generated from juteBags.ts) is what maps them onto real columns, so
  * the schema never has to carry a typo and the UI never has to stop showing one.
  */
-import { SUPPLIER_PENDING_COLUMN, supplierPendingBalances } from "@anagroci/contract/domain/jute";
+import { SUPPLIER_CURRENT_COLUMN, SUPPLIER_PENDING_COLUMN, supplierPendingBalances } from "@anagroci/contract/domain/jute";
 import { JUTE_OPENING_ACTIVITY } from "@anagroci/contract/domain/juteOpeningBalance";
 import { LEDGER_COLUMN_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import type { LedgerRow } from "@anagroci/contract/types/receipt";
@@ -24,7 +24,6 @@ const DELEGATE: Record<string, string> = {
 /** Columns the server owns. A client cannot set these; they are computed or assigned on write. */
 const SERVER_OWNED: Record<string, string[]> = {
   "warehouse-stock": ["S N", "Balance"],
-  "supplier-movement": [SUPPLIER_PENDING_COLUMN],
   "warehouse-to-warehouse-movement": ["SN"],
 };
 
@@ -62,11 +61,17 @@ function toLedgerRow(ledgerId: string, row: Record<string, unknown>): LedgerRow 
  * by the caller: the bags a supplier holds don't depend on which warehouse is looking. */
 async function supplierMovementRows() {
   const rows = await prisma.juteSupplierMovement.findMany({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
-  const pending = supplierPendingBalances(rows.map((r) => ({ supplierCode: r.supplierCode, issued: r.bagsIssuedToSupplier, returned: r.returnedViaDeliveries })));
+  const pending = supplierPendingBalances(rows.map((r) => ({ supplierCode: r.supplierCode, issued: r.bagsIssuedToSupplier, returned: r.returnedViaDeliveries, corrected: r.pendingWithSupplier })));
+  // Later rows overwrite earlier ones, leaving each supplier's newest balance.
+  const current = new Map(rows.map((r, i) => [r.supplierCode.trim(), pending[i]]));
   return rows.map((r, i) => ({
     id: r.id,
     whLocation: r.whLocation,
-    wire: { ...toLedgerRow("supplier-movement", r), [SUPPLIER_PENDING_COLUMN]: fmt(pending[i]) },
+    wire: {
+      ...toLedgerRow("supplier-movement", r),
+      [SUPPLIER_PENDING_COLUMN]: fmt(pending[i]),
+      [SUPPLIER_CURRENT_COLUMN]: fmt(current.get(r.supplierCode.trim())),
+    },
   }));
 }
 
@@ -110,14 +115,14 @@ export function ledgerSiteWhere(ledgerId: string, site?: string[]) {
 
 const INT_COLS = new Set([
   "bagsIssued", "bagsReceived", "reportedBalance", "goodBagsAvailable", "completelyDamaged",
-  "damagedRepairable", "bagsIssuedToSupplier", "returnedViaDeliveries",
+  "damagedRepairable", "bagsIssuedToSupplier", "returnedViaDeliveries", "pendingWithSupplier",
   "damaged", "reusable", "issuedToProduction", "goodBagsRecovered", "partiallyDamaged",
   "returnedToWarehouse", "closingBalance", "bagsDispatched", "damagedBags", "newBagsUsed",
   "recondition", "reportedDifference", "finalBagsAfterRebagging", "reportedDiff", "fullyLoadedTruckWeight",
   "emptyTruckTareWeight", "grossWeightReceived", "netWeightAtArrival", "netWeightDispatched", "weightDifference",
 ]);
 /** The ones that are a difference or a balance, so can really be below zero. */
-const SIGNED_COLS = new Set(["reportedDifference", "reportedDiff", "weightDifference", "closingBalance"]);
+const SIGNED_COLS = new Set(["reportedDifference", "reportedDiff", "weightDifference", "closingBalance", "pendingWithSupplier"]);
 /** Ledger 4's readings with a *Raw twin: a value that isn't a number is kept there as written, as its importer does. */
 const DECIMAL_WITH_RAW = ["korReceived", "korDispatched", "moistureReceived", "moistureDispatched"];
 
@@ -235,6 +240,10 @@ export async function addLedgerRow(ledgerId: string, row: LedgerRow): Promise<Le
     // supplierCode is NOT NULL on JuteSupplierMovement; the generic loop above would otherwise
     // send `null` for a blank input and fail the write outright.
     data.supplierCode = (row["Supplier code"] ?? "").trim();
+    // A row with no supplier has no balance, so the typed figure would be saved and then never shown.
+    if (!data.supplierCode && data.pendingWithSupplier != null) {
+      throw new ValidationError(`Enter the Supplier code the "${SUPPLIER_PENDING_COLUMN}" figure belongs to.`);
+    }
   }
 
   const model = (prisma as any)[DELEGATE[ledgerId]];

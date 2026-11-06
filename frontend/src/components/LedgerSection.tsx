@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useState, type FormEvent, type ReactNode } from "react";
 import type { JuteLedger, JuteLedgerColumn } from "../types/stage";
 import { useTracking } from "../state/TrackingContext";
 import { usePagination } from "./ui/usePagination";
@@ -50,8 +50,21 @@ interface Props {
   /** A ledger column that must name a warehouse in the master. Filled from `selected`, or picked from `options` when no
    * single warehouse is selected, so it is never free text the server would refuse. */
   warehouse?: { column: string; selected?: string; options: string[] };
-  /** A calculated column to show in the form, read-only: what it will be if the draft is saved. Others stay out of the form. */
-  calculatedField?: { column: string; preview: (rows: Row[], draft: Row) => string; hint: string };
+  /** A calculated column to show in the form, filled with what it will be if the draft is saved. Typing over it saves the
+   * typed figure instead; clearing it goes back to the calculated one. Others stay out of the form. In the table it goes by
+   * `tableHeader`, with `current` as a column beside it. */
+  calculatedField?: {
+    column: string;
+    preview: (rows: Row[], draft: Row) => string;
+    hint: string;
+    tableHeader: string;
+    current: { header: string; read: (rows: Row[]) => (row: Row) => string };
+  };
+}
+
+function withoutKey(row: Row, key: string): Row {
+  const { [key]: _removed, ...rest } = row;
+  return rest;
 }
 
 export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, warehouse, calculatedField }: Props) {
@@ -70,6 +83,15 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
   const dateColumn = ledger.columns.find((c) => c.label.toLowerCase().includes("date"));
   const dateFilter = useDateRangeFilter(allRows, (row) => (dateColumn ? row[dateColumn.label] : undefined));
   const page = usePagination(dateFilter.filtered);
+  const calculated = calculatedField?.preview(allRows, draft) ?? "";
+  // Read from every row, not the filtered page: narrowing the dates doesn't change what a supplier holds today.
+  const currentOf = calculatedField?.current.read(allRows);
+
+  /** Retyping the figure already shown isn't a correction, so it mustn't pin the balance to that number. */
+  function draftToSave(): Row {
+    const column = calculatedField?.column;
+    return column && draft[column]?.trim() === calculated ? withoutKey(draft, column) : draft;
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -80,7 +102,8 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
     setSaveError(null);
     setSaved(false);
     try {
-      await addLedgerEntry(ledger.id, warehouse?.selected ? { ...draft, [warehouse.column]: warehouse.selected } : { ...draft });
+      const toSave = draftToSave();
+      await addLedgerEntry(ledger.id, warehouse?.selected ? { ...toSave, [warehouse.column]: warehouse.selected } : { ...toSave });
       // Only now: a refused entry must stay in the form to be corrected, not vanish as if it had saved.
       setDraft(blankRow(ledger.columns));
       setSaved(true);
@@ -125,12 +148,14 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                   {c.label === calculatedField?.column ? (
                     <input
                       id={id}
-                      readOnly
-                      tabIndex={-1}
-                      value={calculatedField.preview(allRows, draft)}
-                      placeholder="Calculated automatically"
+                      inputMode="numeric"
+                      value={draft[c.label] ?? calculated}
+                      onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
+                      // On blur, not on change: backspacing to retype a number mustn't snap the calculated one back mid-edit.
+                      onBlur={() => setDraft((d) => (d[c.label]?.trim() === "" ? withoutKey(d, c.label) : d))}
+                      placeholder="Fills in automatically"
                       aria-describedby={`${id}-hint`}
-                      className={`${inputCls} cursor-not-allowed`}
+                      className={inputCls}
                     />
                   ) : c.label === warehouse?.column ? (
                     warehouse.selected ? (
@@ -175,7 +200,17 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                     />
                   )}
                   {c.label === calculatedField?.column && (
-                    <p id={`${id}-hint`} className="mt-1.5 text-[11.5px] leading-snug text-warmstone-500">{calculatedField.hint}</p>
+                    <p id={`${id}-hint`} className="mt-1.5 text-[11.5px] leading-snug text-warmstone-500">
+                      {calculatedField.hint}
+                      {draft[c.label] !== undefined && draft[c.label].trim() !== calculated && (
+                        <>
+                          {" "}
+                          <button type="button" onClick={() => setDraft((d) => withoutKey(d, c.label))} className="font-semibold text-brand-700 underline">
+                            Use the calculated figure{calculated ? ` (${calculated})` : ""}
+                          </button>
+                        </>
+                      )}
+                    </p>
                   )}
                 </div>
               );
@@ -205,16 +240,23 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
           <thead>
             <tr className="border-b border-warmstone-200 bg-warmstone-50">
               {ledger.columns.map((c) => (
-                <th key={c.label} className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap">
-                  {c.label}
-                </th>
+                <Fragment key={c.label}>
+                  <th className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap">
+                    {c.label === calculatedField?.column ? calculatedField.tableHeader : c.label}
+                  </th>
+                  {c.label === calculatedField?.column && (
+                    <th className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-900 whitespace-nowrap">
+                      {calculatedField.current.header}
+                    </th>
+                  )}
+                </Fragment>
               ))}
             </tr>
           </thead>
           <tbody>
             {dateFilter.filtered.length === 0 && (
               <tr>
-                <td colSpan={ledger.columns.length} className="px-3 py-4 text-warmstone-400 italic">
+                <td colSpan={ledger.columns.length + (calculatedField ? 1 : 0)} className="px-3 py-4 text-warmstone-400 italic">
                   {allRows.length === 0 ? "No entries yet - add one above." : "No entries in this date range."}
                 </td>
               </tr>
@@ -222,9 +264,14 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
             {page.pageRows.map((row, i) => (
               <tr key={i} className="border-b border-warmstone-100 last:border-0 hover:bg-warmstone-50">
                 {ledger.columns.map((c) => (
-                  <td key={c.label} className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
-                    {(c === dateColumn ? formatDate(row[c.label]) : row[c.label]) || "-"}
-                  </td>
+                  <Fragment key={c.label}>
+                    <td className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
+                      {(c === dateColumn ? formatDate(row[c.label]) : row[c.label]) || "-"}
+                    </td>
+                    {c.label === calculatedField?.column && (
+                      <td className="px-3 py-2 font-bold text-warmstone-900 whitespace-nowrap tabular-nums">{currentOf?.(row) || "-"}</td>
+                    )}
+                  </Fragment>
                 ))}
               </tr>
             ))}

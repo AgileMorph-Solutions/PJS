@@ -95,8 +95,9 @@ export const juteLedgers: JuteLedger[] = [
       { label: "Activity", real: false , col: "activity"},
       { label: "Bags issued to supplier", real: false , col: "bagsIssuedToSupplier"},
       { label: "Returned through RCN deliveries", real: false , col: "returnedViaDeliveries"},
-      // Calculated, not typed (client observations list: "AUTO FEED ... PENDING/BALANCE WITH SUPPLIER (+/-)"): see
-      // supplierPendingBalances() in domain/jute.ts. The column stays in the table but nothing writes to it.
+      // Calculated (client observations list: "AUTO FEED ... PENDING/BALANCE WITH SUPPLIER (+/-)"): see
+      // supplierPendingBalances() in domain/jute.ts. The column holds a value only when someone typed over the
+      // calculated figure on that row; the team asked for that so a physical count can correct the balance.
       // The Q&A calls this "Pending/balance with supplier"; shown in plainer words at the team's request.
       { label: "Bags still with supplier", real: false , col: "pendingWithSupplier"},
       { label: "Damaged", real: false , col: "damaged"},

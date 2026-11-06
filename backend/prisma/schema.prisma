@@ -828,7 +828,7 @@ model JuteSupplierMovement {
 
   bagsIssuedToSupplier  Int?
   returnedViaDeliveries Int?
-  /// Not read or written: the balance is calculated (contract's supplierPendingBalances). Kept so the ledger's column map holds.
+  /// Only a balance someone typed over the calculated one; null otherwise. The balance itself is calculated (contract's supplierPendingBalances).
   pendingWithSupplier   Int?
   damaged               Int?
   reusable              Int?
