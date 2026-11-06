@@ -4,6 +4,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { FilterBar } from "../../components/ui/FilterBar";
+import { MultiSelect } from "../../components/ui/MultiSelect";
 import { Pill } from "../../components/ui/Pill";
 import { Field, inputClass, n, TRANSFER_TONE, TransferLotLink } from "../../components/transfers/TransferPanel";
 import { useTableSearch } from "../../components/ui/useTableSearch";
@@ -12,7 +13,7 @@ import { useTracking, useTransfers } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
-import type { ReceiptRecord, TransferRequest } from "../../types/receipt";
+import type { TransferRequest } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
@@ -45,7 +46,6 @@ export function TransfersPage() {
   const [date, setDate] = useState(today());
   const [to, setTo] = useState("");
   const [remarks, setRemarks] = useState("");
-  const [lotFilter, setLotFilter] = useState("");
   const [picked, setPicked] = useState<Record<string, Pick>>({});
 
   const destinations = transferDestinations(masters.warehouses, site.warehouseName);
@@ -58,12 +58,22 @@ export function TransfersPage() {
     const onABkt = new Set(transfers.flatMap((t) => t.lines.map((l) => l.receiptId)));
     return receipts
       .filter((r) => r.warehouse === site.warehouseName && readyForTransfer(r) && !onABkt.has(r.id))
-      .filter((r) => !lotFilter.trim() || `${r.lotNo} ${r.supplierName} ${r.vehicleNo}`.toLowerCase().includes(lotFilter.trim().toLowerCase()))
-      .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1))
-      .slice(0, 50);
-  }, [receipts, transfers, loading, site.warehouseName, lotFilter]);
+      .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1));
+  }, [receipts, transfers, loading, site.warehouseName]);
+  const lotOptions = useMemo(
+    () => candidates.map((r) => ({
+      value: r.id,
+      label: r.lotNo!,
+      detail: [normalizeSupplierName(r.supplierName) || "-", r.binNo || "no bin", r.vehicleNo].filter(Boolean).join(" · "),
+    })),
+    [candidates]
+  );
+  // Read back through the candidates, so a Lot that stopped being ready after it was ticked can't be sent unseen.
+  const pickedLots = candidates.filter((r) => picked[r.id]);
 
-  function toggle(r: ReceiptRecord) {
+  function toggle(receiptId: string) {
+    const r = candidates.find((c) => c.id === receiptId);
+    if (!r) return;
     setPicked((prev) => {
       const next = { ...prev };
       if (next[r.id]) delete next[r.id];
@@ -86,10 +96,10 @@ export function TransfersPage() {
         fromWarehouse: site.warehouseName,
         toWarehouse: to,
         remarks: remarks.trim() || undefined,
-        lines: Object.entries(picked).map(([receiptId, p]) => ({
-          receiptId,
-          bags: p.bags.trim() ? Number(p.bags) : null,
-          netWeightKg: p.net.trim() || null,
+        lines: pickedLots.map((r) => ({
+          receiptId: r.id,
+          bags: picked[r.id]!.bags.trim() ? Number(picked[r.id]!.bags) : null,
+          netWeightKg: picked[r.id]!.net.trim() || null,
         })),
       })
     );
@@ -136,36 +146,39 @@ export function TransfersPage() {
               <Field id="tr-remarks" label="Remarks"><input id="tr-remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} className={inputClass} /></Field>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <span className="text-[12.5px] font-semibold text-warmstone-700">Lots to send ({Object.keys(picked).length} selected)</span>
-                <input placeholder="Filter Lot, supplier, truck…" value={lotFilter} onChange={(e) => setLotFilter(e.target.value)} className={`${inputClass} sm:w-64`} />
-              </div>
-              <div className="border border-warmstone-200 rounded-xl divide-y divide-warmstone-100 max-h-72 overflow-y-auto">
-                {candidates.length === 0 && <p className="px-4 py-3 text-[13px] text-warmstone-500">No Lot is ready to send. Choose &quot;Yes — transfers out&quot; on a receipt that passed quality, and its Lot will show here.</p>}
-                {candidates.map((r) => {
-                  const p = picked[r.id];
+            <Field
+              id="tr-lots"
+              label={`Lots to send (${pickedLots.length} selected)`}
+              hint={candidates.length ? undefined : "No Lot is ready to send. Choose \"Yes — transfers out\" on a receipt that passed quality, and its Lot will show here."}
+            >
+              <MultiSelect id="tr-lots" options={lotOptions} selected={pickedLots.map((r) => r.id)} onToggle={toggle} placeholder="Search Lot, supplier or truck, and tick each Lot to send" />
+            </Field>
+
+            {pickedLots.length > 0 && (
+              <div className="border border-warmstone-200 rounded-xl divide-y divide-warmstone-100">
+                {pickedLots.map((r) => {
+                  const p = picked[r.id]!;
                   return (
                     <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-[13px]">
-                      <label className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
-                        <input type="checkbox" checked={Boolean(p)} onChange={() => toggle(r)} />
-                        <span className="font-mono text-[12px]">{r.lotNo}</span>
+                      <span className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span className="font-medium text-warmstone-800">{r.lotNo}</span>
                         <span className="text-warmstone-500 truncate">{normalizeSupplierName(r.supplierName) || "-"} · {r.binNo || "no bin"}</span>
-                      </label>
-                      {p && (
-                        <span className="flex items-center gap-2">
-                          <input aria-label={`Bags for ${r.lotNo}`} inputMode="numeric" value={p.bags} onChange={(e) => setPicked((prev) => ({ ...prev, [r.id]: { ...p, bags: e.target.value } }))} placeholder="Bags" className={`${inputClass} w-24`} />
-                          <input aria-label={`Net kg for ${r.lotNo}`} inputMode="decimal" value={p.net} onChange={(e) => setPicked((prev) => ({ ...prev, [r.id]: { ...p, net: e.target.value } }))} placeholder="Net kg" className={`${inputClass} w-28`} />
-                        </span>
-                      )}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <input aria-label={`Bags for ${r.lotNo}`} inputMode="numeric" value={p.bags} onChange={(e) => setPicked((prev) => ({ ...prev, [r.id]: { ...p, bags: e.target.value } }))} placeholder="Bags" className={`${inputClass} w-24`} />
+                        <input aria-label={`Net kg for ${r.lotNo}`} inputMode="decimal" value={p.net} onChange={(e) => setPicked((prev) => ({ ...prev, [r.id]: { ...p, net: e.target.value } }))} placeholder="Net kg" className={`${inputClass} w-28`} />
+                        <button type="button" aria-label={`Remove ${r.lotNo}`} onClick={() => toggle(r.id)} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
+                          <span aria-hidden="true" className="material-symbols-outlined text-[20px] block">close</span>
+                        </button>
+                      </span>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            )}
 
             <div className="flex items-center gap-3">
-              <button type="submit" disabled={saving || !Object.keys(picked).length || !to} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-50">
+              <button type="submit" disabled={saving || !pickedLots.length || !to} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-50">
                 <span className="material-symbols-outlined text-[17px]">swap_horiz</span>
                 Create transfer
               </button>
