@@ -12,7 +12,9 @@ import { createReceipt, setBranch, setStageFields } from "../src/services/receip
 import {
   commitProductionWorkbook, downloadProductionWorkbook, previewProductionWorkbook,
 } from "../src/services/productionWorkbook.js";
+import { batchCalibration } from "../src/services/production/calibration.js";
 import { listRcnReceipts } from "../src/services/production/rcnReceipts.js";
+import { TABS, tabHeader } from "../src/domain/productionWorkbook/tabs.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -22,6 +24,9 @@ let wi: { id: string; role: "warehouse_incharge" };
 let qfsCookie = "";
 
 async function cleanup() {
+  await prisma.manualCalibration.deleteMany({ where: { sizingCheck: { batch: { warehouse: SITE } } } });
+  await prisma.sizingCheck.deleteMany({ where: { batch: { warehouse: SITE } } });
+  await prisma.rcnCalibrationRun.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
   await prisma.rcnPallet.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
   await prisma.rcnEmptyPalletStack.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
   await prisma.rcnMoistureCheck.deleteMany({ where: { rcnReceipt: { batch: { warehouse: SITE } } } });
@@ -81,13 +86,22 @@ afterAll(async () => {
 });
 
 describe("the sample", () => {
-  it("is one file with a tab per Phase 1 step, headers only", async () => {
+  it("is one file with a tab per Phase 1 and Phase 2 step, headers only", async () => {
     const built = await downloadProductionWorkbook(SITE, {}, true);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(built.buffer as ArrayBuffer);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(["Batches", "RCN Receipts", "Moisture Checks", "Pallets", "Final Weight"]);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Batches", "RCN Receipts", "Moisture Checks", "Pallets", "Final Weight", "Calibration Runs", "Silo Checks", "Silo Moves"]);
     expect(wb.worksheets.every((w) => w.actualRowCount === 1)).toBe(true);
     expect(built.filename).toBe("ANAGROCI - Production - Sample.xlsx");
+  });
+});
+
+describe("the columns", () => {
+  it("no two columns of a tab read as one: silo A++'s kg must never land in silo A", () => {
+    for (const tab of TABS) {
+      const headers = tab.fields.map((f) => tabHeader(f.label));
+      expect(new Set(headers).size, tab.title).toBe(headers.length);
+    }
   });
 });
 
@@ -181,6 +195,73 @@ describe("what the file can't do — the screens' own refusals, row by row", () 
   it("a column the tab needs must be there", async () => {
     const p = await preview(await xlsx({ Pallets: [["Gross Weight (kg)", "No of Bags"], [1, 1]] }));
     expect(byName(p, "Pallets").errors[0]!.message).toMatch(/"Pallet ID" column is missing/);
+  });
+});
+
+describe("Calibration in the same file", () => {
+  const RUNS = ["Run ID", "RCN Receipt ID", "BTM No", "Date", "Size A++ (>25mm)", "Size A (24mm)", "Size E (18mm)"];
+  const CHECKS2 = ["Check ID", "Batch Name", "Date", "Sampling Point", "BIN NO", "Nut Count per KG", "Sample Qty (gm)", "A++ (g)", "A (g)", "AB (g)", "DE (g)", "< DE (g)", "Result"];
+  const MOVES = ["Move ID", "Date", "From Silo", "To Silo", "Kg Moved"];
+  // PWB-ANA-03B's BTM 109 hands over 2335 + 2445.4 − 39 (60 bags) − 200 (pallets) − 2.5 (dust) = 4,538.9 kg.
+  const file = () => xlsx({
+    "Calibration Runs": [RUNS, [null, null, "109", "2026-07-21", 500, 3000, null], [null, null, "109", "2026-07-22", null, 1000, 38.9]],
+    "Silo Checks": [
+      CHECKS2,
+      [null, "PWB-ANA-03B", "2026-07-22", "A", "PWB-03B", 143, 1000, null, 203, 625, null, 172, "Fail"],
+      [null, "PWB-ANA-03B", "2026-07-22", "DE", null, null, 1000, null, null, null, 950, 50, "OK"],
+    ],
+    "Silo Moves": [MOVES, [null, "2026-07-23", "A", "AB", 400]],
+  });
+
+  it("previews runs, checks and moves leaning on each other, and writes nothing", async () => {
+    const p = await preview(await file());
+    expect(p.errorCount).toBe(0);
+    expect(p.sheets.map((s) => [s.name, s.created])).toEqual([["Calibration Runs", 2], ["Silo Checks", 2], ["Silo Moves", 1]]);
+    expect(await prisma.rcnCalibrationRun.count({ where: { rcnReceipt: { batch: { warehouse: SITE } } } })).toBe(0);
+  });
+
+  it("applies them: the silos fill, DE reads as silo E, a check is approved as it is saved, and the nuts move", async () => {
+    await commitProductionWorkbook(wi, (await preview(await file())).token);
+    const load = (await listRcnReceipts(SITE)).find((r) => r.btmNo === "109")!;
+    expect(load.calibration).toMatchObject({ sizedKg: 4_538.9, leftKg: 0 });
+    expect(load.status).toBe("calibrated");
+    const cal = (await batchCalibration(SITE, "PWB-ANA-03B"))!;
+    const stock = Object.fromEntries(cal.silos.map((s) => [s.size, s.stockKg]));
+    expect(stock).toMatchObject({ App: 500, A: 3_600, AB: 400, E: 38.9 });
+    expect(cal.siloChecks.A).toMatchObject({ state: "re_sized" });
+    expect(cal.siloChecks.E).toMatchObject({ state: "ok" });
+    expect(cal.sizingChecks.every((c) => c.status === "approved")).toBe(true);
+  });
+
+  it("the same file again creates nothing: an upload is never duplicated", async () => {
+    const p = await preview(await xlsx({
+      "Calibration Runs": [RUNS, [null, null, "109", "2026-07-22", null, 1000, 38.9]],
+      "Silo Checks": [CHECKS2, [null, "PWB-ANA-03B", "2026-07-22", "A", "PWB-03B", 143, 1000, null, 203, 625, null, 172, "Fail"]],
+      "Silo Moves": [MOVES, [null, "2026-07-23", "A", "AB", 400]],
+    }));
+    expect(p.errorCount).toBe(0);
+    expect(p.totalCreated).toBe(0);
+  });
+
+  it("an export uploaded back unchanged changes nothing, Calibration tabs included", async () => {
+    const built = await downloadProductionWorkbook(SITE, {}, false);
+    const p = await preview(Buffer.from(built.buffer as ArrayBuffer));
+    expect(p.errorCount).toBe(0);
+    expect(p.totalCreated + p.totalChanged).toBe(0);
+    expect(byName(p, "Calibration Runs").unchanged).toBe(2);
+    expect(byName(p, "Silo Checks").unchanged).toBe(2);
+    expect(byName(p, "Silo Moves").unchanged).toBe(1);
+  });
+
+  it("gives the screens' own refusals, row by row", async () => {
+    const p = await preview(await xlsx({
+      "Calibration Runs": [RUNS, [null, null, "109", "2026-07-24", 1, null, null], [999999, null, null, "2026-07-24", 1, null, null]],
+      "Silo Checks": [CHECKS2, [null, "PWB-ANA-03B", "2026-07-24", "Z", null, null, 1000, 1000, null, null, null, null, "OK"], [null, "PWB-ANA-03B", "2026-07-24", "A", "BIN-NOPE", null, 1000, null, 1000, null, null, null, "OK"]],
+      "Silo Moves": [MOVES, [null, "2026-07-24", "E", "A", 1], [null, "2026-07-24", "A", "AB", 999999]],
+    }));
+    expect(byName(p, "Calibration Runs").errors.map((e) => e.message)).toEqual([expect.stringMatching(/is Calibrated; it can't be calibrated now/), expect.stringMatching(/run 999999 doesn't exist/)]);
+    expect(byName(p, "Silo Checks").errors.map((e) => e.message)).toEqual([expect.stringMatching(/Choose the silo the sample was taken from/), expect.stringMatching(/BIN-NOPE is not in batch/)]);
+    expect(byName(p, "Silo Moves").errors.map((e) => e.message)).toEqual([expect.stringMatching(/E \(18 mm\) has no failed check/), expect.stringMatching(/can't be moved out of it/)]);
   });
 });
 

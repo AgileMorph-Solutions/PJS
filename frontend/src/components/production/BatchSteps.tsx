@@ -46,7 +46,7 @@ function ReceiptWork({ receipt, can, onChanged }: { receipt: RcnReceipt; can: St
         <b>Moisture OK</b> · {ok.moisture} %, nut count {ok.nutCount}{ok.kor !== null ? `, KOR ${ok.kor.toFixed(2)}` : ""} · {ok.submittedBy}
       </p>
       <WeighingCard receipt={receipt} canEdit={can.canReceive} onChanged={onChanged} />
-      {receipt.calibration && <p className="text-[12px] text-warmstone-500">This load is weighed. It is sorted into the silos in Calibration, below.</p>}
+      {receipt.calibration && <p className="text-[12px] text-warmstone-500">This load is weighed. Its next step is in Calibration: click Calibration in the steps above.</p>}
     </div>
   );
 }
@@ -64,7 +64,7 @@ export function BatchSteps({ batch, receipts, can, onChanged }: { batch: BatchDe
       <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="text-[15px] font-bold text-warmstone-900">RCN Receipts ({receipts.length})</h3>
-          <p className="text-[12px] text-warmstone-500 mt-0.5">One receipt for each load brought from a bin. Click a receipt to do its next step: moisture check, then weighing. Once weighed, it moves to Calibration below.</p>
+          <p className="text-[12px] text-warmstone-500 mt-0.5">One receipt for each load brought from a bin. Click a receipt to do its next step: moisture check, then weighing. Once weighed, it moves to Calibration, the next phase.</p>
         </div>
         {can.canReceive && !adding && (
           <button type="button" className={primaryButton} onClick={() => setAdding(true)}>

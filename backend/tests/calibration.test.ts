@@ -174,7 +174,7 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
     const cal = await calibration();
     expect(cal.siloChecks.Ap).toMatchObject({ state: "re_sized", date: "2026-08-28" });
     expect(cal.siloChecks.Ap.correctPct).toBeCloseTo(16.2, 6);
-    expect(cal.siloChecks.B).toEqual({ state: "not_checked", correctPct: null, date: null });
+    expect(cal.siloChecks.B).toEqual({ state: "not_checked", correctPct: null, date: null, checkId: null });
   });
 
   it("won't remove a run whose nuts have since been moved out of a silo by hand", async () => {
@@ -197,6 +197,35 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
   it("refuses a sample from a bin outside the batch, and one with no grams", async () => {
     expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, binCode: "BIN-NOPE" })).json().error).toMatch(/BIN-NOPE is not in batch/);
     expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, grams: {} })).json().error).toMatch(/grams found in each size/);
+  });
+
+  it("a silo failed from another batch can be fixed from this one: the silos are the factory's", async () => {
+    // Silo A+ last failed on BATCH's check; another batch's page must still see that check, with its moves.
+    await prisma.bin.create({ data: { code: "CAL-OTHER" } });
+    const r = await createReceipt(SITE, "2026-06-02");
+    await setBranch(r.id, "n-qfs", "pass");
+    await setStageFields(r.id, "n-bin", { "Bin Number": "CAL-OTHER" }, { bypassValidation: true });
+    await setStageFields(r.id, "n-grn", { [GRN]: "1000000", PRICE: "470" }, { bypassValidation: true });
+    await setBranch(r.id, "n-drying", "none");
+    await setBranch(r.id, "n-xferdec", "production");
+    expect((await call("wi", "POST", "/api/production/batches", { code: "CAL-OTHER-B", startDate: "2026-08-01", bins: ["CAL-OTHER"] })).statusCode).toBe(201);
+    const other = (await call("wi", "GET", "/api/production/batches/CAL-OTHER-B/calibration")).json();
+    expect(other.sizingChecks.map((c: { id: number; batchCode: string }) => [c.id, c.batchCode])).toEqual([[checkId, BATCH]]);
+    expect(other.siloChecks.Ap.checkId).toBe(checkId);
+    // The silo stock is the factory's; the batch's own share is what it sized itself.
+    expect(other.batchSizedKg.Ap).toBe(0);
+    expect(other.silos.find((s: { size: string }) => s.size === "Ap").stockKg).toBe(100);
+  });
+
+  it("reports the silos day by day, closing on the same total as the silo stock", async () => {
+    const cal = await calibration();
+    expect(cal.daily.map((d: { date: string; openingKg: number; sizedKg: number; closingKg: number }) => [d.date, d.openingKg, d.sizedKg, d.closingKg])).toEqual([
+      ["2026-07-25", 0, 54_710, 54_710],
+      ["2026-07-26", 54_710, 82_012.5, TO_SILOS],
+      ["2026-08-28", TO_SILOS, 0, TO_SILOS],
+    ]);
+    expect(cal.daily[2].movedKg).toBe(500);
+    expect(cal.daily[2].sizes).toMatchObject({ Ap: -500, A: 500 });
   });
 
   it("an Incharge's own check is approved as saved, and the batch history reads both checks", async () => {

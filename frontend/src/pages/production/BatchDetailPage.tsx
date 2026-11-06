@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { StatBlock } from "../../components/ui/StatBlock";
 import { Pill } from "../../components/ui/Pill";
-import { BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
+import { BATCH_PHASES, BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
 import { BatchSteps } from "../../components/production/BatchSteps";
 import { CalibrationSection } from "../../components/production/CalibrationSection";
 import { useBatch, useBatchCalibration } from "../../state/productionBatches";
@@ -24,6 +24,7 @@ type Tab = "steps" | "overview" | "history";
 
 /** The doc's "next person" column, for what the batch's loads are waiting on. */
 const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done", "calibrating"];
+const PHASE_TEXT = ["receive each load, check its moisture, weigh it", "sort each weighed load by size into the 9 silos"];
 const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "QFS Officer",
   moisture_pending: "Warehouse Incharge",
@@ -36,9 +37,9 @@ const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
 };
 
 /**
- * The batch page, the one place a batch is worked on, like a truck's Reception page. Steps & entry holds
- * each phase's form (today: Intake's RCN Receipt). Bins & Lots leads back to procurement: bins → Lots →
- * each Lot's truck (the link the Phase 1 doc asks for). History is what happened when.
+ * The batch page, the one place a batch is worked on, like a truck's Reception page. Steps & entry holds one
+ * phase at a time, the one the batch has reached unless the stepper picks another. Bins & Lots leads back to
+ * procurement: bins → Lots → each Lot's truck (the link the Phase 1 doc asks for). History is what happened when.
  */
 export function BatchDetailPage() {
   const { code } = useParams<{ code: string }>();
@@ -49,6 +50,7 @@ export function BatchDetailPage() {
   const isQfs = useHasRole("qfs_officer");
   const [tab, setTab] = useState<Tab>("steps");
   const [open, setOpen] = useState<string | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
 
   if (loading) return <div className="p-10 text-warmstone-400 text-sm">Loading…</div>;
   if (!batch) return <div className="p-10 text-warmstone-400 text-sm">{error ?? `Batch "${code}" not found.`}</div>;
@@ -60,6 +62,8 @@ export function BatchDetailPage() {
   const onChanged = () => void Promise.all([refetch(), receipts.refetch(), calibration.refetch()]);
   // Phases overlap (loads keep arriving while earlier ones are sized), so the batch is "at" the furthest one reached.
   const phase = receipts.rows.some((r) => isIntakeDone(r.status)) ? 2 : 1;
+  const shown = picked ?? phase;
+  const checksWaiting = calibration.calibration?.sizingChecks.filter((c) => c.status === "submitted").length ?? 0;
 
   return (
     <div className="space-y-5">
@@ -83,18 +87,17 @@ export function BatchDetailPage() {
             </p>
           </div>
           <div className="bg-warmstone-50 border border-warmstone-200 rounded-2xl p-4 w-full lg:w-96">
-            <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Intake · {loads} RCN Receipt{loads === 1 ? "" : "s"}</span>
-            {waiting.length === 0 ? (
-              <p className="mt-1.5 text-sm font-bold text-warmstone-900">{loads === 0 ? "Next: record the first RCN Receipt" : "Nothing waiting"}</p>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500">Current phase · {phase} of {BATCH_PHASES.length}: {BATCH_PHASES[phase - 1]}</span>
+            {waiting.length === 0 && checksWaiting === 0 ? (
+              <p className="mt-1.5 text-[13px] font-bold text-warmstone-900">{loads === 0 ? "Next: record the first RCN Receipt" : `${loads} load${loads === 1 ? "" : "s"}, nothing waiting`}</p>
             ) : (
               <ul className="mt-1.5 space-y-1">
                 {waiting.map(([st, n]) => (
-                  <li key={st} className="text-[13px] text-warmstone-900 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[16px] text-brand-700">arrow_forward</span>
-                    <b>{n}</b> {RCN_RECEIPT_STATUS_LABELS[st].toLowerCase()}
-                    <span className="text-warmstone-500 text-[12px]">· {NEXT_PERSON[st]}</span>
-                  </li>
+                  <WaitingLine key={st} n={n} what={RCN_RECEIPT_STATUS_LABELS[st].toLowerCase()} who={NEXT_PERSON[st]} />
                 ))}
+                {checksWaiting > 0 && (
+                  <WaitingLine n={checksWaiting} what={`silo check${checksWaiting === 1 ? "" : "s"} waiting for approval`} who="Warehouse Incharge" />
+                )}
               </ul>
             )}
             {tab !== "steps" && (
@@ -102,7 +105,7 @@ export function BatchDetailPage() {
             )}
           </div>
         </div>
-        <BatchPhaseStepper current={phase} />
+        <BatchPhaseStepper current={phase} shown={shown} onShow={(n) => { setPicked(n); setTab("steps"); }} />
       </section>
 
       <div className="flex items-center gap-1 border-b border-warmstone-200 overflow-x-auto">
@@ -126,19 +129,14 @@ export function BatchDetailPage() {
       </div>
 
       {tab === "steps" && (
-        <div className="space-y-8">
-          <div>
-            <PhaseHeading n={1} title="Intake" text="receive each load, check its moisture, weigh it" />
-            <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
-          </div>
-          <div>
-            <PhaseHeading n={2} title="Calibration" text="sort each weighed load by size into the 9 silos" />
-            {calibration.calibration ? (
-              <CalibrationSection batch={batch} receipts={receipts.rows} calibration={calibration.calibration} can={{ canSize: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
-            ) : (
-              <p className="text-[13px] text-warmstone-500">{calibration.error ?? "Loading…"}</p>
-            )}
-          </div>
+        <div>
+          <PhaseHeading n={shown} title={BATCH_PHASES[shown - 1]!} text={PHASE_TEXT[shown - 1]!} />
+          {shown === 1 && <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />}
+          {shown === 2 && (calibration.calibration ? (
+            <CalibrationSection batch={batch} receipts={receipts.rows} calibration={calibration.calibration} can={{ canSize: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+          ) : (
+            <p className="text-[13px] text-warmstone-500">{calibration.error ?? "Loading…"}</p>
+          ))}
         </div>
       )}
 
@@ -190,7 +188,7 @@ export function BatchDetailPage() {
         <section className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs max-w-4xl">
           <ol className="space-y-2.5">
             {batch.history.map((h, i) => (
-              <li key={i} className="text-[12.5px] flex gap-3">
+              <li key={i} className="text-[12px] flex gap-3">
                 <span className="text-warmstone-400 tabular-nums whitespace-nowrap">{formatDateTime(h.at)}</span>
                 <span className="text-warmstone-800">
                   {h.text}
@@ -202,6 +200,15 @@ export function BatchDetailPage() {
         </section>
       )}
     </div>
+  );
+}
+
+function WaitingLine({ n, what, who }: { n: number; what: string; who: string }) {
+  return (
+    <li className="text-[13px] text-warmstone-900 flex items-start gap-2">
+      <span className="material-symbols-outlined text-[16px] text-brand-700 mt-0.5">arrow_forward</span>
+      <span><b>{n}</b> {what} <span className="text-warmstone-500 text-[12px]">· {who}</span></span>
+    </li>
   );
 }
 

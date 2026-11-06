@@ -41,11 +41,11 @@ export function BatchesListPage() {
           <div className="flex items-center gap-3">
             <ProductionFactorySwitcher />
             {canCreate && (<>
-              {/* The same Upload / Export as Reception's, for Batch & Intake: Warehouse Incharge / admin only. */}
+              {/* The same Upload / Export as Reception's, for Batch, Intake & Calibration: Warehouse Incharge / admin only. */}
               <button type="button" onClick={() => setDialogMode("upload")} className={secondaryButton}>
                 <span className="material-symbols-outlined text-[17px]">upload</span>Upload
               </button>
-              <button type="button" onClick={() => setDialogMode("export")} className={secondaryButton} title="Download batches, loads, moisture checks, pallets and final weights">
+              <button type="button" onClick={() => setDialogMode("export")} className={secondaryButton} title="Download batches, loads, moisture checks, pallets, final weights, calibration runs, silo checks and silo moves">
                 <span className="material-symbols-outlined text-[17px]">download</span>Export
               </button>
               <Link to="/production/batches/new" className={primaryButton}>
@@ -59,7 +59,7 @@ export function BatchesListPage() {
         <WorkbookModal
           mode={dialogMode}
           warehouse=""
-          sectionLabel="Production · Batch & Intake"
+          sectionLabel="Production · Batch, Intake & Calibration"
           client={productionWorkbookClient}
           onClose={() => setDialogMode(null)}
           onCommitted={() => void refetch()}

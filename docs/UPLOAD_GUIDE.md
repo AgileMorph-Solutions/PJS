@@ -66,6 +66,9 @@ Incharge approves them.
 | **Moisture Checks** | one check | Check ID (blank = new) | records the check, approved as it is saved (OK, or Hold then a re-check row) |
 | **Pallets** | one pallet on the scale | Pallet ID (blank = new) | weighs the pallet; an existing pallet's values are corrected until the final weight is saved |
 | **Final Weight** | a load's closing weighing | its load | saves empty pallets (stacks as `374.3 / 211.2`), dust, voids, and closes the load |
+| **Calibration Runs** | one run of a load through the sizing machine | Run ID (blank = new) | puts the kg of each size into the silos; the same load, date and kg again is not added twice |
+| **Silo Checks** | one QC-2 sample | Check ID (blank = new) | records the check, approved as it is saved. Sampling Point is the silo (`A++` … `D`, `DE`) or `Received RCN`; Result is `OK` or `Fail` |
+| **Silo Moves** | kg moved by hand after a failed check | Move ID (blank = new) | moves the kg out of From Silo, which must stand on a failed check, into To Silo |
 
 - **Checks, pallets and the final weight name their load** by RCN Receipt ID or by BTM No. The BTM No is
   enough when one load has it, which is what lets a new load and its checks come in the same file. When two

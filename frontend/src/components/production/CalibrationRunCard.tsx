@@ -7,7 +7,7 @@ import { Modal } from "../ui/Modal";
 import { api, ApiError } from "../../repository/api";
 import { SILO_SIZES, calibrationRunError, siloLabel, sizesTotal, type SizeValues } from "@anagroci/contract/domain/calibration";
 import { canCalibrate } from "@anagroci/contract/domain/rcnReceipt";
-import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
+import { pctOfNet, weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 
@@ -32,7 +32,7 @@ export function SortLoadDialog({ receipt, canEdit, onClose, onChanged }: { recei
             {cal.leftKg > 0 ? `${formatKg(cal.leftKg)} left to sort` : "All of this load is sorted."}
           </p>
           <p className="text-[12px] text-warmstone-500 mt-1 tabular-nums">
-            Weighed in Intake: {formatKg(t.netKg)} net − {formatKg(t.dustKg + t.voidsKg)} dust and voids = {formatKg(cal.toSilosKg)} to sort.
+            Weighed in Intake: {formatKg(t.netKg)} net − {formatKg(t.dustKg)} dust ({pctOfNet(t.dustKg, t.netKg).toFixed(2)} %) − {formatKg(t.voidsKg)} voids ({pctOfNet(t.voidsKg, t.netKg).toFixed(3)} %) = {formatKg(cal.toSilosKg)} to sort.
           </p>
         </div>
         {open && <NewRun receiptId={receipt.id} leftKg={cal.leftKg} onSaved={() => { onChanged(); onClose(); }} />}

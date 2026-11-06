@@ -1,6 +1,7 @@
 /**
  * An uploaded production workbook, row by row, through the SAME rule code the production screens call
- * (createBatchIn, createRcnReceiptIn, submitMoistureCheckIn, addPalletIn / updatePalletIn, saveFinalWeightIn).
+ * (createBatchIn, createRcnReceiptIn, submitMoistureCheckIn, addPalletIn / updatePalletIn, saveFinalWeightIn,
+ * addCalibrationRunIn, submitSizingCheckIn, addManualCalibrationIn).
  * Nothing here re-states a rule: a bin already in a batch, a load that isn't due a check, a pallet on a load
  * that isn't weighable — each is refused by the function that refuses it on screen, with the same words.
  *
@@ -11,9 +12,12 @@
  *
  * Saved records are never rewritten from the file except where the app itself edits them (a pallet, until
  * the load's final weight is saved). Anything else that differs is reported, so an edit is never silently lost.
+ * A new Calibration row identical to a saved one is the same record uploaded twice, not a second record: nothing
+ * else stops it (a half-sized load still has room), and the doc says an upload is "never duplicated".
  */
 import type { Prisma } from "@prisma/client";
 import type { WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { SILO_SIZES, SIZING_GRADES, samplingPointFromWord, siloFromWord, siloLabel, type SizingGrams } from "@anagroci/contract/domain/calibration";
 import { CUT_TEST_GRAMS, sameBtmAndBin } from "@anagroci/contract/domain/rcnReceipt";
 import type { MoistureCheckInput } from "@anagroci/contract/types/rcnReceipt";
 import { ValidationError } from "../validation.js";
@@ -22,9 +26,10 @@ import { normalizeHeader } from "../workbook/fields.js";
 import type { Change, ParsedSheet, ParsedWorkbook, RowError, RowWarning, Sample } from "../workbook/types.js";
 import { SAMPLE_LIMIT } from "../workbook/types.js";
 import { createBatchIn } from "../../services/production/batches.js";
-import { createRcnReceiptIn, submitMoistureCheckIn, type Actor } from "../../services/production/rcnReceipts.js";
+import { addCalibrationRunIn, addManualCalibrationIn, submitSizingCheckIn } from "../../services/production/calibration.js";
+import { createRcnReceiptIn, runSizes, submitMoistureCheckIn, type Actor } from "../../services/production/rcnReceipts.js";
 import { addPalletIn, saveFinalWeightIn, updatePalletIn } from "../../services/production/rcnWeighing.js";
-import { splitList, TABS, type Tab } from "./tabs.js";
+import { gramKey, runKgKey, splitList, tabHeader, TABS, type Tab } from "./tabs.js";
 
 type Tx = Prisma.TransactionClient;
 
@@ -211,15 +216,111 @@ async function finalRow(ctx: ProductionCtx, tab: Tab, cells: Cells): Promise<Out
   return "created";
 }
 
+// ── Phase 2: Calibration ─────────────────────────────────────────────────────────────────────────
+
+/** Kg or grams compare as numbers: Excel hands 2335 back for a cell the screen saved as "2335.0". */
+const sameNumber = (a: string | null | undefined, b: string | null | undefined) => {
+  const [x, y] = [(a ?? "").trim(), (b ?? "").trim()];
+  return x === y || (x !== "" && y !== "" && Number(x) === Number(y));
+};
+const sizesOfFile = (cells: Cells) => Object.fromEntries(SILO_SIZES.flatMap((s) => {
+  const v = cells.get(runKgKey(s.key));
+  return v ? [[s.key, v]] : [];
+})) as Partial<Record<(typeof SILO_SIZES)[number]["key"], string>>;
+const sameSizes = (a: Record<string, string | undefined>, b: Record<string, string | undefined>) => SILO_SIZES.every((s) => sameNumber(a[s.key], b[s.key]));
+
+async function runRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.rcnCalibrationRun.findFirst({ where: { id, rcnReceipt: { batch: { warehouse: ctx.site } } } }) : null;
+    if (!saved) return refuse(`Calibration run ${raw} doesn't exist at ${ctx.site}. Leave the Run ID blank to add a new run.`);
+    if (cells.get("date") !== undefined && !same(cells.get("date"), saved.date)) refuse(savedNote(`Run ${raw}`, ["Date"], "Remove it on the batch page and add it again."));
+    if (!sameSizes(sizesOfFile(cells), runSizes(saved))) refuse(savedNote(`Run ${raw}`, ["the kg per size"], "Remove it on the batch page and add it again."));
+    return "unchanged";
+  }
+  const load = await loadOf(ctx, cells);
+  const sizes = sizesOfFile(cells);
+  const date = (cells.get("date") ?? "").trim();
+  const saved = await ctx.tx.rcnCalibrationRun.findMany({ where: { rcnReceiptId: load.id, date } });
+  if (saved.some((r) => sameSizes(sizes, runSizes(r)))) return "unchanged";
+  await addCalibrationRunIn(ctx.tx, ctx.site, ctx.actor.id, load.id, { date, sizes });
+  return "created";
+}
+
+const siloDecisionOf = (v: string | null) => {
+  const d = (v ?? "").trim().toLowerCase();
+  return d === "no" ? "fail" : d;
+};
+const gramsOfFile = (cells: Cells): SizingGrams => Object.fromEntries(SIZING_GRADES.flatMap((g) => {
+  const v = cells.get(gramKey(g));
+  return v ? [[g, v]] : [];
+}));
+const savedGrams = (c: Record<string, unknown>): SizingGrams => Object.fromEntries(SIZING_GRADES.flatMap((g) => {
+  const v = c[g === "under" ? "gUnder" : `g${g}`];
+  return typeof v === "string" ? [[g, v]] : [];
+}));
+const sameGrams = (a: SizingGrams, b: SizingGrams) => SIZING_GRADES.every((g) => sameNumber(a[g], b[g]));
+
+async function siloCheckRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  const point = samplingPointFromWord(cells.get("point"));
+  const grams = gramsOfFile(cells);
+  const decision = siloDecisionOf(cells.get("decision") ?? null);
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.sizingCheck.findFirst({ where: { id, batch: { warehouse: ctx.site } } }) : null;
+    if (!saved) return refuse(`Silo check ${raw} doesn't exist at ${ctx.site}. Leave the Check ID blank to add a new check.`);
+    const unchanged = same(cells.get("date"), saved.date) && point === saved.point && sameGrams(grams, savedGrams(saved)) && decision === saved.decision;
+    if (!unchanged) refuse(`Silo check ${raw} is already saved, and the file can't change it. A saved check isn't edited: add a new check as a new row.`);
+    return "unchanged";
+  }
+  const batchCode = upper(cells.get("batchCode") ?? null);
+  const date = (cells.get("date") ?? "").trim();
+  if (point) {
+    const twins = await ctx.tx.sizingCheck.findMany({ where: { batchCode, date, point, decision, batch: { warehouse: ctx.site } } });
+    if (twins.some((c) => sameGrams(grams, savedGrams(c)))) return "unchanged";
+  }
+  // As on screen: an Incharge's or Admin's check is approved as it is saved (they are the only ones who upload).
+  await submitSizingCheckIn(ctx.tx, ctx.site, ctx.actor, {
+    batchCode, date, point: point ?? undefined, binCode: cells.get("binCode") ?? undefined, nutCount: cells.get("nutCount") ?? undefined,
+    sampleG: cells.get("sampleG") ?? undefined, grams, decision,
+  });
+  return "created";
+}
+
+async function siloMoveRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> {
+  const raw = (cells.get("id") ?? "").trim();
+  const from = siloFromWord(cells.get("fromSize"));
+  const to = siloFromWord(cells.get("toSize"));
+  const kg = (cells.get("kg") ?? "").trim();
+  const date = (cells.get("date") ?? "").trim();
+  if (raw) {
+    const id = Number(raw);
+    const saved = Number.isInteger(id) ? await ctx.tx.manualCalibration.findFirst({ where: { id, sizingCheck: { batch: { warehouse: ctx.site } } } }) : null;
+    if (!saved) return refuse(`Silo move ${raw} doesn't exist at ${ctx.site}. Leave the Move ID blank to add a new move.`);
+    if (!(same(date, saved.date) && from === saved.fromSize && to === saved.toSize && sameNumber(kg, saved.kg))) refuse(`Silo move ${raw} is already saved, and the file can't change it.`);
+    return "unchanged";
+  }
+  if (!from) return refuse("From Silo must be one of A++, A+, A, AB, B, BC, C, D or DE.");
+  // The check that decides the silo now, as on screen: nuts move only because of it, and a silo that has since passed needs no move.
+  const standing = await ctx.tx.sizingCheck.findFirst({ where: { point: from, status: "approved", batch: { warehouse: ctx.site } }, orderBy: { id: "desc" } });
+  if (!standing || standing.decision !== "fail") return refuse(`Silo ${siloLabel(from)} has no failed check to act on. Add its failed check on the Silo Checks tab first.`);
+  const twin = await ctx.tx.manualCalibration.findMany({ where: { sizingCheckId: standing.id, date, toSize: to ?? "" } });
+  if (twin.some((m) => sameNumber(m.kg, kg))) return "unchanged";
+  await addManualCalibrationIn(ctx.tx, ctx.site, ctx.actor.id, standing.id, { date, fromSize: from, toSize: to ?? undefined, kg });
+  return "created";
+}
+
 // ── The file → tabs → rows ───────────────────────────────────────────────────────────────────────
 
 /** The uploaded sheet's headers → the tab's keys. Our own derived columns are skipped quietly; strangers are reported. */
 function cellsOf(tab: Tab, sheet: ParsedSheet, notices: string[]) {
-  const byLabel = new Map(tab.fields.map((f) => [normalizeHeader(f.label), f]));
-  const unknown = sheet.headers.filter((h) => !byLabel.has(normalizeHeader(h)));
+  const byLabel = new Map(tab.fields.map((f) => [tabHeader(f.label), f]));
+  const unknown = sheet.headers.filter((h) => !byLabel.has(tabHeader(h)));
   if (unknown.length) notices.push(`${tab.title}: ${unknown.map((u) => `"${u}"`).join(", ")} ${unknown.length > 1 ? "aren't columns we use" : "isn't a column we use"} — ignored.`);
   const columns = sheet.headers.flatMap((h) => {
-    const f = byLabel.get(normalizeHeader(h));
+    const f = byLabel.get(tabHeader(h));
     return f && !f.derived ? [[h, f.key] as const] : [];
   });
   return {
@@ -240,6 +341,7 @@ function cellsOf(tab: Tab, sheet: ParsedSheet, notices: string[]) {
 /** Each tab's link column(s): without them every row would look new, or could name no load. */
 const NEEDS: Record<Tab["id"], string[][]> = {
   batches: [["code"]], receipts: [["id"]], checks: [["id"], ["receiptId", "btmNo"]], pallets: [["id"], ["receiptId", "btmNo"]], final: [["receiptId", "btmNo"]],
+  runs: [["id"], ["receiptId", "btmNo"]], siloChecks: [["id"], ["batchCode"]], siloMoves: [["id"], ["fromSize"]],
 };
 
 export async function runProductionWorkbook(ctx: ProductionCtx, wb: ParsedWorkbook): Promise<{ tabs: TabResult[]; notices: string[] }> {
@@ -274,7 +376,10 @@ export async function runProductionWorkbook(ctx: ProductionCtx, wb: ParsedWorkbo
           : tab.id === "receipts" ? await receiptRow(ctx, tab, cells, warn)
           : tab.id === "checks" ? await checkRow(ctx, tab, cells)
           : tab.id === "pallets" ? await palletRow(ctx, tab, cells, sample)
-          : await finalRow(ctx, tab, cells);
+          : tab.id === "final" ? await finalRow(ctx, tab, cells)
+          : tab.id === "runs" ? await runRow(ctx, cells)
+          : tab.id === "siloChecks" ? await siloCheckRow(ctx, cells)
+          : await siloMoveRow(ctx, cells);
         result[outcome]++;
       } catch (e) {
         // A rule's refusal is the row's problem; anything else (the database) stops the whole upload.

@@ -19,6 +19,7 @@ export function SortLoadsStep({ receipts, canEdit, active, onChanged }: { receip
   const columns: Column<RcnReceipt>[] = [
     { label: "Load (BTM)", nowrap: true, render: (r) => <b className="font-semibold">{r.btmNo}</b> },
     { label: "From bin", nowrap: true, render: (r) => r.binCode },
+    { label: "To sort", align: "right", nowrap: true, render: (r) => formatKg(r.calibration?.toSilosKg ?? 0) },
     { label: "Left to sort", align: "right", nowrap: true, render: (r) => (canCalibrate(r.status) ? formatKg(r.calibration?.leftKg ?? 0) : <Pill tone="entry" label="All sorted" />) },
     {
       label: "",

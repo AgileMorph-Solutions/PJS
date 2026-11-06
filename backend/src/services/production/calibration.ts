@@ -11,7 +11,7 @@ import type { Prisma } from "@prisma/client";
 import { canWriteStageDirectly } from "@anagroci/contract/data/roles";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
 import {
-  SILO_SIZE_KEYS, SIZING_GRADES, correctSizePct, manualCalibrationError, siloChecks, siloLabel, siloStock, sizingCheckError, sizingCheckNotes,
+  SILO_SIZE_KEYS, SIZING_GRADES, correctSizePct, manualCalibrationError, siloChecks, siloDailyStock, siloLabel, siloStock, sizingCheckError, sizingCheckNotes,
   calibrationRunError, isSiloSize, type SamplingPoint, type SiloSize, type SizingDecision, type SizingGrams, type SizeValues,
 } from "@anagroci/contract/domain/calibration";
 import { RCN_RECEIPT_STATUS_LABELS, canCalibrate, type MoistureCheckStatus } from "@anagroci/contract/domain/rcnReceipt";
@@ -39,7 +39,7 @@ async function siloMovements(tx: Tx | typeof prisma, site: string) {
     tx.rcnCalibrationRun.findMany({ where: { rcnReceipt: { batch: { warehouse: site } } }, include: { rcnReceipt: { select: { batchCode: true } } } }),
     tx.manualCalibration.findMany({ where: { sizingCheck: { batch: { warehouse: site } } } }),
   ]);
-  return { runs: runs.map((r) => ({ batchCode: r.rcnReceipt.batchCode, sizes: runSizes(r) })), moves };
+  return { runs: runs.map((r) => ({ batchCode: r.rcnReceipt.batchCode, date: r.date, sizes: runSizes(r) })), moves };
 }
 
 async function stockOf(tx: Tx, site: string, size: SiloSize): Promise<number> {
@@ -224,19 +224,24 @@ export async function addManualCalibrationIn(tx: Tx, site: string, actorId: stri
 
 // ── Read ────────────────────────────────────────────────────────────────────────────────────────
 
+/** Every sizing check at the site, oldest first, as the screens read them (the workbook export uses this too). */
+export async function listSizingChecks(site: string): Promise<SizingCheck[]> {
+  const rows = await prisma.sizingCheck.findMany({ where: { batch: { warehouse: site } }, include: CHECK_INCLUDE, orderBy: { id: "asc" } });
+  return rows.map(checkView);
+}
+
 export async function batchCalibration(site: string, batchCode: string): Promise<BatchCalibration | null> {
   const batch = await prisma.productionBatch.findFirst({ where: { code: batchCode, warehouse: site }, select: { code: true } });
   if (!batch) return null;
-  const [{ runs, moves }, siteChecks] = await Promise.all([
-    siloMovements(prisma, site),
-    prisma.sizingCheck.findMany({ where: { batch: { warehouse: site } }, include: CHECK_INCLUDE, orderBy: { id: "desc" } }),
-  ]);
+  const [{ runs, moves }, siteChecks] = await Promise.all([siloMovements(prisma, site), listSizingChecks(site)]);
   const own = siloStock(runs.filter((r) => r.batchCode === batchCode), []);
-  const views = siteChecks.map(checkView);
+  const standing = siloChecks(siteChecks.map((c) => ({ ...c, moves: c.manualCalibrations.length })));
+  const stillDeciding = new Set(Object.values(standing).filter((c) => c.state === "failed" || c.state === "re_sized").map((c) => c.checkId));
   return {
     silos: siloStock(runs, moves),
     batchSizedKg: Object.fromEntries(own.map((s) => [s.size, s.sizedInKg])) as Record<SiloSize, number>,
-    siloChecks: siloChecks(views.map((c) => ({ ...c, moves: c.manualCalibrations.length }))),
-    sizingChecks: views.filter((c) => c.batchCode === batchCode),
+    siloChecks: standing,
+    sizingChecks: siteChecks.filter((c) => c.batchCode === batchCode || stillDeciding.has(c.id)).reverse(),
+    daily: siloDailyStock(runs, moves),
   };
 }

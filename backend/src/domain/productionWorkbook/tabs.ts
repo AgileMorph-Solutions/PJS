@@ -1,9 +1,10 @@
 /**
- * The production workbook's tabs: Production Phase 1 (Batch & Intake), one tab per thing a person records,
- * in the order they happen. A later phase (calibration, cooking, …) is a new tab here when it is built.
+ * The production workbook's tabs: Phase 1 (Batch & Intake) and Phase 2 (Calibration), one tab per thing a person
+ * records, in the order they happen. A later phase (cooking, …) is a new tab here when it is built.
  *
  * Column words follow the client's own sheets — "2. Input RCN Quality report" for a moisture check, the
- * "RCN Receipts Tally Sheet" for pallets — so the file reads like what the floor already fills in.
+ * "RCN Receipts Tally Sheet" for pallets, "5. Calibrated RCN Silos Stock report" for the sizes, "24. Wholes Manual
+ * Calibration" for a silo check — so the file reads like what the floor already fills in.
  * `derived` columns are what the app works out (a status, KOR, a net weight): the file shows them, an
  * upload never reads them, exactly as Reception's workbook treats a truck's status.
  *
@@ -11,6 +12,8 @@
  * The BTM No is the number the client writes on every sheet, and it is what lets a load and its checks
  * arrive in the same file, before the app has issued the load an ID.
  */
+import { SILO_SIZES, SIZING_GRADES, type SizingGrade } from "@anagroci/contract/domain/calibration";
+
 export interface TabField {
   key: string;
   label: string;
@@ -20,7 +23,7 @@ export interface TabField {
 }
 
 export interface Tab {
-  id: "batches" | "receipts" | "checks" | "pallets" | "final";
+  id: "batches" | "receipts" | "checks" | "pallets" | "final" | "runs" | "siloChecks" | "siloMoves";
   title: string;
   /** The column that names an existing row; blank in it means "add a new one". */
   key: string;
@@ -34,6 +37,15 @@ const LOAD_LINK: TabField[] = [
   { key: "receiptId", label: "RCN Receipt ID", note: "The load this row is for. Or leave it blank and give the BTM No instead." },
   { key: "btmNo", label: "BTM No", note: "Enough on its own when only one load has this BTM No; otherwise give the RCN Receipt ID." },
 ];
+
+/** The silo stock report's own column words: "Size A++ (>25mm)". */
+export const runKgKey = (key: string) => `kg_${key}`;
+const RUN_SIZES: TabField[] = SILO_SIZES.map((s) => ({ key: runKgKey(s.key), label: `Size ${s.code} (${s.mm.replace(" ", "")})` }));
+
+/** The QC-2 sheet's own column words: "A++" … "DE", "< DE". */
+export const gramKey = (g: SizingGrade) => `g_${g}`;
+const GRADE_WORD = (g: SizingGrade) => (g === "under" ? "< DE" : SILO_SIZES.find((s) => s.key === g)!.sheet);
+const SAMPLE_GRAMS: TabField[] = SIZING_GRADES.map((g) => ({ key: gramKey(g), label: `${GRADE_WORD(g)} (g)` }));
 
 export const TABS: Tab[] = [
   {
@@ -122,7 +134,62 @@ export const TABS: Tab[] = [
       { key: "toSilosKg", label: "To Silos (kg)", derived: true },
     ],
   },
+  {
+    id: "runs",
+    title: "Calibration Runs",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Run ID" },
+      ...LOAD_LINK,
+      { key: "date", label: "Date" },
+      ...RUN_SIZES,
+      { key: "totalKg", label: "Sized RCN (kg)", derived: true },
+    ],
+  },
+  {
+    id: "siloChecks",
+    title: "Silo Checks",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Check ID" },
+      { key: "batchCode", label: "Batch Name" },
+      { key: "date", label: "Date" },
+      { key: "point", label: "Sampling Point", note: "The silo the sample came from (A++, A+, A, AB, B, BC, C, D, DE), or Received RCN." },
+      { key: "binCode", label: "BIN NO", note: "Optional: the warehouse bin of the batch the nuts came from." },
+      { key: "nutCount", label: "Nut Count per KG" },
+      { key: "sampleG", label: "Sample Qty (gm)" },
+      ...SAMPLE_GRAMS,
+      { key: "decision", label: "Result", note: "OK, or Fail if the nuts must be moved to the right silo. A new check is a new row." },
+      { key: "correctPct", label: "Correct Size (%)", derived: true },
+      { key: "status", label: "Approval", derived: true },
+    ],
+  },
+  {
+    id: "siloMoves",
+    title: "Silo Moves",
+    key: "id",
+    dateKey: "date",
+    dateLabel: "Date",
+    fields: [
+      { key: "id", label: "Move ID" },
+      { key: "date", label: "Date" },
+      { key: "fromSize", label: "From Silo", note: "The silo that failed its check." },
+      { key: "toSize", label: "To Silo" },
+      { key: "kg", label: "Kg Moved" },
+    ],
+  },
 ];
+
+/**
+ * A header as this workbook matches it. Keeps + < > where the shared normalizeHeader drops them: the client's size
+ * words differ only by those ("A++", "A+", "A"; "DE", "< DE"), and dropping them would put silo A++'s kg in silo A.
+ */
+export const tabHeader = (s: string): string =>
+  s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^\p{L}\p{N}+<>]+/gu, " ").trim();
 
 /** "BIN-03B / BIN-03C", "374.3/211.2": the file's way of putting several values in one cell. */
 export const splitList = (v: string | null): string[] => (v ?? "").split("/").map((s) => s.trim()).filter(Boolean);

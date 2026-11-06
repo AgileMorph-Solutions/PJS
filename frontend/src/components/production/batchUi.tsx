@@ -53,28 +53,40 @@ export function transferHref(warehouse: string, transferId: string): string {
   return `/${siteSlugOf(warehouse)}/transfers/${encodeURIComponent(transferId)}`;
 }
 
-/** The phases a batch walks through (Production module doc). Only Created and Intake's RCN Receipt exist so far. */
-export const BATCH_PHASES = ["Created", "Intake", "Calibration", "Cooking", "Shelling", "Colour sort", "Borma", "Peeling & grading", "Packing", "Closed"];
+/** The eight phases a batch walks through (Production module doc, page 1), in order. */
+export const BATCH_PHASES = ["Intake", "Calibration", "Cooking", "Shelling", "Colour sort", "Borma", "Peeling & grading", "Packing & dispatch"];
 
-/** `current` is the index in BATCH_PHASES of the phase the batch is at (1 = Intake, 2 = Calibration, …). */
-export function BatchPhaseStepper({ current }: { current: number }) {
+/** How many of BATCH_PHASES have screens so far. */
+export const BUILT_PHASES = 2;
+
+/**
+ * `current` is the 1-based phase the batch has reached; `shown` is the one on screen. A built phase opens on click,
+ * done or not (loads keep arriving in Intake while earlier ones are in Calibration).
+ */
+export function BatchPhaseStepper({ current, shown, onShow }: { current: number; shown: number; onShow: (phase: number) => void }) {
   return (
     <ol className="flex items-start gap-0 overflow-x-auto pb-1">
       {BATCH_PHASES.map((label, i) => {
-        const done = i < current;
-        const active = i === current;
+        const n = i + 1;
+        const done = n < current;
+        const active = n === current;
+        const built = n <= BUILT_PHASES;
         return (
-          <li key={label} className="flex-1 min-w-[78px] flex flex-col items-center relative">
-            {i > 0 && <span className={`absolute top-3.5 right-1/2 w-full h-0.5 ${i <= current ? "bg-success-600" : "bg-warmstone-200"}`} />}
-            <span
-              className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${
-                done ? "bg-success-600 border-success-600 text-white" : active ? "bg-white border-brand-700 text-brand-700" : "bg-warmstone-100 border-warmstone-200 text-warmstone-400"
-              }`}
+          <li key={label} className="flex-1 min-w-[78px] relative">
+            {i > 0 && <span className={`absolute top-3.5 right-1/2 w-full h-0.5 ${n <= current ? "bg-success-600" : "bg-warmstone-200"}`} />}
+            <button
+              type="button" disabled={!built} onClick={() => onShow(n)} aria-current={n === shown ? "step" : undefined} title={built ? undefined : "Not built yet"}
+              className={`relative z-10 w-full flex flex-col items-center ${built ? "cursor-pointer" : "cursor-not-allowed"}`}
             >
-              {done ? <span className="material-symbols-outlined text-[16px]">check</span> : active ? <span className="w-2 h-2 rounded-full bg-brand-700" /> : i}
-            </span>
-            <span className={`mt-1.5 text-[11px] text-center font-semibold ${active || done ? "text-warmstone-900" : "text-warmstone-400"}`}>{label}</span>
-            {active && <span className="text-[10.5px] text-warmstone-500">next</span>}
+              <span
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${
+                  done ? "bg-success-600 border-success-600 text-white" : active ? "bg-white border-brand-700 text-brand-700" : "bg-warmstone-100 border-warmstone-200 text-warmstone-400"
+                }`}
+              >
+                {done ? <span className="material-symbols-outlined text-[16px]">check</span> : active ? <span className="w-2 h-2 rounded-full bg-brand-700" /> : n}
+              </span>
+              <span className={`mt-1.5 text-[11px] text-center font-semibold ${n === shown ? "text-brand-700 underline underline-offset-4" : built ? "text-warmstone-900 hover:text-brand-700" : "text-warmstone-400"}`}>{label}</span>
+            </button>
           </li>
         );
       })}

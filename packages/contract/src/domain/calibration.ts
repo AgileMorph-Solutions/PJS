@@ -131,6 +131,15 @@ export function sizingGradePct(grade: SizingGrade, sampleG: string | undefined, 
   return ((num(grams[grade]) || 0) / sample) * 100;
 }
 
+/** The size most of the sample turned out to be, other than the silo's own: where its nuts probably belong. Null if none. */
+export function largestOtherGrade(point: SamplingPoint, grams: SizingGrams): SiloSize | null {
+  let best: SiloSize | null = null;
+  for (const k of SILO_SIZE_KEYS) {
+    if (k !== point && (num(grams[k]) || 0) > 0 && (best === null || (num(grams[k]) || 0) > (num(grams[best]) || 0))) best = k;
+  }
+  return best;
+}
+
 export interface SizingCheckValues {
   date?: string;
   point?: string;
@@ -206,9 +215,10 @@ export function nextCalibrationStep(v: { canSize: boolean; canCheck: boolean; lo
 
 export interface SiloCheck {
   state: SiloCheckState;
-  /** The deciding check's correct-size %, and its date; null when not checked. */
+  /** The deciding check's correct-size %, date and id; null when not checked. */
   correctPct: number | null;
   date: string | null;
+  checkId: number | null;
 }
 
 /**
@@ -218,13 +228,26 @@ export interface SiloCheck {
 export function siloChecks(
   checks: { id: number; point: string; status: string; decision: string; date: string; correctPct: number | null; moves: number }[],
 ): Record<SiloSize, SiloCheck> {
-  const out = Object.fromEntries(SILO_SIZE_KEYS.map((k) => [k, { state: "not_checked", correctPct: null, date: null }])) as Record<SiloSize, SiloCheck>;
+  const out = Object.fromEntries(SILO_SIZE_KEYS.map((k) => [k, { state: "not_checked", correctPct: null, date: null, checkId: null }])) as Record<SiloSize, SiloCheck>;
   const newestFirst = checks.filter((c) => c.status === "approved").sort((a, b) => b.id - a.id);
   for (const size of SILO_SIZE_KEYS) {
     const c = newestFirst.find((x) => x.point === size);
-    if (c) out[size] = { state: c.decision === "ok" ? "ok" : c.moves > 0 ? "re_sized" : "failed", correctPct: c.correctPct, date: c.date };
+    if (c) out[size] = { state: c.decision === "ok" ? "ok" : c.moves > 0 ? "re_sized" : "failed", correctPct: c.correctPct, date: c.date, checkId: c.id };
   }
   return out;
+}
+
+/**
+ * The silos that still need someone. Only silos holding nuts count: an empty silo can't be sampled and nothing can
+ * be moved out of it, so a failed check on one must not leave the screen asking for a move that is refused.
+ */
+export function silosWaiting(silos: { size: SiloSize; stockKg: number }[], checks: Record<SiloSize, SiloCheck>): { toCheck: SiloSize[]; failed: SiloSize[]; moved: SiloSize[] } {
+  const holding = silos.filter((s) => s.stockKg > 0).map((s) => s.size);
+  return {
+    toCheck: holding.filter((s) => checks[s].state === "not_checked" || checks[s].state === "re_sized"),
+    failed: holding.filter((s) => checks[s].state === "failed"),
+    moved: holding.filter((s) => checks[s].state === "re_sized"),
+  };
 }
 
 // ── Step 4 · Wholes manual calibration ──────────────────────────────────────────────────────────
@@ -273,4 +296,68 @@ export function siloStock(
     const cookedKg = 0;
     return { size, sizedInKg, manualInKg, manualOutKg, cookedKg, stockKg: kg2(sizedInKg + manualInKg - manualOutKg - cookedKg) };
   });
+}
+
+/**
+ * "5. Calibrated RCN Silos Stock report", one row per day: opening + sized − cooked = closing, with the kg per size.
+ * Calculated from the runs and moves, so it can't drift from the silo stock above. A move by hand shifts kg between
+ * sizes and leaves the total alone (the report's "Adjusted qty"), so it shows in `sizes` and `movedKg`, not in closing.
+ */
+export interface SiloDay {
+  date: string;
+  openingKg: number;
+  sizedKg: number;
+  /** Phase 3 (Cooking) takes nuts out of the silos; 0 until it exists. */
+  cookedKg: number;
+  /** Net kg added to each size that day: sized in, plus moved in, minus moved out. */
+  sizes: Record<SiloSize, number>;
+  movedKg: number;
+  closingKg: number;
+}
+
+export function siloDailyStock(
+  runs: { date: string; sizes: SizeValues }[],
+  moves: { date: string; fromSize: string; toSize: string; kg: string }[],
+): SiloDay[] {
+  const dates = [...new Set([...runs.map((r) => r.date), ...moves.map((m) => m.date)])].sort();
+  let closing = 0;
+  return dates.map((date) => {
+    const dayRuns = runs.filter((r) => r.date === date);
+    const dayMoves = moves.filter((m) => m.date === date);
+    const sizedKg = kg2(dayRuns.reduce((n, r) => n + sizesTotal(r.sizes), 0));
+    const sizes = Object.fromEntries(SILO_SIZE_KEYS.map((k) => {
+      const sized = dayRuns.reduce((n, r) => n + (num(r.sizes[k]) || 0), 0);
+      const moved = dayMoves.reduce((n, m) => n + (m.toSize === k ? num(m.kg) || 0 : 0) - (m.fromSize === k ? num(m.kg) || 0 : 0), 0);
+      return [k, kg2(sized + moved)];
+    })) as Record<SiloSize, number>;
+    const openingKg = closing;
+    const cookedKg = 0;
+    closing = kg2(openingKg + sizedKg - cookedKg);
+    return { date, openingKg, sizedKg, cookedKg, sizes, movedKg: kg2(dayMoves.reduce((n, m) => n + (num(m.kg) || 0), 0)), closingKg: closing };
+  });
+}
+
+/** One batch's loads, added up: what Intake handed over, what has been sorted so far, and how many loads are finished. */
+export function batchCalibrationTotals(loads: { calibration: { toSilosKg: number; sizedKg: number; leftKg: number } | null }[]): { toSilosKg: number; sizedKg: number; leftKg: number; loads: number; loadsDone: number } {
+  const ready = loads.flatMap((l) => (l.calibration ? [l.calibration] : []));
+  return {
+    toSilosKg: kg2(ready.reduce((n, c) => n + c.toSilosKg, 0)),
+    sizedKg: kg2(ready.reduce((n, c) => n + c.sizedKg, 0)),
+    leftKg: kg2(ready.reduce((n, c) => n + c.leftKg, 0)),
+    loads: ready.length,
+    loadsDone: ready.filter((c) => c.leftKg <= 0).length,
+  };
+}
+
+/** A silo as a workbook writes it: the report's "A++", the QC-2 sheet's "DE", or our own "E". Null when it's none of them. */
+export function siloFromWord(word: string | null | undefined): SiloSize | null {
+  const w = (word ?? "").trim().toUpperCase();
+  return SILO_SIZES.find((s) => s.code === w || s.sheet === w)?.key ?? null;
+}
+
+/** The QC-2 sheet's "Sampling Point": a silo, or the RCN as it was received ("Received RCN", "Before Calibration"). */
+export function samplingPointFromWord(word: string | null | undefined): SamplingPoint | null {
+  const w = (word ?? "").trim().toLowerCase();
+  if (w.startsWith("received") || w.startsWith("before cal")) return "received";
+  return siloFromWord(word);
 }
