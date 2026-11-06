@@ -1,5 +1,50 @@
 import { describe, it, expect } from "vitest";
-import { transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+import { readyForTransfer, transferDestinationLabel, transferDestinations, transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+
+describe("where a BKT can go", () => {
+  // The shape of the real master: two typed sites, their stores, and two sites with no type.
+  const master = [
+    { name: "BOUAKE", kind: "REGIONAL_CENTRAL", type: "UNIT", site: null },
+    { name: "BKE-001", kind: null, type: null, site: "BOUAKE" },
+    { name: "YAKRO FACTORY", kind: "FACTORY", type: "CENTRAL", site: null },
+    { name: "ANAGROCI-01", kind: null, type: null, site: "YAKRO FACTORY" },
+    { name: "BKE-06", kind: null, type: null, site: "YAKRO FACTORY" },
+    { name: "BKE-04", kind: "FACTORY", type: null, site: null },
+  ];
+
+  it("offers the stores of other sites, never the sender's own stores or a site with no type", () => {
+    expect(transferDestinations(master, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06"]);
+    expect(transferDestinations(master, "YAKRO FACTORY")).toEqual(["BKE-001"]);
+  });
+
+  it("offers a typed site itself until it has stores, and its stores once it does", () => {
+    const added = [...master, { name: "KORHOGO", kind: "REGIONAL_CENTRAL", type: "UNIT", site: null }];
+    expect(transferDestinations(added, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06", "KORHOGO"]);
+    const withStore = [...added, { name: "KOR-001", kind: null, type: null, site: "KORHOGO" }];
+    expect(transferDestinations(withStore, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06", "KOR-001"]);
+  });
+
+  it("reads as the site plus the store, or the site alone on a BKT that named no store", () => {
+    expect(transferDestinationLabel({ toWarehouse: "YAKRO FACTORY", toStore: "ANAGROCI-01" })).toBe("YAKRO FACTORY · ANAGROCI-01");
+    expect(transferDestinationLabel({ toWarehouse: "YAKRO FACTORY", toStore: null })).toBe("YAKRO FACTORY");
+  });
+});
+
+describe("which Lots the Transfers page offers", () => {
+  const passed = { lotNo: "LOT-BKE-2026-0001" };
+
+  // The bug this guards: "Yes" hid the Lot and "No" showed it, the opposite of what the buttons say.
+  it("offers a Lot marked Yes, and not one marked No or not answered yet", () => {
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass", "n-xferdec": "transfer" } })).toBe(true);
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass", "n-xferdec": "stays" } })).toBe(false);
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass" } })).toBe(false);
+  });
+
+  it("never offers a rejected truck or one with no Lot, even marked Yes", () => {
+    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "fail", "n-xferdec": "transfer" } })).toBe(false);
+    expect(readyForTransfer({ lotNo: undefined, branches: { "n-xferdec": "transfer" } })).toBe(false);
+  });
+});
 
 const t = (over: Partial<TransferFacts> = {}): TransferFacts => ({
   status: "received",

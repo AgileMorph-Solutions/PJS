@@ -11,9 +11,8 @@
  * at dispatch; the variance and the in-transit / closed / discrepancy state are derived from the two
  * halves (contract domain/transfers.ts), never stored.
  *
- * Putting a Lot on a transfer is the transfer decision for that truck, so it records the n-xferdec
- * branch as "transfer" in the same transaction — the receipt's status then derives to
- * "transferred out" exactly as if the decision had been taken on the receipt itself.
+ * The decision comes first and is taken on the receipt: "Yes — transfers out" (n-xferdec = "transfer")
+ * is what makes a Lot ready to go on a BKT, and "No — stays" keeps it off one.
  */
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
@@ -25,7 +24,7 @@ import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 import { toReceiptRecord } from "../serialize.js";
 import { nextTransferId, siteOf } from "./ids.js";
-import { applyBranch, loadReceiptRow, type WriteOpts } from "./receipts.js";
+import { loadReceiptRow, type WriteOpts } from "./receipts.js";
 import { resolveSite } from "../domain/site.js";
 
 type Tx = Prisma.TransactionClient;
@@ -129,6 +128,7 @@ function toWire(t: TransferRow): TransferRequest {
     transferDate: t.transferDate,
     fromWarehouse: t.fromWarehouse,
     toWarehouse: t.toWarehouse,
+    toStore: t.toStore,
     status: facts.status,
     remarks: t.remarks,
     lines,
@@ -189,7 +189,8 @@ const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 
 /**
  * Each Lot must be at the sending warehouse, actually have a Lot (passed quality), not be rejected,
- * and not already be on another transfer — a Lot leaves a warehouse once.
+ * not already be on another transfer — a Lot leaves a warehouse once — and be marked "Yes — transfers
+ * out" on its receipt.
  */
 async function addLines(tx: Tx, transferId: string, from: string, lines: TransferLineInput[], opts: WriteOpts) {
   const ids = lines.map((l) => l.receiptId);
@@ -208,6 +209,9 @@ async function addLines(tx: Tx, transferId: string, from: string, lines: Transfe
     if (receipt.branches.some((b) => b.stageId === "n-qfs" && b.branchId === "fail")) throw new ValidationError(`${line.receiptId} was rejected and can't be transferred.`);
     const other = await tx.transferRequestLine.findFirst({ where: { receiptId: line.receiptId, transferId: { not: transferId } }, select: { transferId: true } });
     if (other) throw new ValidationError(`Lot ${receipt.lot.lotNumber} is already on transfer ${other.transferId}.`);
+    if (!receipt.branches.some((b) => b.stageId === "n-xferdec" && b.branchId === "transfer")) {
+      throw new ValidationError(`Lot ${receipt.lot.lotNumber} isn't marked for transfer. Choose "Yes — transfers out" on its receipt first.`);
+    }
     if (line.bags !== undefined && line.bags !== null && (!Number.isInteger(line.bags) || line.bags < 0)) {
       throw new ValidationError(`Bags "${line.bags}" isn't a whole number.`);
     }
@@ -218,7 +222,6 @@ async function addLines(tx: Tx, transferId: string, from: string, lines: Transfe
         binCode: text(line.binCode) ?? text(receipt.bin?.binNumber),
       },
     });
-    await applyBranch(tx, line.receiptId, "n-xferdec", "transfer", undefined, opts);
     await timeline(tx, line.receiptId, `Added to transfer ${transferId}`, opts);
   }
 }
@@ -242,10 +245,13 @@ export async function createTransfer(input: TransferInput, opts: WriteOpts = {})
     if (!from) throw new ValidationError(`Warehouse "${input.fromWarehouse}" isn't in the warehouse master.`);
     if (!to) throw new ValidationError(`Warehouse "${input.toWarehouse}" isn't in the warehouse master.`);
     if (from === to) throw new ValidationError("A transfer must go to a different warehouse.");
+    // Naming a store sends the BKT to its site, and the store is kept alongside.
+    const named = await tx.warehouse.findUnique({ where: { name: input.toWarehouse!.trim() }, select: { name: true, site: true } });
+    const toStore = named?.site ? named.name : null;
 
     const id = await nextTransferId(tx, date);
     await tx.transferRequest.create({
-      data: { id, transferDate: date, fromWarehouse: from, toWarehouse: to, remarks: input.remarks?.trim() || null },
+      data: { id, transferDate: date, fromWarehouse: from, toWarehouse: to, toStore, remarks: input.remarks?.trim() || null },
     });
     await addLines(tx, id, from, input.lines!, opts);
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });

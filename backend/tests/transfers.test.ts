@@ -50,6 +50,7 @@ async function lot(bin?: string, bags = 100): Promise<string> {
   await setStageFields(id, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5", "Final nut count": "170" });
   await setBranch(id, "n-qfs", "pass");
   if (bin) await setStageFields(id, "n-bin", { "Bin Number": bin });
+  await setBranch(id, "n-xferdec", "transfer");
   void bags;
   return id;
 }
@@ -153,6 +154,35 @@ describe("a BKT is one truck, sent and then received", () => {
   });
 });
 
+describe("the receipt's Yes / No decides whether a Lot can go on a BKT", () => {
+  const send = (receiptId: string) => createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId, bags: 10 }] });
+
+  it("refuses a Lot marked 'No — stays', and one nobody has decided on", async () => {
+    const stays = await lot();
+    await setBranch(stays, "n-xferdec", "stays");
+    await expect(send(stays)).rejects.toThrow(/isn't marked for transfer/);
+
+    const undecided = (await createReceipt(A, D)).id;
+    await setBranch(undecided, "n-qfs", "pass");
+    await expect(send(undecided)).rejects.toThrow(/isn't marked for transfer/);
+  });
+
+  it("'Yes' alone creates no BKT, and changing back to 'No' before one exists is allowed", async () => {
+    const id = await lot();
+    expect(await prisma.transferRequestLine.count({ where: { receiptId: id } })).toBe(0);
+    await setBranch(id, "n-xferdec", "stays");
+    await expect(send(id)).rejects.toThrow(/isn't marked for transfer/);
+    await setBranch(id, "n-xferdec", "transfer");
+    expect((await send(id)).lines[0]!.receiptId).toBe(id);
+  });
+
+  it("can't change to 'No — stays' once the Lot is on a BKT", async () => {
+    const id = await lot();
+    const t = await send(id);
+    await expect(setBranch(id, "n-xferdec", "stays")).rejects.toThrow(new RegExp(`already on transfer ${t.id}`));
+  });
+});
+
 describe("each warehouse writes only its own half", () => {
   let id: string;
   beforeAll(async () => {
@@ -201,6 +231,39 @@ describe("each warehouse writes only its own half", () => {
     expect((await as("bm", "POST", `/api/transfers/${t}/dispatch`, { whReceiptNo: "WR-D", truckNo: "X" })).statusCode).toBe(403);
   });
 
+  it("a Warehouse Incharge sends only from their own warehouse, and can still see where to send to", async () => {
+    const line = async () => [{ receiptId: await lot(), bags: 5 }];
+    const other = await as("sender", "POST", "/api/transfers", { transferDate: D, fromWarehouse: C, toWarehouse: B, lines: await line() });
+    expect(other.statusCode).toBe(403);
+    // The destination dropdown is read from the master, which isn't limited to the reader's own warehouse.
+    const names = (await as("sender", "GET", "/api/masters")).json().warehouses.map((w: { name: string }) => w.name);
+    expect(names).toEqual(expect.arrayContaining([A, B]));
+  });
+
+  it("a store chosen as the destination is kept, while its site still decides who sees and receives the BKT", async () => {
+    const res = await as("sender", "POST", "/api/transfers", { transferDate: D, toWarehouse: B_STORE, lines: [{ receiptId: await lot(), bags: 5 }] });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ fromWarehouse: A, toWarehouse: B, toStore: B_STORE });
+    expect((await as("receiver", "GET", `/api/transfers/${res.json().id}`)).statusCode).toBe(200);
+    await dispatchTransfer(res.json().id, { whReceiptNo: "WR-D", truckNo: `STORE-RIG-${res.json().id}` });
+    const got = await as("receiver", "POST", `/api/transfers/${res.json().id}/receive`, { whReceiptNo: "WR-R", bagsReceived: 5, receivedGrossKg: 5, lines: await bins(res.json().id) });
+    expect(got.statusCode).toBe(200);
+    expect(got.json().toStore).toBe(B_STORE);
+  });
+
+  it("a BKT naming only the site has no store, and the sender's own store is refused", async () => {
+    const site = await createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: await lot(), bags: 5 }] });
+    expect(site.toStore).toBeNull();
+    await prisma.warehouse.create({ data: { name: "BKTTEST-A-OWN", site: A } });
+    await expect(createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: "BKTTEST-A-OWN", lines: [{ receiptId: await lot(), bags: 5 }] })).rejects.toThrow(/different warehouse/);
+  });
+
+  it("an admin can send from any warehouse", async () => {
+    const res = await as("admin", "POST", "/api/transfers", { transferDate: D, fromWarehouse: A, toWarehouse: C, lines: [{ receiptId: await lot(), bags: 5 }] });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ fromWarehouse: A, toWarehouse: C });
+  });
+
   it("the old one-button status step is gone — it could dispatch a BKT with no truck", async () => {
     expect((await as("sender", "POST", `/api/transfers/${id}`, {})).statusCode).toBe(404);
   });
@@ -234,6 +297,7 @@ describe("dispatch carries quality and the warehouse receipt number; receiving e
   it("refuses a Lot with no quality on record unless it is entered, and an impossible value", async () => {
     const bare = (await createReceipt(A, D)).id; // passed quality with no readings
     await setBranch(bare, "n-qfs", "pass");
+    await setBranch(bare, "n-xferdec", "transfer");
     const t = await send([{ receiptId: bare, bags: 100 }]);
     await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4" })).rejects.toThrow(/no moisture on record/);
     await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 10 }] })).rejects.toThrow(/no KOR on record/);

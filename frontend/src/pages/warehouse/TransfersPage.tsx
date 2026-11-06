@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
+import { readyForTransfer, transferDestinationLabel, transferDestinations, TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -11,9 +11,7 @@ import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { useTracking, useTransfers } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
-import { SITE_LIST } from "../../config/sites";
 import { api } from "../../repository/api";
-import { deriveStatus } from "../../domain/receiptStatus";
 import type { ReceiptRecord, TransferRequest } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
@@ -21,20 +19,13 @@ import { DateInput } from "../../components/ui/DateInput";
 
 const today = todayIso;
 
-/** A Lot can go on a transfer once: it needs a Lot (so it passed quality), must not be rejected and
- * must not already be on one. The API enforces all three; this only keeps the picker honest. */
-function transferable(r: ReceiptRecord): boolean {
-  const status = deriveStatus(r);
-  return Boolean(r.lotNo) && status !== "rejected" && status !== "transferred_out";
-}
-
 interface Pick { bags: string; net: string }
 
 /**
  * Transfers — moving Lots to another warehouse on ONE truck, numbered BKT-<year>-NNN. A line is a Lot:
  * its supplier, fiche and Lot number come from the receipt, and the bags and net weight start as what
- * that receipt recorded, so nothing is typed twice. Adding a Lot here is the transfer decision for
- * that truck, so its status moves to "transferred out".
+ * that receipt recorded, so nothing is typed twice. A Lot is offered here once its receipt says
+ * "Yes — transfers out"; "No — stays" keeps it off this page.
  *
  * Two warehouses write two halves, and neither writes the other's: the SENDING one says what left (the
  * truck, and what its scale read), the DESTINATION one says what arrived. What arrived is blank until
@@ -45,9 +36,9 @@ export function TransfersPage() {
   const site = useSite();
   const switchSite = useSwitchSite();
   const canEdit = useCanEditDirectly();
-  const { receipts, refresh } = useTracking();
-  const { transfers, refetch } = useTransfers(site.warehouseName);
-  const search = useTableSearch(transfers, (t) => [t.id, t.truckNo, t.fromWarehouse, t.toWarehouse, ...t.lines.map((l) => l.lotNumber)]);
+  const { receipts, masters, refresh } = useTracking();
+  const { transfers, loading, refetch } = useTransfers(site.warehouseName);
+  const search = useTableSearch(transfers, (t) => [t.id, t.truckNo, t.fromWarehouse, t.toWarehouse, t.toStore, ...t.lines.map((l) => l.lotNumber)]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -57,18 +48,20 @@ export function TransfersPage() {
   const [lotFilter, setLotFilter] = useState("");
   const [picked, setPicked] = useState<Record<string, Pick>>({});
 
-  const destinations = SITE_LIST.filter((s) => s.warehouseName !== site.warehouseName);
+  const destinations = transferDestinations(masters.warehouses, site.warehouseName);
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
-  const candidates = useMemo(
-    () =>
-      receipts
-        .filter((r) => r.warehouse === site.warehouseName && transferable(r))
-        .filter((r) => !lotFilter.trim() || `${r.lotNo} ${r.supplierName} ${r.vehicleNo}`.toLowerCase().includes(lotFilter.trim().toLowerCase()))
-        .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1))
-        .slice(0, 50),
-    [receipts, site.warehouseName, lotFilter]
-  );
+  // Marked "Yes" on the receipt says it is ready; only the BKTs themselves say it has already gone on one.
+  // Nothing is offered until they have loaded, or a Lot already on a BKT would show for a moment.
+  const candidates = useMemo(() => {
+    if (loading) return [];
+    const onABkt = new Set(transfers.flatMap((t) => t.lines.map((l) => l.receiptId)));
+    return receipts
+      .filter((r) => r.warehouse === site.warehouseName && readyForTransfer(r) && !onABkt.has(r.id))
+      .filter((r) => !lotFilter.trim() || `${r.lotNo} ${r.supplierName} ${r.vehicleNo}`.toLowerCase().includes(lotFilter.trim().toLowerCase()))
+      .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1))
+      .slice(0, 50);
+  }, [receipts, transfers, loading, site.warehouseName, lotFilter]);
 
   function toggle(r: ReceiptRecord) {
     setPicked((prev) => {
@@ -100,7 +93,7 @@ export function TransfersPage() {
         })),
       })
     );
-    if (ok) { setPicked({}); setRemarks(""); } // the Lots' receipts now read "transferred out"
+    if (ok) { setPicked({}); setRemarks(""); }
   }
 
   const lotLink = (l: TransferRequest["lines"][number]) => <TransferLotLink key={l.receiptId} line={l} siteSlug={site.slug} canOpen={visible.has(l.receiptId)} />;
@@ -108,7 +101,7 @@ export function TransfersPage() {
   const columns: Column<TransferRequest>[] = [
     { label: "BKT", nowrap: true, render: (t) => <span className="font-mono text-[12.5px]">{t.id}</span> },
     { label: "Date", filter: { value: (t) => t.transferDate, kind: "date" }, nowrap: true, render: (t) => formatDate(t.transferDate) },
-    { label: "From → To", filter: { value: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` }, render: (t) => `${t.fromWarehouse} → ${t.toWarehouse}` },
+    { label: "From → To", filter: { value: (t) => `${t.fromWarehouse} → ${transferDestinationLabel(t)}` }, render: (t) => `${t.fromWarehouse} → ${transferDestinationLabel(t)}` },
     { label: "Truck", nowrap: true, render: (t) => t.truckNo ?? <span className="text-warmstone-300">not sent yet</span> },
     { label: "Lots", render: (t) => <span className="flex flex-wrap gap-x-2 gap-y-0.5">{t.lines.map(lotLink)}</span> },
     { label: "Bags sent", filter: { value: (t) => t.variance.bagsDispatched, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagsDispatched) },
@@ -134,10 +127,10 @@ export function TransfersPage() {
           <form onSubmit={handleCreate} className="space-y-4 pt-3">
             <div className="grid sm:grid-cols-3 gap-4">
               <Field id="tr-date" label="Date"><DateInput id="tr-date" required value={date} onChange={setDate} className={inputClass} /></Field>
-              <Field id="tr-to" label="To warehouse">
+              <Field id="tr-to" label="To warehouse" hint={destinations.length ? undefined : "No warehouse is available. In Masters, give another site a Unit or Central type."}>
                 <select id="tr-to" required value={to} onChange={(e) => setTo(e.target.value)} className={inputClass}>
                   <option value="" disabled>Select…</option>
-                  {destinations.map((s) => <option key={s.slug} value={s.warehouseName}>{s.label} · {s.sublabel}</option>)}
+                  {destinations.map((name) => <option key={name} value={name}>{name}</option>)}
                 </select>
               </Field>
               <Field id="tr-remarks" label="Remarks"><input id="tr-remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} className={inputClass} /></Field>
@@ -149,7 +142,7 @@ export function TransfersPage() {
                 <input placeholder="Filter Lot, supplier, truck…" value={lotFilter} onChange={(e) => setLotFilter(e.target.value)} className={`${inputClass} sm:w-64`} />
               </div>
               <div className="border border-warmstone-200 rounded-xl divide-y divide-warmstone-100 max-h-72 overflow-y-auto">
-                {candidates.length === 0 && <p className="px-4 py-3 text-[13px] text-warmstone-400">No Lot here can be transferred - a truck needs a Lot (it passed quality) and must not already be on a transfer.</p>}
+                {candidates.length === 0 && <p className="px-4 py-3 text-[13px] text-warmstone-500">No Lot is ready to send. Choose &quot;Yes — transfers out&quot; on a receipt that passed quality, and its Lot will show here.</p>}
                 {candidates.map((r) => {
                   const p = picked[r.id];
                   return (

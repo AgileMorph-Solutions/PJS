@@ -8,6 +8,7 @@ import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
 import type { TransferRequest } from "../../types/receipt";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { transferDestinationLabel } from "@anagroci/contract/domain/transfers";
 
 /**
  * One BKT in full. The sending warehouse fills in the dispatch here, the receiving warehouse records the
@@ -65,7 +66,7 @@ export function TransferDetailPage() {
   return (
     <div className="space-y-5">
       {back}
-      <PageHeader kicker={`${site.label} · ${site.sublabel}`} title={t.id} lede={`${t.fromWarehouse} → ${t.toWarehouse} · ${formatDate(t.transferDate)}${t.remarks ? ` · ${t.remarks}` : ""}`} />
+      <PageHeader kicker={`${site.label} · ${site.sublabel}`} title={t.id} lede={`${t.fromWarehouse} → ${transferDestinationLabel(t)} · ${formatDate(t.transferDate)}${t.remarks ? ` · ${t.remarks}` : ""}`} />
       {error && <p role="alert" className="px-1 text-[13px] text-danger-700">{error}</p>}
       <TransferPanel
         key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} saving={saving} lotLink={lotLink} qualityOf={qualityOf} binOptions={binOptions}

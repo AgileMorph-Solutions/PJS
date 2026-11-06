@@ -267,7 +267,10 @@ export interface TransferRequest {
   id: string;
   transferDate: string;
   fromWarehouse: string;
+  /** The destination SITE: it decides who sees this BKT and who records its arrival. */
   toWarehouse: string;
+  /** The store chosen at that site, from Masters. Null when the BKT named only the site. */
+  toStore: string | null;
   /** The step: requested → dispatched → received. `state` is what a person reads. */
   status: TransferStatus;
   remarks: string | null;

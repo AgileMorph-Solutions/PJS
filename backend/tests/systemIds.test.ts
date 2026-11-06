@@ -355,9 +355,10 @@ describe("Transfer Request", () => {
     lotted = (await createReceipt(SITE, `${YEAR}-08-01`)).id;
     await setStageFields(lotted, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5" }); // what a dispatch takes unless measured again
     lotNumber = (await setBranch(lotted, "n-qfs", "pass")).lotNo!;
+    await setBranch(lotted, "n-xferdec", "transfer");
   });
 
-  it("is BKT-<year>-NNN, takes its Lots from the receipts, and marks them transferred out", async () => {
+  it("is BKT-<year>-NNN, takes its Lots from the receipts, and they read transferred out", async () => {
     const t = await createTransfer({ transferDate: `${YEAR}-08-05`, fromWarehouse: SITE, toWarehouse: "BOUAKE", lines: [{ receiptId: lotted, bags: 478, netWeightKg: "40822" }] });
     expect(t.id).toBe(`BKT-${YEAR}-001`);
     expect(t).toMatchObject({ status: "requested", fromWarehouse: SITE, toWarehouse: "BOUAKE" });

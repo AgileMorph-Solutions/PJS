@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { TRANSFER_STATE_LABELS, transferState, type TransferFacts, type TransferState } from "@anagroci/contract/domain/transfers";
+import { TRANSFER_STATE_LABELS, transferDestinationLabel, transferState, type TransferFacts, type TransferState } from "@anagroci/contract/domain/transfers";
 import { Pill } from "../ui/Pill";
 import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
@@ -66,7 +66,7 @@ export function TransferPanel({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <InfoCard icon="local_shipping" title={`${t.id} · what left`} badge={<Pill tone={TRANSFER_TONE[t.state]} label={TRANSFER_STATE_LABELS[t.state]} />}>
-        <InfoRow label="From → To" value={`${t.fromWarehouse} → ${t.toWarehouse}`} />
+        <InfoRow label="From → To" value={`${t.fromWarehouse} → ${transferDestinationLabel(t)}`} />
         <InfoRow label="Truck" strong value={t.truckNo} />
         <InfoRow label="Warehouse receipt no." value={t.dispatchWhReceiptNo} />
         <InfoRow label="Transporter" value={t.transporter} />

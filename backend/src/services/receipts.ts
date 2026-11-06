@@ -399,6 +399,11 @@ export async function applyBranch(
   if (!opts.bypassValidation && stageId === "n-qfs") assertRejectionHasReason(branchId, reason);
   // The quality decision is part of the locked record; the drying and transfer decisions come after the GRN and stay open.
   if (!opts.bypassValidation && LOCKED_DECISIONS.has(stageId)) await assertRecordOpen(tx, id);
+  // Once a Lot is on a BKT the truck is committed: "stays" would contradict the transfer on record.
+  if (!opts.bypassValidation && stageId === "n-xferdec" && branchId !== "transfer") {
+    const line = await tx.transferRequestLine.findFirst({ where: { receiptId: id }, select: { transferId: true } });
+    if (line) throw new ValidationError(`This Lot is already on transfer ${line.transferId}, so it can't be changed to stay at this warehouse.`);
+  }
 
   await tx.receiptBranch.upsert({
     where: { receiptId_stageId: { receiptId: id, stageId } },

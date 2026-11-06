@@ -31,11 +31,11 @@ export const DECISION_BRANCHES: Record<string, BranchOutcome[]> = {
     },
   ],
   "n-xferdec": [
-    { id: "stays", label: "No — stays at this warehouse", note: "Nothing further happens until a transfer is decided on later." },
+    { id: "stays", label: "No — stays at this warehouse", note: "The Lot stays here and isn't offered on the Transfers page." },
     {
       id: "transfer",
       label: "Yes — transfers out",
-      note: "Continues in Inter-Warehouse Stock Transfer — a separate process, not built yet.",
+      note: "The Lot is ready to send: it shows on the Transfers page, where its BKT is created.",
     },
   ],
 };

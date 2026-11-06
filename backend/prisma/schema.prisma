@@ -321,6 +321,9 @@ model TransferRequest {
   fromRef       Warehouse             @relation("TransferRequestFrom", fields: [fromWarehouse], references: [name])
   toWarehouse   String
   toRef         Warehouse             @relation("TransferRequestTo", fields: [toWarehouse], references: [name])
+  /// The store chosen at the destination. `toWarehouse` stays its SITE, because that is what decides who
+  /// sees the BKT and who records its arrival. Null on BKTs created before a store could be chosen.
+  toStore       String?
   /// "requested" | "dispatched" | "received" — the STEP. What a person reads (in transit / closed /
   /// discrepancy) is derived with the variance (contract's domain/transfers.ts), never stored.
   status        String                @default("requested")
