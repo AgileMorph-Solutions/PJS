@@ -37,7 +37,7 @@ async function cleanup() {
 async function lot(bin?: string, bags = 100): Promise<string> {
   const id = (await createReceipt(A, D)).id;
   // The quality check's result, which a dispatch takes unless it is measured again.
-  await setStageFields(id, "n-qfs", { "MOIS. (moisture)": "10.2", KOR: "47.5", "NUT COUNT": "170" });
+  await setStageFields(id, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5", "Final nut count": "170" });
   await setBranch(id, "n-qfs", "pass");
   if (bin) await setStageFields(id, "n-bin", { "Bin Number": bin });
   void bags;

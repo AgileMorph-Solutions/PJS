@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type FormEvent, type ReactNode } from "react";
 import type { JuteLedger, JuteLedgerColumn } from "../types/stage";
 import { useTracking } from "../state/TrackingContext";
 import { usePagination } from "./ui/usePagination";
@@ -7,6 +7,7 @@ import { FilterBar } from "./ui/FilterBar";
 import { DateRangeInputs } from "./ui/DateRangeInputs";
 import { DateInput } from "./ui/DateInput";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { DERIVED_COLUMNS } from "@anagroci/contract/domain/jute";
 import { useDateRangeFilter } from "./ui/useDateRangeFilter";
 // NOTE: allRowsFor() is deliberately NOT used any more. It prepended juteBags.ts's hardcoded
 // sampleRows to the entered rows, which was right when the ledger was empty demo data. The API now
@@ -27,8 +28,6 @@ const KNOWN_ACTIVITY_TYPES = [
   "TRANSFFER TO YAMOUSSOUKRO",
 ];
 
-const DERIVED_COLUMNS = new Set(["S N", "Balance"]);
-
 function blankRow(columns: JuteLedgerColumn[]): Row {
   return Object.fromEntries(columns.filter((c) => !DERIVED_COLUMNS.has(c.label)).map((c) => [c.label, ""]));
 }
@@ -46,12 +45,35 @@ interface Props {
   /** Called right after a new entry is submitted, in addition to the always-unscoped write itself
    * — lets a filtered host page refetch its own filtered set. */
   onEntryAdded?: () => void;
+  /** Shown inside the section, above its "Add entry". */
+  aboveEntry?: ReactNode;
+  /** A ledger column that must name a warehouse in the master. Filled from `selected`, or picked from `options` when no
+   * single warehouse is selected, so it is never free text the server would refuse. */
+  warehouse?: { column: string; selected?: string; options: string[] };
+  /** A calculated column to show in the form, filled with what it will be if the draft is saved. Typing over it saves the
+   * typed figure instead; clearing it goes back to the calculated one. Others stay out of the form. In the table it goes by
+   * `tableHeader`, with `current` as a column beside it. */
+  calculatedField?: {
+    column: string;
+    preview: (rows: Row[], draft: Row) => string;
+    hint: string;
+    tableHeader: string;
+    current: { header: string; read: (rows: Row[]) => (row: Row) => string };
+  };
 }
 
-export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Props) {
+function withoutKey(row: Row, key: string): Row {
+  const { [key]: _removed, ...rest } = row;
+  return rest;
+}
+
+export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, warehouse, calculatedField }: Props) {
   const { ledgerEntries, addLedgerEntry } = useTracking();
-  const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label));
+  const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label) || c.label === calculatedField?.column);
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   // Every row comes from the server, sample rows included.
   const allRows = rowsOverride ?? (ledgerEntries[ledger.id] ?? []);
@@ -61,15 +83,36 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
   const dateColumn = ledger.columns.find((c) => c.label.toLowerCase().includes("date"));
   const dateFilter = useDateRangeFilter(allRows, (row) => (dateColumn ? row[dateColumn.label] : undefined));
   const page = usePagination(dateFilter.filtered);
+  const calculated = calculatedField?.preview(allRows, draft) ?? "";
+  // Read from every row, not the filtered page: narrowing the dates doesn't change what a supplier holds today.
+  const currentOf = calculatedField?.current.read(allRows);
 
-  function handleSubmit(e: FormEvent) {
+  /** Retyping the figure already shown isn't a correction, so it mustn't pin the balance to that number. */
+  function draftToSave(): Row {
+    const column = calculatedField?.column;
+    return column && draft[column]?.trim() === calculated ? withoutKey(draft, column) : draft;
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     // "S N" and "Balance" are assigned by the server: computing them here raced whenever two
     // people added a row at once, and the balance is now a SQL window function with no column to
     // drift. The row that comes back is what gets displayed.
-    addLedgerEntry(ledger.id, { ...draft });
-    setDraft(blankRow(ledger.columns));
-    onEntryAdded?.();
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const toSave = draftToSave();
+      await addLedgerEntry(ledger.id, warehouse?.selected ? { ...toSave, [warehouse.column]: warehouse.selected } : { ...toSave });
+      // Only now: a refused entry must stay in the form to be corrected, not vanish as if it had saved.
+      setDraft(blankRow(ledger.columns));
+      setSaved(true);
+      onEntryAdded?.();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -84,12 +127,14 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
       )}
       {ledger.description && <p className="text-[13px] text-warmstone-500 leading-relaxed mb-3.5">{ledger.description}</p>}
 
+      {aboveEntry}
+
       <details className="group mb-4">
         <summary className="list-none cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-warmstone-50 border border-warmstone-200 text-warmstone-700 text-[13px] font-semibold hover:bg-warmstone-100 transition-colors">
           <span className="material-symbols-outlined text-[17px]">add</span>
           Add entry
         </summary>
-        <form onSubmit={handleSubmit} className="mt-4">
+        <form onSubmit={(e) => void handleSubmit(e)} className="mt-4">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {inputColumns.map((c) => {
               const id = `ledger-${ledger.id}-${c.col}`;
@@ -100,7 +145,34 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
                       {c.label}
                     </label>
                   </div>
-                  {c.label === "Activities type" ? (
+                  {c.label === calculatedField?.column ? (
+                    <input
+                      id={id}
+                      inputMode="numeric"
+                      value={draft[c.label] ?? calculated}
+                      onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
+                      // On blur, not on change: backspacing to retype a number mustn't snap the calculated one back mid-edit.
+                      onBlur={() => setDraft((d) => (d[c.label]?.trim() === "" ? withoutKey(d, c.label) : d))}
+                      placeholder="Fills in automatically"
+                      aria-describedby={`${id}-hint`}
+                      className={inputCls}
+                    />
+                  ) : c.label === warehouse?.column ? (
+                    warehouse.selected ? (
+                      <input id={id} readOnly value={warehouse.selected} className={`${inputCls} cursor-not-allowed`} />
+                    ) : (
+                      <select
+                        id={id}
+                        required
+                        value={draft[c.label] ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
+                        className={inputCls}
+                      >
+                        <option value="">Choose a warehouse…</option>
+                        {warehouse.options.map((w) => <option key={w} value={w}>{w}</option>)}
+                      </select>
+                    )
+                  ) : c.label === "Activities type" ? (
                     <>
                       <input
                         id={id}
@@ -127,16 +199,32 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
                       className={inputCls}
                     />
                   )}
+                  {c.label === calculatedField?.column && (
+                    <p id={`${id}-hint`} className="mt-1.5 text-[11.5px] leading-snug text-warmstone-500">
+                      {calculatedField.hint}
+                      {draft[c.label] !== undefined && draft[c.label].trim() !== calculated && (
+                        <>
+                          {" "}
+                          <button type="button" onClick={() => setDraft((d) => withoutKey(d, c.label))} className="font-semibold text-brand-700 underline">
+                            Use the calculated figure{calculated ? ` (${calculated})` : ""}
+                          </button>
+                        </>
+                      )}
+                    </p>
+                  )}
                 </div>
               );
             })}
           </div>
+          {saveError && <p role="alert" className="mt-4 text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{saveError}</p>}
+          {saved && <p className="mt-4 text-[13px] text-success-700">Entry saved.</p>}
           <button
             type="submit"
+            disabled={saving}
             className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
           >
             <span className="material-symbols-outlined text-[17px]">add</span>
-            Save entry
+            {saving ? "Saving…" : "Save entry"}
           </button>
         </form>
       </details>
@@ -152,16 +240,23 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
           <thead>
             <tr className="border-b border-warmstone-200 bg-warmstone-50">
               {ledger.columns.map((c) => (
-                <th key={c.label} className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap">
-                  {c.label}
-                </th>
+                <Fragment key={c.label}>
+                  <th className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap">
+                    {c.label === calculatedField?.column ? calculatedField.tableHeader : c.label}
+                  </th>
+                  {c.label === calculatedField?.column && (
+                    <th className="text-left px-3 py-2.5 text-[10.5px] font-bold uppercase tracking-wider text-warmstone-900 whitespace-nowrap">
+                      {calculatedField.current.header}
+                    </th>
+                  )}
+                </Fragment>
               ))}
             </tr>
           </thead>
           <tbody>
             {dateFilter.filtered.length === 0 && (
               <tr>
-                <td colSpan={ledger.columns.length} className="px-3 py-4 text-warmstone-400 italic">
+                <td colSpan={ledger.columns.length + (calculatedField ? 1 : 0)} className="px-3 py-4 text-warmstone-400 italic">
                   {allRows.length === 0 ? "No entries yet - add one above." : "No entries in this date range."}
                 </td>
               </tr>
@@ -169,9 +264,14 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded }: Prop
             {page.pageRows.map((row, i) => (
               <tr key={i} className="border-b border-warmstone-100 last:border-0 hover:bg-warmstone-50">
                 {ledger.columns.map((c) => (
-                  <td key={c.label} className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
-                    {(c === dateColumn ? formatDate(row[c.label]) : row[c.label]) || "-"}
-                  </td>
+                  <Fragment key={c.label}>
+                    <td className="px-3 py-2 text-warmstone-800 whitespace-nowrap tabular-nums">
+                      {(c === dateColumn ? formatDate(row[c.label]) : row[c.label]) || "-"}
+                    </td>
+                    {c.label === calculatedField?.column && (
+                      <td className="px-3 py-2 font-bold text-warmstone-900 whitespace-nowrap tabular-nums">{currentOf?.(row) || "-"}</td>
+                    )}
+                  </Fragment>
                 ))}
               </tr>
             ))}

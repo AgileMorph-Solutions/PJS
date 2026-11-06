@@ -128,7 +128,7 @@ describe("record locking", () => {
 
   it("leaves the steps after the GRN open: stock, the drying decision, and other activities", async () => {
     const [{ id }] = await prisma.receipt.findMany({ where: { warehouse: A, lockedAt: { not: null } }, select: { id: true } });
-    await setStageFields(id, "n-stock", { "Warehouse stock ledger entry": "Stock in" });
+    await setStageFields(id, "n-stock", { "Added to stock from this truck (kg)": "Stock in" });
     await setBranch(id, "n-drying", "direct");
     expect((await get(id)).branches["n-drying"]).toBe("direct");
   });

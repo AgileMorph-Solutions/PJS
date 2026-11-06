@@ -8,7 +8,7 @@ _Generated from the application's own definitions (`npm run gen` in packages/con
 
 | Part | Fields |
 |---|---|
-| Quality readings and cut test | MOIS. (moisture), NUT COUNT, Sample – Good Kernel (g), Sample – Immature (g), Sample – Spotted (g), Sample – Rejection (g), Sample – Void (g), Sample – Oil (g), Sample – Shell (g), KOR, Final – Good Kernel (g), Final – Immature (g), Final – Spotted (g), Final – Rejection (g), Final – Void (g), Final – Oil (g), Final – Shell (g), FINAL KOR |
+| Quality readings and cut test | Sample moisture (%), Sample nut count, Final moisture (%), Final nut count, Sample – Good Kernel (g), Sample – Immature (g), Sample – Spotted (g), Sample – Rejection (g), Sample – Void (g), Sample – Oil (g), Sample – Shell (g), KOR, Final – Good Kernel (g), Final – Immature (g), Final – Spotted (g), Final – Rejection (g), Final – Void (g), Final – Oil (g), Final – Shell (g), FINAL KOR |
 | Jute bags | BON SACS (good bags), HUMID SACS (damp bags), Sacs déchirés (torn bags) |
 
 The **Pass / Fail** decision is **not** part of this form: the Warehouse Incharge records it, because a Fail rejects the truck
@@ -51,4 +51,4 @@ A truck's reception record **locks automatically when its GRN is complete**: the
 One Reception page lists every truck; its status filter has a **Reception** and an **Offloading** choice for these two parts.
 
 - **Reception**: Truck arrives at warehouse (Gate entry) → Verify supplier documents → Weight truck (Gross weight) → Quality analysis (QFS) → Reject / Hold and inform procurement in charge
-- **Offloading**: Unload RCN at warehouse → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Update warehouse RCN stock (System)
+- **Offloading**: Unload RCN at warehouse → Calculate net weight → Assign Lot Number to truck → Allocate Bin (physical storage location) → Generate RCN reception record (GRN) → Add this truck to warehouse stock

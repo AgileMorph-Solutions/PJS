@@ -17,7 +17,7 @@ const byId = Object.fromEntries([...stages, rejectStage].map((s) => [s.id, s]));
 const SHADOW: Record<string, string[]> = {
   "n-gross": ["loadedTruckWtKgs", "tareWtKgs", "grossWtKgs"], "n-netwt": ["netWtKgs", "paidWt"],
   "n-unload": ["sacs", "bonSacs", "humidSacs", "sacsDechires", "refraction"],
-  "n-qfs": ["moisture", "nutCount", "kor", "finalKor"], "n-grn": ["price", "amount", "grnWeight"],
+  "n-qfs": ["finalMoisture", "finalNutCount", "kor", "finalKor"], "n-grn": ["price", "amount", "grnWeight"],
 };
 const out: string[] = [];
 for (const [stageId, spec] of Object.entries(STAGE_FIELD_MAP)) {

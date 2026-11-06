@@ -8,6 +8,7 @@
  * required columns, that the row belongs to this section's warehouse, that foreign keys and unique
  * sets hold.
  */
+import { JUTE_OPENING_ACTIVITY } from "@anagroci/contract/domain/juteOpeningBalance";
 import { categoriseActivity } from "../../services/imports.js";
 import { canonical, parseCell } from "./cells.js";
 import { columnInfo, delegateOf, foreignKeys, uniqueSets } from "./schemaInfo.js";
@@ -100,6 +101,10 @@ export async function planTable(ctx: Ctx, spec: SheetSpec, sheet: ParsedSheet, f
     }
 
     const merged: Vals = { ...(current ?? {}), ...data };
+    // The Opening stock field on Warehouse Stock is the one way in: it keeps the row first in its warehouse and a change to it Admin-only.
+    if (model === "JuteWarehouseMovement" && changes.length && [current?.activitiesType, merged.activitiesType].some((a) => String(a ?? "").trim().toUpperCase() === JUTE_OPENING_ACTIVITY)) {
+      err("opening stock can only be changed in the Opening stock field on Warehouse Stock");
+    }
 
     // Belongs to this section's warehouse — before AND after the change, so a row can't be pulled in
     // from, or pushed out to, another warehouse.

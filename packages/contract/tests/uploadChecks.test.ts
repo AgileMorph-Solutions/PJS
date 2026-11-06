@@ -3,7 +3,7 @@ import { checkUploadRow, type UploadCheckInput } from "../src/domain/uploadCheck
 
 const clean = (over: Partial<UploadCheckInput> = {}): UploadCheckInput => ({
   arrivalDate: "2026-09-02", supplierName: "SCOOP AKISSI", lbaCode: "LBA-101-AKI", today: "2026-10-12",
-  stageData: { "n-gross": { "Loaded truck weight (kg)": "38000", "Tare / empty truck weight (kg)": "6800" }, "n-qfs": { "MOIS. (moisture)": "10,5", KOR: "47.2" } },
+  stageData: { "n-gross": { "Loaded truck weight (kg)": "38000", "Tare / empty truck weight (kg)": "6800" }, "n-qfs": { "Final moisture (%)": "10,5", KOR: "47.2" } },
   suppliers: new Map([["LBA-101-AKI", "SCOOP AKISSI"]]), ficheUsedBy: [], ...over,
 });
 const messages = (i: UploadCheckInput) => checkUploadRow(i).map((w) => w.message);
@@ -14,15 +14,15 @@ describe("upload row checks", () => {
   });
 
   it("flags a value that is not a number or is negative, naming the column", () => {
-    const w = checkUploadRow(clean({ stageData: { "n-qfs": { "MOIS. (moisture)": "ten", KOR: "-3" } } }));
+    const w = checkUploadRow(clean({ stageData: { "n-qfs": { "Final moisture (%)": "ten", KOR: "-3" } } }));
     expect(w).toEqual(expect.arrayContaining([
-      expect.objectContaining({ column: "MOIS. (moisture)", message: expect.stringContaining("isn't a number") }),
+      expect.objectContaining({ column: "Final moisture (%)", message: expect.stringContaining("isn't a number") }),
       expect.objectContaining({ column: "KOR", message: expect.stringContaining("negative") }),
     ]));
   });
 
   it("flags moisture over 100 and KOR over 80, and an empty truck heavier than the loaded one", () => {
-    const m = messages(clean({ stageData: { "n-qfs": { "MOIS. (moisture)": "140", KOR: "95" }, "n-gross": { "Loaded truck weight (kg)": "5000", "Tare / empty truck weight (kg)": "6000" } } }));
+    const m = messages(clean({ stageData: { "n-qfs": { "Final moisture (%)": "140", KOR: "95" }, "n-gross": { "Loaded truck weight (kg)": "5000", "Tare / empty truck weight (kg)": "6000" } } }));
     expect(m.some((x) => /over 100%/.test(x))).toBe(true);
     expect(m.some((x) => /over 80/.test(x))).toBe(true);
     expect(m.some((x) => /empty truck/.test(x))).toBe(true);

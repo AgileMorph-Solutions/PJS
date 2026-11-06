@@ -125,7 +125,7 @@ def build_stage_data(row):
         }
     if any_(row["MOIS."], row["NUT COUNT"], row["KOR"], row["FINAL KOR"]):
         sd["n-qfs"] = {
-            "MOIS. (moisture)": row["MOIS."], "NUT COUNT": row["NUT COUNT"], "KOR": row["KOR"],
+            "Final moisture (%)": row["MOIS."], "Final nut count": row["NUT COUNT"], "KOR": row["KOR"],
             "FINAL KOR": row["FINAL KOR"],
         }
     if has(row["GROSS WT KGS"]):

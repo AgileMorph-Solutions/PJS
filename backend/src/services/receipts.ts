@@ -15,6 +15,7 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
 import { RECEIPT_STAGE_MIRRORS, STAGE_TO_RECEIPT_COLUMNS } from "@anagroci/contract/domain/receiptMirror";
 import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
+import { splitBinNumber } from "@anagroci/contract/domain/binNumber";
 import { autoDateFill } from "@anagroci/contract/data/autoFields";
 import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES, isGrnComplete } from "@anagroci/contract/domain/recordLock";
 import { prisma } from "../db.js";
@@ -434,8 +435,7 @@ export async function applyBranch(
  * that are really store codes are reported by the data-quality audit instead.
  */
 async function assertBinIsAPhysicalBin(tx: Tx, value: string | undefined) {
-  const bins = (value ?? "").split(/\s*[\/,]\s*/).map((b) => b.trim()).filter(Boolean);
-  for (const code of bins) {
+  for (const code of splitBinNumber(value)) {
     const store = await tx.warehouse.findFirst({ where: { name: code, site: { not: null } }, select: { name: true } });
     if (store) {
       throw new ValidationError(`${code} is a store (a warehouse code), not a Bin. Choose the Bin inside it, e.g. ${code}-BIN-012.`);

@@ -353,7 +353,7 @@ describe("Transfer Request", () => {
 
   beforeAll(async () => {
     lotted = (await createReceipt(SITE, `${YEAR}-08-01`)).id;
-    await setStageFields(lotted, "n-qfs", { "MOIS. (moisture)": "10.2", KOR: "47.5" }); // what a dispatch takes unless measured again
+    await setStageFields(lotted, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5" }); // what a dispatch takes unless measured again
     lotNumber = (await setBranch(lotted, "n-qfs", "pass")).lotNo!;
   });
 

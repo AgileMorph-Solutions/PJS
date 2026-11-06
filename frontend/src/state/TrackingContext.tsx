@@ -39,7 +39,8 @@ interface TrackingApi {
   setBranch: (id: string, stageId: string, branchId: string, reason?: string) => void;
 
   ledgerEntries: LedgerEntries;
-  addLedgerEntry: (ledgerId: string, row: LedgerRow) => void;
+  /** Rejects when the server refuses the row: the form that called it shows why and keeps what was typed. */
+  addLedgerEntry: (ledgerId: string, row: LedgerRow) => Promise<void>;
 
   masters: Masters;
   addSupplier: (s: Supplier) => void;
@@ -209,15 +210,12 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       },
 
       ledgerEntries,
-      addLedgerEntry: (ledgerId, row) => {
-        api.addLedgerEntry(ledgerId, row)
-          .then(({ data, warnings: w }) => {
-            // The server assigns the serial number and computes the running balance, so the row it
-            // returns — not the submitted draft — is what goes into the table.
-            setLedgerEntries((prev) => ({ ...prev, [ledgerId]: [...(prev[ledgerId] ?? []), data] }));
-            setWarnings(w);
-          })
-          .catch((e) => { fail(e); void refresh(); });
+      addLedgerEntry: async (ledgerId, row) => {
+        const { data, warnings: w } = await api.addLedgerEntry(ledgerId, row);
+        // The server assigns the serial number and computes the running balance, so the row it
+        // returns — not the submitted draft — is what goes into the table.
+        setLedgerEntries((prev) => ({ ...prev, [ledgerId]: [...(prev[ledgerId] ?? []), data] }));
+        setWarnings(w);
       },
 
       masters,
@@ -386,6 +384,30 @@ export function useWarehouseActivityLedger() {
   const [rows, setRows] = useState<import("../repository/api").WarehouseActivityLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const refetch = useCallback(() => api.listWarehouseActivityLedger().then(setRows).catch(() => {}), []);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+export function useOpeningBalances(warehouse?: string) {
+  const [rows, setRows] = useState<import("../repository/api").OpeningBalanceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listOpeningBalances(warehouse).then(setRows).catch(() => {}), [warehouse]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+export function useVendorReceipts(warehouse?: string) {
+  const [rows, setRows] = useState<import("../repository/api").VendorReceiptRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listVendorReceipts(warehouse).then(setRows).catch(() => {}), [warehouse]);
+  useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
+  return { rows, loading, refetch };
+}
+
+export function useEmptyBagReceipts(warehouse?: string) {
+  const [rows, setRows] = useState<import("../repository/api").EmptyBagReceiptRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listEmptyBagReceipts(warehouse).then(setRows).catch(() => {}), [warehouse]);
   useEffect(() => { setLoading(true); void refetch().finally(() => setLoading(false)); }, [refetch]);
   return { rows, loading, refetch };
 }

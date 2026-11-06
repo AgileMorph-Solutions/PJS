@@ -114,8 +114,8 @@ export function LotOverview({
           qfs ? <Pill tone={qfs === "pass" ? "entry" : "gap"} label={qfs === "pass" ? "Passed" : "Rejected"} /> : <Pill tone="decision" label="Pending" />
         }
       >
-        <InfoRow label="Moisture" value={pct(v(receipt, "n-qfs", "MOIS. (moisture)"))} />
-        <InfoRow label="Nut count" value={v(receipt, "n-qfs", "NUT COUNT")} />
+        <InfoRow label="Moisture" value={pct(v(receipt, "n-qfs", "Final moisture (%)"))} />
+        <InfoRow label="Nut count" value={v(receipt, "n-qfs", "Final nut count")} />
         <InfoRow label="KOR" value={v(receipt, "n-qfs", "KOR")} />
         <InfoRow label="Final KOR" value={v(receipt, "n-qfs", "FINAL KOR")} strong />
         {qfs === "fail" && <InfoRow label="Reason" value={v(receipt, "n-reject", "Reason for rejection")} />}

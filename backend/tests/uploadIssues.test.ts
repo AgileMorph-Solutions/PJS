@@ -77,7 +77,7 @@ describe("soft checks on an uploaded row", () => {
     const body = (await preview(await withEdit("Moisture (%)", 140))).json();
     const s = sheet(body, "Truck Reception");
     expect(s).toMatchObject({ changed: 1, errorCount: 0 });
-    expect(s.warnings).toEqual([expect.objectContaining({ row: expect.any(Number), column: "MOIS. (moisture)", message: expect.stringContaining("over 100%"), severity: "warning" })]);
+    expect(s.warnings).toEqual([expect.objectContaining({ row: expect.any(Number), column: "Final moisture (%)", message: expect.stringContaining("over 100%"), severity: "warning" })]);
     expect(body.warningCount).toBe(1);
   });
 
@@ -92,7 +92,7 @@ describe("soft checks on an uploaded row", () => {
     expect((await get(`/api/receipts/${untouched}/upload-issues`)).json()).toEqual([]);
 
     // The odd value was stored as typed, not "fixed".
-    expect((await get(`/api/receipts/${flagged}`)).json().stageData["n-qfs"]["MOIS. (moisture)"]).toBe("140");
+    expect((await get(`/api/receipts/${flagged}`)).json().stageData["n-qfs"]["Final moisture (%)"]).toBe("140");
 
     const reviewed = await app.inject({ method: "POST", url: `/api/receipts/${flagged}/upload-issues/${issues[0].id}/review`, headers: { cookie } });
     expect(reviewed.json()).toMatchObject({ reviewedBy: "Ama", reviewedAt: expect.any(String) });
