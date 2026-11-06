@@ -1,4 +1,4 @@
-import type { SamplingPoint, SiloSize, SiloStock, SizeValues, SizingDecision, SizingGrams } from "../domain/calibration.js";
+import type { SamplingPoint, SiloCheck, SiloSize, SiloStock, SizeValues, SizingDecision, SizingGrams } from "../domain/calibration.js";
 import type { MoistureCheckStatus } from "../domain/rcnReceipt.js";
 
 /** One run of a load through the sizing machine (Phase 2, step 2). Kg kept as typed; totals are calculated. */
@@ -64,7 +64,9 @@ export interface BatchCalibration {
   silos: SiloStock[];
   /** This batch's own sized-in kg, per size. */
   batchSizedKg: Record<SiloSize, number>;
-  /** Newest first. */
+  /** Where each silo stands on QC-2. The silos are shared, so every batch's checks count here. */
+  siloChecks: Record<SiloSize, SiloCheck>;
+  /** This batch's checks, newest first. */
   sizingChecks: SizingCheck[];
 }
 

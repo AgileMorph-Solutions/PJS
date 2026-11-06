@@ -113,6 +113,9 @@ export function weighingTotals(
   return { pallets: pallets.length, bags, grossKg, bagsKg, palletKg, netKg, dustKg, voidsKg, toSilosKg: kg2(netKg - dustKg - voidsKg) };
 }
 
+/** Dust % and Voids %, of the net received, as the Calibration Process report: BTM 113 → 1,250 of 137,831.9 kg = 0.91 %. */
+export const pctOfNet = (kg: number, netKg: number): number => (netKg > 0 ? (kg / netKg) * 100 : 0);
+
 /**
  * A soft note, never a refusal: the counts typed with the empty pallets don't add up to the pallets weighed.
  * Null when they agree or when any count was left blank.

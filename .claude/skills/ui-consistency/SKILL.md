@@ -189,12 +189,11 @@ How to build it:
 These have no shared primitive yet, so copies have drifted apart:
 
 - **Buttons and inputs.** `btnPrimary`, `inputCls` and similar are redefined across many files, and
-  `production/batchUi.tsx` exports its own. Don't add another copy. The first time you need one in a
-  file, create `ui/Button` (with a `variant` prop) or `ui/Input` from the tables above if it doesn't
-  exist yet, and use it for the lines you touch.
-- **Card shell.** The card classes are pasted inline. Create `ui/Card` the next time you write one.
-- **Headings.** Section and card titles are hand-written and vary in size. Create `ui/SectionTitle`
-  and `ui/CardTitle` when you need them.
+  `production/batchUi.tsx` exports its own. Don't add another copy. `ui/Button` and `ui/Input` (`Input`,
+  `Select`, `Field`) now exist: use them for the lines you touch.
+- **Card shell.** The card classes are pasted inline in older files. Use `ui/Card` the next time you write one.
+- **Headings.** Section and card titles are hand-written and vary in size. `ui/CardTitle` exists; create
+  `ui/SectionTitle` when you need it.
 
 Delete this section's entries as each one is resolved.
 

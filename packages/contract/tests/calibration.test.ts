@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  calibrationProgress, calibrationRunError, correctSizePct, manualCalibrationError, siloStock, sizingCheckError, sizingCheckNotes,
+  calibrationProgress, calibrationRunError, correctSizePct, manualCalibrationError, nextCalibrationStep, siloChecks, siloStock, sizingCheckError, sizingCheckNotes, sizingGradePct,
 } from "../src/domain/calibration.js";
 import { rcnReceiptStatus } from "../src/domain/rcnReceipt.js";
+import { pctOfNet } from "../src/domain/rcnWeighing.js";
 
 describe("calibration runs", () => {
   it("adds up a load sized over two days, as the client's Calibration Process report does for BTM 1001", () => {
@@ -43,6 +44,56 @@ describe("QC-2 sizing check", () => {
     expect(sizingCheckNotes(a2plus)).toEqual(["Only 72.7 % is the silo's own size (target 85 %)."]);
     // One of the sheet's four rows whose parts don't add up (Error Check −15).
     expect(sizingCheckNotes({ point: "A", sampleG: "1000", grams: { A: "900", AB: "115" } })).toEqual(["The grams add up to 1,015 g, not the 1,000 g sample."]);
+  });
+});
+
+describe("a silo's QC-2 standing", () => {
+  const check = (over: object) => ({ id: 1, point: "A", status: "approved", decision: "ok", date: "2026-08-28", correctPct: 90, moves: 0, ...over });
+
+  it("is flagged by a failed check, and asks for a new check once re-sized rather than reading as passed", () => {
+    expect(siloChecks([]).A.state).toBe("not_checked");
+    expect(siloChecks([check({ decision: "fail" })]).A.state).toBe("failed");
+    expect(siloChecks([check({ decision: "fail", moves: 1 })]).A.state).toBe("re_sized");
+    expect(siloChecks([check({ decision: "fail", moves: 1 }), check({ id: 2 })]).A).toMatchObject({ state: "ok", correctPct: 90 });
+  });
+
+  it("changes only on an approved check, and only for its own silo", () => {
+    const standing = siloChecks([check({ decision: "fail", status: "submitted" }), check({ id: 2, status: "rejected" }), check({ id: 3, point: "received" })]);
+    expect(standing.A.state).toBe("not_checked");
+    expect(standing.B.state).toBe("not_checked");
+  });
+});
+
+describe("the next job on screen", () => {
+  const nothing = { loadsToSort: 0, checksWaiting: 0, failedSilos: 0, silosToCheck: 0 };
+  const incharge = { canSize: true, canCheck: true };
+  const qfs = { canSize: false, canCheck: true };
+
+  it("goes load, then approval, then failed silo, then the next check", () => {
+    expect(nextCalibrationStep({ ...incharge, ...nothing, loadsToSort: 1, failedSilos: 1 })).toBe("sort");
+    expect(nextCalibrationStep({ ...incharge, ...nothing, checksWaiting: 1, failedSilos: 1 })).toBe("check");
+    expect(nextCalibrationStep({ ...incharge, ...nothing, failedSilos: 1, silosToCheck: 1 })).toBe("fix");
+    expect(nextCalibrationStep({ ...incharge, ...nothing, silosToCheck: 1 })).toBe("check");
+    expect(nextCalibrationStep({ ...incharge, ...nothing })).toBe("none");
+  });
+
+  it("never sends a QFS Officer to a job only the Incharge can do", () => {
+    expect(nextCalibrationStep({ ...qfs, ...nothing, loadsToSort: 1, checksWaiting: 1, failedSilos: 1 })).toBe("none");
+    expect(nextCalibrationStep({ ...qfs, ...nothing, loadsToSort: 1, silosToCheck: 1 })).toBe("check");
+  });
+});
+
+describe("what Intake hands over", () => {
+  it("reads dust and voids as a share of the net received: the doc's BTM 113", () => {
+    expect(pctOfNet(1250, 137_831.9).toFixed(2)).toBe("0.91");
+    expect(pctOfNet(8, 137_831.9).toFixed(3)).toBe("0.006");
+    expect(pctOfNet(5, 0)).toBe(0);
+  });
+
+  it("gives each size its share of the sample, as the sheet's % columns", () => {
+    expect(sizingGradePct("Ap", "1000", { Ap: "224" })).toBeCloseTo(22.4, 9);
+    expect(sizingGradePct("under", "1000", {})).toBe(0);
+    expect(sizingGradePct("A", "", { A: "5" })).toBeNull();
   });
 });
 

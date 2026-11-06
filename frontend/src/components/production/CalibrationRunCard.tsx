@@ -1,95 +1,44 @@
 import { useState, type FormEvent } from "react";
-import { formatKg, inputCls, primaryButton } from "./batchUi";
+import { formatKg } from "./batchUi";
+import { Button } from "../ui/Button";
 import { DateInput } from "../ui/DateInput";
+import { Field, Input, inputClass } from "../ui/Input";
+import { Modal } from "../ui/Modal";
 import { api, ApiError } from "../../repository/api";
-import { SILO_SIZES, calibrationRunError, sizesTotal, type SizeValues } from "@anagroci/contract/domain/calibration";
+import { SILO_SIZES, calibrationRunError, siloLabel, sizesTotal, type SizeValues } from "@anagroci/contract/domain/calibration";
 import { canCalibrate } from "@anagroci/contract/domain/rcnReceipt";
+import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 
-const cellInput = `${inputCls} font-mono py-1.5! px-2! text-right`;
+type Run = NonNullable<RcnReceipt["calibration"]>["runs"][number];
 
 /**
- * Phase 2, step 2 of a load: the kg that went into each of the 9 silos, as the silo stock report's size columns.
- * A load can take several runs (the client's Calibration Process report sizes one load over two days), until its
- * runs add up to the into-silo kg from Intake. Totals use the same contract function the server checks with.
+ * One load's sorting, in a dialog: where its kg came from in one sentence, the form, and what was already entered.
+ * A load can take several runs over several days (the client's Calibration Process report sizes one over two days),
+ * so saving a part of it is normal. Totals use the same contract function the server checks with.
  */
-export function CalibrationRunCard({ receipt, canEdit, onChanged }: { receipt: RcnReceipt; canEdit: boolean; onChanged: () => void }) {
+export function SortLoadDialog({ receipt, canEdit, onClose, onChanged }: { receipt: RcnReceipt; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
   const cal = receipt.calibration;
   if (!cal) return null;
   const open = canEdit && canCalibrate(receipt.status);
+  const t = weighingTotals(receipt.pallets, receipt.finalWeight ?? { emptyPallets: [] });
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h4 className="text-[13px] font-bold text-warmstone-900">Calibration · into the silos</h4>
-        <p className="text-[12px] text-warmstone-500">The kg that went into each size silo. A load can be sized over several runs.</p>
+    <Modal wide title={`Sort BTM ${receipt.btmNo} into the silos`} onClose={onClose}>
+      <div className="space-y-5">
+        <div>
+          <p className="text-[15px] font-bold text-warmstone-900 tabular-nums">
+            {cal.leftKg > 0 ? `${formatKg(cal.leftKg)} left to sort` : "All of this load is sorted."}
+          </p>
+          <p className="text-[12px] text-warmstone-500 mt-1 tabular-nums">
+            Weighed in Intake: {formatKg(t.netKg)} net − {formatKg(t.dustKg + t.voidsKg)} dust and voids = {formatKg(cal.toSilosKg)} to sort.
+          </p>
+        </div>
+        {open && <NewRun receiptId={receipt.id} leftKg={cal.leftKg} onSaved={() => { onChanged(); onClose(); }} />}
+        <RunList runs={cal.runs} removable={open} onChanged={onChanged} />
       </div>
-      <div className="grid grid-cols-3 gap-3 rounded-xl border border-warmstone-200 bg-white p-3 text-[12.5px]">
-        {([["Into silos (from Intake)", cal.toSilosKg], ["Sized so far", cal.sizedKg], ["Still to calibrate", cal.leftKg]] as const).map(([label, kg]) => (
-          <div key={label}>
-            <span className="block text-[10.5px] uppercase tracking-wide text-warmstone-500 font-bold">{label}</span>
-            <b className={`tabular-nums ${label === "Still to calibrate" && kg > 0 ? "text-brand-700" : "text-warmstone-900"}`}>{formatKg(kg)}</b>
-          </div>
-        ))}
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-warmstone-200 bg-white">
-        <table className="w-full text-[12px]">
-          <thead className="bg-warmstone-50 text-[10.5px] uppercase tracking-wide text-warmstone-500">
-            <tr>
-              <th className="text-left font-bold px-3 py-2">Date</th>
-              {SILO_SIZES.map((s) => (
-                <th key={s.key} className="text-right font-bold px-2 py-2 whitespace-nowrap" title={s.mm}>{s.code}</th>
-              ))}
-              <th className="text-right font-bold px-3 py-2">Total</th>
-              {open && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {cal.runs.map((r) => (
-              <RunRow key={r.id} run={r} removable={open} onChanged={onChanged} />
-            ))}
-            {cal.runs.length === 0 && !open && (
-              <tr><td colSpan={11} className="px-3 py-3 text-warmstone-500">Not sized yet.</td></tr>
-            )}
-          </tbody>
-          {open && <NewRun receiptId={receipt.id} leftKg={cal.leftKg} onSaved={onChanged} />}
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function RunRow({ run, removable, onChanged }: { run: NonNullable<RcnReceipt["calibration"]>["runs"][number]; removable: boolean; onChanged: () => void }) {
-  const [error, setError] = useState<string | null>(null);
-  async function remove() {
-    if (!window.confirm("Remove this run? Its kg leave the silos.")) return;
-    try {
-      await api.deleteCalibrationRun(run.id);
-      onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : String(err));
-    }
-  }
-  return (
-    <tr className="border-t border-warmstone-100" title={run.createdBy ? `Entered by ${run.createdBy}` : undefined}>
-      <td className="px-3 py-2 whitespace-nowrap">
-        {formatDate(run.date)}
-        {error && <span className="block text-danger-700 text-[11px]">{error}</span>}
-      </td>
-      {SILO_SIZES.map((s) => (
-        <td key={s.key} className="px-2 py-2 text-right font-mono tabular-nums">{run.sizes[s.key] ?? ""}</td>
-      ))}
-      <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums">{run.totalKg.toLocaleString("en-US", { maximumFractionDigits: 2 })}</td>
-      {removable && (
-        <td className="px-2 py-2 text-right">
-          <button type="button" onClick={remove} title="Remove this run" className="text-warmstone-400 hover:text-danger-700">
-            <span className="material-symbols-outlined text-[17px]">delete</span>
-          </button>
-        </td>
-      )}
-    </tr>
+    </Modal>
   );
 }
 
@@ -99,6 +48,7 @@ function NewRun({ receiptId, leftKg, onSaved }: { receiptId: string; leftKg: num
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const total = sizesTotal(sizes);
+  const over = total > leftKg;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -108,44 +58,74 @@ function NewRun({ receiptId, leftKg, onSaved }: { receiptId: string; leftKg: num
     setError(null);
     try {
       await api.addCalibrationRun(receiptId, { date, sizes });
-      setSizes({});
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
-    } finally {
       setSaving(false);
     }
   }
 
   return (
-    <tfoot>
-      <tr className="border-t-2 border-warmstone-200 bg-brand-50/30">
-        <td className="px-2 py-2 min-w-[130px]"><DateInput value={date} onChange={setDate} className={`${inputCls} py-1.5!`} /></td>
-        {SILO_SIZES.map((s) => (
-          <td key={s.key} className="px-1 py-2 min-w-[78px]">
-            <input
-              inputMode="decimal"
-              aria-label={`Size ${s.code} kg`}
-              className={cellInput}
-              value={sizes[s.key] ?? ""}
-              onChange={(e) => setSizes((p) => ({ ...p, [s.key]: e.target.value }))}
-            />
-          </td>
+    <form onSubmit={submit} className="space-y-4">
+      <div className="max-w-48">
+        <Field label="Date"><DateInput value={date} onChange={setDate} className={inputClass} /></Field>
+      </div>
+      <fieldset>
+        <legend className="block text-[13px] font-bold text-warmstone-900 mb-3">How many kg went into each silo?</legend>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {SILO_SIZES.map((s) => (
+            <Field key={s.key} label={`Silo ${siloLabel(s.key)}`}>
+              <Input numeric value={sizes[s.key] ?? ""} onChange={(e) => setSizes((p) => ({ ...p, [s.key]: e.target.value }))} />
+            </Field>
+          ))}
+        </div>
+        <p className="text-[12px] text-warmstone-500 mt-2">Leave a silo blank if nothing went into it.</p>
+      </fieldset>
+      <p className={`text-[13px] tabular-nums ${over ? "text-danger-700" : "text-warmstone-800"}`}>
+        You entered <b>{formatKg(total)}</b>. {over ? `That is ${formatKg(total - leftKg)} too much.` : `${formatKg(leftKg - total)} will be left.`}
+      </p>
+      {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
+      <div className="flex justify-end">
+        <Button type="submit" icon="check" disabled={saving || over}>Save</Button>
+      </div>
+    </form>
+  );
+}
+
+function RunList({ runs, removable, onChanged }: { runs: Run[]; removable: boolean; onChanged: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  if (runs.length === 0) return null;
+
+  async function remove(run: Run) {
+    if (!window.confirm("Remove this entry? Its kg leave the silos.")) return;
+    setError(null);
+    try {
+      await api.deleteCalibrationRun(run.id);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="border-t border-warmstone-100 pt-4">
+      <h3 className="text-[13px] font-bold text-warmstone-900 mb-2">Already entered</h3>
+      <ul className="space-y-2">
+        {runs.map((r) => (
+          <li key={r.id} className="flex items-center justify-between gap-3 text-[13px] text-warmstone-800">
+            <span className="min-w-0 tabular-nums">
+              {formatDate(r.date)} · <b>{formatKg(r.totalKg)}</b>
+              <span className="block text-[12px] text-warmstone-500">{SILO_SIZES.filter((s) => r.sizes[s.key]).map((s) => `${s.code}: ${r.sizes[s.key]} kg`).join(" · ")}</span>
+            </span>
+            {removable && (
+              <button type="button" onClick={() => remove(r)} aria-label={`Remove the entry of ${formatDate(r.date)}`} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
+                <span className="material-symbols-outlined text-[20px]">delete</span>
+              </button>
+            )}
+          </li>
         ))}
-        <td className={`px-3 py-2 text-right font-mono font-semibold tabular-nums ${total > leftKg ? "text-danger-700" : ""}`}>{total.toLocaleString("en-US", { maximumFractionDigits: 2 })}</td>
-        <td className="px-2 py-2">
-          <button type="button" onClick={submit} disabled={saving} className={`${primaryButton} px-3! py-1.5!`}>
-            <span className="material-symbols-outlined text-[17px]">add</span>Add
-          </button>
-        </td>
-      </tr>
-      <tr>
-        <td colSpan={12} className="px-3 pb-2 text-[11.5px]">
-          {error ? <span role="alert" className="text-danger-700">{error}</span> : (
-            <span className="text-warmstone-500">kg per size · {formatKg(Math.max(leftKg - total, 0))} of this load left after this run</span>
-          )}
-        </td>
-      </tr>
-    </tfoot>
+      </ul>
+      {error && <p role="alert" className="text-[12px] text-danger-700 mt-2">{error}</p>}
+    </div>
   );
 }

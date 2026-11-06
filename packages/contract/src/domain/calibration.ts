@@ -121,10 +121,14 @@ export const sizingGramsTotal = (g: SizingGrams): number => SIZING_GRADES.reduce
  * it, never re-read one column over; the decision stays the QFS Officer's.
  */
 export function correctSizePct(point: SamplingPoint, sampleG: string | undefined, grams: SizingGrams): number | null {
-  if (point === "received") return null;
+  return point === "received" ? null : sizingGradePct(point, sampleG, grams);
+}
+
+/** One size's share of the sample: the sheet's "A++ %" … "< DE %" columns. Null without a sample weight. */
+export function sizingGradePct(grade: SizingGrade, sampleG: string | undefined, grams: SizingGrams): number | null {
   const sample = num(sampleG);
   if (sample === null || Number.isNaN(sample) || sample <= 0) return null;
-  return ((num(grams[point]) || 0) / sample) * 100;
+  return ((num(grams[grade]) || 0) / sample) * 100;
 }
 
 export interface SizingCheckValues {
@@ -171,6 +175,56 @@ export function sizingCheckNotes(v: SizingCheckValues): string[] {
     if (pct !== null && pct < CORRECT_SIZE_TARGET_PCT) notes.push(`Only ${pct.toFixed(1)} % is the silo's own size (target ${CORRECT_SIZE_TARGET_PCT} %).`);
   }
   return notes;
+}
+
+/**
+ * Where a silo stands on QC-2. The doc: "QC-2 = NO: silo is flagged", and a check answered No "is repeated" after
+ * the material goes back a step, so a re-sized silo asks for a new check rather than reading as passed.
+ */
+export type SiloCheckState = "not_checked" | "ok" | "failed" | "re_sized";
+
+export const SILO_CHECK_LABELS: Record<SiloCheckState, string> = {
+  not_checked: "Not checked yet",
+  ok: "OK",
+  failed: "Failed · move the nuts",
+  re_sized: "Nuts moved · check again",
+};
+
+export type CalibrationStep = "sort" | "check" | "fix" | "none";
+
+/**
+ * The one job to point this person at. Only what they can act on: a QFS Officer is never sent to sort a load or
+ * to approve their own check, so with nothing to sample they are simply told there is nothing to do.
+ */
+export function nextCalibrationStep(v: { canSize: boolean; canCheck: boolean; loadsToSort: number; checksWaiting: number; failedSilos: number; silosToCheck: number }): CalibrationStep {
+  if (v.canSize && v.loadsToSort > 0) return "sort";
+  if (v.canSize && v.checksWaiting > 0) return "check";
+  if (v.canSize && v.failedSilos > 0) return "fix";
+  if (v.canCheck && v.silosToCheck > 0) return "check";
+  return "none";
+}
+
+export interface SiloCheck {
+  state: SiloCheckState;
+  /** The deciding check's correct-size %, and its date; null when not checked. */
+  correctPct: number | null;
+  date: string | null;
+}
+
+/**
+ * Each silo's standing, from its newest approved check. A check waiting for approval or rejected changes nothing,
+ * as with a moisture check ("saved as pending; nothing changes yet").
+ */
+export function siloChecks(
+  checks: { id: number; point: string; status: string; decision: string; date: string; correctPct: number | null; moves: number }[],
+): Record<SiloSize, SiloCheck> {
+  const out = Object.fromEntries(SILO_SIZE_KEYS.map((k) => [k, { state: "not_checked", correctPct: null, date: null }])) as Record<SiloSize, SiloCheck>;
+  const newestFirst = checks.filter((c) => c.status === "approved").sort((a, b) => b.id - a.id);
+  for (const size of SILO_SIZE_KEYS) {
+    const c = newestFirst.find((x) => x.point === size);
+    if (c) out[size] = { state: c.decision === "ok" ? "ok" : c.moves > 0 ? "re_sized" : "failed", correctPct: c.correctPct, date: c.date };
+  }
+  return out;
 }
 
 // ── Step 4 · Wholes manual calibration ──────────────────────────────────────────────────────────

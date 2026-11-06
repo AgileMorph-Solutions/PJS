@@ -170,6 +170,13 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
     expect(cal.silos.reduce((n: number, s: { stockKg: number }) => n + s.stockKg, 0)).toBe(TO_SILOS);
   });
 
+  it("flags the silo until it is re-sized, then asks for a new check; a silo not yet checked says so", async () => {
+    const cal = await calibration();
+    expect(cal.siloChecks.Ap).toMatchObject({ state: "re_sized", date: "2026-08-28" });
+    expect(cal.siloChecks.Ap.correctPct).toBeCloseTo(16.2, 6);
+    expect(cal.siloChecks.B).toEqual({ state: "not_checked", correctPct: null, date: null });
+  });
+
   it("won't remove a run whose nuts have since been moved out of a silo by hand", async () => {
     const load = (await call("wi", "GET", `/api/production/rcn-receipts?batch=${BATCH}`)).json()[0];
     const firstRun = load.calibration.runs[0].id;

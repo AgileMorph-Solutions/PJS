@@ -173,11 +173,8 @@ function AppRoutes() {
               <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
               {/* The workbook-import pages above are not linked from the sidebar; Batches is. */}
               <Route path="/production" element={<Navigate to="/production/batches" replace />} />
-              {/* Batch & Intake is for one factory: an admin's choice of it is held here for all three pages. */}
               <Route element={<ProductionFactoryLayout />}>
-                <Route path="/production/batches" element={<BatchesListPage />} />
                 <Route path="/production/batches/new" element={<NewBatchPage />} />
-                <Route path="/production/batches/:code" element={<BatchDetailPage />} />
               </Route>
 
               <Route path="/masters/suppliers" element={<SuppliersPage />} />
@@ -188,6 +185,15 @@ function AppRoutes() {
               <Route path="/masters/origins" element={<OriginsPage />} />
               <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/supplier-assignment" element={<SupplierAssignmentPage />} />
+            </Route>
+
+            {/* The QFS Officer takes each load's moisture check and the silo checks on the batch page (auth/policy.ts). */}
+            <Route element={<RequireRole roles={[...REVIEWERS, "qfs_officer"]} />}>
+              {/* Batch & Intake is for one factory: an admin's choice of it is held here. */}
+              <Route element={<ProductionFactoryLayout />}>
+                <Route path="/production/batches" element={<BatchesListPage />} />
+                <Route path="/production/batches/:code" element={<BatchDetailPage />} />
+              </Route>
             </Route>
 
             <Route element={<RequireRole roles={["branch_manager"]} />}>

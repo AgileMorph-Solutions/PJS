@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { formatKg, inputCls, primaryButton } from "./batchUi";
 import { api, ApiError } from "../../repository/api";
 import { canWeigh } from "@anagroci/contract/domain/rcnReceipt";
-import { JUTE_BAG_KG, emptyPalletCountNote, finalWeightError, palletError, weighingTotals, type WeighingTotals } from "@anagroci/contract/domain/rcnWeighing";
+import { JUTE_BAG_KG, emptyPalletCountNote, finalWeightError, palletError, pctOfNet, weighingTotals, type WeighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import type { RcnPallet, RcnPalletInput, RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 
@@ -29,7 +29,7 @@ export function WeighingCard({ receipt, canEdit, onChanged }: { receipt: RcnRece
       {fw ? (
         <section>
           <h4 className="text-[13px] font-bold text-warmstone-900 mb-2">Final weight</h4>
-          <Summary t={totals} />
+          <WeighingSummary t={totals} />
           <p className="mt-2 text-[12px] text-warmstone-500">
             Empty pallets weighed {fw.emptyPallets.length} time{fw.emptyPallets.length === 1 ? "" : "s"} ({fw.emptyPallets.map((s) => `${s.weightKg} kg${s.count ? ` / ${s.count}` : ""}`).join(", ")}).
             Saved {formatDateTime(fw.finalisedAt)}{fw.finalisedBy ? ` by ${fw.finalisedBy}` : ""}.
@@ -263,9 +263,9 @@ function FinalWeightForm({ receipt, onSaved }: { receipt: RcnReceipt; onSaved: (
         {label("Voids kg", <input inputMode="decimal" className={`${inputCls} font-mono`} value={voidsKg} onChange={(e) => setVoids(e.target.value)} placeholder="e.g. 0.5" />, "Leave blank if not recorded.")}
       </div>
 
-      <Summary t={totals} />
+      <WeighingSummary t={totals} />
 
-      {error && <p role="alert" className="text-[12.5px] text-danger-700">{error}</p>}
+      {error &&<p role="alert" className="text-[12.5px] text-danger-700">{error}</p>}
       <div className="flex justify-end">
         <button type="submit" disabled={saving} className={primaryButton}>
           <span className="material-symbols-outlined text-[18px]">check</span>Save final weight
@@ -276,21 +276,21 @@ function FinalWeightForm({ receipt, onSaved }: { receipt: RcnReceipt; onSaved: (
 }
 
 /** The tally sheet's Print form summary box, in its order. */
-function Summary({ t }: { t: WeighingTotals }) {
+function WeighingSummary({ t }: { t: WeighingTotals }) {
   const row = (label: string, value: string, strong?: boolean) => (
     <div className={`flex justify-between gap-3 py-1 border-b border-warmstone-100 last:border-0 ${strong ? "font-bold text-warmstone-900" : "text-warmstone-700"}`}>
       <dt>{label}</dt>
-      <dd className="tabular-nums">{value}</dd>
+      <dd className="tabular-nums whitespace-nowrap">{value}</dd>
     </div>
   );
   return (
-    <dl className="rounded-xl border border-warmstone-200 bg-warmstone-50/60 px-4 py-2 text-[12.5px]">
+    <dl className="rounded-xl border border-warmstone-200 bg-warmstone-50/60 px-4 py-2 text-[13px]">
       {row("Total gross weight", formatKg(t.grossKg))}
       {row(`Jute bags weight (${t.bags.toLocaleString("en-US")} × ${JUTE_BAG_KG} kg)`, `− ${formatKg(t.bagsKg)}`)}
-      {row(`Empty pallets weight (${t.pallets} pallets)`, `− ${formatKg(t.palletKg)}`)}
+      {row(`Empty pallets weight (${t.pallets} pallet${t.pallets === 1 ? "" : "s"})`, `− ${formatKg(t.palletKg)}`)}
       {row("Net weight received", formatKg(t.netKg), true)}
-      {row("Dust", `− ${formatKg(t.dustKg)}`)}
-      {row("Voids", `− ${formatKg(t.voidsKg)}`)}
+      {row(`Dust (${pctOfNet(t.dustKg, t.netKg).toFixed(2)} %)`, `− ${formatKg(t.dustKg)}`)}
+      {row(`Voids (${pctOfNet(t.voidsKg, t.netKg).toFixed(3)} %)`, `− ${formatKg(t.voidsKg)}`)}
       {row("Net weight to silos", formatKg(t.toSilosKg), true)}
     </dl>
   );

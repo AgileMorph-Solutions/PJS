@@ -132,9 +132,9 @@ export function BatchDetailPage() {
             <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
           </div>
           <div>
-            <PhaseHeading n={2} title="Calibration" text="size each load into the 9 silos, check the silos (QC-2)" />
+            <PhaseHeading n={2} title="Calibration" text="sort each weighed load by size into the 9 silos" />
             {calibration.calibration ? (
-              <CalibrationSection batch={batch} calibration={calibration.calibration} can={{ canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+              <CalibrationSection batch={batch} receipts={receipts.rows} calibration={calibration.calibration} can={{ canSize: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
             ) : (
               <p className="text-[13px] text-warmstone-500">{calibration.error ?? "Loading…"}</p>
             )}

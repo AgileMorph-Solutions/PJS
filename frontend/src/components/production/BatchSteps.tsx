@@ -3,9 +3,8 @@ import { RcnReceiptStatusPill, primaryButton, secondaryButton } from "./batchUi"
 import { RcnReceiptForm } from "./RcnReceiptForm";
 import { MoistureCard } from "./MoistureCard";
 import { WeighingCard } from "./WeighingCard";
-import { CalibrationRunCard } from "./CalibrationRunCard";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
-import { canCalibrate, canWeigh, isIntakeDone, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
+import { canWeigh, isIntakeDone, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
 import type { BatchDetail } from "@anagroci/contract/types/productionBatch";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 
@@ -24,7 +23,6 @@ function actionLabel(status: RcnReceiptStatus, can: StepPermissions): string {
   if (status === "moisture_pending" && can.canReview) return "Review moisture";
   if (status === "on_hold" && can.canEnterMoisture) return "Re-check moisture";
   if (canWeigh(status) && can.canReceive) return "Weigh pallets";
-  if (canCalibrate(status) && can.canReceive) return "Calibrate";
   return "View";
 }
 
@@ -48,11 +46,7 @@ function ReceiptWork({ receipt, can, onChanged }: { receipt: RcnReceipt; can: St
         <b>Moisture OK</b> · {ok.moisture} %, nut count {ok.nutCount}{ok.kor !== null ? `, KOR ${ok.kor.toFixed(2)}` : ""} · {ok.submittedBy}
       </p>
       <WeighingCard receipt={receipt} canEdit={can.canReceive} onChanged={onChanged} />
-      {receipt.calibration && (
-        <div className="border-t border-warmstone-200 pt-4">
-          <CalibrationRunCard receipt={receipt} canEdit={can.canReceive} onChanged={onChanged} />
-        </div>
-      )}
+      {receipt.calibration && <p className="text-[12px] text-warmstone-500">This load is weighed. It is sorted into the silos in Calibration, below.</p>}
     </div>
   );
 }
@@ -70,7 +64,7 @@ export function BatchSteps({ batch, receipts, can, onChanged }: { batch: BatchDe
       <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h3 className="text-[15px] font-bold text-warmstone-900">RCN Receipts ({receipts.length})</h3>
-          <p className="text-[12px] text-warmstone-500 mt-0.5">One receipt for each load brought from a bin. Click a receipt to do its next step: moisture check, weighing, then sizing into the silos.</p>
+          <p className="text-[12px] text-warmstone-500 mt-0.5">One receipt for each load brought from a bin. Click a receipt to do its next step: moisture check, then weighing. Once weighed, it moves to Calibration below.</p>
         </div>
         {can.canReceive && !adding && (
           <button type="button" className={primaryButton} onClick={() => setAdding(true)}>
