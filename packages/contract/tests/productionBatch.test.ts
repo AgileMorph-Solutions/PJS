@@ -5,7 +5,7 @@ import type { ReceiptRecord, TransferRequest } from "../src/types/receipt";
 
 const DRIED_BIN = 'New/assigned Bin (marked "dried stock")';
 /** Every decision answered the way that keeps the Lot in its bin. */
-const READY = { "n-qfs": "pass", "n-drying": "none", "n-xferdec": "stays" };
+const READY = { "n-qfs": "pass", "n-drying": "none", "n-xferdec": "production" };
 
 function receipt(id: string, stageData: ReceiptRecord["stageData"], extra: Partial<ReceiptRecord> = {}): ReceiptRecord {
   return {
@@ -60,7 +60,7 @@ describe("warehouse bin stock, as procurement left it", () => {
       receipt("NO-DRY", inBin, { branches: noDryingAnswer }),
       // Drying chosen, but the Lot hasn't been issued to drying yet: it's about to leave the bin.
       receipt("DRY-SOON", inBin, { branches: { ...READY, "n-drying": "indirect" } }),
-      receipt("QFS-OPEN", inBin, { branches: { "n-drying": "none", "n-xferdec": "stays" } }),
+      receipt("QFS-OPEN", inBin, { branches: { "n-drying": "none", "n-xferdec": "production" } }),
     ]);
     expect(stock.get("BIN-03B")!.lots.map((l) => l.receiptId)).toEqual(["READY"]);
     expect(stock.get("BIN-03B")!.kg).toBe(1000);

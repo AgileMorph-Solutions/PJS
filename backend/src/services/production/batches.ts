@@ -6,7 +6,7 @@
  * batch bin leads back to the Lots in it, their trucks and suppliers.
  */
 import { Prisma } from "@prisma/client";
-import { arrivedLots, BATCH_CODE_PATTERN, batchStatus, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { arrivedLots, BATCH_CODE_PATTERN, batchStatus, keptLotsByBin, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
 import { MOISTURE_DECISION_LABELS, type MoistureDecision } from "@anagroci/contract/domain/rcnReceipt";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { SIZING_DECISION_LABELS, samplingPointLabel, siloLabel, sizesTotal, type SamplingPoint, type SiloSize, type SizingDecision } from "@anagroci/contract/domain/calibration";
@@ -56,6 +56,7 @@ async function runningBatchOfBins(binCodes?: string[]): Promise<Map<string, stri
 /** The New batch screen's list: the site's bins holding stock, plus bins already in a batch (greyed out). */
 export async function listAvailableBins(site: string): Promise<AvailableBin[]> {
   const stock = await procurementBinStock(site);
+  const kept = keptLotsByBin(await listReceipts(await resolveSite(site)));
   const batchBins = await prisma.productionBatchBin.findMany({ where: { batch: { warehouse: site } }, select: { binCode: true, batchCode: true } });
   const codes = [...new Set([...stock.keys(), ...batchBins.map((b) => b.binCode)])];
   const [master, inBatch] = await Promise.all([
@@ -72,6 +73,7 @@ export async function listAvailableBins(site: string): Promise<AvailableBin[]> {
         kg: s?.kg ?? 0,
         lotCount: s?.lots.length ?? 0,
         lotsWithoutKg: s?.lots.filter((l) => l.kg === undefined).length ?? 0,
+        lotsKept: kept.get(code) ?? 0,
         inBatch: inBatch.get(code) ?? null,
         inMaster: storeOf.has(code),
       };

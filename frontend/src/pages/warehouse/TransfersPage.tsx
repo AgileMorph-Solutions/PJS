@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { siteTypeOf } from "@anagroci/contract/domain/siteType";
 import { readyForTransfer, transferDestinationLabel, transferDestinations, TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
@@ -26,7 +27,8 @@ interface Pick { bags: string; net: string }
  * Transfers — moving Lots to another warehouse on ONE truck, numbered BKT-<year>-NNN. A line is a Lot:
  * its supplier, fiche and Lot number come from the receipt, and the bags and net weight start as what
  * that receipt recorded, so nothing is typed twice. A Lot is offered here once its receipt says
- * "Yes — transfers out"; "No — stays" keeps it off this page.
+ * "Yes — transfers out"; "No — stays" keeps it off this page. RCN only moves from Unit to Central, so a
+ * Central warehouse has no new transfer here: this page is where it records what arrives.
  *
  * Two warehouses write two halves, and neither writes the other's: the SENDING one says what left (the
  * truck, and what its scale read), the DESTINATION one says what arrived. What arrived is blank until
@@ -48,6 +50,7 @@ export function TransfersPage() {
   const [remarks, setRemarks] = useState("");
   const [picked, setPicked] = useState<Record<string, Pick>>({});
 
+  const canSend = siteTypeOf(masters.warehouses, masters.aliases, site.warehouseName) === "UNIT";
   const destinations = transferDestinations(masters.warehouses, site.warehouseName);
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
@@ -128,16 +131,18 @@ export function TransfersPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Transfers"
-        lede="Move Lots to another warehouse on one truck - each truck is one BKT. The sending warehouse records what leaves; the receiving warehouse records what arrives, and the difference is worked out for you."
+        lede={canSend
+          ? "Move Lots to the Central warehouse on one truck - each truck is one BKT. You record what leaves; the receiving warehouse records what arrives, and the difference is worked out for you."
+          : "Trucks coming from the Unit warehouse - each truck is one BKT. Open one to record what arrived and the bin each Lot went into, and the difference is worked out for you."}
         actions={<SiteSwitcher value={site.slug} onChange={(s) => s && switchSite(s)} />}
       />
 
-      {canEdit && (
+      {canEdit && canSend && (
         <CollapsibleCard title="New transfer request" meta={`from ${site.warehouseName}`}>
           <form onSubmit={handleCreate} className="space-y-4 pt-3">
             <div className="grid sm:grid-cols-3 gap-4">
               <Field id="tr-date" label="Date"><DateInput id="tr-date" required value={date} onChange={setDate} className={inputClass} /></Field>
-              <Field id="tr-to" label="To warehouse" hint={destinations.length ? undefined : "No warehouse is available. In Masters, give another site a Unit or Central type."}>
+              <Field id="tr-to" label="To warehouse" hint={destinations.length ? undefined : "No warehouse is available. In Masters, a site needs the Central type."}>
                 <select id="tr-to" required value={to} onChange={(e) => setTo(e.target.value)} className={inputClass}>
                   <option value="" disabled>Select…</option>
                   {destinations.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -199,7 +204,7 @@ export function TransfersPage() {
         keyFn={(t) => t.id}
         rowHref={(t) => `/${site.slug}/transfers/${encodeURIComponent(t.id)}`}
         emptyTitle="No transfers yet"
-        emptyHint="Create a transfer request to send Lots to another warehouse."
+        emptyHint={canSend ? "Create a transfer request to send Lots to the Central warehouse." : "Trucks sent from the Unit warehouse will show here."}
       />
     </div>
   );

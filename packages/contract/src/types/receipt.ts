@@ -10,6 +10,7 @@ export type ReceiptStatus =
   | "grn_completed"
   | "in_stock"
   | "in_drying"
+  | "ready_for_production"
   | "transferred_out";
 
 export interface TimelineEntry {

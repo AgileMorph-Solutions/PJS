@@ -37,7 +37,7 @@ async function lotInBin(bin: string, kg: string, opts: { price?: boolean; decide
   await setStageFields(r.id, "n-grn", { [GRN]: kg, ...(opts.price === false ? {} : { PRICE: "470" }) }, { bypassValidation: true });
   if (opts.decided !== false) {
     await setBranch(r.id, "n-drying", "none");
-    await setBranch(r.id, "n-xferdec", "stays");
+    await setBranch(r.id, "n-xferdec", "production", undefined, { bypassValidation: opts.price === false });
   }
   return r.id;
 }
@@ -68,8 +68,8 @@ describe("New batch: bins and their stock come from procurement", () => {
     const res = await call("wi", "GET", "/api/production/batch-bins");
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
-      { binCode: "PBT-03B", store: null, kg: 2_950_400, lotCount: 2, lotsWithoutKg: 0, inBatch: null, inMaster: true },
-      { binCode: "PBT-10", store: null, kg: 878_200, lotCount: 1, lotsWithoutKg: 0, inBatch: null, inMaster: true },
+      { binCode: "PBT-03B", store: null, kg: 2_950_400, lotCount: 2, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true },
+      { binCode: "PBT-10", store: null, kg: 878_200, lotCount: 1, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true },
     ]);
   });
 

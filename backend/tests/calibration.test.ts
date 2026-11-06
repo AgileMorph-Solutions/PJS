@@ -65,7 +65,7 @@ beforeAll(async () => {
   await setStageFields(r.id, "n-bin", { "Bin Number": "CAL-03B" }, { bypassValidation: true });
   await setStageFields(r.id, "n-grn", { [GRN]: "2950400", PRICE: "470" }, { bypassValidation: true });
   await setBranch(r.id, "n-drying", "none");
-  await setBranch(r.id, "n-xferdec", "stays");
+  await setBranch(r.id, "n-xferdec", "production");
   await login("wi", "warehouse_incharge");
   await login("qfs", "qfs_officer");
   expect((await call("wi", "POST", "/api/production/batches", { code: BATCH, startDate: "2026-07-19", bins: ["CAL-03B"] })).statusCode).toBe(201);

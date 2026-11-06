@@ -10,7 +10,8 @@ import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
 import { createTransfer, dispatchTransfer, receiveTransfer as receiveInto, getTransfer, addTransferLines, type ReceiveInput } from "../src/services/transfers.js";
-import { procurementBinStock } from "../src/services/production/batches.js";
+import { listAvailableBins, procurementBinStock } from "../src/services/production/batches.js";
+import { getReceiptLinks } from "../src/services/receiptLinks.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -180,6 +181,66 @@ describe("the receipt's Yes / No decides whether a Lot can go on a BKT", () => {
     const id = await lot();
     const t = await send(id);
     await expect(setBranch(id, "n-xferdec", "stays")).rejects.toThrow(new RegExp(`already on transfer ${t.id}`));
+  });
+});
+
+describe("RCN moves one way: Unit to Central", () => {
+  /** A Lot at the Central site B, past everything "Ready for production" needs when `complete`. */
+  async function centralLot(complete = true): Promise<string> {
+    const id = (await createReceipt(B, D)).id;
+    await setBranch(id, "n-qfs", "pass");
+    if (complete) {
+      await setStageFields(id, "n-bin", { "Bin Number": B_BIN }, { bypassValidation: true });
+      await setStageFields(id, "n-grn", { "GRN Weight (kept separate from Gross/Net/Paid)": "1000", PRICE: "470" }, { bypassValidation: true });
+      await setBranch(id, "n-drying", "none");
+    }
+    return id;
+  }
+
+  it("refuses a new BKT from Central back to Unit, and between two Central sites", async () => {
+    const id = await centralLot();
+    await expect(createTransfer({ transferDate: D, fromWarehouse: B, toWarehouse: A, lines: [{ receiptId: id, bags: 5 }] })).rejects.toThrow(/from a Unit warehouse to a Central warehouse/);
+    await expect(createTransfer({ transferDate: D, fromWarehouse: B, toWarehouse: C, lines: [{ receiptId: id, bags: 5 }] })).rejects.toThrow(/from a Unit warehouse to a Central warehouse/);
+  });
+
+  it("won't dispatch or add to a BKT already created the wrong way round, and nothing is written", async () => {
+    await prisma.transferRequest.create({ data: { id: "BKT-2033-901", transferDate: D, fromWarehouse: B, toWarehouse: A } });
+    await expect(dispatchTransfer("BKT-2033-901", { whReceiptNo: "WR", truckNo: "BACK-RIG" })).rejects.toThrow(/from a Unit warehouse to a Central warehouse/);
+    await expect(addTransferLines("BKT-2033-901", [{ receiptId: await centralLot() }])).rejects.toThrow(/from a Unit warehouse to a Central warehouse/);
+    expect((await getTransfer("BKT-2033-901"))!.status).toBe("requested");
+  });
+
+  it("Central can't answer 'transfers out', and Unit can't answer 'ready for production'", async () => {
+    await expect(setBranch(await centralLot(), "n-xferdec", "transfer")).rejects.toThrow(/Central warehouse can't be transferred/);
+    await expect(setBranch(await lot(), "n-xferdec", "production")).rejects.toThrow(/Only a Lot at a Central warehouse/);
+  });
+
+  it("a Lot can only be marked ready once nothing is open, and says what is missing", async () => {
+    await expect(setBranch(await centralLot(false), "n-xferdec", "production")).rejects.toThrow(/allocate a Bin, complete the GRN .*, answer the Drying step/);
+    const ready = await setBranch(await centralLot(), "n-xferdec", "production");
+    expect(ready.status).toBe("ready_for_production");
+  });
+
+  it("only a Lot marked ready counts in its bin; a kept one stays out and is reported on the bin", async () => {
+    const keep = await centralLot();
+    await setBranch(keep, "n-xferdec", "stays");
+    const go = await centralLot();
+    await setBranch(go, "n-xferdec", "production");
+    const lots = (await procurementBinStock(B)).get(B_BIN)!.lots.map((l) => l.receiptId);
+    expect(lots).toContain(go);
+    expect(lots).not.toContain(keep);
+    expect((await listAvailableBins(B)).find((b) => b.binCode === B_BIN)!.lotsKept).toBeGreaterThanOrEqual(1);
+  });
+
+  it("the receipt's links report its real BKT, and a batch only through the bin it reached", async () => {
+    const id = await lot(BIN1);
+    expect(await getReceiptLinks(id)).toMatchObject({ bkt: null, batchCode: null });
+    const t = await createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: id, bags: 5 }] });
+    expect((await getReceiptLinks(id)).bkt).toMatchObject({ id: t.id, dispatchedAt: null, receivedAt: null }); // "Yes" and a BKT aren't a dispatch
+    await dispatchTransfer(t.id, { whReceiptNo: "WR-D", truckNo: `LINK-RIG-${t.id}` });
+    expect((await getReceiptLinks(id)).bkt!.dispatchedAt).not.toBeNull();
+    await receiveTransfer(t.id, { whReceiptNo: "WR-R", bagsReceived: 5, receivedGrossKg: 5 });
+    expect((await getReceiptLinks(id)).bkt!.receivedAt).not.toBeNull();
   });
 });
 

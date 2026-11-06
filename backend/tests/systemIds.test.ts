@@ -359,9 +359,9 @@ describe("Transfer Request", () => {
   });
 
   it("is BKT-<year>-NNN, takes its Lots from the receipts, and they read transferred out", async () => {
-    const t = await createTransfer({ transferDate: `${YEAR}-08-05`, fromWarehouse: SITE, toWarehouse: "BOUAKE", lines: [{ receiptId: lotted, bags: 478, netWeightKg: "40822" }] });
+    const t = await createTransfer({ transferDate: `${YEAR}-08-05`, fromWarehouse: SITE, toWarehouse: "YAKRO FACTORY", lines: [{ receiptId: lotted, bags: 478, netWeightKg: "40822" }] });
     expect(t.id).toBe(`BKT-${YEAR}-001`);
-    expect(t).toMatchObject({ status: "requested", fromWarehouse: SITE, toWarehouse: "BOUAKE" });
+    expect(t).toMatchObject({ status: "requested", fromWarehouse: SITE, toWarehouse: "YAKRO FACTORY" });
     expect(t.lines[0]).toMatchObject({ receiptId: lotted, lotNumber, bags: 478, netWeightKg: 40822 });
     const r = (await getReceipt(lotted))!;
     expect(r.status).toBe("transferred_out");
@@ -369,7 +369,7 @@ describe("Transfer Request", () => {
   });
 
   it("a Lot leaves a warehouse once", async () => {
-    await expect(createTransfer({ transferDate: `${YEAR}-08-06`, fromWarehouse: SITE, toWarehouse: "BOUAKE", lines: [{ receiptId: lotted }] }))
+    await expect(createTransfer({ transferDate: `${YEAR}-08-06`, fromWarehouse: SITE, toWarehouse: "YAKRO FACTORY", lines: [{ receiptId: lotted }] }))
       .rejects.toThrow(/already on transfer/);
     expect(await prisma.transferRequest.count({ where: { id: `BKT-${YEAR}-002` } })).toBe(0); // all-or-nothing
   });
@@ -378,10 +378,10 @@ describe("Transfer Request", () => {
     const noLot = (await createReceipt(SITE, `${YEAR}-08-07`)).id;
     const failed = (await createReceipt(SITE, `${YEAR}-08-08`)).id;
     await setBranch(failed, "n-qfs", "fail", "Mouldy");
-    const go = (receiptId: string, from = SITE) => createTransfer({ transferDate: D, fromWarehouse: from, toWarehouse: "BOUAKE", lines: [{ receiptId }] });
+    const go = (receiptId: string, from = SITE) => createTransfer({ transferDate: D, fromWarehouse: from, toWarehouse: "YAKRO FACTORY", lines: [{ receiptId }] });
     await expect(go(noLot)).rejects.toThrow(/no Lot yet/);
     await expect(go(failed)).rejects.toThrow(/no Lot yet|rejected/);
-    await expect(createTransfer({ transferDate: D, fromWarehouse: "BOUAKE", toWarehouse: SITE, lines: [{ receiptId: noLot }] })).rejects.toThrow(/is at/);
+    await expect(createTransfer({ transferDate: D, fromWarehouse: "BOUAKE", toWarehouse: "YAKRO FACTORY", lines: [{ receiptId: noLot }] })).rejects.toThrow(/is at/);
     await expect(createTransfer({ transferDate: D, fromWarehouse: SITE, toWarehouse: SITE, lines: [{ receiptId: noLot }] })).rejects.toThrow(/different warehouse/);
   });
 

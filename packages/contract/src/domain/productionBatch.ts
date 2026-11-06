@@ -103,9 +103,9 @@ export function splitBinCodes(raw: string | undefined): string[] {
  * - Quality passed.
  * - GRN complete: quantity and price, the rule that locks the record (recordLock.ts). An imported receipt only
  *   needs a GRN row: its sheet had no GRN quantity column, the same exception deriveStatus makes.
- * - Transfer decided "No — stays". Unanswered could still become "Yes — transfers out" after the bin is planned.
  * - Drying decided: "No drying needed", or the drying step exists (warehouseBinStock then waits for the dried
  *   quantity to come back). "Direct"/"Warehouse → Drying" chosen but not yet started is not ready either.
+ * - Marked "Ready for production" at the warehouse. "Keep in warehouse" or no answer leaves it out of the bin's stock.
  *
  * Imported receipts never recorded the two decisions, so they don't qualify until someone answers them in the app.
  */
@@ -113,8 +113,45 @@ function procurementComplete(r: ReceiptRecord): boolean {
   if (r.branches["n-qfs"] !== "pass") return false;
   const grn = r.source === "imported" ? Boolean(r.stageData["n-grn"]) : isGrnComplete(r.stageData);
   if (!grn) return false;
-  if (r.branches["n-xferdec"] !== "stays") return false;
+  if (r.branches["n-xferdec"] !== "production") return false;
   return Boolean(r.stageData["n-drying"]) || r.branches["n-drying"] === "none";
+}
+
+/** The bins a Lot sits in now: the one it came back to from drying, otherwise the one it was allocated. */
+export function binsOfLot(r: Pick<ReceiptRecord, "stageData" | "binNo">): string[] {
+  const back = splitBinCodes(r.stageData["n-drying"]?.['New/assigned Bin (marked "dried stock")']);
+  return back.length ? back : splitBinCodes(r.stageData["n-bin"]?.["Bin Number"] || r.binNo);
+}
+
+/**
+ * What still stands between a Lot and "Ready for production", in the warehouse's words. Empty means it
+ * can be marked. The same facts procurementComplete reads, so a Lot marked ready is one a batch can count.
+ */
+export function productionReadinessGaps(r: Pick<ReceiptRecord, "branches" | "stageData" | "binNo" | "source">): string[] {
+  const drying = r.stageData["n-drying"];
+  const dried = !drying || (parseQty(drying["Dried quantity returned to warehouse"]) !== undefined && binsOfLot(r).length > 0);
+  return [
+    r.branches["n-qfs"] !== "pass" && "pass Quality",
+    binsOfLot(r).length === 0 && "allocate a Bin",
+    !(r.source === "imported" ? Boolean(r.stageData["n-grn"]) : isGrnComplete(r.stageData)) && "complete the GRN (quantity and price)",
+    !drying && r.branches["n-drying"] !== "none" && "answer the Drying step",
+    !dried && "record the dried quantity returned to a Bin",
+  ].filter((gap): gap is string => Boolean(gap));
+}
+
+/** What the "Ready for production" option needs to say while it can't be chosen. */
+export function productionReadinessNotice(gaps: string[]): string | undefined {
+  return gaps.length ? `Before this Lot can be marked ready for production: ${gaps.join(", ")}.` : undefined;
+}
+
+/** Lots marked "Keep in warehouse", per bin: physically there, but not in the stock a batch plans from. */
+export function keptLotsByBin(receipts: ReceiptRecord[]): Map<string, number> {
+  const kept = new Map<string, number>();
+  for (const r of receipts) {
+    if (r.branches["n-xferdec"] !== "stays") continue;
+    for (const code of binsOfLot(r)) kept.set(code, (kept.get(code) ?? 0) + 1);
+  }
+  return kept;
 }
 
 /**

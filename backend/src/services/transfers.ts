@@ -17,13 +17,13 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import type { ReceiptRecord, TransferRequest, TransferStatus } from "@anagroci/contract/types/receipt";
-import { transferState, transferVariance, type TransferFacts } from "@anagroci/contract/domain/transfers";
+import { canTransferBetween, TRANSFER_DIRECTION_MESSAGE, transferState, transferVariance, type TransferFacts } from "@anagroci/contract/domain/transfers";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 import { toReceiptRecord } from "../serialize.js";
-import { nextTransferId, siteOf } from "./ids.js";
+import { nextTransferId, siteOf, siteTypeOf } from "./ids.js";
 import { loadReceiptRow, type WriteOpts } from "./receipts.js";
 import { resolveSite } from "../domain/site.js";
 
@@ -187,6 +187,11 @@ function whole(v: string | number | null | undefined, what: string): number | nu
 
 const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 
+/** Unit to Central only. Checked again at dispatch, so a BKT created before this rule can't leave either. */
+async function assertTransferDirection(tx: Tx, from: string, to: string) {
+  if (!canTransferBetween(await siteTypeOf(tx, from), await siteTypeOf(tx, to))) throw new ValidationError(TRANSFER_DIRECTION_MESSAGE);
+}
+
 /**
  * Each Lot must be at the sending warehouse, actually have a Lot (passed quality), not be rejected,
  * not already be on another transfer — a Lot leaves a warehouse once — and be marked "Yes — transfers
@@ -245,6 +250,7 @@ export async function createTransfer(input: TransferInput, opts: WriteOpts = {})
     if (!from) throw new ValidationError(`Warehouse "${input.fromWarehouse}" isn't in the warehouse master.`);
     if (!to) throw new ValidationError(`Warehouse "${input.toWarehouse}" isn't in the warehouse master.`);
     if (from === to) throw new ValidationError("A transfer must go to a different warehouse.");
+    await assertTransferDirection(tx, from, to);
     // Naming a store sends the BKT to its site, and the store is kept alongside.
     const named = await tx.warehouse.findUnique({ where: { name: input.toWarehouse!.trim() }, select: { name: true, site: true } });
     const toStore = named?.site ? named.name : null;
@@ -266,6 +272,7 @@ export async function addTransferLines(id: string, lines: TransferLineInput[], o
     const t = await tx.transferRequest.findUnique({ where: { id } });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
     if (t.status !== "requested") throw new ValidationError(`Transfer ${id} is already ${t.status} — Lots can't be added now.`);
+    await assertTransferDirection(tx, t.fromWarehouse, t.toWarehouse);
     await addLines(tx, id, t.fromWarehouse, lines, opts);
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   });
@@ -290,6 +297,7 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
     const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { id: true, receiptId: true } } } });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
     if (t.status !== "requested") throw new ValidationError(`Transfer ${id} is already ${t.status}.`);
+    await assertTransferDirection(tx, t.fromWarehouse, t.toWarehouse);
     if (!t.lines.length) throw new ValidationError(`Transfer ${id} has no Lots to send.`);
 
     // Every Lot leaves with its quality on the record: re-measured here when given, else its own quality check's result.

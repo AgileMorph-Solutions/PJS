@@ -73,7 +73,7 @@ export function DeliveryPlanDetailPage() {
 
   const { progress: p } = plan;
   // "Done" is the point a truck's kg count: its GRN is recorded (status grn_completed or beyond, which a rejected one never is).
-  const DONE = new Set(["grn_completed", "in_stock", "in_drying", "transferred_out"]);
+  const DONE = new Set(["grn_completed", "in_stock", "in_drying", "ready_for_production", "transferred_out"]);
   const done = plan.trucks.filter((t) => DONE.has(t.status)).length;
   const inProgress = plan.trucks.filter((t) => !t.rejected && !DONE.has(t.status)).length;
   const columns: Column<DeliveryPlanTruck>[] = [

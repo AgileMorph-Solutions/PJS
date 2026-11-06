@@ -31,6 +31,7 @@ const grnQuantityRecorded = (r: StatusInputs) => (r.stageData["n-grn"]?.[GRN_QUA
 export function deriveStatus(r: StatusInputs): ReceiptStatus {
   if (r.branches["n-qfs"] === "fail") return "rejected";
   if (r.branches["n-xferdec"] === "transfer") return "transferred_out";
+  if (r.branches["n-xferdec"] === "production") return "ready_for_production";
   if (r.stageData["n-drying"]) return "in_drying";
   if (r.stageData["n-stock"]) return "in_stock";
   if (r.stageData["n-grn"] && (r.source === "imported" || grnQuantityRecorded(r))) return "grn_completed";
@@ -88,6 +89,7 @@ export const STATUS_LABELS: Record<ReceiptStatus, string> = {
   grn_completed: "GRN completed",
   in_stock: "In stock",
   in_drying: "In drying",
+  ready_for_production: "Ready for production",
   transferred_out: "Transferred out",
 };
 
@@ -103,12 +105,13 @@ export const STATUS_TONE: Record<ReceiptStatus, "entry" | "decision" | "system" 
   grn_completed: "entry",
   in_stock: "term",
   in_drying: "decision",
+  ready_for_production: "entry",
   transferred_out: "term",
 };
 
 export const ALL_STATUSES: ReceiptStatus[] = [
   "planned", "arrived", "pending_qa", "rejected", "pending_unload",
-  "unloaded", "grn_completed", "in_stock", "in_drying", "transferred_out",
+  "unloaded", "grn_completed", "in_stock", "in_drying", "ready_for_production", "transferred_out",
 ];
 
 export interface DashboardCounts {
@@ -120,8 +123,8 @@ export interface DashboardCounts {
   rejected: number;
 }
 
-const UNLOADED_OR_BEYOND: ReceiptStatus[] = ["unloaded", "grn_completed", "in_stock", "in_drying", "transferred_out"];
-const GRN_OR_BEYOND: ReceiptStatus[] = ["grn_completed", "in_stock", "in_drying", "transferred_out"];
+const UNLOADED_OR_BEYOND: ReceiptStatus[] = ["unloaded", "grn_completed", "in_stock", "in_drying", "ready_for_production", "transferred_out"];
+const GRN_OR_BEYOND: ReceiptStatus[] = ["grn_completed", "in_stock", "in_drying", "ready_for_production", "transferred_out"];
 
 /** Directly implements doc §3's required dashboard line items. */
 export function computeDashboardCounts(receipts: StatusInputs[]): DashboardCounts {

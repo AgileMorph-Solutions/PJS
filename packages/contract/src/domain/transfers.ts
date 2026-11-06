@@ -30,14 +30,21 @@ export function readyForTransfer(r: Pick<ReceiptRecord, "lotNo" | "branches">): 
 }
 
 /**
- * Where a BKT can go, from the warehouse master: the stores of every OTHER site that has a Unit/Central
- * type, or the site itself until it has stores. The sender's own stores are left out, because a BKT
- * moves Lots between sites. A site with no type (BKE-04) can't have users assigned to it, so nobody
- * there could record the truck arriving.
+ * RCN moves one way: from a Unit warehouse to a Central one. At Central a Lot stays in its bin or goes
+ * to production, and never goes back. The client's sheets only ever record Bouaké → Yakro.
+ */
+export const canTransferBetween = (fromType: string | null, toType: string | null): boolean => fromType === "UNIT" && toType === "CENTRAL";
+
+export const TRANSFER_DIRECTION_MESSAGE = "RCN can only be transferred from a Unit warehouse to a Central warehouse.";
+
+/**
+ * Where a BKT can go, from the warehouse master: the stores of every Central site, or the site itself
+ * until it has stores. A site with no type (BKE-04) can't have users assigned to it, so nobody there
+ * could record the truck arriving.
  */
 export function transferDestinations(warehouses: WarehouseMaster[], from: string): string[] {
   return warehouses
-    .filter((w) => !w.site && w.type && w.name !== from)
+    .filter((w) => !w.site && w.type === "CENTRAL" && w.name !== from)
     .flatMap((site) => {
       const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name);
       return stores.length ? stores : [site.name];

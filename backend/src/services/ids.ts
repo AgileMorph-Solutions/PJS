@@ -31,6 +31,13 @@ export async function siteOf(tx: Tx, name: string): Promise<string | undefined> 
   return target ? target.site ?? target.name : undefined;
 }
 
+/** The Unit/Central type of `warehouse`'s site, null when the master gives it none. */
+export async function siteTypeOf(tx: Tx, warehouse: string): Promise<string | null> {
+  const site = await siteOf(tx, warehouse);
+  if (!site) return null;
+  return (await tx.warehouse.findUnique({ where: { name: site }, select: { type: true } }))?.type ?? null;
+}
+
 /** The code printed into every ID issued at `warehouse`'s site. Refuses rather than guesses when the master has none. */
 export async function warehouseCodeFor(tx: Tx, warehouse: string): Promise<string> {
   const site = await siteOf(tx, warehouse);

@@ -94,7 +94,7 @@ export function NewBatchPage() {
               <h3 className="text-[15px] font-bold text-warmstone-900">Select warehouse bins</h3>
               <p className="text-[12px] text-warmstone-500 mt-0.5">
                 Bins at the factory holding Lots whose procurement is complete: quality passed, GRN quantity and price recorded, drying
-                answered (no drying, or dried and returned) and transfer answered "No — stays". A Lot with any of these open is not counted.
+                answered (no drying, or dried and returned) and marked "Ready for production". A Lot with any of these open is not counted.
                 Stock is the Lots' GRN weight. Lots received here on a transfer (BKT) count in the bin they were unloaded into, at the net
                 weighed on arrival.
               </p>
@@ -124,7 +124,8 @@ export function NewBatchPage() {
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="font-mono font-semibold">{b.binCode}</div>
-                          <div className="text-[11.5px] text-warmstone-500">{reason ?? (b.store ? `Store ${b.store}` : "Store not recorded")}</div>
+                          <div className="text-[11px] text-warmstone-500">{reason ?? (b.store ? `Store ${b.store}` : "Store not recorded")}</div>
+                          {b.lotsKept > 0 && <div className="text-[11px] font-semibold text-ambernut-700">{b.lotsKept} Lot{b.lotsKept === 1 ? " is" : "s are"} being kept in the warehouse and {b.lotsKept === 1 ? "isn't" : "aren't"} counted</div>}
                         </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{b.lotCount}</td>
                         <td className="px-5 py-2.5 text-right tabular-nums font-semibold">{b.kg ? formatTonnes(b.kg) : "-"}</td>

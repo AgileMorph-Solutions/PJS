@@ -18,12 +18,14 @@ import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
 import { splitBinNumber } from "@anagroci/contract/domain/binNumber";
 import { autoDateFill } from "@anagroci/contract/data/autoFields";
 import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES, isGrnComplete } from "@anagroci/contract/domain/recordLock";
+import { decisionBranchesFor } from "@anagroci/contract/domain/decisions";
+import { productionReadinessGaps } from "@anagroci/contract/domain/productionBatch";
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ForbiddenError, ValidationError } from "../domain/validation.js";
 import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
-import { nextLotNumber, nextReceiptId } from "./ids.js";
+import { nextLotNumber, nextReceiptId, siteTypeOf } from "./ids.js";
 
 type Tx = Prisma.TransactionClient;
 export interface WriteOpts {
@@ -388,6 +390,31 @@ export async function setStageFields(
  * changes at once (the workbook upload) can run it inside its own transaction and append ONE
  * timeline entry for the lot. A QFS fail still needs a reason, here as everywhere.
  */
+/**
+ * The last decision depends on the site: Unit asks "transfer?", Central asks "ready for production?", and
+ * neither can answer the other's question. Ready also has to be true, so a batch never plans around a Lot
+ * still waiting on its GRN or drying; and a Lot on a BKT is committed to that truck.
+ */
+async function assertLastDecisionAllowed(tx: Tx, id: string, branchId: string) {
+  const line = branchId === "transfer" ? null : await tx.transferRequestLine.findFirst({ where: { receiptId: id }, select: { transferId: true } });
+  if (line) throw new ValidationError(`This Lot is already on transfer ${line.transferId}, so it can't be changed to stay at this warehouse.`);
+
+  const row = await loadReceiptRow(id, tx);
+  if (!row) return;
+  const siteType = await siteTypeOf(tx, row.warehouse);
+  if (!decisionBranchesFor("n-xferdec", siteType)!.some((b) => b.id === branchId)) {
+    throw new ValidationError(
+      branchId === "transfer"
+        ? "RCN at a Central warehouse can't be transferred. Mark it ready for production, or keep it in the warehouse."
+        : "Only a Lot at a Central warehouse can be marked ready for production."
+    );
+  }
+  if (branchId === "production") {
+    const gaps = productionReadinessGaps(toReceiptRecord(row) as ReceiptRecord);
+    if (gaps.length) throw new ValidationError(`This Lot can't be marked ready for production yet: ${gaps.join(", ")}.`);
+  }
+}
+
 export async function applyBranch(
   tx: Tx,
   id: string,
@@ -399,11 +426,7 @@ export async function applyBranch(
   if (!opts.bypassValidation && stageId === "n-qfs") assertRejectionHasReason(branchId, reason);
   // The quality decision is part of the locked record; the drying and transfer decisions come after the GRN and stay open.
   if (!opts.bypassValidation && LOCKED_DECISIONS.has(stageId)) await assertRecordOpen(tx, id);
-  // Once a Lot is on a BKT the truck is committed: "stays" would contradict the transfer on record.
-  if (!opts.bypassValidation && stageId === "n-xferdec" && branchId !== "transfer") {
-    const line = await tx.transferRequestLine.findFirst({ where: { receiptId: id }, select: { transferId: true } });
-    if (line) throw new ValidationError(`This Lot is already on transfer ${line.transferId}, so it can't be changed to stay at this warehouse.`);
-  }
+  if (!opts.bypassValidation && stageId === "n-xferdec") await assertLastDecisionAllowed(tx, id, branchId);
 
   await tx.receiptBranch.upsert({
     where: { receiptId_stageId: { receiptId: id, stageId } },

@@ -39,7 +39,7 @@ async function lotInBin(bin: string, kg: string) {
   await setStageFields(r.id, "n-bin", { "Bin Number": bin }, { bypassValidation: true });
   await setStageFields(r.id, "n-grn", { [GRN]: kg, PRICE: "470" }, { bypassValidation: true });
   await setBranch(r.id, "n-drying", "none");
-  await setBranch(r.id, "n-xferdec", "stays");
+  await setBranch(r.id, "n-xferdec", "production");
 }
 
 /** An .xlsx with the given tabs: first row the headers, then the rows. */

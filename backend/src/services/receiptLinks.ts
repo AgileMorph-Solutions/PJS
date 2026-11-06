@@ -30,6 +30,7 @@
  * the one identifier that genuinely travels with a batch. `ficheAgrees` still says which matched
  * rows are confirmed by the fiche.
  */
+import { splitBinCodes } from "@anagroci/contract/domain/productionBatch";
 import { prisma } from "../db.js";
 
 // Extended to production: a linked transfer's own `idTransfer` column IS the production BTM
@@ -178,6 +179,40 @@ export interface ReceiptLinks {
   warehouseReceiving: LinkedWarehouseReceiving[];
   dryingBatches: LinkedDryingBatchRow[];
   issuedToProduction: LinkedIssuedToProduction[];
+  /** The BKT this Lot is on, as recorded in the app (a Lot is on at most one). `transfers` above is the imported sheet. */
+  bkt: LinkedBkt | null;
+  /** The production batch holding the bin this Lot is in now, as created in the app. */
+  batchCode: string | null;
+}
+
+export interface LinkedBkt {
+  id: string;
+  dispatchedAt: string | null;
+  receivedAt: string | null;
+}
+
+/**
+ * The app's own records of where a Lot went: its BKT and the batch holding its bin. A Lot on a BKT is
+ * only in the bin it was unloaded into at the destination; until then it is in no bin a batch could take.
+ */
+async function appRecords(id: string): Promise<{ bkt: LinkedBkt | null; batchCode: string | null }> {
+  const [line, receipt] = await Promise.all([
+    prisma.transferRequestLine.findFirst({
+      where: { receiptId: id },
+      select: { receivedBinCode: true, transfer: { select: { id: true, dispatchedAt: true, receivedAt: true } } },
+    }),
+    prisma.receipt.findUnique({ where: { id }, select: { bin: { select: { binNumber: true } }, drying: { select: { driedStockBin: true } } } }),
+  ]);
+  // The same order as binsOfLot: the bin it came back to from drying, otherwise the one it was allocated.
+  const ownBins = splitBinCodes(receipt?.drying?.driedStockBin ?? undefined);
+  const bins = line
+    ? (line.receivedBinCode ? [line.receivedBinCode.trim().toUpperCase()] : [])
+    : ownBins.length ? ownBins : splitBinCodes(receipt?.bin?.binNumber ?? undefined);
+  const inBatch = bins.length ? await prisma.productionBatchBin.findFirst({ where: { binCode: { in: bins } }, select: { batchCode: true } }) : null;
+  return {
+    bkt: line ? { id: line.transfer.id, dispatchedAt: line.transfer.dispatchedAt?.toISOString() ?? null, receivedAt: line.transfer.receivedAt?.toISOString() ?? null } : null,
+    batchCode: inBatch?.batchCode ?? null,
+  };
 }
 
 const num = (v: { toString(): string } | null | undefined) => (v === null || v === undefined ? null : Number(v.toString()));
@@ -207,11 +242,12 @@ function byLotOrFiche<L extends string, F extends string>(lotCol: L, lotNo: stri
 }
 
 export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
-  const [verify, own] = await Promise.all([
+  const [verify, own, app] = await Promise.all([
     prisma.stageVerifyDocs.findUnique({ where: { receiptId: id }, select: { fiche: true } }),
     prisma.stageLotAssignment.findUnique({
       where: { receiptId: id }, select: { lotNumber: true, warehouseName: true },
     }),
+    appRecords(id),
   ]);
   const fiche = verify?.fiche?.trim() || null;
   const lotNo = own?.lotNumber?.trim() || null;
@@ -237,7 +273,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
   if (!lotNo && !fiche) {
     return {
       lotNo: null, lotWarehouse, fiche, dryingJobs: [], transfers: [], btmIntakes: [],
-      dispatches, warehouseReceiving: [], dryingBatches: [], issuedToProduction: [],
+      dispatches, warehouseReceiving: [], dryingBatches: [], issuedToProduction: [], ...app,
     };
   }
 
@@ -349,5 +385,6 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
     issuedToProduction: issuedToProductionRows.map((p) => ({
       id: p.id, btmNo: p.btmNo ?? "", date: p.date, sourceBin: p.sourceBin, dryBin: p.dryBin, binStatus: p.binStatus,
     })),
+    ...app,
   };
 }

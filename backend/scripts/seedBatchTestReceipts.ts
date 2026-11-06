@@ -74,7 +74,7 @@ const TRUCKS = buildTrucks();
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** No drying, stays at the factory: the answers that make a Lot ready for production (contract domain/productionBatch.ts). */
-const READY_ANSWER: Record<string, string> = { "n-drying": "none", "n-xferdec": "stays" };
+const READY_ANSWER: Record<string, string> = { "n-drying": "none", "n-xferdec": "production" };
 
 async function answerDecisions(id: string, stageIds: string[]) {
   for (const stageId of stageIds) await setBranch(id, stageId, READY_ANSWER[stageId]!);

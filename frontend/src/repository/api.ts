@@ -707,6 +707,10 @@ export interface ReceiptLinks {
   warehouseReceiving: LinkedWarehouseReceiving[];
   dryingBatches: LinkedDryingBatchRow[];
   issuedToProduction: LinkedIssuedToProduction[];
+  /** The BKT this Lot is on, as recorded in the app. `transfers` above is the imported sheet. */
+  bkt: { id: string; dispatchedAt: string | null; receivedAt: string | null } | null;
+  /** The production batch holding the bin this Lot is in now. */
+  batchCode: string | null;
 }
 
 export interface DispatchPayload {

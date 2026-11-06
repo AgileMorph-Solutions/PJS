@@ -10,6 +10,8 @@ export interface AvailableBin {
   lotCount: number;
   /** Lots in the bin that add no kg: no GRN weight recorded, or split across bins without a share. */
   lotsWithoutKg: number;
+  /** Lots physically in the bin but marked "Keep in warehouse", so not in its stock. A batch still takes the whole bin. */
+  lotsKept: number;
   /** Set when the bin is already in a running batch — it can't be picked again. */
   inBatch: string | null;
   /** False when the code appears on receipts but not in Masters › Bins, so it can't be put in a batch. */

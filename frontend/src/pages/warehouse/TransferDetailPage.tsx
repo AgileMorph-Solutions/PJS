@@ -9,6 +9,7 @@ import { api } from "../../repository/api";
 import type { TransferRequest } from "../../types/receipt";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { transferDestinationLabel } from "@anagroci/contract/domain/transfers";
+import { siteTypeOf } from "@anagroci/contract/domain/siteType";
 
 /**
  * One BKT in full. The sending warehouse fills in the dispatch here, the receiving warehouse records the
@@ -69,7 +70,7 @@ export function TransferDetailPage() {
       <PageHeader kicker={`${site.label} · ${site.sublabel}`} title={t.id} lede={`${t.fromWarehouse} → ${transferDestinationLabel(t)} · ${formatDate(t.transferDate)}${t.remarks ? ` · ${t.remarks}` : ""}`} />
       {error && <p role="alert" className="px-1 text-[13px] text-danger-700">{error}</p>}
       <TransferPanel
-        key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} saving={saving} lotLink={lotLink} qualityOf={qualityOf} binOptions={binOptions}
+        key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} canSend={siteTypeOf(masters.warehouses, masters.aliases, site.warehouseName) === "UNIT"} saving={saving} lotLink={lotLink} qualityOf={qualityOf} binOptions={binOptions}
         onDispatch={(p) => run(() => api.dispatchTransfer(t.id, p))} onReceive={(p) => run(() => api.receiveTransfer(t.id, p))}
       />
     </div>

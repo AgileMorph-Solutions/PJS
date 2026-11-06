@@ -33,8 +33,10 @@ export function TransferLotLink({ line, siteSlug, canOpen }: { line: TransferReq
 
 /** One BKT in full: what is on the truck, what left, what arrived — and the form this warehouse is allowed to fill in. */
 export function TransferPanel({
-  t, siteWarehouse, canEdit, saving, lotLink, onDispatch, onReceive, qualityOf, binOptions,
+  t, siteWarehouse, canEdit, canSend, saving, lotLink, onDispatch, onReceive, qualityOf, binOptions,
 }: {
+  /** False at a Central warehouse: RCN never leaves it on a BKT, so a BKT left over from before that rule can't be sent. */
+  canSend: boolean;
   /** This site's bins, offered for "unloaded into" when receiving. */
   binOptions: string[];
   /** A Lot's own quality-check result, to start each line's dispatch quality from. */
@@ -47,7 +49,7 @@ export function TransferPanel({
   onDispatch: (p: Parameters<typeof api.dispatchTransfer>[1]) => Promise<boolean>;
   onReceive: (p: Parameters<typeof api.receiveTransfer>[1]) => Promise<boolean>;
 }) {
-  const sending = canEdit && t.status === "requested" && t.fromWarehouse === siteWarehouse;
+  const sending = canEdit && canSend && t.status === "requested" && t.fromWarehouse === siteWarehouse;
   const receiving = canEdit && t.status === "dispatched" && t.toWarehouse === siteWarehouse;
   const [d, setD] = useState({ truckNo: "", transporter: "", driver: "", driverPhone: "", gross: "", wr: "" });
   const [quality, setQuality] = useState<Record<string, { moisture: string; kor: string; nutCount: string }>>(() => Object.fromEntries(t.lines.map((l) => [l.receiptId, qualityOf(l.receiptId)])));
