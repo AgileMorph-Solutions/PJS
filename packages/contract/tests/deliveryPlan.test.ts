@@ -173,3 +173,29 @@ describe("what the plan already knows", () => {
     });
   });
 });
+
+import { supplierOpenPlans } from "../src/domain/deliveryPlan";
+describe("a supplier's open plans, for linking a truck", () => {
+  const plan = (id: string, supplierCode: string | null, expectedArrivalDate: string, status: "planned" | "partially_received" | "delivered" | "cancelled" = "planned") =>
+    ({ id, supplierCode, expectedArrivalDate, plannedDeliveryDate: null, status });
+  const plans = [
+    plan("DP-BKE-2026-001", "LBA-1", "2026-11-01"),
+    plan("DP-BKE-2026-002", "LBA-1", "2026-11-08", "partially_received"),
+    plan("DP-BKE-2026-003", "LBA-1", "2026-11-12", "delivered"),
+    plan("DP-BKE-2026-004", "LBA-2", "2026-11-20"),
+    plan("DP-BKE-2026-005", null, "2026-11-25"),
+  ];
+
+  it("lists only that supplier's plans still expecting trucks, the latest first", () => {
+    expect(supplierOpenPlans(plans, "LBA-1").map((p) => p.id)).toEqual(["DP-BKE-2026-002", "DP-BKE-2026-001"]);
+  });
+
+  it("is empty for a supplier with no open plan — the screen then says so and offers to create one", () => {
+    expect(supplierOpenPlans(plans, "LBA-9")).toEqual([]);
+    expect(supplierOpenPlans([plan("DP-BKE-2026-006", "LBA-3", "2026-11-01", "cancelled")], "LBA-3")).toEqual([]);
+  });
+
+  it("breaks a tie on arrival date by the highest ID", () => {
+    expect(supplierOpenPlans([plan("DP-BKE-2026-009", "LBA-1", "2026-11-01"), plan("DP-BKE-2026-010", "LBA-1", "2026-11-01")], "LBA-1")[0]!.id).toBe("DP-BKE-2026-010");
+  });
+});

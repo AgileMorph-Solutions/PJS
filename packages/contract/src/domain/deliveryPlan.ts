@@ -257,3 +257,22 @@ export const PLAN_LINK_LABELS: Record<PlanLinkStatus, string> = {
   planned_from_start: "Planned from start",
   linked_later: "Linked afterwards",
 };
+
+/** A plan a truck can still be linked to: one still expecting trucks. */
+export const isOpenPlan = (p: { status: PlanStatus }): boolean => p.status === "planned" || p.status === "partially_received";
+
+/**
+ * The open plans a truck from `supplierCode` can be linked to, the latest first — the one the screen picks for it. The
+ * latest is the one expected to arrive last (the newest plan), then the newest planning date, then the highest ID. A
+ * plan made for this supplier only: one with no supplier on it is not offered here (it would not be "this supplier's").
+ */
+export function supplierOpenPlans<P extends { id: string; status: PlanStatus; supplierCode: string | null; expectedArrivalDate: string; plannedDeliveryDate: string | null }>(
+  plans: P[], supplierCode: string,
+): P[] {
+  return plans
+    .filter((p) => isOpenPlan(p) && p.supplierCode === supplierCode)
+    .sort((a, b) =>
+      b.expectedArrivalDate.localeCompare(a.expectedArrivalDate)
+      || (b.plannedDeliveryDate ?? "").localeCompare(a.plannedDeliveryDate ?? "")
+      || b.id.localeCompare(a.id, undefined, { numeric: true }));
+}
