@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { inputCls, primaryButton, secondaryButton } from "./batchUi";
+import { Button } from "../ui/Button";
+import { inputClass } from "../ui/Input";
 import { Pill } from "../ui/Pill";
 import { api, ApiError } from "../../repository/api";
 import {
@@ -30,7 +31,7 @@ export function MoistureCard({ receipt, canEnter, canReview, direct, onChanged }
   return (
     <div className="space-y-4">
       {receipt.status === "on_hold" && current && (
-        <p className="rounded-xl border border-danger-200 bg-danger-50 text-danger-800 px-4 py-3 text-[12.5px]">
+        <p className="rounded-xl border border-danger-200 bg-danger-50 text-danger-800 px-4 py-3 text-[12px]">
           <b>On hold:</b> moisture was {current.moisture} %. Weighing stays locked; take a new sample once the load has dried.
         </p>
       )}
@@ -49,13 +50,13 @@ export function MoistureCard({ receipt, canEnter, canReview, direct, onChanged }
           onDone={onChanged}
         />
       ) : (
-        <p className="rounded-xl border border-ambernut-200 bg-ambernut-50 text-ambernut-900 px-4 py-3 text-[12.5px]">Submitted. Waiting for the Warehouse Incharge to approve.</p>
+        <p className="rounded-xl border border-ambernut-200 bg-ambernut-50 text-ambernut-900 px-4 py-3 text-[12px]">Submitted. Waiting for the Warehouse Incharge to approve.</p>
       ))}
 
       {earlier.length > 0 && (
         <div>
           <h4 className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500 mb-1.5">Earlier checks</h4>
-          <ul className="space-y-1 text-[12.5px] text-warmstone-700">
+          <ul className="space-y-1 text-[12px] text-warmstone-700">
             {earlier.map((c) => (
               <li key={c.id}>
                 {formatDateTime(c.submittedAt)} · moisture {c.moisture} %, {MOISTURE_DECISION_LABELS[c.decision]} · {c.submittedBy}
@@ -94,48 +95,48 @@ function MoistureForm({ receiptId, direct, onSaved }: { receiptId: string; direc
   }
 
   const numberInput = (key: keyof MoistureCheckInput, placeholder?: string) => (
-    <input inputMode="decimal" className={`${inputCls} font-mono`} value={v[key] ?? ""} onChange={set(key)} placeholder={placeholder} />
+    <input inputMode="decimal" className={`${inputClass} tabular-nums`} value={v[key] ?? ""} onChange={set(key)} placeholder={placeholder} />
   );
 
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid sm:grid-cols-2 gap-4">
         <label className="block">
-          <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Moisture %</span>
+          <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">Moisture %</span>
           {numberInput("moisture", "e.g. 8.3")}
-          <span className="block mt-1 text-[11.5px] text-warmstone-500">Between 0 and 20.</span>
+          <span className="block mt-1 text-[12px] text-warmstone-500">Between 0 and 20.</span>
         </label>
         <label className="block">
-          <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Nut count</span>
+          <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">Nut count</span>
           {numberInput("nutCount", "e.g. 173")}
         </label>
       </div>
 
       <fieldset className="rounded-xl border border-warmstone-200 bg-white p-4">
-        <legend className="px-1 text-[12.5px] font-semibold text-warmstone-700">Cut test, grams (optional)</legend>
+        <legend className="px-1 text-[12px] font-semibold text-warmstone-700">Cut test, grams (optional)</legend>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <label className="block">
-            <span className="block text-[11.5px] text-warmstone-600 mb-1">Sample weight</span>
+            <span className="block text-[12px] text-warmstone-600 mb-1">Sample weight</span>
             {numberInput("sampleG")}
           </label>
           {CUT_TEST_GRAMS.map(([key, label]) => (
             <label key={key} className="block">
-              <span className="block text-[11.5px] text-warmstone-600 mb-1">{label}</span>
+              <span className="block text-[12px] text-warmstone-600 mb-1">{label}</span>
               {numberInput(key)}
             </label>
           ))}
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12.5px]">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px]">
           <span className="text-warmstone-500">Parts add up to {gramsTotal.toLocaleString("en-US")} g{v.sampleG ? ` of ${v.sampleG} g` : ""}</span>
           <span className="rounded-lg bg-brand-50 border border-brand-200 px-3 py-1.5 text-brand-800">
-            KOR <b className="font-mono">{formatKor(kor)}</b> lbs
+            KOR <b className="tabular-nums">{formatKor(kor)}</b> lbs
             {kor === null && <span className="text-warmstone-500"> · needs good kernel, spotted and immature</span>}
           </span>
         </div>
       </fieldset>
 
       <div>
-        <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Decision</span>
+        <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">Decision</span>
         <div className="grid sm:grid-cols-2 gap-3">
           {(["ok", "hold"] as MoistureDecision[]).map((d) => {
             const on = v.decision === d;
@@ -144,7 +145,7 @@ function MoistureForm({ receiptId, direct, onSaved }: { receiptId: string; direc
                 <input type="radio" name="decision" className="mt-0.5" checked={on} onChange={() => setV((p) => ({ ...p, decision: d }))} />
                 <span>
                   <span className="block font-semibold text-[13px]">{MOISTURE_DECISION_LABELS[d]}</span>
-                  <span className="block text-[11.5px] text-warmstone-500">{d === "ok" ? "Dry enough: the load goes on to weighing." : "Too wet: the load is put on hold and re-checked later."}</span>
+                  <span className="block text-[12px] text-warmstone-500">{d === "ok" ? "Dry enough: the load goes on to weighing." : "Too wet: the load is put on hold and re-checked later."}</span>
                 </span>
               </label>
             );
@@ -152,13 +153,10 @@ function MoistureForm({ receiptId, direct, onSaved }: { receiptId: string; direc
         </div>
       </div>
 
-      {error && <p role="alert" className="text-[12.5px] text-danger-700">{error}</p>}
+      {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       <div className="flex items-center justify-end gap-3">
-        <span className="text-[11.5px] text-warmstone-500">{direct ? "Your entry applies at once." : "The Warehouse Incharge approves it."}</span>
-        <button type="submit" disabled={saving} className={primaryButton}>
-          <span className="material-symbols-outlined text-[18px]">{direct ? "check" : "send"}</span>
-          {direct ? "Save check" : "Submit for approval"}
-        </button>
+        <span className="text-[12px] text-warmstone-500">{direct ? "Saved at once, no approval needed." : "The Warehouse Incharge must approve it before it counts."}</span>
+        <Button type="submit" icon={direct ? "check" : "send"} disabled={saving}>{direct ? "Save moisture check" : "Send for approval"}</Button>
       </div>
     </form>
   );
@@ -181,7 +179,7 @@ function CheckDetails({ check }: { check: MoistureCheck }) {
           {check.status === "approved" && check.reviewedBy && check.reviewedBy !== check.submittedBy && ` · approved by ${check.reviewedBy}`}
         </span>
       </div>
-      <dl className="grid sm:grid-cols-2 gap-x-6 text-[12.5px]">
+      <dl className="grid sm:grid-cols-2 gap-x-6 text-[12px]">
         {row("Moisture", `${check.moisture} %`)}
         {row("Nut count", check.nutCount)}
         {row("KOR (lbs)", formatKor(check.kor))}
@@ -223,23 +221,19 @@ export function ReviewBar({ applies, onApprove, onReject, onDone }: {
         <b>Needs your approval.</b> Approving applies it: {applies} Rejecting applies nothing.
       </p>
       {rejecting && (
-        <input className={inputCls} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is it rejected? (required)" />
+        <input className={inputClass} autoFocus value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is it rejected? (required)" />
       )}
-      {error && <p role="alert" className="text-[12.5px] text-danger-700">{error}</p>}
+      {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       <div className="flex flex-wrap gap-2 justify-end">
         {rejecting ? (
           <>
-            <button type="button" className={secondaryButton} onClick={() => setRejecting(false)} disabled={busy}>Cancel</button>
-            <button type="button" className={`${primaryButton} !bg-danger-700 hover:!bg-danger-800`} disabled={busy || !reason.trim()} onClick={() => run(() => onReject(reason.trim()))}>
-              <span className="material-symbols-outlined text-[18px]">close</span>Reject
-            </button>
+            <Button variant="secondary" onClick={() => setRejecting(false)} disabled={busy}>Cancel</Button>
+            <Button variant="danger" icon="close" disabled={busy || !reason.trim()} onClick={() => run(() => onReject(reason.trim()))}>Reject this check</Button>
           </>
         ) : (
           <>
-            <button type="button" className={secondaryButton} onClick={() => setRejecting(true)} disabled={busy}>Reject…</button>
-            <button type="button" className={primaryButton} disabled={busy} onClick={() => run(onApprove)}>
-              <span className="material-symbols-outlined text-[18px]">check</span>Approve
-            </button>
+            <Button variant="secondary" onClick={() => setRejecting(true)} disabled={busy}>Reject…</Button>
+            <Button icon="check" disabled={busy} onClick={() => run(onApprove)}>Approve this check</Button>
           </>
         )}
       </div>

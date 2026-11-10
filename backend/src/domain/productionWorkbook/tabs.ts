@@ -1,6 +1,6 @@
 /**
- * The production workbook's tabs: Phases 1 to 4, one tab per thing a person records, in the order they happen. A
- * later phase (colour sorting, …) is a new tab here when it is built; a Lot's small records come from its definitions.
+ * The production workbook's tabs: Phases 1 to 5, one tab per thing a person records, in the order they happen. A
+ * later phase (Borma, …) is a new tab here when it is built; a Lot's small records come from its definitions.
  *
  * Column words follow the client's own sheets — "2. Input RCN Quality report" for a moisture check, the
  * "RCN Receipts Tally Sheet" for pallets, "5. Calibrated RCN Silos Stock report" for the sizes, "24. Wholes Manual
@@ -13,6 +13,7 @@
  * arrive in the same file, before the app has issued the load an ID.
  */
 import { SILO_SIZES, SIZING_GRADES, type SizingGrade } from "@anagroci/contract/domain/calibration";
+import { STREAMS } from "@anagroci/contract/domain/byProducts";
 import { ENTRY_DEFS, ENTRY_KINDS, type EntryKind } from "@anagroci/contract/domain/lotEntries";
 
 export interface TabField {
@@ -276,6 +277,8 @@ export const TABS: Tab[] = [
   entryTab("qc5_capacity"),
   entryTab("qty1"),
   entryTab("qc6"),
+  entryTab("qc7_before"),
+  entryTab("qc7_after"),
   {
     id: "boiler",
     title: "Boiler",
@@ -297,7 +300,7 @@ export const TABS: Tab[] = [
     dateLabel: "Date",
     fields: [
       { key: "id", label: "Truck ID" },
-      { key: "stream", label: "Stream", note: "Dust & voids, Cooking waste water, Shell or Shell dust." },
+      { key: "stream", label: "Stream", note: `${STREAMS.map((x) => x.label).join(", ")}.` },
       { key: "date", label: "DATE" },
       { key: "truckNo", label: "TRUCK NO" },
       { key: "driver", label: "Driver" },

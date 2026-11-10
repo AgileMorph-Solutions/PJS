@@ -276,8 +276,9 @@ function lotHistory(l: BatchRow["lots"][number]): BatchHistoryEntry[] {
     ...(l.coolingAt ? [{ at: l.createdAt.toISOString(), text: `Lot ${l.code} in cooling silo ${l.coolingSilo} from ${l.coolingAt.replace("T", " ")}`, actor: l.createdBy.displayName }] : []),
     ...l.entries.filter((e) => ENTRY_DEFS[e.kind as EntryKind].decision).flatMap((e) => {
       const def = ENTRY_DEFS[e.kind as EntryKind];
-      const size = def.fields.find((f) => f.type === "size");
-      const about = size ? `, ${entryFieldText(size, (e.values as Record<string, string>)[size.key])}` : "";
+      // Name what the check was about: the size for QC-3, the stream for QC-7.
+      const about_ = def.fields.find((f) => f.type === "size") ?? def.fields.find((f) => f.key === "stream");
+      const about = about_ ? `, ${entryFieldText(about_, (e.values as Record<string, string>)[about_.key])}` : "";
       const said = e.decision === "ok" ? def.decision!.ok : def.decision!.no;
       return reviewedHistory(`Lot ${l.code} ${def.check}${about}: ${said}`, `Lot ${l.code} ${def.check}`, e);
     }),

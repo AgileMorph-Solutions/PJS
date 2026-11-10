@@ -57,11 +57,11 @@ export function transferHref(warehouse: string, transferId: string): string {
 export const BATCH_PHASES = ["Intake", "Calibration", "Cooking", "Shelling", "Colour sort", "Borma", "Peeling & grading", "Packing & dispatch"];
 
 /** How many of BATCH_PHASES have screens so far. */
-export const BUILT_PHASES = 4;
+export const BUILT_PHASES = 5;
 
 /**
- * `current` is the 1-based phase the batch has reached; `shown` is the one last gone to. Every phase is on the page,
- * so a click takes the person to it, done or not (loads keep arriving in Intake while later phases run).
+ * `current` is the 1-based phase the batch has reached; `shown` is the one last jumped to. Every phase is on the
+ * page, so a click scrolls down to it, done or not (loads keep arriving in Intake while later phases run).
  */
 export function BatchPhaseStepper({ current, shown, onShow }: { current: number; shown: number; onShow: (phase: number) => void }) {
   return (
@@ -85,7 +85,7 @@ export function BatchPhaseStepper({ current, shown, onShow }: { current: number;
               >
                 {done ? <span className="material-symbols-outlined text-[16px]">check</span> : active ? <span className="w-2 h-2 rounded-full bg-brand-700" /> : n}
               </span>
-              <span className={`mt-1.5 text-[11px] text-center font-semibold ${n === shown ? "text-brand-700 underline underline-offset-4" : built ? "text-warmstone-900 hover:text-brand-700" : "text-warmstone-400 hover:text-warmstone-700"}`}>{label}</span>
+              <span className={`mt-1.5 px-2 py-0.5 rounded-full text-[11px] text-center font-semibold ${n === shown ? "bg-brand-700 text-white" : built ? "text-warmstone-900 hover:text-brand-700" : "text-warmstone-400 hover:text-warmstone-700"}`}>{label}</span>
             </button>
           </li>
         );

@@ -10,10 +10,11 @@ import type { Prisma } from "@prisma/client";
 import { canWriteStageDirectly } from "@anagroci/contract/data/roles";
 import { SILO_SIZE_KEYS, siloLabel, type SiloSize, type SizeValues } from "@anagroci/contract/domain/calibration";
 import {
-  canShell, coolingCheck, coolingError, cookChecks, cookRunError, lotBags, lotSizes, lotStatus,
+  canColourSort, canShell, coolingCheck, coolingError, cookChecks, cookRunError, lotBags, lotSizes, lotStatus,
 } from "@anagroci/contract/domain/cooking";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
-import { AFTER_COOLING, ENTRY_DEFS, entryError, entryNotes, isEntryKind, normalizeEntryValues, type EntryKind } from "@anagroci/contract/domain/lotEntries";
+import { SORTER_STREAMS, isColourSorted, sortChecks, sorterStreamKg } from "@anagroci/contract/domain/colourSort";
+import { AFTER_COOLING, AFTER_SHELLING, ENTRY_DEFS, entryError, entryNotes, isEntryKind, normalizeEntryValues, type EntryKind } from "@anagroci/contract/domain/lotEntries";
 import type { MoistureCheckStatus } from "@anagroci/contract/domain/rcnReceipt";
 import { SHELLING_KG_FIELDS, shellingDayError, shellingDayNotes, shellingFigures, type ShellingKgField } from "@anagroci/contract/domain/shelling";
 import type { CoolingInput, CookRunInput, LotEntryInput, LotEntryView, LotView, ShellingDayInput, ShellingDayView } from "@anagroci/contract/types/lots";
@@ -72,13 +73,17 @@ export function lotView(l: LotRow): LotView {
     return { id: d.id, lotCode: d.lotCode, date: d.date, inputKg: d.inputKg, kg, figures: shellingFigures(v), notes: shellingDayNotes(v, left), createdBy: d.createdBy.displayName, createdAt: d.createdAt.toISOString() };
   });
   const shelledKg = Math.round(shelled * 100) / 100;
+  const sorterKg = sorterStreamKg(shellingDays);
+  const sorterStreams = SORTER_STREAMS.filter((s) => sorterKg[s] > 0);
+  const sorted = sortChecks(sorterStreams, of("qc7_after"));
   return {
     code: l.code, batchCode: l.batchCode,
-    status: lotStatus({ inCooling: l.coolingAt !== null, cooling, shellingDays: shellingDays.length }),
+    status: lotStatus({ inCooling: l.coolingAt !== null, cooling, shellingDays: shellingDays.length, colourSorted: isColourSorted(sorterStreams, sorted) }),
     date: runs[0]?.date ?? "", runs, sizes, cookedSizes, totalKg, bags: lotBags(totalKg),
     coolingSilo: l.coolingSilo, coolingAt: l.coolingAt,
     cookChecks: cookChecks(cookedSizes, of("qc3")), coolingCheck: cooling,
     entries, shellingDays, shelledKg, leftToShellKg: Math.round((totalKg - shelledKg) * 100) / 100,
+    sorterKg, sorterStreams, sortChecks: sorted,
   };
 }
 
@@ -187,6 +192,8 @@ export async function addLotEntryIn(tx: Tx, site: string, actor: Actor, code: st
   const problem = entryError(kind, { date, values: input.values, decision: input.decision }, view.cookedSizes);
   if (problem) throw new ValidationError(problem);
   if (kind === "qc4" && !lot.coolingAt) throw new ValidationError(`${lot.code} has not gone to its cooling silo yet.`);
+  if (AFTER_SHELLING.includes(kind) && !canColourSort(view.status)) throw new ValidationError(`${lot.code} has no shelling day record yet; the sorter has nothing of it to sort.`);
+  if (kind === "qc7_after" && !view.sorterStreams.includes(input.values?.stream as never)) throw new ValidationError(`Shelling gave ${lot.code} no ${input.values?.stream ?? ""} to sort.`);
   if (AFTER_COOLING.includes(kind) && !canShell(view.status)) throw new ValidationError(`${lot.code} has not passed its moisture and temperature check (QC-4); shelling can't start on it.`);
   await tx.lotEntry.create({
     data: {

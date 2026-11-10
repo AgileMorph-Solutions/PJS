@@ -116,24 +116,28 @@ export function coolingCheck(qc4: CheckLike[]): CoolingCheckState {
   return !decided ? "not_checked" : decided.decision === "ok" ? "ok" : "wait";
 }
 
-/** The doc's Lot statuses as far as Shelling, plus its step 5 "Ready for shelling". Worked out from the records, never typed. */
-export type LotStatus = "cooking" | "cooling" | "ready" | "shelled";
+/** The doc's Lot statuses as far as Colour sort, plus its step 5 "Ready for shelling". Worked out from the records, never typed. */
+export type LotStatus = "cooking" | "cooling" | "ready" | "shelled" | "colour_sorted";
 
 export const LOT_STATUS_LABELS: Record<LotStatus, string> = {
   cooking: "Cooking",
   cooling: "Cooling",
   ready: "Ready for shelling",
   shelled: "Shelled",
+  colour_sorted: "Colour sorted",
 };
 
-export function lotStatus(v: { inCooling: boolean; cooling: CoolingCheckState; shellingDays: number }): LotStatus {
-  if (v.shellingDays > 0) return "shelled";
+export function lotStatus(v: { inCooling: boolean; cooling: CoolingCheckState; shellingDays: number; colourSorted?: boolean }): LotStatus {
+  if (v.shellingDays > 0) return v.colourSorted ? "colour_sorted" : "shelled";
   if (!v.inCooling) return "cooking";
   return v.cooling === "ok" ? "ready" : "cooling";
 }
 
 /** Past QC-4, so anything of Phase 4 may be recorded on it. */
-export const canShell = (status: LotStatus): boolean => status === "ready" || status === "shelled";
+export const canShell = (status: LotStatus): boolean => status === "ready" || status === "shelled" || status === "colour_sorted";
+
+/** Shelled, so the sorter has its kernels: Phase 5 may be recorded on it. */
+export const canColourSort = (status: LotStatus): boolean => status === "shelled" || status === "colour_sorted";
 
 export type CookingStep = "cook" | "cooker_log" | "qc3" | "cooling" | "qc4" | "none";
 

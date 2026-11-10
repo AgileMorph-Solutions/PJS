@@ -207,7 +207,7 @@ describe("the checks on the line", () => {
 
   it("every kind names its workbook sheet, and only a check with a decision asks for one", () => {
     expect(new Set(ENTRY_KINDS.map((k) => ENTRY_DEFS[k].sheet)).size).toBe(ENTRY_KINDS.length);
-    expect(ENTRY_KINDS.filter((k) => ENTRY_DEFS[k].decision)).toEqual(["qc3", "qc4"]);
+    expect(ENTRY_KINDS.filter((k) => ENTRY_DEFS[k].decision)).toEqual(["qc3", "qc4", "qc7_after"]);
   });
 });
 

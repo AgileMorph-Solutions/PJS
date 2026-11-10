@@ -128,6 +128,20 @@
 ::-webkit-scrollbar {
   display: none;
 }
+/* The one exception to hidden scrollbars: a box whose content can be taller than the screen (a dialog's body),
+   where a hidden scrollbar leaves the person no sign that there is more below. */
+.scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-warmstone-300) transparent;
+}
+.scrollbar-visible::-webkit-scrollbar {
+  display: block;
+  width: 8px;
+}
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background-color: var(--color-warmstone-300);
+  border-radius: 9999px;
+}
 
 /* Material Symbols — sized/weighted per use via className, base config here. */
 .material-symbols-outlined {

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { formatKg } from "./batchUi";
 import { EntryList, type LotPermissions } from "./LotEntries";
+import { NextStep } from "./NextStep";
 import { StepCard } from "./StepCard";
 import { Button } from "../ui/Button";
 import { DataTable, type Column } from "../ui/DataTable";
@@ -17,7 +18,7 @@ import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import type { BatchCalibration } from "@anagroci/contract/types/calibration";
 import type { BatchLots, LotView } from "@anagroci/contract/types/lots";
 
-const STATUS_TONE: Record<LotStatus, string> = { cooking: "decision", cooling: "decision", ready: "entry", shelled: "term" };
+const STATUS_TONE: Record<LotStatus, string> = { cooking: "decision", cooling: "decision", ready: "entry", shelled: "term", colour_sorted: "term" };
 const CHECK_TONE: Record<CookCheckState, string> = { not_checked: "system", waiting: "decision", ok: "entry", recook: "gap" };
 export const LotStatusPill = ({ status }: { status: LotStatus }) => <Pill tone={STATUS_TONE[status]} label={LOT_STATUS_LABELS[status]} />;
 
@@ -51,13 +52,13 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
 
   const nextText =
     data.lots.length === 0
-      ? (inSilosKg > 0 ? (can.canFloor ? `Next: cook the first Lot. The silos hold ${formatKg(inSilosKg)}.` : "Nothing for you yet. The first Lot still has to be cooked.") : "Nothing to do yet. Nuts come here after they are sorted in Calibration.")
-    : step === "cooker_log" ? (held.length > 0 ? `Size ${held.map(siloLabel).join(", ")} failed its check. Next: cook it again and add the new run to the cooker log, then check it again.` : `Next: write the cooker log for Lot ${lot!.code}.`)
-    : step === "qc3" ? (can.canReview && lot!.cookedSizes.some((s) => lot!.cookChecks[s] === "waiting") ? `Next: approve the cooking check waiting for you on Lot ${lot!.code}.` : `Next: do the cooking check (QC-3) for Lot ${lot!.code}.`)
-    : step === "cooling" ? `Next: move Lot ${lot!.code} to a cooling silo.`
-    : step === "qc4" ? (can.canReview && lot!.coolingCheck === "waiting" ? `Next: approve the moisture and temperature check on Lot ${lot!.code}.` : `Next: do the moisture and temperature check (QC-4) for Lot ${lot!.code}.`)
-    : ready ? `Lot ${lot!.code} is ready for shelling: ${formatKg(lot!.totalKg)}.`
-    : `Nothing for you right now on Lot ${lot!.code}. The Warehouse Incharge or the QFS Officer has the next job.`;
+      ? (inSilosKg > 0 ? (can.canFloor ? `Next: in step 1, click "Cook a Lot". The silos hold ${formatKg(inSilosKg)} ready to cook.` : "Nothing for you to do yet. The first Lot still has to be cooked.") : "Nothing to do yet. Nuts arrive here once they are sorted into the silos in Calibration (Phase 2).")
+    : step === "cooker_log" ? (held.length > 0 ? `Size ${held.map(siloLabel).join(", ")} failed its cooking check. Next: cook it again, add the new run in step 2, then check it again in step 3.` : `Next: in step 2, fill in the cooker log for Lot ${lot!.code}.`)
+    : step === "qc3" ? (can.canReview && lot!.cookedSizes.some((s) => lot!.cookChecks[s] === "waiting") ? `Next: in step 3, approve or reject the cooking check waiting for you on Lot ${lot!.code}.` : `Next: in step 3, do the cooking check (QC-3) for each size of Lot ${lot!.code}.`)
+    : step === "cooling" ? `Next: in step 4, move Lot ${lot!.code} into a cooling silo, where it rests ${COOLING_HOURS} hours.`
+    : step === "qc4" ? (can.canReview && lot!.coolingCheck === "waiting" ? `Next: in step 5, approve or reject the moisture and temperature check on Lot ${lot!.code}.` : `Next: in step 5, check the moisture and temperature (QC-4) of Lot ${lot!.code}.`)
+    : ready ? `Lot ${lot!.code} (${formatKg(lot!.totalKg)}) is cooked, cooled and ready for Shelling.`
+    : `Nothing for you to do on Lot ${lot!.code} right now. The Warehouse Incharge or the QFS Officer does the next job.`;
 
   const lotColumns: Column<LotView>[] = [
     { label: "Lot", nowrap: true, render: (l) => <b className="font-semibold">{l.code}</b> },
@@ -66,16 +67,12 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
     { label: "Total", align: "right", nowrap: true, render: (l) => <b className="font-semibold">{formatKg(l.totalKg)}</b> },
     { label: "Bags", align: "right", nowrap: true, render: (l) => l.bags.toLocaleString("en-US", { maximumFractionDigits: 1 }) },
     { label: "Status", nowrap: true, render: (l) => <LotStatusPill status={l.status} /> },
-    { label: "", align: "right", nowrap: true, render: (l) => (l.code === lot?.code ? <Pill tone="term" label="Open below" /> : <Button variant="secondary" onClick={() => setPickedCode(l.code)}>Open</Button>) },
+    { label: "", align: "right", nowrap: true, render: (l) => (l.code === lot?.code ? <Pill tone="term" label="Shown below" /> : <Button variant="secondary" onClick={() => setPickedCode(l.code)}>Show below</Button>) },
   ];
 
   return (
-    <div className="max-w-5xl space-y-3">
-      <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${ready && step === "none" ? "border-success-200 bg-success-50" : "border-brand-200 bg-brand-50"}`}>
-        <span className={`material-symbols-outlined text-[18px] ${ready && step === "none" ? "text-success-700" : "text-brand-700"}`}>{ready && step === "none" ? "check_circle" : "arrow_forward"}</span>
-        <p className="min-w-0 flex-1 text-[13px] font-semibold text-warmstone-900">{nextText}</p>
-        {ready && step === "none" && <Button variant="secondary" icon="arrow_forward" onClick={onGoToShelling}>Go to Shelling</Button>}
-      </div>
+    <div className="space-y-4">
+      <NextStep done={ready && step === "none"} action={ready && step === "none" && <Button variant="secondary" icon="arrow_downward" onClick={onGoToShelling}>Go to Shelling</Button>}>{nextText}</NextStep>
 
       <StepCard n={1} title="Cook by size" status={data.lots.length === 0 ? "No Lot yet" : `${data.lots.length} Lot${data.lots.length === 1 ? "" : "s"} · ${formatKg(data.lots.reduce((n, l) => n + l.totalKg, 0))} cooked`} active={data.lots.length === 0 && can.canFloor} done={data.lots.length > 0}>
         <p className="text-[13px] text-warmstone-800 mb-3">Each size is steam-cooked from its own silo. This is where the Lot is born: everything after this is tracked by its number.</p>
@@ -91,7 +88,7 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
 
       {lot && (
         <>
-          <h3 className="pt-2 text-[13px] font-bold text-warmstone-900">Lot {lot.code} · {formatKg(lot.totalKg)}</h3>
+          <h3 className="pt-2 text-[15px] font-bold text-warmstone-900">Steps 2 to 6 for Lot {lot.code} · {formatKg(lot.totalKg)}</h3>
           <StepCard n={2} title="Cooker log" status={`${lot.entries.filter((e) => e.kind === "cooker_log").length} run${lot.entries.filter((e) => e.kind === "cooker_log").length === 1 ? "" : "s"} written`} active={step === "cooker_log"} done={lot.coolingAt !== null}>
             <EntryList kind="cooker_log" lot={lot} can={can} onChanged={onChanged} />
           </StepCard>
@@ -116,7 +113,7 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
           </StepCard>
           <StepCard n={6} title="Cooking waste water" status={`${formatKg(lot.entries.filter((e) => e.kind === "waste_water").reduce((n, e) => n + (Number(e.values.kg) || 0), 0))} from this Lot`} active={false} done={false}>
             <EntryList kind="waste_water" lot={lot} can={can} onChanged={onChanged} />
-            <p className="mt-2 text-[12px] text-warmstone-500">The tank's balance and its trucks are further down this page, under By-products and trucks.</p>
+            <p className="mt-2 text-[12px] text-warmstone-500">The tank's balance and its trucks are in Shelling, under By-products and trucks.</p>
           </StepCard>
         </>
       )}

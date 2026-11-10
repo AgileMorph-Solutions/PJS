@@ -26,16 +26,25 @@ export function Modal({ title, onClose, children, wide }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
+  // The page behind must not scroll along with the dialog: a wheel over a long form should move the form only.
+  useEffect(() => {
+    const before = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = before;
+    };
+  }, []);
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
       <div className="fixed inset-0 bg-warmstone-900/40" onClick={onClose} aria-hidden="true" />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative bg-white rounded-2xl shadow-xl border border-warmstone-200 w-full ${wide ? "max-w-3xl" : "max-w-lg"} my-4`}
+        className={`relative flex max-h-full w-full flex-col bg-white rounded-2xl shadow-xl border border-warmstone-200 ${wide ? "max-w-3xl" : "max-w-lg"}`}
       >
-        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-warmstone-100">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-5 py-4 border-b border-warmstone-100">
           <h2 className="text-[15px] font-bold text-warmstone-900">{title}</h2>
           <button
             type="button"
@@ -46,7 +55,7 @@ export function Modal({ title, onClose, children, wide }: Props) {
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="scrollbar-visible min-h-0 overflow-y-auto p-5">{children}</div>
       </div>
     </div>,
     document.body,

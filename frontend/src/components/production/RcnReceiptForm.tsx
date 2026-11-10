@@ -1,6 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { DateInput } from "../ui/DateInput";
-import { formatTonnes, inputCls, primaryButton } from "./batchUi";
+import { formatTonnes } from "./batchUi";
+import { Button } from "../ui/Button";
+import { inputClass } from "../ui/Input";
 import { api, ApiError } from "../../repository/api";
 import { sameBtmAndBin } from "@anagroci/contract/domain/rcnReceipt";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
@@ -9,9 +11,9 @@ import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 
 const field = (label: string, el: ReactNode, hint?: string) => (
   <label className="block">
-    <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">{label}</span>
+    <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">{label}</span>
     {el}
-    {hint && <span className="block mt-1 text-[11.5px] text-warmstone-500">{hint}</span>}
+    {hint && <span className="block mt-1 text-[12px] text-warmstone-500">{hint}</span>}
   </label>
 );
 
@@ -47,12 +49,12 @@ export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetai
   return (
     <form onSubmit={submit} className="space-y-4">
       <div className="grid sm:grid-cols-2 gap-4">
-        {field("Date", <DateInput value={date} onChange={setDate} className={inputCls} />)}
-        {field("BTM number", <input className={`${inputCls} font-mono`} value={btmNo} onChange={(e) => setBtmNo(e.target.value)} placeholder="e.g. 112" />, "From the transfer slip.")}
+        {field("Date", <DateInput value={date} onChange={setDate} className={inputClass} />)}
+        {field("BTM number", <input className={`${inputClass} tabular-nums`} value={btmNo} onChange={(e) => setBtmNo(e.target.value)} placeholder="e.g. 112" />, "The number on the transfer slip (BTM) that came with the load.")}
       </div>
 
       <div>
-        <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">From which warehouse bin?</span>
+        <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">From which warehouse bin?</span>
         <div className="grid sm:grid-cols-2 gap-3">
           {batch.bins.map((b) => {
             const on = binCode === b.binCode;
@@ -60,8 +62,8 @@ export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetai
               <label key={b.binCode} className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer bg-white ${on ? "border-brand-700 bg-brand-50/60" : "border-warmstone-200 hover:bg-warmstone-50"}`}>
                 <input type="radio" name="rcn-bin" checked={on} onChange={() => setBinCode(b.binCode)} />
                 <span>
-                  <span className="block font-mono font-semibold text-[13px]">{b.binCode}</span>
-                  <span className="block text-[11.5px] text-warmstone-500">{formatTonnes(b.currentKg)} left</span>
+                  <span className="block font-semibold text-[13px]">{b.binCode}</span>
+                  <span className="block text-[12px] text-warmstone-500">{formatTonnes(b.currentKg)} left</span>
                 </span>
               </label>
             );
@@ -74,12 +76,10 @@ export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetai
           <b>BTM {btmNo.trim()} from {binCode} is already recorded</b> ({duplicates.map((d) => `${d.id}, ${formatDate(d.date)}`).join("; ")}). Save only if this is really a second load.
         </p>
       )}
-      {error && <p role="alert" className="text-[12.5px] text-danger-700">{error}</p>}
+      {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
 
       <div className="flex justify-end">
-        <button type="submit" disabled={saving || !date || !btmNo.trim() || !binCode} className={primaryButton}>
-          <span className="material-symbols-outlined text-[18px]">check</span>Save RCN Receipt
-        </button>
+        <Button type="submit" icon="check" disabled={saving || !date || !btmNo.trim() || !binCode}>Save RCN Receipt</Button>
       </div>
     </form>
   );

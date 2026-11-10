@@ -4,6 +4,7 @@ import type { EntryKind } from "../domain/lotEntries.js";
 import type { ShellingFigures, ShellingKgField } from "../domain/shelling.js";
 import type { StoreBalance, Stream, TruckStatus } from "../domain/byProducts.js";
 import type { MoistureCheckStatus } from "../domain/rcnReceipt.js";
+import type { SortCheckState, SorterStream } from "../domain/colourSort.js";
 
 /** One cooking row of a Lot: kg per size, as typed. */
 export interface LotCookRunView {
@@ -69,6 +70,10 @@ export interface LotView {
   shellingDays: ShellingDayView[];
   shelledKg: number;
   leftToShellKg: number;
+  /** Phase 5: each stream's kg out of shelling, the streams with kg, and where each stands on QC-7. */
+  sorterKg: Record<SorterStream, number>;
+  sorterStreams: SorterStream[];
+  sortChecks: Record<string, SortCheckState>;
 }
 
 export interface TruckView {

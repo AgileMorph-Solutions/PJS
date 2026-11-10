@@ -8,6 +8,7 @@ import { BatchSteps } from "../../components/production/BatchSteps";
 import { CalibrationSection } from "../../components/production/CalibrationSection";
 import { CookingSection } from "../../components/production/CookingSection";
 import { ShellingSection } from "../../components/production/ShellingSection";
+import { ColourSortSection } from "../../components/production/ColourSortSection";
 import { useBatch, useBatchCalibration, useBatchLots } from "../../state/productionBatches";
 import { useRcnReceipts } from "../../state/rcnReceipts";
 import { useCanEditDirectly, useHasRole } from "../../state/AuthContext";
@@ -28,11 +29,11 @@ type Tab = "steps" | "overview" | "history";
 /** The doc's "next person" column, for what the batch's loads are waiting on. */
 const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done", "calibrating"];
 const PHASE_TEXT = [
-  "receive each load, check its moisture, weigh it",
-  "sort each weighed load by size into the 9 silos",
-  "steam-cook each size, then rest the Lot 24 hours in a cooling silo",
-  "cut the shells open: kernels, uncut, shell and shell dust",
-  "a camera machine splits the kernels: wholes, pieces, rejection + oil, black rejection",
+  "Record each load that comes from a warehouse bin, check its moisture, then weigh it.",
+  "Sort each weighed load by nut size into the 9 silos, then check that each silo holds the right size.",
+  "Steam-cook the nuts size by size to make a Lot, then rest the Lot 24 hours in a cooling silo.",
+  "Cut the shells open and record what comes out: kernels, uncut nuts, shell and shell dust.",
+  "A camera machine splits the kernels into wholes, pieces, rejection + oil and black rejection. Check the sorter before and after.",
   "dry the kernels in the ovens, trolley by trolley",
   "humidify, peel and grade the kernels",
   "pack, check and dispatch the finished goods",
@@ -50,7 +51,7 @@ const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
 
 /**
  * The batch page, the one place a batch is worked on, like a truck's Reception page. Steps & entry holds every
- * phase, one under the other, and the stepper takes the person to one. Bins & Lots leads back to
+ * phase, one under the other, read by scrolling down; the stepper only jumps to one. Bins & Lots leads back to
  * procurement: bins → Lots → each Lot's truck (the link the Phase 1 doc asks for). History is what happened when.
  */
 export function BatchDetailPage() {
@@ -68,7 +69,8 @@ export function BatchDetailPage() {
   // After the render, as coming from another tab has only then put the phase on the page.
   useEffect(() => {
     if (scrollTo === null || tab !== "steps") return;
-    document.getElementById(`phase-${scrollTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Phases not built yet share one block, the one after the last built phase.
+    document.getElementById(`phase-${Math.min(scrollTo, BUILT_PHASES + 1)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
     setScrollTo(null);
   }, [scrollTo, tab]);
   const goToPhase = (n: number) => {
@@ -87,7 +89,8 @@ export function BatchDetailPage() {
   const onChanged = () => void Promise.all([refetch(), receipts.refetch(), calibration.refetch(), lots.refetch()]);
   // Phases overlap (loads keep arriving while earlier ones are sized), so the batch is "at" the furthest one reached.
   const lotList = lots.data?.lots ?? [];
-  const phase = lotList.some((l) => l.status === "ready" || l.status === "shelled") ? 4 : lotList.length > 0 ? 3 : receipts.rows.some((r) => isIntakeDone(r.status)) ? 2 : 1;
+  const phase = lotList.some((l) => l.status === "colour_sorted" || l.entries.some((e) => e.kind === "qc7_before" || e.kind === "qc7_after")) ? 5
+    : lotList.some((l) => l.status === "ready" || l.status === "shelled") ? 4 : lotList.length > 0 ? 3 : receipts.rows.some((r) => isIntakeDone(r.status)) ? 2 : 1;
   const shown = picked ?? phase;
   const checksWaiting = (calibration.calibration?.sizingChecks.filter((c) => c.status === "submitted").length ?? 0)
     + lotList.flatMap((l) => l.entries).filter((e) => e.status === "submitted").length;
@@ -147,14 +150,14 @@ export function BatchDetailPage() {
               tab === id ? "border-brand-700 text-brand-700" : "border-transparent text-warmstone-500 hover:text-warmstone-800 hover:border-warmstone-200"
             }`}
           >
-            <span className="material-symbols-outlined text-[17px]">{icon}</span>
+            <span className="material-symbols-outlined text-[18px]">{icon}</span>
             {label}
           </button>
         ))}
       </div>
 
       {tab === "steps" && (
-        <div className="space-y-10">
+        <div className="space-y-12">
           <PhaseSection n={1} current={phase}>
             <BatchSteps batch={batch} receipts={receipts.rows} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
           </PhaseSection>
@@ -179,11 +182,20 @@ export function BatchDetailPage() {
               <p className="text-[13px] text-warmstone-500">{lots.error ?? "Loading…"}</p>
             )}
           </PhaseSection>
-          {BATCH_PHASES.map((_, i) => i + 1).filter((n) => n > BUILT_PHASES).map((n) => (
-            <PhaseSection key={n} n={n} current={phase}>
-              <p className="max-w-5xl rounded-2xl border border-dashed border-warmstone-300 bg-warmstone-50/60 px-5 py-4 text-[13px] text-warmstone-500">Not built yet.</p>
-            </PhaseSection>
-          ))}
+          <PhaseSection n={5} current={phase}>
+            {lots.data ? (
+              <ColourSortSection data={lots.data} can={{ canFloor: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+            ) : (
+              <p className="text-[13px] text-warmstone-500">{lots.error ?? "Loading…"}</p>
+            )}
+          </PhaseSection>
+          {/* One block for every phase still to come, so the page doesn't end in a row of empty headings. */}
+          <section id={`phase-${BUILT_PHASES + 1}`} className="scroll-mt-24 rounded-2xl border border-dashed border-warmstone-300 bg-warmstone-50/60 px-5 py-4">
+            <h2 className="text-[15px] font-bold text-warmstone-900">Coming later</h2>
+            <p className="text-[13px] text-warmstone-500 mt-1">
+              {BATCH_PHASES.slice(BUILT_PHASES).map((name, i) => `Phase ${BUILT_PHASES + 1 + i} · ${name}`).join(", ")}. These phases are not built in the app yet.
+            </p>
+          </section>
         </div>
       )}
 
@@ -232,7 +244,7 @@ export function BatchDetailPage() {
       )}
 
       {tab === "history" && (
-        <section className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs max-w-4xl">
+        <section className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
           <ol className="space-y-2.5">
             {batch.history.map((h, i) => (
               <li key={i} className="text-[12px] flex gap-3">
@@ -259,14 +271,23 @@ function WaitingLine({ n, what, who }: { n: number; what: string; who: string })
   );
 }
 
+/** One phase of the batch: a clear numbered heading, what happens in it, then its work. */
 function PhaseSection({ n, current, children }: { n: number; current: number; children: ReactNode }) {
+  const done = n < current;
   return (
     // The scroll margin keeps the heading clear of the page's fixed top bar.
-    <section id={`phase-${n}`} className="scroll-mt-24">
-      <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-warmstone-200 pb-2">
-        <h2 className="text-[17px] font-bold text-warmstone-900">Phase {n} · {BATCH_PHASES[n - 1]}</h2>
-        {n === current && <Pill tone="term" label="Current phase" />}
-        <p className="w-full text-[12px] text-warmstone-500">{PHASE_TEXT[n - 1]}</p>
+    <section id={`phase-${n}`} className="scroll-mt-24 space-y-4">
+      <div className="flex items-start gap-3 border-b border-warmstone-200 pb-3">
+        <span className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[15px] font-bold ${done ? "bg-success-100 text-success-700 border border-success-200" : n === current ? "bg-brand-700 text-white" : "bg-warmstone-100 text-warmstone-500"}`}>
+          {done ? <span className="material-symbols-outlined text-[20px]">check</span> : n}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-[17px] font-bold text-warmstone-900">Phase {n} · {BATCH_PHASES[n - 1]}</h2>
+            {n === current && <Pill tone="term" label="Current phase" />}
+          </div>
+          <p className="text-[12px] text-warmstone-500 mt-0.5">{PHASE_TEXT[n - 1]}</p>
+        </div>
       </div>
       {children}
     </section>
@@ -277,15 +298,15 @@ function LotRows({ bin, warehouse }: { bin: BatchBinView; warehouse: string }) {
   if (bin.lots.length === 0) {
     return (
       <tr className="bg-warmstone-50/60">
-        <td colSpan={4} className="px-10 py-3 text-[12.5px] text-warmstone-500">No completed Lots are in this bin now.</td>
+        <td colSpan={4} className="px-10 py-3 text-[12px] text-warmstone-500">No completed Lots are in this bin now.</td>
       </tr>
     );
   }
   return (
     <tr className="bg-warmstone-50/60">
       <td colSpan={4} className="px-10 py-3">
-        <table className="w-full text-[12.5px]">
-          <thead className="text-[10.5px] uppercase tracking-wide text-warmstone-500">
+        <table className="w-full text-[12px]">
+          <thead className="text-[11px] uppercase tracking-wide text-warmstone-500">
             <tr>
               <th className="text-left font-bold py-1">Lot</th>
               <th className="text-left font-bold py-1">Supplier</th>

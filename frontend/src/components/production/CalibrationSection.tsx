@@ -2,6 +2,7 @@ import { formatKg } from "./batchUi";
 import { CalibrationReportsStep } from "./CalibrationReports";
 import { SortLoadsStep } from "./CalibrationLoads";
 import { CheckSilosStep, FixSiloStep, silosToCheck, type CalibrationPermissions } from "./SizingChecks";
+import { NextStep } from "./NextStep";
 import { StepCard } from "./StepCard";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
@@ -20,7 +21,7 @@ const silos = (n: number) => `${n} silo${n === 1 ? "" : "s"}`;
 
 /**
  * Phase 2 in the shape of a truck's Reception page: one sentence saying what to do next, how far the batch has got,
- * then numbered steps with only the current one open. The forms open in a dialog, so the page itself stays short.
+ * then the numbered steps, the one due now shown beside the list. The forms open in a dialog, so the page stays short.
  * The client's "pick a reconciled load" and "kg into each silo" are one step here: picking a load opens its form.
  */
 export function CalibrationSection({ batch, receipts, calibration, can, onChanged, onGoToCooking }: {
@@ -42,12 +43,12 @@ export function CalibrationSection({ batch, receipts, calibration, can, onChange
 
   const nextText =
     // The list is newest first; the load that has waited longest goes first.
-    next === "sort" ? `Next: sort BTM ${toSort.at(-1)!.btmNo} into the silos.`
-    : next === "check" ? (can.canSize && checksWaiting > 0 ? "Next: approve the silo check waiting for you." : `Next: check ${silos(toCheck)}.`)
-    : next === "fix" ? "Next: move the nuts out of the failed silo."
+    next === "sort" ? `Next: in step 1, click "Sort this load" for BTM ${toSort.at(-1)!.btmNo} and enter how many kg went into each silo.`
+    : next === "check" ? (can.canSize && checksWaiting > 0 ? "Next: in step 2, approve or reject the silo check that is waiting for you." : `Next: in step 2, take a sample from each of the ${silos(toCheck)} with nuts and check the nuts are the right size.`)
+    : next === "fix" ? "Next: in step 3, a silo failed its check. Move its nuts to the right silos."
     : allDone ? `Calibration is finished for every load so far. The silos hold ${formatKg(inSilosKg)}, ready for Cooking.`
-    : anyReady ? "Nothing for you right now. The Warehouse Incharge or the QFS Officer has the next job here."
-    : "Nothing to do yet. A load comes here after it is weighed in Intake.";
+    : anyReady ? "Nothing for you to do here right now. The Warehouse Incharge or the QFS Officer does the next job."
+    : "Nothing to do yet. A load arrives here once it is weighed in Intake (Phase 1).";
 
   const checkStatus = checksWaiting > 0 ? `${checksWaiting} waiting for approval`
     : calibration.silos.every((s) => s.stockKg <= 0) ? "Nothing in the silos yet"
@@ -55,12 +56,8 @@ export function CalibrationSection({ batch, receipts, calibration, can, onChange
     : "All silos with nuts are checked";
 
   return (
-    <div className="max-w-5xl space-y-3">
-      <div className={`flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 ${allDone ? "border-success-200 bg-success-50" : "border-brand-200 bg-brand-50"}`}>
-        <span className={`material-symbols-outlined text-[18px] ${allDone ? "text-success-700" : "text-brand-700"}`}>{allDone ? "check_circle" : "arrow_forward"}</span>
-        <p className="min-w-0 flex-1 text-[13px] font-semibold text-warmstone-900">{nextText}</p>
-        {allDone && <Button variant="secondary" icon="arrow_forward" onClick={onGoToCooking}>Go to Cooking</Button>}
-      </div>
+    <div className="space-y-4">
+      <NextStep done={allDone} action={allDone && <Button variant="secondary" icon="arrow_downward" onClick={onGoToCooking}>Go to Cooking</Button>}>{nextText}</NextStep>
       <Progress receipts={receipts} />
       <SortLoadsStep receipts={receipts} canEdit={can.canSize} active={next === "sort"} onChanged={onChanged} />
       <CheckSilosStep

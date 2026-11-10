@@ -28,6 +28,7 @@ export async function storeBalances(tx: Tx | typeof prisma, site: string): Promi
     waste_water: entries.reduce((n, e) => n + (Number((e.values as { kg?: string }).kg) || 0), 0),
     shell: figures.reduce((n, f) => n + f.shellKg, 0),
     shell_dust: figures.reduce((n, f) => n + f.shellDustKg, 0),
+    black_rejection: days.reduce((n, d) => n + (Number(d.blackRejectionKg) || 0), 0),
   };
   const dispatched = (s: Stream) => trucks.filter((t) => t.stream === s).reduce((n, t) => n + (truckNetKg(t) ?? 0), 0);
   const burned = boiler.reduce((n, b) => n + (Number(b.shellKg) || 0), 0);

@@ -3,6 +3,7 @@ import { formatKg } from "./batchUi";
 import { ByProductsPanel } from "./ByProductsPanel";
 import { LotStatusPill } from "./CookingSection";
 import { EntryList, Notes, type LotPermissions } from "./LotEntries";
+import { NextStep } from "./NextStep";
 import { StepCard } from "./StepCard";
 import { Button } from "../ui/Button";
 import { DataTable, type Column } from "../ui/DataTable";
@@ -32,23 +33,20 @@ export function ShellingSection({ data, can, onChanged }: { data: BatchLots; can
   const step = lot ? nextShellingStep({ ...can, ...counts }) : "none";
 
   const nextText = !lot
-    ? (waitingOnCooling > 0 ? `No Lot is ready yet. ${waitingOnCooling} Lot${waitingOnCooling === 1 ? " is" : "s are"} still in Cooking; shelling opens when the moisture and temperature check says OK.` : "Nothing to do yet. A Lot comes here after it is cooked and cooled.")
-    : can.canReview && waitingApproval.length > 0 ? `Next: approve the ${waitingApproval.length} check${waitingApproval.length === 1 ? "" : "s"} waiting for you on Lot ${lot.code}.`
-    : step === "day" ? `Next: enter the day record for Lot ${lot.code}: ${formatKg(lot.leftToShellKg)} to shell.`
-    : step === "line_run" ? `Next: enter the line runs for Lot ${lot.code}.`
-    : step === "qc5" ? `Next: do the machine checks (QC-5) for Lot ${lot.code}.`
-    : step === "qty1" ? `Next: do the uncut quantity check (QTY-1) for Lot ${lot.code}.`
-    : step === "qc6" ? `Next: sample the shell (QC-6) for Lot ${lot.code}.`
-    : counts.days > 0 ? `Lot ${lot.code} is shelled and every check has a record. Its kernels go on to Colour sort, the next phase.`
-    : `Nothing for you right now on Lot ${lot.code}. The Warehouse Incharge has the next job.`;
+    ? (waitingOnCooling > 0 ? `No Lot is ready to shell yet. ${waitingOnCooling} Lot${waitingOnCooling === 1 ? " is" : "s are"} still in Cooking. A Lot arrives here once its moisture and temperature check says OK.` : "Nothing to do yet. A Lot arrives here once it is cooked and cooled in Cooking (Phase 3).")
+    : can.canReview && waitingApproval.length > 0 ? `Next: approve or reject the ${waitingApproval.length} check${waitingApproval.length === 1 ? "" : "s"} waiting for you on Lot ${lot.code}.`
+    : step === "day" ? `Next: in step 1, enter the day record for Lot ${lot.code}. ${formatKg(lot.leftToShellKg)} is left to shell.`
+    : step === "line_run" ? `Next: in step 2, enter what each shelling line ran for Lot ${lot.code}.`
+    : step === "qc5" ? `Next: in step 3, do the machine checks (QC-5) for Lot ${lot.code}.`
+    : step === "qty1" ? `Next: in step 4, count the uncut nuts (QTY-1) for Lot ${lot.code}.`
+    : step === "qc6" ? `Next: in step 5, take a shell sample (QC-6) for Lot ${lot.code}.`
+    : counts.days > 0 ? `Lot ${lot.code} is shelled and every check is done. Its kernels go on to Colour sort (Phase 5), further down this page.`
+    : `Nothing for you to do on Lot ${lot.code} right now. The Warehouse Incharge does the next job.`;
   const allDone = lot !== null && step === "none" && counts.days > 0 && waitingApproval.length === 0;
 
   return (
-    <div className="max-w-5xl space-y-3">
-      <p className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-[13px] font-semibold text-warmstone-900 ${allDone ? "border-success-200 bg-success-50" : "border-brand-200 bg-brand-50"}`}>
-        <span className={`material-symbols-outlined text-[18px] ${allDone ? "text-success-700" : "text-brand-700"}`}>{allDone ? "check_circle" : "arrow_forward"}</span>
-        <span>{nextText}</span>
-      </p>
+    <div className="space-y-4">
+      <NextStep done={allDone}>{nextText}</NextStep>
 
       {lot && (
         <>
@@ -61,7 +59,11 @@ export function ShellingSection({ data, can, onChanged }: { data: BatchLots; can
               </Field>
             </div>
           )}
-          <h3 className="flex items-center gap-2 pt-1 text-[13px] font-bold text-warmstone-900">Lot {lot.code} · {formatKg(lot.totalKg)} cooked <LotStatusPill status={lot.status} /></h3>
+          <h3 className="flex items-center gap-2 text-[15px] font-bold text-warmstone-900">Lot {lot.code} · {formatKg(lot.totalKg)} cooked <LotStatusPill status={lot.status} /></h3>
+        </>
+      )}
+      {lot && (
+        <>
           <StepCard n={1} title="Day record" status={counts.days === 0 ? "Not entered yet" : `${formatKg(lot.shelledKg)} shelled`} active={step === "day"} done={counts.days > 0}>
             <DayRecords lot={lot} can={can} onChanged={onChanged} />
           </StepCard>
