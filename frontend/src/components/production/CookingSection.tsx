@@ -17,6 +17,7 @@ import {
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import type { BatchCalibration } from "@anagroci/contract/types/calibration";
 import type { BatchLots, LotView } from "@anagroci/contract/types/lots";
+import { PRODUCTION_PAGE_SIZE, dateCol, kgCol, numCol, statusCol, textCol } from "./columns";
 
 const STATUS_TONE: Record<LotStatus, string> = { cooking: "decision", cooling: "decision", ready: "entry", shelled: "term", colour_sorted: "term" };
 const CHECK_TONE: Record<CookCheckState, string> = { not_checked: "system", waiting: "decision", ok: "entry", recook: "gap" };
@@ -52,7 +53,7 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
 
   const nextText =
     data.lots.length === 0
-      ? (inSilosKg > 0 ? (can.canFloor ? `Next: in step 1, click "Cook a Lot". The silos hold ${formatKg(inSilosKg)} ready to cook.` : "Nothing for you to do yet. The first Lot still has to be cooked.") : "Nothing to do yet. Nuts arrive here once they are sorted into the silos in Calibration (Phase 2).")
+      ? (inSilosKg > 0 ? (can.canFloor ? `Next: in step 1, click "Cook a Lot". The silos hold ${formatKg(inSilosKg)} ready to cook.` : "Nothing for you to do yet. The first Lot still has to be cooked.") : "Nothing to do yet. Nuts arrive here once they are sorted into the silos in Calibration.")
     : step === "cooker_log" ? (held.length > 0 ? `Size ${held.map(siloLabel).join(", ")} failed its cooking check. Next: cook it again, add the new run in step 2, then check it again in step 3.` : `Next: in step 2, fill in the cooker log for Lot ${lot!.code}.`)
     : step === "qc3" ? (can.canReview && lot!.cookedSizes.some((s) => lot!.cookChecks[s] === "waiting") ? `Next: in step 3, approve or reject the cooking check waiting for you on Lot ${lot!.code}.` : `Next: in step 3, do the cooking check (QC-3) for each size of Lot ${lot!.code}.`)
     : step === "cooling" ? `Next: in step 4, move Lot ${lot!.code} into a cooling silo, where it rests ${COOLING_HOURS} hours.`
@@ -61,12 +62,12 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
     : `Nothing for you to do on Lot ${lot!.code} right now. The Warehouse Incharge or the QFS Officer does the next job.`;
 
   const lotColumns: Column<LotView>[] = [
-    { label: "Lot", nowrap: true, render: (l) => <b className="font-semibold">{l.code}</b> },
-    { label: "Cooked on", nowrap: true, render: (l) => formatDate(l.date) },
-    ...SILO_SIZES.map((s): Column<LotView> => ({ label: s.code, align: "right", nowrap: true, render: (l) => (l.sizes[s.key] > 0 ? l.sizes[s.key].toLocaleString("en-US") : "-") })),
-    { label: "Total", align: "right", nowrap: true, render: (l) => <b className="font-semibold">{formatKg(l.totalKg)}</b> },
-    { label: "Bags", align: "right", nowrap: true, render: (l) => l.bags.toLocaleString("en-US", { maximumFractionDigits: 1 }) },
-    { label: "Status", nowrap: true, render: (l) => <LotStatusPill status={l.status} /> },
+    textCol("Lot", (l) => l.code, { strong: true }),
+    dateCol("Cooked on", (l) => l.date),
+    ...SILO_SIZES.map((s) => kgCol<LotView>(s.code, (l) => l.sizes[s.key], { zeroAsDash: true })),
+    kgCol("Total", (l) => l.totalKg, { strong: true }),
+    numCol("Bags", (l) => l.bags, { digits: 1 }),
+    statusCol("Status", (l) => LOT_STATUS_LABELS[l.status], (l) => <LotStatusPill status={l.status} />),
     { label: "", align: "right", nowrap: true, render: (l) => (l.code === lot?.code ? <Pill tone="term" label="Shown below" /> : <Button variant="secondary" onClick={() => setPickedCode(l.code)}>Show below</Button>) },
   ];
 
@@ -77,7 +78,7 @@ export function CookingSection({ batchCode, data, calibration, can, onChanged, o
       <StepCard n={1} title="Cook by size" status={data.lots.length === 0 ? "No Lot yet" : `${data.lots.length} Lot${data.lots.length === 1 ? "" : "s"} · ${formatKg(data.lots.reduce((n, l) => n + l.totalKg, 0))} cooked`} active={data.lots.length === 0 && can.canFloor} done={data.lots.length > 0}>
         <p className="text-[13px] text-warmstone-800 mb-3">Each size is steam-cooked from its own silo. This is where the Lot is born: everything after this is tracked by its number.</p>
         {can.canFloor && <Button icon="add" disabled={inSilosKg <= 0} onClick={() => setCooking(true)}>Cook a Lot</Button>}
-        {data.lots.length > 0 && <div className="mt-3"><DataTable columns={lotColumns} rows={data.lots} keyFn={(l) => l.code} /></div>}
+        {data.lots.length > 0 && <div className="mt-3"><DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={lotColumns} rows={data.lots} keyFn={(l) => l.code} /></div>}
         {lot && can.canFloor && lot.coolingAt === null && <CookRows lot={lot} onChanged={onChanged} />}
         {cooking && (
           <Modal wide title="Cook a Lot" onClose={() => setCooking(false)}>

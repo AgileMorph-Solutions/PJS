@@ -19,6 +19,7 @@ import type { MoistureCheckStatus } from "@anagroci/contract/domain/rcnReceipt";
 import { SHELLING_KG_FIELDS, shellingDayError, shellingDayNotes, shellingFigures, type ShellingKgField } from "@anagroci/contract/domain/shelling";
 import type { CoolingInput, CookRunInput, LotEntryInput, LotEntryView, LotView, ShellingDayInput, ShellingDayView } from "@anagroci/contract/types/lots";
 import { prisma } from "../../db.js";
+import { runWhere } from "./batches.js";
 import { ForbiddenError, ValidationError } from "../../domain/validation.js";
 import { assertStoresNotShort } from "./byProducts.js";
 import { siloStockBySize } from "./calibration.js";
@@ -94,7 +95,7 @@ async function lotAt(tx: Tx | typeof prisma, site: string, code: string): Promis
 }
 
 export async function listLots(site: string, batchCode?: string): Promise<LotView[]> {
-  const rows = await prisma.factoryLot.findMany({ where: { batch: { warehouse: site }, ...(batchCode ? { batchCode } : {}) }, include: LOT_INCLUDE, orderBy: { createdAt: "asc" } });
+  const rows = await prisma.factoryLot.findMany({ where: { batch: batchCode ? runWhere(site, batchCode) : { warehouse: site } }, include: LOT_INCLUDE, orderBy: { createdAt: "asc" } });
   return rows.map(lotView);
 }
 
@@ -115,10 +116,11 @@ export async function cookLot(site: string, actorId: string, input: CookRunInput
 
 /** A new number makes the Lot; a number of this batch still cooking takes one more row. Never past a silo's stock. */
 export async function cookLotIn(tx: Tx, site: string, actorId: string, input: CookRunInput): Promise<LotRow> {
-  const batchCode = (input.batchCode ?? "").trim().toUpperCase();
-  if (!batchCode) throw new ValidationError("Choose the batch the Lot is for.");
-  const batch = await tx.productionBatch.findFirst({ where: { code: batchCode, warehouse: site }, select: { code: true } });
-  if (!batch) throw new ValidationError(`Batch ${batchCode} doesn't exist at ${site}.`);
+  const runRef = (input.batchCode ?? "").trim().toUpperCase();
+  if (!runRef) throw new ValidationError("Choose the production run the Lot is for.");
+  const batch = await tx.productionBatch.findFirst({ where: runWhere(site, runRef), select: { code: true } });
+  if (!batch) throw new ValidationError(`Production run ${runRef} doesn't exist at ${site}.`);
+  const batchCode = batch.code;
   const code = (input.code ?? "").trim().toUpperCase();
   const date = asDate(input.date);
   const problem = cookRunError({ date, code, sizes: input.sizes }, await siloStockBySize(tx, site));
@@ -126,7 +128,7 @@ export async function cookLotIn(tx: Tx, site: string, actorId: string, input: Co
 
   const existing = await tx.factoryLot.findUnique({ where: { code } });
   if (existing) {
-    if (existing.batchCode !== batchCode) throw new ValidationError(`Lot ${code} belongs to batch ${existing.batchCode}.`);
+    if (existing.batchCode !== batchCode) throw new ValidationError(`Lot ${code} belongs to production run ${existing.batchCode}.`);
     if (existing.coolingAt) throw new ValidationError(`Lot ${code} has gone to its cooling silo; nothing more can be cooked into it.`);
   } else {
     await tx.factoryLot.create({ data: { code, batchCode, createdById: actorId } });

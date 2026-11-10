@@ -19,7 +19,20 @@ import { resolveSite } from "../../domain/site.js";
 import { ValidationError } from "../../domain/validation.js";
 import { listReceipts } from "../receipts.js";
 import { listTransfers } from "../transfers.js";
+import { nextProductionRunId } from "../ids.js";
+import { parseSiteId } from "@anagroci/contract/domain/ids";
 import { isUsableSite } from "@anagroci/contract/domain/siteType";
+
+/**
+ * How anything finds a run at a site: by its system ID (PR-YAK-2026-001) or by the name the team gave it (ANA-03B).
+ * Every lookup goes through this, so a workbook or an old link that names a run still reaches it.
+ */
+export function runWhere(site: string, ref: string) {
+  return { warehouse: site, OR: [{ code: ref }, { name: ref }] };
+}
+
+/** How a message names a run: its ID, and the name people know it by when it has one — "PR-YAK-2026-003 (ANA-03B)". */
+export const runLabel = (code: string, name: string | null) => (name ? `${code} (${name})` : code);
 
 /**
  * The factory site production works at. Production happens only at a FACTORY site (Yakro); a user
@@ -86,6 +99,9 @@ export async function listAvailableBins(site: string): Promise<AvailableBin[]> {
 }
 
 export interface CreateBatchInput {
+  /** An optional name for the run (ANA-03B). Never its ID: the ID is always issued by the system. */
+  name?: string;
+  /** What older clients sent as the name, read the same way. */
   code?: string;
   startDate?: string;
   proposedBy?: string;
@@ -103,11 +119,14 @@ export async function createBatch(site: string, actorId: string, input: CreateBa
  * procurementBinStock gives it.
  */
 export async function createBatchIn(tx: Prisma.TransactionClient, site: string, actorId: string, input: CreateBatchInput, stock: Map<string, WarehouseBinStock>) {
-  const code = (input.code ?? "").trim().toUpperCase();
-  if (!code) throw new ValidationError("A batch needs a name.");
-  if (!BATCH_CODE_PATTERN.test(code)) throw new ValidationError(`"${code}" can only use letters, digits and - _ .`);
   const startDate = (input.startDate ?? "").trim();
   if (!isIsoDate(startDate)) throw new ValidationError("A start date is required.");
+  // Every run gets a system ID (PR-YAK-2026-001), like a truck's REC- ID. A name given (the production workbook's
+  // "Batch Name" column, e.g. ANA-03B) is kept beside it, so the team can keep calling it that and a re-uploaded
+  // file still finds the same run.
+  const name = (input.name ?? input.code ?? "").trim().toUpperCase() || null;
+  if (name && !BATCH_CODE_PATTERN.test(name)) throw new ValidationError(`"${name}" can only use letters, digits and - _ .`);
+  if (name && parseSiteId(name)?.kind === "PR") throw new ValidationError(`${name} looks like a production run ID. IDs are issued by the system; give a name, or leave it empty.`);
   const binCodes = [...new Set((input.bins ?? []).map((b) => String(b).trim().toUpperCase()).filter(Boolean))];
   if (binCodes.length === 0) throw new ValidationError("Pick at least one warehouse bin.");
 
@@ -120,14 +139,16 @@ export async function createBatchIn(tx: Prisma.TransactionClient, site: string, 
     const empty = binCodes.filter((c) => !stock.get(c)?.lots.length);
     if (empty.length) throw new ValidationError(`No procurement stock in ${empty.join(", ")} at ${site}.`);
 
-    const taken = await tx.productionBatchBin.findMany({ where: { binCode: { in: binCodes } }, select: { binCode: true, batchCode: true } });
-    if (taken.length) throw new ValidationError(taken.map((t) => `${t.binCode} is already in batch ${t.batchCode}`).join("; ") + ".");
+    const taken = await tx.productionBatchBin.findMany({ where: { binCode: { in: binCodes } }, select: { binCode: true, batchCode: true, batch: { select: { name: true } } } });
+    if (taken.length) throw new ValidationError(taken.map((t) => `${t.binCode} is already in production run ${runLabel(t.batchCode, t.batch.name)}`).join("; ") + ".");
 
-    if (await tx.productionBatch.findUnique({ where: { code }, select: { code: true } })) throw new ValidationError(`Batch ${code} already exists.`);
+    if (name && (await tx.productionBatch.findFirst({ where: { warehouse: site, name }, select: { code: true } }))) throw new ValidationError(`A production run named ${name} already exists.`);
 
+    const code = await nextProductionRunId(tx, site, startDate);
     await tx.productionBatch.create({
       data: {
         code,
+        name,
         warehouse: site,
         startDate,
         proposedBy: (input.proposedBy ?? "").trim() || null,
@@ -191,6 +212,7 @@ function toSummary(b: BatchRow): BatchSummary {
   const plan = planBatch(b.bins.map((x) => Number(x.plannedKg)), b.startDate);
   return {
     code: b.code,
+    name: b.name,
     warehouse: b.warehouse,
     startDate: b.startDate,
     proposedBy: b.proposedBy,
@@ -212,7 +234,7 @@ export async function listBatches(site: string): Promise<BatchSummary[]> {
 const tonnes = (kg: number) => `${(kg / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} t`;
 
 export async function getBatch(site: string, code: string): Promise<BatchDetail | null> {
-  const row = await prisma.productionBatch.findFirst({ where: { code, warehouse: site }, include: BATCH_INCLUDE });
+  const row = await prisma.productionBatch.findFirst({ where: runWhere(site, code), include: BATCH_INCLUDE });
   if (!row) return null;
   const stock = await procurementBinStock(site);
   const summary = toSummary(row);

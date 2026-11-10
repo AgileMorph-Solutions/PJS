@@ -5,13 +5,6 @@ import { siteSlugFor } from "../../config/sites";
 import { useSites } from "../../state/SiteContext";
 import { useTracking } from "../../state/TrackingContext";
 
-export const primaryButton =
-  "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white text-[13px] font-bold shadow-sm transition-all";
-export const secondaryButton =
-  "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl border border-warmstone-200 bg-white hover:bg-warmstone-50 text-warmstone-800 text-[13px] font-semibold transition-all";
-export const inputCls =
-  "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-white text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700";
-
 /** Kg as the client reads batch sizes: tonnes, one decimal (4,172.9 t). */
 export function formatTonnes(kg: number): string {
   return `${(kg / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} t`;
@@ -55,43 +48,20 @@ export function useSiteHrefs() {
   };
 }
 
-/** The eight phases a batch walks through (Production module doc, page 1), in order. */
-export const BATCH_PHASES = ["Intake", "Calibration", "Cooking", "Shelling", "Colour sort", "Borma", "Peeling & grading", "Packing & dispatch"];
-
-/** How many of BATCH_PHASES have screens so far. */
-export const BUILT_PHASES = 5;
-
 /**
- * `current` is the 1-based phase the batch has reached; `shown` is the one last jumped to. Every phase is on the
- * page, so a click scrolls down to it, done or not (loads keep arriving in Intake while later phases run).
+ * The stages a production run walks through (the client's Production module: Intake, Calibration & sizing, Cooking,
+ * Shelling, Colour sorting, Borma, Peeling & grading, Packing & dispatch), in order. `built` = has screens so far;
+ * the rest are listed so nobody wonders where they went. `sheets` are the client's workbooks each stage replaces.
  */
-export function BatchPhaseStepper({ current, shown, onShow }: { current: number; shown: number; onShow: (phase: number) => void }) {
-  return (
-    <ol className="flex items-start gap-0 overflow-x-auto pb-1">
-      {BATCH_PHASES.map((label, i) => {
-        const n = i + 1;
-        const done = n < current;
-        const active = n === current;
-        const built = n <= BUILT_PHASES;
-        return (
-          <li key={label} className="flex-1 min-w-[78px] relative">
-            {i > 0 && <span className={`absolute top-3.5 right-1/2 w-full h-0.5 ${n <= current ? "bg-success-600" : "bg-warmstone-200"}`} />}
-            <button
-              type="button" onClick={() => onShow(n)} aria-current={n === shown ? "step" : undefined} title={built ? undefined : "Not built yet"}
-              className="relative z-10 w-full flex flex-col items-center cursor-pointer"
-            >
-              <span
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold border-2 ${
-                  done ? "bg-success-600 border-success-600 text-white" : active ? "bg-white border-brand-700 text-brand-700" : "bg-warmstone-100 border-warmstone-200 text-warmstone-400"
-                }`}
-              >
-                {done ? <span className="material-symbols-outlined text-[16px]">check</span> : active ? <span className="w-2 h-2 rounded-full bg-brand-700" /> : n}
-              </span>
-              <span className={`mt-1.5 px-2 py-0.5 rounded-full text-[11px] text-center font-semibold ${n === shown ? "bg-brand-700 text-white" : built ? "text-warmstone-900 hover:text-brand-700" : "text-warmstone-400 hover:text-warmstone-700"}`}>{label}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
+export const PRODUCTION_STAGES = [
+  { id: "intake", label: "Intake", built: true, sheets: "1. RCN Receipts · 2. Input RCN Quality report · 19. RCN Receipts Tally Sheet", text: "Each load from a warehouse bin gets an RCN receipt, a moisture check, then is weighed pallet by pallet." },
+  { id: "calibration", label: "Calibration", built: true, sheets: "4. Calibration Process report · 5. Calibrated RCN Silos Stock report", text: "Sort each weighed load by nut size into the 9 silos, then check that each silo holds the right size." },
+  { id: "cooking", label: "Cooking", built: true, sheets: "6. Cooking Process Report", text: "Steam-cook the nuts size by size to make a Lot, then rest the Lot 24 hours in a cooling silo." },
+  { id: "shelling", label: "Shelling", built: true, sheets: "7. Shelling process Report · 13. Shelling Machine Quality Reports", text: "Cut the shells open and record what comes out: kernels, uncut nuts, shell and shell dust." },
+  { id: "colour_sort", label: "Colour sorting", built: true, sheets: "12. Shelled Kernels Quality Report", text: "A camera machine splits the kernels into wholes, pieces, rejection + oil and black rejection. Check the sorter before and after." },
+  { id: "borma", label: "Borma ovens", built: false, sheets: "8. Borma Process Report", text: "Dry the kernels in the ovens, trolley by trolley." },
+  { id: "peeling", label: "Peeling & grading", built: false, sheets: "", text: "Humidify, peel and grade the kernels." },
+  { id: "packing", label: "Packing & dispatch", built: false, sheets: "", text: "Pack, check and dispatch the finished goods." },
+] as const;
+
+export type ProductionStageId = (typeof PRODUCTION_STAGES)[number]["id"];

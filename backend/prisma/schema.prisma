@@ -2350,9 +2350,14 @@ model IssuedToProduction {
 /// One batch: the warehouse bins production will process together (~1 month, ~4,000 t). A plan —
 /// creating it moves no stock. The planned total and end date are derived from its bins' planned kg
 /// and the start date, never stored.
+/// A production run (the client's documents say "batch"; the screens say production run).
 model ProductionBatch {
-  /// The client's own name for it, e.g. ANA-03B ("production BIN" in their workbooks).
+  /// The run's system ID, PR-<warehouse code>-<start year>-NNN (contract's domain/ids.ts) — like a truck's REC- ID,
+  /// always issued by the system, never typed.
   code         String    @id
+  /// An optional name the team gave it, e.g. ANA-03B ("production BIN" in their workbooks) — kept so an uploaded
+  /// workbook can keep naming the run its own way. Unique per factory, so a name finds exactly one run.
+  name         String?
   /// The factory site whose bins it draws on.
   warehouse    String
   warehouseRef Warehouse @relation(fields: [warehouse], references: [name])
@@ -2368,6 +2373,7 @@ model ProductionBatch {
   sizingChecks SizingCheck[]
   lots        FactoryLot[]
 
+  @@unique([warehouse, name])
   @@index([warehouse])
 }
 

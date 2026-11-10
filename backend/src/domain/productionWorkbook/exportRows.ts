@@ -26,12 +26,16 @@ export async function exportRows(site: string): Promise<Record<Tab["id"], TabRow
   const word = (size: SiloSize) => SILO_SIZES.find((s) => s.key === size)!.sheet;
   // Oldest first, the order the loads happened in, as on the client's sheets.
   const loads = [...receipts].reverse();
+  // Every "Batch Name" cell names the run the way people know it: its name when it has one, else its ID.
+  const runNames = new Map(batches.map((b) => [b.code, b.name ?? b.code]));
+  const run = (code: string) => runNames.get(code) ?? code;
 
   return {
     batches: [...batches].reverse().map((b) => ({
-      code: b.code, startDate: b.startDate, bins: joinList(b.binCodes), proposedBy: b.proposedBy, plannedKg: b.plannedKg, status: BATCH_STATUS_LABELS[b.status],
+      // The run's name when it has one, else its ID — either finds it again on upload (services' runWhere).
+      code: b.name ?? b.code, startDate: b.startDate, bins: joinList(b.binCodes), proposedBy: b.proposedBy, plannedKg: b.plannedKg, status: BATCH_STATUS_LABELS[b.status],
     })),
-    receipts: loads.map((r) => ({ id: r.id, batchCode: r.batchCode, date: r.date, btmNo: r.btmNo, binCode: r.binCode, status: RCN_RECEIPT_STATUS_LABELS[r.status] })),
+    receipts: loads.map((r) => ({ id: r.id, batchCode: run(r.batchCode), date: r.date, btmNo: r.btmNo, binCode: r.binCode, status: RCN_RECEIPT_STATUS_LABELS[r.status] })),
     checks: loads.flatMap((r) => r.moistureChecks.map((c) => ({
       id: c.id, receiptId: r.id, btmNo: r.btmNo, loadDate: r.date, moisture: c.moisture, nutCount: c.nutCount, sampleG: c.sampleG, ...c.grams,
       decision: c.decision === "ok" ? "OK" : "Hold", kor: c.kor === null ? null : round2(c.kor), status: CHECK_STATUS[c.status],
@@ -55,13 +59,13 @@ export async function exportRows(site: string): Promise<Record<Tab["id"], TabRow
       ...Object.fromEntries(SILO_SIZES.map((s) => [runKgKey(s.key), c.sizes[s.key]])),
     }))),
     siloChecks: sizingChecks.map((c) => ({
-      id: c.id, batchCode: c.batchCode, date: c.date, point: c.point === "received" ? "Received RCN" : word(c.point), binCode: c.binCode, nutCount: c.nutCount, sampleG: c.sampleG,
+      id: c.id, batchCode: run(c.batchCode), date: c.date, point: c.point === "received" ? "Received RCN" : word(c.point), binCode: c.binCode, nutCount: c.nutCount, sampleG: c.sampleG,
       ...Object.fromEntries(SIZING_GRADES.map((g) => [gramKey(g), c.grams[g]])),
       decision: c.decision === "ok" ? "OK" : "Fail", correctPct: c.correctPct === null ? null : round2(c.correctPct), status: CHECK_STATUS[c.status],
     })),
     siloMoves: sizingChecks.flatMap((c) => c.manualCalibrations.map((m) => ({ id: m.id, date: m.date, fromSize: word(m.fromSize), toSize: word(m.toSize), kg: m.kg }))),
     cooking: lots.flatMap((l) => l.runs.map((r) => ({
-      id: r.id, batchCode: l.batchCode, lotCode: l.code, date: r.date, totalKg: r.totalKg, bags: round2(r.totalKg / 80),
+      id: r.id, batchCode: run(l.batchCode), lotCode: l.code, date: r.date, totalKg: r.totalKg, bags: round2(r.totalKg / 80),
       ...Object.fromEntries(SILO_SIZES.map((s) => [runKgKey(s.key), r.sizes[s.key]])),
     }))),
     cooling: lots.filter((l) => l.coolingAt).map((l) => ({ lotCode: l.code, silo: l.coolingSilo, date: l.coolingAt!.slice(0, 10), time: l.coolingAt!.slice(11) })),

@@ -69,7 +69,7 @@ describe("RCN Receipt: a load arrives from one bin of the batch", () => {
 
     const res = await call("wi", "POST", "/api/production/rcn-receipts", { batchCode: "rrt-ana-03b", date: "2026-07-19", btmNo: " 108 ", binCode: "rrt-03b" });
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ id: "RR-RRT-2026-0001", batchCode: "RRT-ANA-03B", date: "2026-07-19", btmNo: "108", binCode: "RRT-03B", status: "waiting_for_moisture", createdBy: "wi" });
+    expect(res.json()).toMatchObject({ id: "RR-RRT-2026-0001", batchCode: expect.stringMatching(/^PR-RRT-2026-\d{3}$/), date: "2026-07-19", btmNo: "108", binCode: "RRT-03B", status: "waiting_for_moisture", createdBy: "wi" });
 
     const batch = (await call("wi", "GET", "/api/production/batches/RRT-ANA-03B")).json();
     expect(batch.status).toBe("in_process");
@@ -90,9 +90,9 @@ describe("RCN Receipt: a load arrives from one bin of the batch", () => {
   it("refuses a bin outside the batch, an unknown batch, and missing fields — and says why", async () => {
     const ok = { batchCode: "RRT-ANA-03B", date: "2026-07-21", btmNo: "110", binCode: "RRT-10" };
     const cases: [object, RegExp][] = [
-      [{ ...ok, binCode: "RRT-11" }, /RRT-11 is not in batch RRT-ANA-03B/],
-      [{ ...ok, batchCode: "RRT-NOPE" }, /Batch RRT-NOPE doesn't exist/],
-      [{ ...ok, batchCode: "" }, /Choose the batch/],
+      [{ ...ok, binCode: "RRT-11" }, /RRT-11 is not in production run PR-RRT-2026-\d{3} \(RRT-ANA-03B\)/],
+      [{ ...ok, batchCode: "RRT-NOPE" }, /Production run RRT-NOPE doesn't exist/],
+      [{ ...ok, batchCode: "" }, /Choose the production run/],
       [{ ...ok, date: "21/07/2026" }, /date is required/],
       [{ ...ok, btmNo: " " }, /BTM number/],
       [{ ...ok, binCode: "" }, /warehouse bin/],
@@ -102,7 +102,7 @@ describe("RCN Receipt: a load arrives from one bin of the batch", () => {
       expect(res.statusCode, JSON.stringify(body)).toBe(422);
       expect(res.json().error).toMatch(message);
     }
-    expect(await prisma.rcnReceipt.count({ where: { batchCode: "RRT-ANA-03B" } })).toBe(2);
+    expect(await prisma.rcnReceipt.count({ where: { batch: { name: "RRT-ANA-03B" } } })).toBe(2);
   });
 
   it("lists the batch's receipts, newest first", async () => {
@@ -138,8 +138,10 @@ describe("Moisture check (Phase 1, step 2)", () => {
     expect(approved.statusCode).toBe(200);
     expect(approved.json()).toMatchObject({ status: "waiting_for_weighing", moistureChecks: [{ status: "approved", reviewedBy: "wi" }] });
 
-    // Weighing is next: no further moisture check is due.
-    expect((await call("qfs", "POST", "/api/production/rcn-receipts/RR-RRT-2026-0001/moisture-checks", { ...btm1001, decision: "ok" })).statusCode).toBe(422);
+    // Any order (Nov 2026): a further check can still be taken after an OK one — the newest approved check decides.
+    const again = await call("wi", "POST", "/api/production/rcn-receipts/RR-RRT-2026-0001/moisture-checks", { ...btm1001, decision: "ok" });
+    expect(again.statusCode).toBe(201);
+    expect(again.json().status).toBe("waiting_for_weighing");
   });
 
   it("a rejected check applies nothing and needs a reason; Fail puts the load on hold until re-checked", async () => {
@@ -193,11 +195,12 @@ describe("Weighing (Phase 1, steps 3–4)", () => {
   const receipt = async () =>
     (await call("wi", "GET", "/api/production/rcn-receipts?batch=RRT-ANA-03B")).json().find((r: { id: string }) => r.id === id);
 
-  it("is refused before moisture is OK, and to a QFS Officer", async () => {
+  it("can be done before moisture is OK — steps go in any order — but never by a QFS Officer", async () => {
     const waiting = (await call("wi", "GET", "/api/production/rcn-receipts?batch=RRT-ANA-03B")).json().find((r: { status: string }) => r.status === "waiting_for_moisture");
     const res = await call("wi", "POST", `/api/production/rcn-receipts/${waiting.id}/pallets`, pallet("2308.9", "30"));
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error).toMatch(/Waiting for moisture; it can't be weighed now/);
+    expect(res.statusCode).toBe(201);
+    // Weighed, but the moisture check is still what it waits for: the status says so.
+    expect(res.json()).toMatchObject({ status: "waiting_for_moisture", pallets: [{ grossKg: "2308.9" }] });
     expect((await call("qfs", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet("2308.9", "30"))).statusCode).toBe(403);
   });
 
@@ -228,7 +231,7 @@ describe("Weighing (Phase 1, steps 3–4)", () => {
     expect(after.pallets.map((p: { id: number; no: number }) => [p.id, p.no])).toEqual([[expect.any(Number), 1], [second.id, 2], [third.id, 3]]);
   });
 
-  it("needs the empty pallets' weight; saving the final weight makes it Intake done and closes the weighing", async () => {
+  it("needs the empty pallets' weight; saving the final weight makes it Intake done, and it can be saved again to correct it", async () => {
     const missing = await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, { emptyPallets: [], dustKg: "925.7" });
     expect(missing.statusCode).toBe(422);
     expect(missing.json().error).toMatch(/empty pallets' weight/);
@@ -244,10 +247,14 @@ describe("Weighing (Phase 1, steps 3–4)", () => {
       finalWeight: { emptyPallets: [{ weightKg: "374.3", count: "" }, { weightKg: "211.2", count: "3" }], dustKg: "925.7", voidsKg: "", finalisedBy: "wi" },
     });
 
-    const [first] = saved.json().pallets;
-    expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, pallet("2000", "30"))).statusCode).toBe(422);
-    expect((await call("wi", "PUT", `/api/production/rcn-pallets/${first.id}`, pallet("2000", "30"))).statusCode).toBe(422);
-    expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, { emptyPallets: [{ weightKg: "1" }] })).statusCode).toBe(422);
+    // Saved again, it replaces what was there — not added to it.
+    const resaved = await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, {
+      emptyPallets: [{ weightKg: "374.3", count: "" }, { weightKg: "211.2", count: "3" }], dustKg: "925.7", voidsKg: "",
+    });
+    expect(resaved.statusCode).toBe(200);
+    expect(resaved.json().finalWeight.emptyPallets).toHaveLength(2);
+    // Still checked like the first time: the empty pallets weigh more than the pallets' bags allow nothing odd through.
+    expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, { emptyPallets: [], dustKg: "1" })).statusCode).toBe(422);
   });
 
   it("writes the weighed load to the batch history, with its totals", async () => {

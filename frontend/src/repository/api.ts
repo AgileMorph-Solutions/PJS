@@ -373,7 +373,8 @@ export const api = {
   listBatchBins: () => request<AvailableBin[]>(prod("/production/batch-bins")),
   listBatches: () => request<BatchSummary[]>(prod("/production/batches")),
   getBatch: (code: string) => request<BatchDetail>(prod(`/production/batches/${encodeURIComponent(code)}`)),
-  createBatch: (b: { code: string; startDate: string; proposedBy: string; bins: string[] }) =>
+  /** Start a production run: its bins, and optionally the loads already brought from them, saved together or not at all. */
+  createBatch: (b: { code?: string; startDate: string; proposedBy?: string; bins: string[]; loads?: { date: string; btmNo: string; binCode: string }[] }) =>
     request<BatchDetail>(prod("/production/batches"), { method: "POST", body: JSON.stringify(b) }),
   binBatch: (binCode: string) => request<{ batch: { batchCode: string; plannedKg: number } | null }>(`/production/bin-batch/${encodeURIComponent(binCode)}`),
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canTakeMoistureCheck, canWeigh, rcnReceiptStatus } from "../src/domain/rcnReceipt";
+import { canTakeMoistureCheck, rcnReceiptStatus } from "../src/domain/rcnReceipt";
 import { emptyPalletCountNote, finalWeightError, palletError, weighingTotals } from "../src/domain/rcnWeighing";
 
 /**
@@ -82,9 +82,8 @@ describe("receipt status through weighing", () => {
     expect(rcnReceiptStatus([...ok], { pallets: 3, finalised: true })).toBe("intake_done");
   });
 
-  it("only weighs after an OK moisture check and before the final weight", () => {
+  it("a moisture check can be taken at any step, except while one is waiting for approval", () => {
     const statuses = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done"] as const;
-    expect(statuses.map(canWeigh)).toEqual([false, false, false, true, true, false]);
-    expect(statuses.map(canTakeMoistureCheck)).toEqual([true, false, true, false, false, false]);
+    expect(statuses.map(canTakeMoistureCheck)).toEqual([true, false, true, true, true, true]);
   });
 });

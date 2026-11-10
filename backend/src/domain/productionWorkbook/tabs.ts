@@ -83,7 +83,7 @@ export const TABS: Tab[] = [
     dateKey: "startDate",
     dateLabel: "Start date",
     fields: [
-      { key: "code", label: "Batch Name", note: "The batch's own name, e.g. ANA-03B. A new name creates the batch." },
+      { key: "code", label: "Batch Name", note: "The production run's name, e.g. ANA-03B, or its ID (PR-YAK-2026-001) when it has no name. A new name starts a run, which gets its own ID." },
       { key: "startDate", label: "Start Date" },
       { key: "bins", label: "Bins", note: "The warehouse bins in the batch, separated by /  (BIN-03B / BIN-03C)." },
       { key: "proposedBy", label: "Proposed By" },

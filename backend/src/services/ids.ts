@@ -10,7 +10,7 @@
 import { Prisma } from "@prisma/client";
 import type { SiteIdKind } from "@anagroci/contract/domain/ids";
 import {
-  formatDeliveryPlanId, formatLotNumber, formatRcnReceiptId, formatReceiptId, formatTransferId, legacyLotSeq, legacyTransferSeq, normalizeLotNumber, normalizeTransferId, recodeSiteId,
+  formatDeliveryPlanId, formatLotNumber, formatProductionRunId, formatRcnReceiptId, formatReceiptId, formatTransferId, legacyLotSeq, legacyTransferSeq, normalizeLotNumber, normalizeTransferId, recodeSiteId,
   parseSiteId, parseTransferId, siteIdPrefix, transferIdPrefix, yearOf,
 } from "@anagroci/contract/domain/ids";
 import { ValidationError } from "../domain/validation.js";
@@ -197,6 +197,14 @@ export async function nextRcnReceiptId(tx: Tx, site: string, date: string): Prom
   const year = requireYear(date, "The receipt date");
   const rows = await tx.rcnReceipt.findMany({ where: { batch: { warehouse: site } }, select: { id: true } });
   return formatRcnReceiptId(code, year, highestSeq(rows.map((r) => r.id), sameKindYear("RR", year)) + 1);
+}
+
+/** PR-<code>-<year>-NNN for a production run started from the screen; a run named in an uploaded workbook keeps its name. */
+export async function nextProductionRunId(tx: Tx, site: string, date: string): Promise<string> {
+  const code = await warehouseCodeFor(tx, site);
+  const year = requireYear(date, "The start date");
+  const rows = await tx.productionBatch.findMany({ where: { warehouse: site }, select: { code: true } });
+  return formatProductionRunId(code, year, highestSeq(rows.map((r) => r.code), sameKindYear("PR", year)) + 1);
 }
 
 export async function nextTransferId(tx: Tx, transferDate: string): Promise<string> {

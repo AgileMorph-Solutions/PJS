@@ -50,8 +50,9 @@ describe("receipt status, derived from its moisture checks", () => {
     expect(rcnReceiptStatus([hold, ok])).toBe("waiting_for_weighing");
   });
 
-  it("takes a new check only while waiting for one or on hold", () => {
-    expect(["waiting_for_moisture", "on_hold", "moisture_pending", "waiting_for_weighing"].map((s) => canTakeMoistureCheck(s as never))).toEqual([true, true, false, false]);
+  it("takes a new check at any step, except while one is still waiting for approval", () => {
+    expect(["waiting_for_moisture", "on_hold", "moisture_pending", "waiting_for_weighing", "intake_done", "calibrated"].map((s) => canTakeMoistureCheck(s as never)))
+      .toEqual([true, true, false, true, true, true]);
   });
 });
 
@@ -75,5 +76,41 @@ describe("moisture check form", () => {
     expect(moistureCheckError({ ...btm1001, nutCount: "" })).toMatch(/nut count/);
     expect(moistureCheckError({ ...btm1001, shellG: "700" })).toMatch(/1036 g, more than the 1000 g sample/);
     expect(moistureCheckError({ ...btm1001, decision: "" })).toMatch(/OK or Fail/);
+  });
+});
+
+import { openStage, rcnReceiptStages } from "../src/domain/rcnReceipt";
+describe("an RCN receipt's stages — recorded in any order", () => {
+  type Check = { status: "submitted" | "approved" | "rejected"; decision: "ok" | "hold" };
+  const ok: Check = { status: "approved", decision: "ok" };
+  const r = (o: { checks?: Check[]; pallets?: number; finalWeight?: object | null; calibration?: { sizedKg: number; leftKg: number | null } | null } = {}) =>
+    rcnReceiptStages({ status: "waiting_for_moisture", moistureChecks: o.checks ?? [], pallets: Array(o.pallets ?? 0).fill({}), finalWeight: o.finalWeight ?? null, calibration: o.calibration ?? null });
+
+  it("a new load: moisture is next, nothing else done", () => {
+    expect(r()).toEqual({ receipt: "done", moisture: "current", pallets: "todo", final_weight: "todo", calibration: "todo" });
+  });
+
+  it("each step is done by what it holds, whatever came before it", () => {
+    // Weighed and closed before any moisture check: those two steps are done, moisture is still the next to do.
+    expect(r({ pallets: 3, finalWeight: {} })).toEqual({ receipt: "done", moisture: "current", pallets: "done", final_weight: "done", calibration: "todo" });
+    // Sorted before the final weight: not "done", as the total it must reach isn't known yet.
+    expect(r({ checks: [ok], pallets: 2, calibration: { sizedKg: 500, leftKg: null } })).toMatchObject({ moisture: "done", final_weight: "current", calibration: "todo" });
+  });
+
+  it("a check waiting for approval is waiting, and the next open step is current", () => {
+    const s = r({ checks: [{ status: "submitted", decision: "ok" }] });
+    expect(s.moisture).toBe("waiting");
+    expect(s.pallets).toBe("current");
+    expect(openStage(s)).toBe("moisture");
+  });
+
+  it("a load on hold still needs its moisture check", () => {
+    expect(r({ checks: [{ status: "approved", decision: "hold" }], pallets: 1 }).moisture).toBe("current");
+  });
+
+  it("all done once every step holds its record and all of the load is sorted", () => {
+    const done = r({ checks: [ok], pallets: 3, finalWeight: {}, calibration: { sizedKg: 4538.9, leftKg: 0 } });
+    expect(Object.values(done).every((x) => x === "done")).toBe(true);
+    expect(openStage(done)).toBe("calibration");
   });
 });

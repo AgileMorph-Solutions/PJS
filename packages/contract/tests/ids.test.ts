@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  formatReceiptId, formatLotNumber, formatDeliveryPlanId, formatTransferId, recodeSiteId,
+  formatReceiptId, formatLotNumber, formatDeliveryPlanId, formatTransferId, formatProductionRunId, recodeSiteId,
   parseSiteId, parseTransferId, siteIdPrefix, yearOf,
   legacyLotSeq, normalizeLotNumber, legacyTransferSeq, normalizeTransferId, isValidWarehouseCode,
 } from "../src/domain/ids.js";
@@ -12,6 +12,11 @@ describe("system IDs", () => {
     expect(formatLotNumber("YAK", 2026, 2)).toBe("LOT-YAK-2026-0002");
     expect(formatTransferId(2027, 3)).toBe("BKT-2027-003");
     expect(formatDeliveryPlanId("BKE", 2026, 1)).toBe("DP-BKE-2026-001");
+  });
+
+  it("issues a production run its own ID, which parses back", () => {
+    expect(formatProductionRunId("YAK", 2026, 1)).toBe("PR-YAK-2026-001");
+    expect(parseSiteId("PR-YAK-2026-001")).toEqual({ kind: "PR", code: "YAK", year: 2026, seq: 1 });
   });
 
   it("grows past 999 instead of wrapping or truncating", () => {

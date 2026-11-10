@@ -8,6 +8,7 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { useProductionLots } from "../../state/TrackingContext";
 import { api, type ProductionLot } from "../../repository/api";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { PRODUCTION_PAGE_SIZE } from "../../components/production/columns";
 
 /** A Lot is created at Cooking, never before (confirmed rule) — so "create a Lot" here really means
  * "cook the first batch", exactly mirroring the BTM list page's "create = first receipt line". */
@@ -96,7 +97,7 @@ export function LotsListPage() {
             />
             <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
           </FilterBar>
-          <DataTable
+          <DataTable pageSize={PRODUCTION_PAGE_SIZE}
             columns={columns}
             rows={search.filtered}
             keyFn={(r) => r.lotNo}

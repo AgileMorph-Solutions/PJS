@@ -34,6 +34,8 @@ interface Props<T> {
   /** Column filters already set when the table mounts, keyed by column label — for a link that opens the page
    * pre-filtered. Read once: change the table's `key` to apply a different set. */
   initialFilters?: Record<string, ActiveFilter>;
+  /** Rows per page (default 25). The pager appears once the rows don't fit on one page. */
+  pageSize?: number;
 }
 
 /** A click on something that is already interactive inside the row (a link, a button, an input) does its
@@ -41,7 +43,7 @@ interface Props<T> {
 const fromControl = (e: MouseEvent | KeyboardEvent) =>
   e.target instanceof Element && e.target.closest("a,button,input,select,textarea,label") !== null && e.target !== e.currentTarget;
 
-export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyTitle, emptyHint, initialFilters }: Props<T>) {
+export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyTitle, emptyHint, initialFilters, pageSize }: Props<T>) {
   const navigate = useNavigate();
   const [active, setActive] = useState<Record<string, ActiveFilter>>(initialFilters ?? {});
   // How each filterable column filters (a checklist, text, a range), decided once per set of rows rather than on every keystroke.
@@ -61,7 +63,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, kinds]);
   const shownRows = useMemo(() => applyFilters(rows, columns, active, kinds), [rows, columns, active, kinds]);
-  const page = usePagination(shownRows);
+  const page = usePagination(shownRows, pageSize);
   const activeCount = columns.filter((c) => kinds[c.label] && isActive(active[c.label])).length;
   const hasFilters = Object.keys(kinds).length > 0;
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CollapsibleCard } from "../ui/CollapsibleCard";
 import { DataTable, type Column } from "../ui/DataTable";
 import { ProductionRowForm } from "./ProductionRowForm";
+import { PRODUCTION_PAGE_SIZE } from "./columns";
 
 interface Field { n: string; v: string; col: string }
 interface Row { id?: string; [key: string]: unknown }
@@ -54,7 +55,7 @@ export function ProductionTableBody({ fields, idPrefix, load, onSubmit, submitLa
       {loading && <p className="text-[12.5px] text-warmstone-400">Loading…</p>}
       {!loading && rows.length > 0 && (
         <div className="max-h-96 overflow-y-auto">
-          <DataTable columns={columns} rows={rows} keyFn={(r) => String(r.id ?? JSON.stringify(r))} emptyTitle="No rows" />
+          <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={columns} rows={rows} keyFn={(r) => String(r.id ?? JSON.stringify(r))} emptyTitle="No rows" />
         </div>
       )}
       <details className="text-[13px]">

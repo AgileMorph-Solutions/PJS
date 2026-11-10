@@ -11,6 +11,8 @@ import { SILO_SIZES, siloLabel, type SiloSize } from "@anagroci/contract/domain/
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import { ENTRY_DEFS, SHELLING_LINES, entryError, entryFieldText, entryFigures, entryNotes, type EntryField, type EntryKind } from "@anagroci/contract/domain/lotEntries";
 import type { LotEntryView, LotView } from "@anagroci/contract/types/lots";
+import { PRODUCTION_PAGE_SIZE, dateCol, statusCol } from "./columns";
+import { IconButton } from "../ui/IconButton";
 
 export interface LotPermissions {
   /** The floor's own records (the Incharge / Admin; Data Entry later). */
@@ -64,8 +66,13 @@ export function EntryList({ kind, lot, can, startValues, onChanged }: { kind: En
   }
 
   const columns: Column<LotEntryView>[] = [
-    { label: "Date", nowrap: true, render: (e) => formatDate(e.date) },
-    ...shownFields.map((f): Column<LotEntryView> => ({ label: f.label, nowrap: f.type !== "text", render: (e) => entryFieldText(f, e.values[f.key]) })),
+    dateCol("Date", (e) => e.date),
+    // Each recorded field filters the way it reads: a number by range, a size, line or shift by checklist.
+    ...shownFields.map((f): Column<LotEntryView> => ({
+      label: f.label, nowrap: f.type !== "text",
+      filter: { value: (e) => (f.type === "number" ? Number(e.values[f.key]) : entryFieldText(f, e.values[f.key])), kind: f.type === "number" ? "number" : undefined },
+      render: (e) => entryFieldText(f, e.values[f.key]),
+    })),
     ...(def.figures ? entryFigures(kind, {}).map((fig, i): Column<LotEntryView> => ({
       label: fig.label, align: "right", nowrap: true,
       render: (e) => {
@@ -73,14 +80,12 @@ export function EntryList({ kind, lot, can, startValues, onChanged }: { kind: En
         return <span className={shown.alert ? "font-semibold text-danger-700" : ""}>{shown.value}</span>;
       },
     })) : []),
-    ...(def.decision ? [{ label: "Result", nowrap: true, render: (e: LotEntryView) => <Pill tone={e.decision === "ok" ? "entry" : "gap"} label={decisionText(kind, e.decision)} /> }] : []),
-    ...(def.who === "qfs" ? [{ label: "Approval", nowrap: true, render: (e: LotEntryView) => <StatusPill status={e.status} /> }] : []),
+    ...(def.decision ? [statusCol<LotEntryView>("Result", (e) => decisionText(kind, e.decision), (e) => <Pill tone={e.decision === "ok" ? "entry" : "gap"} label={decisionText(kind, e.decision)} />)] : []),
+    ...(def.who === "qfs" ? [statusCol<LotEntryView>("Approval", (e) => e.status, (e) => <StatusPill status={e.status} />)] : []),
     ...(def.who === "floor" && can.canFloor ? [{
       label: "", align: "right" as const, nowrap: true,
       render: (e: LotEntryView) => (
-        <button type="button" onClick={() => removeEntry(e)} aria-label={`Remove the line of ${formatDate(e.date)}`} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
-          <span className="material-symbols-outlined text-[20px]">delete</span>
-        </button>
+        <IconButton icon="delete" label={`Remove the line of ${formatDate(e.date)}`} onClick={() => removeEntry(e)} />
       ),
     }] : []),
   ];
@@ -112,7 +117,7 @@ export function EntryList({ kind, lot, can, startValues, onChanged }: { kind: En
           </div>
         ) : null
       ))}
-      {entries.length > 0 && <DataTable columns={columns} rows={[...entries].reverse()} keyFn={(e) => String(e.id)} />}
+      {entries.length > 0 && <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={columns} rows={[...entries].reverse()} keyFn={(e) => String(e.id)} />}
       {entries.flatMap((e) => (e.status === "rejected" && e.rejectReason ? [e] : [])).map((e) => (
         <p key={e.id} className="text-[12px] text-danger-700">Rejected ({formatDate(e.date)}): {e.rejectReason}</p>
       ))}

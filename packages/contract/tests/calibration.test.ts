@@ -183,3 +183,16 @@ describe("a silo as a workbook writes it", () => {
     expect([samplingPointFromWord("Received RCN"), samplingPointFromWord("Before Calibration"), samplingPointFromWord("AB"), samplingPointFromWord("")]).toEqual(["received", "received", "AB", null]);
   });
 });
+
+describe("sorting a load before its final weight is saved (any order)", () => {
+  it("has no total to keep within yet, but still checks the kg themselves", () => {
+    expect(calibrationRunError({ date: "2026-07-21", sizes: { A: "999999" } }, null)).toBeNull();
+    expect(calibrationRunError({ date: "2026-07-21", sizes: { A: "-1" } }, null)).toMatch(/0 or more/);
+    expect(calibrationRunError({ date: "2026-07-21", sizes: {} }, null)).toMatch(/at least one silo/);
+  });
+
+  it("knows how much is left only once the total is known", () => {
+    expect(calibrationProgress(null, [{ sizes: { A: "500" } }])).toEqual({ toSilosKg: null, sizedKg: 500, leftKg: null });
+    expect(calibrationProgress(1000, [{ sizes: { A: "500" } }])).toEqual({ toSilosKg: 1000, sizedKg: 500, leftKg: 500 });
+  });
+});

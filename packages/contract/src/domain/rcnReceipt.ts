@@ -40,7 +40,7 @@ export type MoistureCheckStatus = "submitted" | "approved" | "rejected";
  */
 export function rcnReceiptStatus(
   checks: { status: MoistureCheckStatus; decision: MoistureDecision }[],
-  weighing: { pallets: number; finalised: boolean; calibration?: { sizedKg: number; leftKg: number } } = { pallets: 0, finalised: false },
+  weighing: { pallets: number; finalised: boolean; calibration?: { sizedKg: number; leftKg: number | null } } = { pallets: 0, finalised: false },
 ): RcnReceiptStatus {
   if (checks.some((c) => c.status === "submitted")) return "moisture_pending";
   const approved = checks.filter((c) => c.status === "approved").at(-1); // checks are oldest first
@@ -49,16 +49,17 @@ export function rcnReceiptStatus(
   if (weighing.finalised) {
     const c = weighing.calibration;
     if (!c || c.sizedKg <= 0) return "intake_done";
-    return c.leftKg <= 0 ? "calibrated" : "calibrating";
+    return c.leftKg !== null && c.leftKg <= 0 ? "calibrated" : "calibrating";
   }
   return weighing.pallets > 0 ? "weighing" : "waiting_for_weighing";
 }
 
-/** A new check is taken while the load waits for one, or after it was put on hold to dry. */
-export const canTakeMoistureCheck = (status: RcnReceiptStatus): boolean => status === "waiting_for_moisture" || status === "on_hold";
-
-/** Pallets are weighed, changed and the final weight saved only after moisture is OK and until it is saved. */
-export const canWeigh = (status: RcnReceiptStatus): boolean => status === "waiting_for_weighing" || status === "weighing";
+/**
+ * A load's steps can be recorded in any order (team decision, Nov 2026: the floor fills in what it has, when it has it;
+ * nothing waits for an earlier form). The one limit on a moisture check is approval: while one waits for the Incharge,
+ * a second would race it.
+ */
+export const canTakeMoistureCheck = (status: RcnReceiptStatus): boolean => status !== "moisture_pending";
 
 /** Phase 2: a load is sized into the silos once its Intake is done, run by run, until all of it is. */
 export const canCalibrate = (status: RcnReceiptStatus): boolean => status === "intake_done" || status === "calibrating";
@@ -145,4 +146,55 @@ const sameBtm = (a: string, b: string) => a.trim().toUpperCase() === b.trim().to
  */
 export function sameBtmAndBin<T extends { btmNo: string; binCode: string }>(existing: T[], btmNo: string, binCode: string): T[] {
   return existing.filter((r) => r.binCode === binCode && sameBtm(r.btmNo, btmNo));
+}
+
+/**
+ * The stages one RCN receipt (one load) walks through on the production floor, as the client's sheets record them:
+ * "1. RCN Receipts" (the load and its BTM slip), "2. Input RCN Quality report" (moisture and cut test), "19. RCN
+ * Receipts Tally Sheet" (each pallet on the scale, then empty pallets, dust and voids), "4. Calibration Process
+ * report" (sized into the silos). One stage, one form — the receipt page shows them as separate steps, like a truck's.
+ */
+export type RcnStageId = "receipt" | "moisture" | "pallets" | "final_weight" | "calibration";
+
+/** done · current (the next job) · waiting (done here, waiting for the Incharge's approval) · todo (not reached yet). */
+export type RcnStageState = "done" | "current" | "waiting" | "todo";
+
+export const RCN_STAGES: { id: RcnStageId; label: string; hint: string }[] = [
+  { id: "receipt", label: "RCN receipt", hint: "The load and the BTM slip that came with it." },
+  { id: "moisture", label: "Moisture check", hint: "Sample moisture, nut count and cut test. OK lets the load be weighed." },
+  { id: "pallets", label: "Pallet weighing", hint: "Each pallet on the scale: gross weight and bags." },
+  { id: "final_weight", label: "Final weight", hint: "Empty pallets, dust and voids, to close the weighing." },
+  { id: "calibration", label: "Calibration", hint: "How many kg of the load went into each size silo." },
+];
+
+/**
+ * Each step of a load stands on its own — steps are recorded in any order — so each is done by what it holds: an OK
+ * moisture check approved, a pallet weighed, the final weight saved, all of the load sorted into the silos. A check
+ * waiting for approval is "waiting". The first step not done yet is "current": what to do next, not a lock.
+ */
+export function rcnReceiptStages(r: {
+  status: RcnReceiptStatus;
+  moistureChecks: { status: MoistureCheckStatus; decision: MoistureDecision }[];
+  pallets: unknown[];
+  finalWeight: unknown | null;
+  calibration: { sizedKg: number; leftKg: number | null } | null;
+}): Record<RcnStageId, RcnStageState> {
+  const approved = r.moistureChecks.filter((c) => c.status === "approved").at(-1);
+  const done: Record<RcnStageId, boolean> = {
+    receipt: true,
+    moisture: approved?.decision === "ok",
+    pallets: r.pallets.length > 0,
+    final_weight: Boolean(r.finalWeight),
+    calibration: Boolean(r.calibration && r.calibration.sizedKg > 0 && r.calibration.leftKg !== null && r.calibration.leftKg <= 0),
+  };
+  const waiting = r.moistureChecks.some((c) => c.status === "submitted");
+  const states = Object.fromEntries(RCN_STAGES.map((s) => [s.id, done[s.id] ? "done" : s.id === "moisture" && waiting ? "waiting" : "todo"])) as Record<RcnStageId, RcnStageState>;
+  const next = RCN_STAGES.find((s) => states[s.id] === "todo");
+  if (next) states[next.id] = "current";
+  return states;
+}
+
+/** The stage to open first: the next job, or the one waiting for approval, or the last one once all are done. */
+export function openStage(stages: Record<RcnStageId, RcnStageState>): RcnStageId {
+  return RCN_STAGES.find((s) => stages[s.id] === "current" || stages[s.id] === "waiting")?.id ?? "calibration";
 }

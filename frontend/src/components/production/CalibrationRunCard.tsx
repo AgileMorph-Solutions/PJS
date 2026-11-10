@@ -6,10 +6,10 @@ import { Field, Input, inputClass } from "../ui/Input";
 import { Modal } from "../ui/Modal";
 import { api, ApiError } from "../../repository/api";
 import { SILO_SIZES, calibrationRunError, siloLabel, sizesTotal, type SizeValues } from "@anagroci/contract/domain/calibration";
-import { canCalibrate } from "@anagroci/contract/domain/rcnReceipt";
 import { pctOfNet, weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
+import { IconButton } from "../ui/IconButton";
 
 type Run = NonNullable<RcnReceipt["calibration"]>["runs"][number];
 
@@ -19,36 +19,46 @@ type Run = NonNullable<RcnReceipt["calibration"]>["runs"][number];
  * so saving a part of it is normal. Totals use the same contract function the server checks with.
  */
 export function SortLoadDialog({ receipt, canEdit, onClose, onChanged }: { receipt: RcnReceipt; canEdit: boolean; onClose: () => void; onChanged: () => void }) {
-  const cal = receipt.calibration;
-  if (!cal) return null;
-  const open = canEdit && canCalibrate(receipt.status);
-  const t = weighingTotals(receipt.pallets, receipt.finalWeight ?? { emptyPallets: [] });
-
   return (
     <Modal wide title={`Sort BTM ${receipt.btmNo} into the silos`} onClose={onClose}>
-      <div className="space-y-5">
-        <div>
-          <p className="text-[15px] font-bold text-warmstone-900 tabular-nums">
-            {cal.leftKg > 0 ? `${formatKg(cal.leftKg)} left to sort` : "All of this load is sorted."}
-          </p>
-          <p className="text-[12px] text-warmstone-500 mt-1 tabular-nums">
-            Weighed in Intake: {formatKg(t.netKg)} net − {formatKg(t.dustKg)} dust ({pctOfNet(t.dustKg, t.netKg).toFixed(2)} %) − {formatKg(t.voidsKg)} voids ({pctOfNet(t.voidsKg, t.netKg).toFixed(3)} %) = {formatKg(cal.toSilosKg)} to sort.
-          </p>
-        </div>
-        {open && <NewRun receiptId={receipt.id} leftKg={cal.leftKg} onSaved={() => { onChanged(); onClose(); }} />}
-        <RunList runs={cal.runs} removable={open} onChanged={onChanged} />
-      </div>
+      <SortLoadPanel receipt={receipt} canEdit={canEdit} onChanged={onChanged} onSaved={onClose} />
     </Modal>
   );
 }
 
-function NewRun({ receiptId, leftKg, onSaved }: { receiptId: string; leftKg: number; onSaved: () => void }) {
+/**
+ * How much of one load went into each size silo: what is left to sort, the form for the next run, and the runs so far.
+ * Open at any step: a load can be sorted before its final weight is saved, and is then simply not held to a total yet.
+ */
+export function SortLoadPanel({ receipt, canEdit, onChanged, onSaved }: { receipt: RcnReceipt; canEdit: boolean; onChanged: () => void; onSaved?: () => void }) {
+  const cal = receipt.calibration ?? { toSilosKg: null, sizedKg: 0, leftKg: null, runs: [] };
+  const t = weighingTotals(receipt.pallets, receipt.finalWeight ?? { emptyPallets: [] });
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="text-[15px] font-bold text-warmstone-900 tabular-nums">
+          {cal.leftKg === null ? `${formatKg(cal.sizedKg)} sorted so far` : cal.leftKg > 0 ? `${formatKg(cal.leftKg)} left to sort` : "All of this load is sorted."}
+        </p>
+        <p className="text-[12px] text-warmstone-500 mt-1 tabular-nums">
+          {cal.toSilosKg === null
+            ? "The total to sort is known once the final weight is saved. Until then nothing limits what you enter here."
+            : <>Weighed: {formatKg(t.netKg)} net − {formatKg(t.dustKg)} dust ({pctOfNet(t.dustKg, t.netKg).toFixed(2)} %) − {formatKg(t.voidsKg)} voids ({pctOfNet(t.voidsKg, t.netKg).toFixed(3)} %) = {formatKg(cal.toSilosKg)} to sort.</>}
+        </p>
+      </div>
+      {canEdit && <NewRun receiptId={receipt.id} leftKg={cal.leftKg} onSaved={() => { onChanged(); onSaved?.(); }} />}
+      <RunList runs={cal.runs} removable={canEdit} onChanged={onChanged} />
+    </div>
+  );
+}
+
+function NewRun({ receiptId, leftKg, onSaved }: { receiptId: string; leftKg: number | null; onSaved: () => void }) {
   const [date, setDate] = useState(todayIso());
   const [sizes, setSizes] = useState<SizeValues>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const total = sizesTotal(sizes);
-  const over = total > leftKg;
+  const over = leftKg !== null && total > leftKg;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -82,7 +92,7 @@ function NewRun({ receiptId, leftKg, onSaved }: { receiptId: string; leftKg: num
         <p className="text-[12px] text-warmstone-500 mt-2">Leave a silo blank if nothing went into it.</p>
       </fieldset>
       <p className={`text-[13px] tabular-nums ${over ? "text-danger-700" : "text-warmstone-800"}`}>
-        You entered <b>{formatKg(total)}</b>. {over ? `That is ${formatKg(total - leftKg)} too much.` : `${formatKg(leftKg - total)} will be left.`}
+        You entered <b>{formatKg(total)}</b>.{leftKg === null ? "" : over ? ` That is ${formatKg(total - leftKg)} too much.` : ` ${formatKg(leftKg - total)} will be left.`}
       </p>
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       <div className="flex justify-end">
@@ -118,9 +128,7 @@ function RunList({ runs, removable, onChanged }: { runs: Run[]; removable: boole
               <span className="block text-[12px] text-warmstone-500">{SILO_SIZES.filter((s) => r.sizes[s.key]).map((s) => `${s.code}: ${r.sizes[s.key]} kg`).join(" · ")}</span>
             </span>
             {removable && (
-              <button type="button" onClick={() => remove(r)} aria-label={`Remove the entry of ${formatDate(r.date)}`} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
-                <span className="material-symbols-outlined text-[20px]">delete</span>
-              </button>
+              <IconButton icon="delete" label={`Remove the entry of ${formatDate(r.date)}`} onClick={() => remove(r)} />
             )}
           </li>
         ))}

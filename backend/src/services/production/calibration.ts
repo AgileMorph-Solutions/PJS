@@ -14,12 +14,13 @@ import {
   SILO_SIZE_KEYS, SIZING_GRADES, correctSizePct, manualCalibrationError, siloChecks, siloDailyStock, siloLabel, siloStock, sizingCheckError, sizingCheckNotes,
   calibrationRunError, isSiloSize, type SamplingPoint, type SiloSize, type SizingDecision, type SizingGrams, type SizeValues,
 } from "@anagroci/contract/domain/calibration";
-import { RCN_RECEIPT_STATUS_LABELS, canCalibrate, type MoistureCheckStatus } from "@anagroci/contract/domain/rcnReceipt";
+import type { MoistureCheckStatus } from "@anagroci/contract/domain/rcnReceipt";
 import type {
   BatchCalibration, CalibrationRunInput, ManualCalibration, ManualCalibrationInput, SizingCheck, SizingCheckInput,
 } from "@anagroci/contract/types/calibration";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
 import { prisma } from "../../db.js";
+import { runLabel, runWhere } from "./batches.js";
 import { ValidationError } from "../../domain/validation.js";
 import { blankToNull, receiptAt, runSizes, toView, type Actor } from "./rcnReceipts.js";
 
@@ -60,14 +61,16 @@ export async function addCalibrationRun(site: string, actorId: string, receiptId
   return toView(await prisma.$transaction((tx) => addCalibrationRunIn(tx, site, actorId, receiptId, input)));
 }
 
-/** Only a load whose Intake is done, and never more than is left of its into-silo kg. No approval, like weighing. */
+/**
+ * Any load, at any step (team decision, Nov 2026): a load can be sorted before its final weight is saved. Once the
+ * final weight says how much the load hands over, never more than is left of it. No approval, like weighing.
+ */
 export async function addCalibrationRunIn(tx: Tx, site: string, actorId: string, receiptId: string, input: CalibrationRunInput) {
   const date = (input.date ?? "").trim();
   if (date && !isIsoDate(date)) throw new ValidationError("A date is required.");
   const receipt = await receiptAt(tx, site, receiptId);
   const view = toView(receipt);
-  if (!canCalibrate(view.status)) throw new ValidationError(`${receipt.id} is ${RCN_RECEIPT_STATUS_LABELS[view.status]}; it can't be calibrated now.`);
-  const problem = calibrationRunError({ date, sizes: input.sizes }, view.calibration!.leftKg);
+  const problem = calibrationRunError({ date, sizes: input.sizes }, view.calibration?.leftKg ?? null);
   if (problem) throw new ValidationError(problem);
   await tx.rcnCalibrationRun.create({ data: { rcnReceiptId: receipt.id, date, ...kgColumns(input.sizes), createdById: actorId } });
   return receiptAt(tx, site, receipt.id);
@@ -155,17 +158,18 @@ export async function submitSizingCheck(site: string, actor: Actor, input: Sizin
 
 /** A QFS Officer's check waits for the Incharge; an Incharge's or Admin's own is approved as it is saved. */
 export async function submitSizingCheckIn(tx: Tx, site: string, actor: Actor, input: SizingCheckInput): Promise<CheckRow> {
-  const batchCode = (input.batchCode ?? "").trim().toUpperCase();
-  if (!batchCode) throw new ValidationError("Choose the batch the sample is for.");
+  const runRef = (input.batchCode ?? "").trim().toUpperCase();
+  if (!runRef) throw new ValidationError("Choose the production run the sample is for.");
   const date = (input.date ?? "").trim();
   if (date && !isIsoDate(date)) throw new ValidationError("A date is required.");
   const problem = sizingCheckError({ ...input, date });
   if (problem) throw new ValidationError(problem);
 
-  const batch = await tx.productionBatch.findFirst({ where: { code: batchCode, warehouse: site }, select: { bins: { select: { binCode: true } } } });
-  if (!batch) throw new ValidationError(`Batch ${batchCode} doesn't exist at ${site}.`);
+  const batch = await tx.productionBatch.findFirst({ where: runWhere(site, runRef), select: { code: true, name: true, bins: { select: { binCode: true } } } });
+  if (!batch) throw new ValidationError(`Production run ${runRef} doesn't exist at ${site}.`);
+  const batchCode = batch.code;
   const binCode = blankToNull(input.binCode)?.toUpperCase() ?? null;
-  if (binCode && !batch.bins.some((b) => b.binCode === binCode)) throw new ValidationError(`${binCode} is not in batch ${batchCode}.`);
+  if (binCode && !batch.bins.some((b) => b.binCode === binCode)) throw new ValidationError(`${binCode} is not in production run ${runLabel(batch.code, batch.name)}.`);
 
   const direct = canWriteStageDirectly(actor.role);
   const created = await tx.sizingCheck.create({
@@ -237,9 +241,10 @@ export async function listSizingChecks(site: string): Promise<SizingCheck[]> {
   return rows.map(checkView);
 }
 
-export async function batchCalibration(site: string, batchCode: string): Promise<BatchCalibration | null> {
-  const batch = await prisma.productionBatch.findFirst({ where: { code: batchCode, warehouse: site }, select: { code: true } });
+export async function batchCalibration(site: string, runRef: string): Promise<BatchCalibration | null> {
+  const batch = await prisma.productionBatch.findFirst({ where: runWhere(site, runRef), select: { code: true } });
   if (!batch) return null;
+  const batchCode = batch.code;
   const [{ runs, moves, cooks }, siteChecks] = await Promise.all([siloMovements(prisma, site), listSizingChecks(site)]);
   const own = siloStock(runs.filter((r) => r.batchCode === batchCode), []);
   const standing = siloChecks(siteChecks.map((c) => ({ ...c, moves: c.manualCalibrations.length })));

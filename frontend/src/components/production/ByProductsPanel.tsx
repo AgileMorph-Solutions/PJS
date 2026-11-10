@@ -12,6 +12,8 @@ import { api, ApiError } from "../../repository/api";
 import { STREAMS, TRUCK_STATUS_LABELS, boilerError, streamLabel, truckError, truckNetKg, type StoreBalance } from "@anagroci/contract/domain/byProducts";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import type { BatchLots, BoilerInput, BoilerReadingView, TruckInput, TruckView } from "@anagroci/contract/types/lots";
+import { PRODUCTION_PAGE_SIZE, dateCol, kgCol, numCol, statusCol, textCol } from "./columns";
+import { IconButton } from "../ui/IconButton";
 
 /**
  * The doc's "By-products & dispatch": what each store holds, one truck form with the stream picked from a list, and the
@@ -47,44 +49,40 @@ export function ByProductsPanel({ n, data, can, onChanged }: { n: number; data: 
   }
 
   const storeColumns: Column<StoreBalance>[] = [
-    { label: "Store", nowrap: true, render: (s) => <b className="font-semibold">{streamLabel(s.stream)}</b> },
-    { label: "Produced", align: "right", nowrap: true, render: (s) => formatKg(s.producedKg) },
-    { label: "Left by truck", align: "right", nowrap: true, render: (s) => formatKg(s.dispatchedKg) },
-    { label: "Burned in the boiler", align: "right", nowrap: true, render: (s) => (s.stream === "shell" ? formatKg(s.burnedKg) : "-") },
-    { label: "In the store", align: "right", nowrap: true, render: (s) => <b className="font-semibold">{formatKg(s.stockKg)}</b> },
+    textCol("Store", (s) => streamLabel(s.stream), { strong: true }),
+    kgCol("Produced", (s) => s.producedKg),
+    kgCol("Left by truck", (s) => s.dispatchedKg),
+    kgCol("Burned in the boiler", (s) => (s.stream === "shell" ? s.burnedKg : null)),
+    kgCol("In the store", (s) => s.stockKg, { strong: true }),
   ];
 
   const truckColumns: Column<TruckView>[] = [
-    { label: "Date", nowrap: true, render: (t) => formatDate(t.date) },
-    { label: "Truck", nowrap: true, render: (t) => <b className="font-semibold">{t.truckNo}</b> },
-    { label: "Taking", nowrap: true, render: (t) => streamLabel(t.stream) },
-    { label: "Net", align: "right", nowrap: true, render: (t) => (t.netKg === null ? "-" : formatKg(t.netKg)) },
-    { label: "Buyer", render: (t) => t.buyer || "-" },
-    { label: "Gate pass", nowrap: true, render: (t) => t.gatePassNo || "-" },
-    { label: "Status", nowrap: true, render: (t) => <Pill tone={t.status === "closed" ? "entry" : "decision"} label={TRUCK_STATUS_LABELS[t.status]} /> },
+    dateCol("Date", (t) => t.date),
+    textCol("Truck", (t) => t.truckNo, { strong: true }),
+    textCol("Taking", (t) => streamLabel(t.stream)),
+    kgCol("Net", (t) => t.netKg),
+    textCol("Buyer", (t) => t.buyer, { wrap: true }),
+    textCol("Gate pass", (t) => t.gatePassNo),
+    statusCol("Status", (t) => TRUCK_STATUS_LABELS[t.status], (t) => <Pill tone={t.status === "closed" ? "entry" : "decision"} label={TRUCK_STATUS_LABELS[t.status]} />),
     ...(can.canFloor ? [{
       label: "", align: "right" as const, nowrap: true,
       render: (t: TruckView) => (t.status === "closed" ? "" : (
         <span className="inline-flex items-center gap-1">
           <Button variant="secondary" onClick={() => setTruck(t)}>Continue</Button>
-          <button type="button" onClick={() => removeTruck(t)} aria-label={`Remove truck ${t.truckNo}`} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
-            <span className="material-symbols-outlined text-[20px]">delete</span>
-          </button>
+          <IconButton icon="delete" label={`Remove truck ${t.truckNo}`} onClick={() => removeTruck(t)} />
         </span>
       )),
     }] : []),
   ];
 
   const boilerColumns: Column<BoilerReadingView>[] = [
-    { label: "Date", nowrap: true, render: (b) => formatDate(b.date) },
-    { label: "Shell burned", align: "right", nowrap: true, render: (b) => formatKg(Number(b.shellKg)) },
-    { label: "Running hours", align: "right", nowrap: true, render: (b) => b.runningHours || "-" },
+    dateCol("Date", (b) => b.date),
+    kgCol("Shell burned", (b) => Number(b.shellKg)),
+    numCol("Running hours", (b) => (b.runningHours ? Number(b.runningHours) : null)),
     ...(can.canFloor ? [{
       label: "", align: "right" as const, nowrap: true,
       render: (b: BoilerReadingView) => (
-        <button type="button" onClick={() => removeReading(b)} aria-label={`Remove the boiler reading of ${formatDate(b.date)}`} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
-          <span className="material-symbols-outlined text-[20px]">delete</span>
-        </button>
+        <IconButton icon="delete" label={`Remove the boiler reading of ${formatDate(b.date)}`} onClick={() => removeReading(b)} />
       ),
     }] : []),
   ];
@@ -94,21 +92,21 @@ export function ByProductsPanel({ n, data, can, onChanged }: { n: number; data: 
       <div className="space-y-5">
         <div>
           <p className="text-[13px] text-warmstone-800 mb-3">What each store holds, for the whole factory. A store goes down when a truck leaves with its gate pass, or when shell is burned.</p>
-          <DataTable columns={storeColumns} rows={data.stores} keyFn={(s) => s.stream} />
+          <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={storeColumns} rows={data.stores} keyFn={(s) => s.stream} />
         </div>
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-[13px] font-bold text-warmstone-900">Trucks</h4>
             {can.canFloor && <Button icon="add" onClick={() => setTruck("new")}>A truck is at the gate</Button>}
           </div>
-          {data.trucks.length > 0 && <DataTable columns={truckColumns} rows={data.trucks} keyFn={(t) => String(t.id)} />}
+          {data.trucks.length > 0 && <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={truckColumns} rows={data.trucks} keyFn={(t) => String(t.id)} />}
         </div>
         <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="text-[13px] font-bold text-warmstone-900">Boiler</h4>
             {can.canFloor && <Button variant="secondary" icon="add" onClick={() => setBurning(true)}>Record shell burned</Button>}
           </div>
-          {data.boiler.length > 0 && <DataTable columns={boilerColumns} rows={data.boiler} keyFn={(b) => String(b.id)} />}
+          {data.boiler.length > 0 && <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={boilerColumns} rows={data.boiler} keyFn={(b) => String(b.id)} />}
         </div>
         {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       </div>

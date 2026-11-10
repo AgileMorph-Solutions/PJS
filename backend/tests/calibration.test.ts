@@ -78,12 +78,14 @@ afterAll(async () => {
 });
 
 describe("Kg into each silo (Phase 2, step 2)", () => {
-  it("can't size a load before its final weight: it has no into-silo kg yet", async () => {
+  it("can size a load before its final weight (any order): there is no total yet, so nothing limits it", async () => {
     const load = (await call("wi", "GET", `/api/production/rcn-receipts?batch=${BATCH}`)).json()[0];
-    expect(load.calibration).toBeNull();
+    expect(load.calibration).toMatchObject({ toSilosKg: null, sizedKg: 0, leftKg: null });
     const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-25", sizes: { A: "100" } });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error).toMatch(/Weighing in progress; it can't be calibrated now/);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().calibration).toMatchObject({ toSilosKg: null, sizedKg: 100, leftKg: null });
+    // Taken out again, so the steps below start from an unsorted load.
+    expect((await call("wi", "DELETE", `/api/production/calibration-runs/${res.json().calibration.runs[0].id}`)).statusCode).toBe(200);
   });
 
   it("after the final weight the load is Intake done, with all of its into-silo kg still to calibrate", async () => {
@@ -125,7 +127,12 @@ describe("Kg into each silo (Phase 2, step 2)", () => {
     const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-26", sizes: { BC: "50000", C: "32012.5" } });
     expect(res.json()).toMatchObject({ status: "calibrated", calibration: { sizedKg: TO_SILOS, leftKg: 0 } });
     const more = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-26", sizes: { C: "1" } });
-    expect(more.json().error).toMatch(/is Calibrated; it can't be calibrated now/);
+    expect(more.json().error).toMatch(/already fully calibrated/);
+    // Weighing stays open in any order, but can't drop below what is already in the silos.
+    const pallet = res.json().pallets[0];
+    const drop = await call("wi", "DELETE", `/api/production/rcn-pallets/${pallet.id}`);
+    expect(drop.statusCode).toBe(422);
+    expect(drop.json().error).toMatch(/less than the .* kg already sorted into the silos/);
   });
 
   it("is the Incharge's: a QFS Officer can't size a load", async () => {
@@ -195,7 +202,7 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
   });
 
   it("refuses a sample from a bin outside the batch, and one with no grams", async () => {
-    expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, binCode: "BIN-NOPE" })).json().error).toMatch(/BIN-NOPE is not in batch/);
+    expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, binCode: "BIN-NOPE" })).json().error).toMatch(/BIN-NOPE is not in production run/);
     expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, grams: {} })).json().error).toMatch(/grams found in each size/);
   });
 
@@ -210,7 +217,9 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
     await setBranch(r.id, "n-xferdec", "production");
     expect((await call("wi", "POST", "/api/production/batches", { code: "CAL-OTHER-B", startDate: "2026-08-01", bins: ["CAL-OTHER"] })).statusCode).toBe(201);
     const other = (await call("wi", "GET", "/api/production/batches/CAL-OTHER-B/calibration")).json();
-    expect(other.sizingChecks.map((c: { id: number; batchCode: string }) => [c.id, c.batchCode])).toEqual([[checkId, BATCH]]);
+    // BATCH is the run's name; the check is stored against the run's system ID.
+    const runId = (await call("wi", "GET", `/api/production/batches/${BATCH}`)).json().code;
+    expect(other.sizingChecks.map((c: { id: number; batchCode: string }) => [c.id, c.batchCode])).toEqual([[checkId, runId]]);
     expect(other.siloChecks.Ap.checkId).toBe(checkId);
     // The silo stock is the factory's; the batch's own share is what it sized itself.
     expect(other.batchSizedKg.Ap).toBe(0);

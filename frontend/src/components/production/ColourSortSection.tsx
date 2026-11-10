@@ -10,6 +10,7 @@ import { Pill } from "../ui/Pill";
 import { SORT_CHECK_LABELS, nextColourSortStep, sorterComparison, type SortCheckState, type SortComparison } from "@anagroci/contract/domain/colourSort";
 import { canColourSort } from "@anagroci/contract/domain/cooking";
 import type { BatchLots } from "@anagroci/contract/types/lots";
+import { PRODUCTION_PAGE_SIZE, textCol } from "./columns";
 
 const CHECK_TONE: Record<SortCheckState, string> = { not_checked: "system", waiting: "decision", ok: "entry", resort: "gap" };
 const pct = (n: number | undefined) => (n === undefined ? "-" : `${n.toFixed(1)} %`);
@@ -32,18 +33,18 @@ export function ColourSortSection({ data, can, onChanged }: { data: BatchLots; c
   const done = lot?.status === "colour_sorted" && waiting.length === 0;
 
   const nextText = !lot
-    ? (notShelled > 0 ? `No Lot is ready to sort yet. A Lot arrives here once its day record is entered in Shelling (Phase 4).` : "Nothing to do yet. A Lot arrives here once it is shelled.")
+    ? (notShelled > 0 ? `No Lot is ready to sort yet. A Lot arrives here once its day record is entered in Shelling.` : "Nothing to do yet. A Lot arrives here once it is shelled.")
     : can.canReview && waiting.length > 0 ? `Next: approve or reject the ${waiting.length} sample${waiting.length === 1 ? "" : "s"} waiting for you on Lot ${lot.code}.`
     : resort.length > 0 && step === "after" ? `${resort.join(", ")} failed its check. Next: pass it through the sorter again, then in step 2 take a new sample after the sorter.`
     : step === "before" ? `Next: in step 1, take a sample before the sorter for Lot ${lot.code}.`
     : step === "after" ? `Next: in step 2, take a sample after the sorter for each stream of Lot ${lot.code}.`
-    : done ? `Lot ${lot.code} is colour sorted. Its wholes, pieces and rejection + oil go on to the Borma ovens (Phase 6).`
+    : done ? `Lot ${lot.code} is colour sorted. Its wholes, pieces and rejection + oil go on to the Borma ovens.`
     : `Nothing for you to do on Lot ${lot.code} right now. The QFS Officer takes the next sample.`;
 
   const comparison = lot ? sorterComparison(lot.entries) : [];
   const columns: Column<SortComparison>[] = [
-    { label: "Stream", nowrap: true, render: (r) => <b className="font-semibold">{r.stream}</b> },
-    { label: "Size group", nowrap: true, render: (r) => r.sizes || "-" },
+    textCol("Stream", (r) => r.stream, { strong: true }),
+    textCol("Size group", (r) => r.sizes),
     ...(["wholesPct", "brokensPct", "rejectionPct", "knifeMarkPct"] as const).map((key): Column<SortComparison> => ({
       label: { wholesPct: "Wholes", brokensPct: "Brokens", rejectionPct: "Rejection", knifeMarkPct: "Knife mark" }[key],
       align: "right", nowrap: true,
@@ -85,12 +86,12 @@ export function ColourSortSection({ data, can, onChanged }: { data: BatchLots; c
           </StepCard>
           <StepCard n={3} title="Before and after, compared" status="Worked out by the app from the approved samples" active={false} done={comparison.some((r) => r.before && r.after)}>
             <p className="text-[13px] text-warmstone-800 mb-3">Each stream's newest sample before the sorter next to its newest sample after it. Wholes should go up and rejection down.</p>
-            <DataTable columns={columns} rows={comparison} keyFn={(r) => `${r.stream}|${r.sizes}`} emptyTitle="No approved sample yet" emptyHint="The comparison fills in as samples are approved." />
+            <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={columns} rows={comparison} keyFn={(r) => `${r.stream}|${r.sizes}`} emptyTitle="No approved sample yet" emptyHint="The comparison fills in as samples are approved." />
           </StepCard>
           <StepCard n={4} title="Black rejection to storage" status={`${formatKg(blackStore.stockKg)} in storage`} active={false} done={false}>
             <p className="text-[13px] text-warmstone-800">
               Black rejection goes to storage and is sold. Its kg come from the shelling day record: <b className="tabular-nums">{formatKg(blackStore.producedKg)}</b> in all, <b className="tabular-nums">{formatKg(blackStore.dispatchedKg)}</b> sold, <b className="tabular-nums">{formatKg(blackStore.stockKg)}</b> in storage now.
-              A sale is a truck: in Phase 4, step 6, choose "Black rejection".
+              A sale is a truck: in Shelling, step 6, choose "Black rejection".
             </p>
           </StepCard>
         </>

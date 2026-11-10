@@ -117,7 +117,7 @@ describe("Cooking (Phase 3)", () => {
     const over = await call("wi", "POST", "/factory-lots", { batchCode: BATCH, code: "ANG26G17", date: "2026-07-20", sizes: { A: "70001" } });
     expect(over.statusCode).toBe(422);
     expect(over.json().error).toMatch(/holds 70,000 kg; 70,001 kg can't be cooked/);
-    expect((await call("wi", "POST", "/factory-lots", { batchCode: "NOPE", code: "X1", date: "2026-07-20", sizes: { A: "1" } })).json().error).toMatch(/Batch NOPE doesn't exist/);
+    expect((await call("wi", "POST", "/factory-lots", { batchCode: "NOPE", code: "X1", date: "2026-07-20", sizes: { A: "1" } })).json().error).toMatch(/Production run NOPE doesn't exist/);
     expect((await call("qfs", "POST", "/factory-lots", { batchCode: BATCH, code: "X1", date: "2026-07-20", sizes: { A: "1" } })).statusCode).toBe(403);
   });
 

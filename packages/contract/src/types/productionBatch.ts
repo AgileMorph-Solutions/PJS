@@ -28,7 +28,10 @@ export interface BatchBinView {
 }
 
 export interface BatchSummary {
+  /** The run's system ID, PR-<warehouse code>-<year>-NNN — always issued by the system, like a truck's REC- ID. */
   code: string;
+  /** An optional name the team gave it (ANA-03B), shown beside the ID. */
+  name: string | null;
   warehouse: string;
   startDate: string;
   proposedBy: string | null;

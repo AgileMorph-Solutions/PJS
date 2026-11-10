@@ -74,14 +74,15 @@ export const NAV: NavSection[] = [
     items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2", roles: ["admin", "warehouse_incharge"] }],
   },
   {
-    // The client's "Phase 1 — Batch & Intake" doc. One leaf: every step after creating a batch (an RCN Receipt, ...) is
-    // entered on that batch's own page, like a truck's stages on its Reception page. The older workbook-import pages (BTM/Bin/Lot under pages/production/) still exist
-    // and still route; they are not linked here.
+    // One leaf: a production run is warehouse bins sent to production together; every stage after it (Intake's RCN
+    // receipts, Calibration, Cooking, ...) is entered on the run's own page, one stage at a time. (The client's documents
+    // call it a "batch"; the screens don't, to keep one plain name.) The older workbook-import pages (BTM/Bin/Lot under
+    // pages/production/) still exist and still route; they are not linked here.
     label: "Production",
     items: [
-      // The QFS Officer opens a batch to do its loads' moisture checks (Phase 1, step 2). Factory (Central) users only:
+      // The QFS Officer opens a run to do its loads' moisture checks (Phase 1, step 2). Factory (Central) users only:
       // a Unit warehouse's Incharge or QFS Officer has no production to see.
-      { label: "Batches", to: "/production/batches", icon: "precision_manufacturing", allow: (me) => canAccessProduction(me.role, me.warehouseType) },
+      { label: "Production runs", to: "/production/runs", icon: "precision_manufacturing", allow: (me) => canAccessProduction(me.role, me.warehouseType) },
     ],
   },
   {

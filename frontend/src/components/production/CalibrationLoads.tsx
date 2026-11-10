@@ -5,28 +5,33 @@ import { StepCard } from "./StepCard";
 import { Button } from "../ui/Button";
 import { DataTable, type Column } from "../ui/DataTable";
 import { Pill } from "../ui/Pill";
-import { canCalibrate, isIntakeDone } from "@anagroci/contract/domain/rcnReceipt";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
+import { PRODUCTION_PAGE_SIZE, kgCol, textCol } from "./columns";
 
-/** Step 1: a load appears here once its final weight is saved, because that is what gives it a kg to sort. */
+/** Still to sort: nothing known about its total yet (no final weight), or kg left of it. */
+const stillToSort = (r: RcnReceipt) => !r.calibration || r.calibration.leftKg === null || r.calibration.leftKg > 0;
+
+/**
+ * Step 1: every load of the run, ready to be sorted into the silos at any step (team decision, Nov 2026 — nothing waits
+ * for the final weight). Once the final weight is saved, the load's total limits what can be sorted.
+ */
 export function SortLoadsStep({ receipts, canEdit, active, onChanged }: { receipts: RcnReceipt[]; canEdit: boolean; active: boolean; onChanged: () => void }) {
-  const ready = receipts.filter((r) => isIntakeDone(r.status));
-  const toSort = ready.filter((r) => canCalibrate(r.status));
-  const inIntake = receipts.length - ready.length;
+  const toSort = receipts.filter(stillToSort);
   const [openId, setOpenId] = useState<string | null>(null);
-  const opened = ready.find((r) => r.id === openId);
+  const opened = receipts.find((r) => r.id === openId);
 
   const columns: Column<RcnReceipt>[] = [
-    { label: "Load (BTM)", nowrap: true, render: (r) => <b className="font-semibold">{r.btmNo}</b> },
-    { label: "From bin", nowrap: true, render: (r) => r.binCode },
-    { label: "To sort", align: "right", nowrap: true, render: (r) => formatKg(r.calibration?.toSilosKg ?? 0) },
-    { label: "Left to sort", align: "right", nowrap: true, render: (r) => (canCalibrate(r.status) ? formatKg(r.calibration?.leftKg ?? 0) : <Pill tone="entry" label="All sorted" />) },
+    textCol("Load (BTM)", (r) => r.btmNo, { strong: true }),
+    textCol("From bin", (r) => r.binCode, { mono: true }),
+    { ...kgCol<RcnReceipt>("To sort", (r) => r.calibration?.toSilosKg), render: (r) => (r.calibration?.toSilosKg == null ? <span className="text-warmstone-500">After final weight</span> : formatKg(r.calibration.toSilosKg)) },
+    kgCol("Sorted", (r) => r.calibration?.sizedKg ?? 0),
+    { ...kgCol<RcnReceipt>("Left to sort", (r) => r.calibration?.leftKg), render: (r) => (!stillToSort(r) ? <Pill tone="entry" label="All sorted" /> : r.calibration?.leftKg == null ? "-" : formatKg(r.calibration.leftKg)) },
     {
       label: "",
       align: "right",
       nowrap: true,
       render: (r) => (
-        canEdit && canCalibrate(r.status)
+        canEdit && stillToSort(r)
           ? <Button variant={r.id === toSort.at(-1)?.id ? "primary" : "secondary"} onClick={() => setOpenId(r.id)}>Sort this load</Button>
           : <Button variant="secondary" onClick={() => setOpenId(r.id)}>View</Button>
       ),
@@ -35,11 +40,10 @@ export function SortLoadsStep({ receipts, canEdit, active, onChanged }: { receip
 
   return (
     <StepCard
-      n={1} title="Sort loads into silos" active={active} done={ready.length > 0 && toSort.length === 0}
-      status={toSort.length > 0 ? `${toSort.length} load${toSort.length === 1 ? "" : "s"} to sort` : ready.length > 0 ? "All weighed loads are sorted" : "No load is ready yet"}
+      n={1} title="Sort loads into silos" active={active} done={receipts.length > 0 && toSort.length === 0}
+      status={toSort.length > 0 ? `${toSort.length} load${toSort.length === 1 ? "" : "s"} to sort` : receipts.length > 0 ? "Every load is sorted" : "No load recorded yet"}
     >
-      <DataTable columns={columns} rows={ready} keyFn={(r) => r.id} emptyTitle="No load is ready yet" emptyHint="A load comes here after its final weight is saved in Intake." />
-      {inIntake > 0 && <p className="mt-2 text-[12px] text-warmstone-500">{inIntake} more load{inIntake === 1 ? " is" : "s are"} still being weighed in Intake.</p>}
+      <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={columns} rows={receipts} keyFn={(r) => r.id} emptyTitle="No load recorded yet" emptyHint="Record a load in Intake, then sort it here." />
       {opened && <SortLoadDialog key={opened.id} receipt={opened} canEdit={canEdit} onClose={() => setOpenId(null)} onChanged={onChanged} />}
     </StepCard>
   );

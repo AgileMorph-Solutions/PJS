@@ -10,10 +10,10 @@ import { DataTable, type Column } from "../ui/DataTable";
 import { Pill } from "../ui/Pill";
 import { ProgressBar } from "../ui/ProgressBar";
 import { SILO_CHECK_LABELS, batchCalibrationTotals, nextCalibrationStep, siloLabel, silosWaiting, type SiloCheckState, type SiloStock } from "@anagroci/contract/domain/calibration";
-import { canCalibrate, isIntakeDone } from "@anagroci/contract/domain/rcnReceipt";
 import type { BatchCalibration } from "@anagroci/contract/types/calibration";
 import type { BatchDetail } from "@anagroci/contract/types/productionBatch";
 import type { RcnReceipt } from "@anagroci/contract/types/rcnReceipt";
+import { PRODUCTION_PAGE_SIZE, kgCol, statusCol, textCol } from "./columns";
 
 const CHECK_TONE: Record<SiloCheckState, string> = { not_checked: "system", ok: "entry", failed: "gap", re_sized: "decision" };
 
@@ -32,8 +32,9 @@ export function CalibrationSection({ batch, receipts, calibration, can, onChange
   onChanged: () => void;
   onGoToCooking: () => void;
 }) {
-  const toSort = receipts.filter((r) => canCalibrate(r.status));
-  const anyReady = receipts.some((r) => isIntakeDone(r.status));
+  // Any load can be sorted at any step; one is done once its final weight is known and all of it is in the silos.
+  const toSort = receipts.filter((r) => !r.calibration || r.calibration.leftKg === null || r.calibration.leftKg > 0);
+  const anyReady = receipts.length > 0;
   const checksWaiting = calibration.sizingChecks.filter((c) => c.status === "submitted").length;
   const failedSilos = silosWaiting(calibration.silos, calibration.siloChecks).failed.length;
   const toCheck = silosToCheck(calibration).length;
@@ -48,7 +49,7 @@ export function CalibrationSection({ batch, receipts, calibration, can, onChange
     : next === "fix" ? "Next: in step 3, a silo failed its check. Move its nuts to the right silos."
     : allDone ? `Calibration is finished for every load so far. The silos hold ${formatKg(inSilosKg)}, ready for Cooking.`
     : anyReady ? "Nothing for you to do here right now. The Warehouse Incharge or the QFS Officer does the next job."
-    : "Nothing to do yet. A load arrives here once it is weighed in Intake (Phase 1).";
+    : "Nothing to do yet. Record a load in Intake first.";
 
   const checkStatus = checksWaiting > 0 ? `${checksWaiting} waiting for approval`
     : calibration.silos.every((s) => s.stockKg <= 0) ? "Nothing in the silos yet"
@@ -95,22 +96,22 @@ function SiloStockStep({ calibration }: { calibration: BatchCalibration }) {
     return net === 0 ? "-" : `${net > 0 ? "+" : "−"} ${formatKg(Math.abs(net))}`;
   };
   const columns: Column<SiloStock>[] = [
-    { label: "Silo", nowrap: true, render: (s) => <b className="font-semibold">{siloLabel(s.size)}</b> },
-    { label: "Sorted in, all batches", align: "right", nowrap: true, render: (s) => formatKg(s.sizedInKg) },
-    { label: "Of which this batch", align: "right", nowrap: true, render: (s) => formatKg(calibration.batchSizedKg[s.size]) },
-    { label: "Moved by hand", align: "right", nowrap: true, render: moved },
-    { label: "Cooked", align: "right", nowrap: true, render: (s) => (s.cookedKg > 0 ? `− ${formatKg(s.cookedKg)}` : "-") },
-    { label: "Kg in the silo", align: "right", nowrap: true, render: (s) => <b className="font-semibold">{formatKg(s.stockKg)}</b> },
-    { label: "Check", nowrap: true, render: (s) => {
+    textCol("Silo", (s) => siloLabel(s.size), { strong: true }),
+    kgCol("Sorted in, all runs", (s) => s.sizedInKg),
+    kgCol("Of which this run", (s) => calibration.batchSizedKg[s.size]),
+    { ...kgCol("Moved by hand", (s) => Math.round((s.manualInKg - s.manualOutKg) * 100) / 100), render: moved },
+    { ...kgCol("Cooked", (s) => s.cookedKg), render: (s) => (s.cookedKg > 0 ? `− ${formatKg(s.cookedKg)}` : "-") },
+    kgCol("Kg in the silo", (s) => s.stockKg, { strong: true }),
+    // An empty silo has nothing to check, so it shouldn't read as a job left undone.
+    statusCol("Check", (s) => (s.stockKg <= 0 ? "" : SILO_CHECK_LABELS[calibration.siloChecks[s.size].state]), (s) => {
       const c = calibration.siloChecks[s.size];
-      // An empty silo has nothing to check, so it shouldn't read as a job left undone.
       return s.stockKg <= 0 ? "-" : <Pill tone={CHECK_TONE[c.state]} label={SILO_CHECK_LABELS[c.state]} />;
-    } },
+    }),
   ];
   return (
     <StepCard n={4} title="Silo stock" status={`${formatKg(total)} in all silos · worked out by the app`} active={false} done={false}>
-      <p className="text-[13px] text-warmstone-800 mb-3">The silos belong to the factory, so they hold the nuts of every batch. Kg in the silo = sorted in, plus or minus what was moved by hand, minus what was cooked.</p>
-      <DataTable columns={columns} rows={calibration.silos} keyFn={(s) => s.size} />
+      <p className="text-[13px] text-warmstone-800 mb-3">The silos belong to the factory, so they hold the nuts of every production run. Kg in the silo = sorted in, plus or minus what was moved by hand, minus what was cooked.</p>
+      <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={columns} rows={calibration.silos} keyFn={(s) => s.size} />
     </StepCard>
   );
 }

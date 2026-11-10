@@ -18,10 +18,10 @@ const field = (label: string, el: ReactNode, hint?: string) => (
 );
 
 /**
- * Record one load arriving from a bin of this batch (Phase 1, step 1). The batch is the page's own, so only
- * the slip is typed — no weights. `existing` is the batch's receipts, for the same-BTM-same-bin warning.
+ * Record one load arriving from a warehouse bin of this production run (Intake, step 1). The run is the page's own,
+ * so only the slip is typed — no weights. `existing` is the run's receipts, for the same-BTM-same-bin warning.
  */
-export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetail; existing: RcnReceipt[]; onSaved: () => void }) {
+export function RcnReceiptForm({ run, existing, onSaved }: { run: BatchDetail; existing: RcnReceipt[]; onSaved: () => void }) {
   const [date, setDate] = useState(todayIso());
   const [btmNo, setBtmNo] = useState("");
   const [binCode, setBinCode] = useState("");
@@ -35,7 +35,7 @@ export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetai
     setSaving(true);
     setError(null);
     try {
-      await api.createRcnReceipt({ batchCode: batch.code, date, btmNo, binCode });
+      await api.createRcnReceipt({ batchCode: run.code, date, btmNo, binCode });
       setBtmNo("");
       setBinCode("");
       onSaved();
@@ -56,7 +56,7 @@ export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetai
       <div>
         <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">From which warehouse bin?</span>
         <div className="grid sm:grid-cols-2 gap-3">
-          {batch.bins.map((b) => {
+          {run.bins.map((b) => {
             const on = binCode === b.binCode;
             return (
               <label key={b.binCode} className={`flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer bg-white ${on ? "border-brand-700 bg-brand-50/60" : "border-warmstone-200 hover:bg-warmstone-50"}`}>
@@ -79,7 +79,7 @@ export function RcnReceiptForm({ batch, existing, onSaved }: { batch: BatchDetai
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
 
       <div className="flex justify-end">
-        <Button type="submit" icon="check" disabled={saving || !date || !btmNo.trim() || !binCode}>Save RCN Receipt</Button>
+        <Button type="submit" icon="check" disabled={saving || !date || !btmNo.trim() || !binCode}>Save RCN receipt</Button>
       </div>
     </form>
   );

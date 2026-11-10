@@ -32,15 +32,15 @@ export function MoistureCard({ receipt, canEnter, canReview, direct, onChanged }
     <div className="space-y-4">
       {receipt.status === "on_hold" && current && (
         <p className="rounded-xl border border-danger-200 bg-danger-50 text-danger-800 px-4 py-3 text-[12px]">
-          <b>On hold:</b> moisture was {current.moisture} %. Weighing stays locked; take a new sample once the load has dried.
+          <b>On hold:</b> moisture was {current.moisture} %. Take a new sample once the load has dried.
         </p>
       )}
 
-      {canTakeMoistureCheck(receipt.status) ? (
-        canEnter ? <MoistureForm receiptId={receipt.id} direct={direct} onSaved={onChanged} /> : <p className="text-[13px] text-warmstone-500">Waiting for the QFS Officer's check.</p>
-      ) : current ? (
-        <CheckDetails check={current} />
-      ) : null}
+      {current && <CheckDetails check={current} />}
+      {/* Always open (any order); only a check already waiting for approval holds a new one back. */}
+      {canTakeMoistureCheck(receipt.status) && (
+        canEnter ? <MoistureForm receiptId={receipt.id} direct={direct} onSaved={onChanged} /> : !current && <p className="text-[13px] text-warmstone-500">Waiting for the QFS Officer's check.</p>
+      )}
 
       {pending && (canReview ? (
         <ReviewBar

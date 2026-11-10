@@ -15,6 +15,8 @@ import { canShell } from "@anagroci/contract/domain/cooking";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import { SHELLING_KG_FIELDS, nextShellingStep, shellingDayError, shellingDayNotes, shellingFigures, type ShellingDayValues } from "@anagroci/contract/domain/shelling";
 import type { BatchLots, LotView, ShellingDayView } from "@anagroci/contract/types/lots";
+import { PRODUCTION_PAGE_SIZE, dateCol, kgCol, numCol, pctCol } from "./columns";
+import { IconButton } from "../ui/IconButton";
 
 const pct = (n: number) => `${n.toFixed(2)} %`;
 
@@ -33,14 +35,14 @@ export function ShellingSection({ data, can, onChanged }: { data: BatchLots; can
   const step = lot ? nextShellingStep({ ...can, ...counts }) : "none";
 
   const nextText = !lot
-    ? (waitingOnCooling > 0 ? `No Lot is ready to shell yet. ${waitingOnCooling} Lot${waitingOnCooling === 1 ? " is" : "s are"} still in Cooking. A Lot arrives here once its moisture and temperature check says OK.` : "Nothing to do yet. A Lot arrives here once it is cooked and cooled in Cooking (Phase 3).")
+    ? (waitingOnCooling > 0 ? `No Lot is ready to shell yet. ${waitingOnCooling} Lot${waitingOnCooling === 1 ? " is" : "s are"} still in Cooking. A Lot arrives here once its moisture and temperature check says OK.` : "Nothing to do yet. A Lot arrives here once it is cooked and cooled in Cooking.")
     : can.canReview && waitingApproval.length > 0 ? `Next: approve or reject the ${waitingApproval.length} check${waitingApproval.length === 1 ? "" : "s"} waiting for you on Lot ${lot.code}.`
     : step === "day" ? `Next: in step 1, enter the day record for Lot ${lot.code}. ${formatKg(lot.leftToShellKg)} is left to shell.`
     : step === "line_run" ? `Next: in step 2, enter what each shelling line ran for Lot ${lot.code}.`
     : step === "qc5" ? `Next: in step 3, do the machine checks (QC-5) for Lot ${lot.code}.`
     : step === "qty1" ? `Next: in step 4, count the uncut nuts (QTY-1) for Lot ${lot.code}.`
     : step === "qc6" ? `Next: in step 5, take a shell sample (QC-6) for Lot ${lot.code}.`
-    : counts.days > 0 ? `Lot ${lot.code} is shelled and every check is done. Its kernels go on to Colour sort (Phase 5), further down this page.`
+    : counts.days > 0 ? `Lot ${lot.code} is shelled and every check is done. Its kernels go on to Colour sorting, the next stage.`
     : `Nothing for you to do on Lot ${lot.code} right now. The Warehouse Incharge does the next job.`;
   const allDone = lot !== null && step === "none" && counts.days > 0 && waitingApproval.length === 0;
 
@@ -105,23 +107,21 @@ function DayRecords({ lot, can, onChanged }: { lot: LotView; can: LotPermissions
   }
 
   const columns: Column<ShellingDayView>[] = [
-    { label: "Date", nowrap: true, render: (d) => formatDate(d.date) },
-    { label: "Input", align: "right", nowrap: true, render: (d) => formatKg(Number(d.inputKg)) },
-    { label: "Good kernels", align: "right", nowrap: true, render: (d) => formatKg(d.figures.goodKg) },
-    { label: "Final kernels", align: "right", nowrap: true, render: (d) => <b className="font-semibold">{formatKg(d.figures.finalKg)}</b> },
-    { label: "Shell", align: "right", nowrap: true, render: (d) => formatKg(d.figures.shellKg) },
-    { label: "Shell dust", align: "right", nowrap: true, render: (d) => formatKg(d.figures.shellDustKg) },
-    { label: "Yield", align: "right", nowrap: true, render: (d) => pct(d.figures.yieldPct) },
-    { label: "Realisation", align: "right", nowrap: true, render: (d) => pct(d.figures.realisationPct) },
-    { label: "Wholes", align: "right", nowrap: true, render: (d) => pct(d.figures.wholesPct) },
-    { label: "Uncut", align: "right", nowrap: true, render: (d) => pct(d.figures.uncutPct) },
-    { label: "SHOT (lbs)", align: "right", nowrap: true, render: (d) => d.figures.shotLbs.toFixed(2) },
+    dateCol("Date", (d) => d.date),
+    kgCol("Input", (d) => Number(d.inputKg)),
+    kgCol("Good kernels", (d) => d.figures.goodKg),
+    kgCol("Final kernels", (d) => d.figures.finalKg, { strong: true }),
+    kgCol("Shell", (d) => d.figures.shellKg),
+    kgCol("Shell dust", (d) => d.figures.shellDustKg),
+    { ...pctCol("Yield", (d) => d.figures.yieldPct), render: (d) => pct(d.figures.yieldPct) },
+    { ...pctCol("Realisation", (d) => d.figures.realisationPct), render: (d) => pct(d.figures.realisationPct) },
+    { ...pctCol("Wholes", (d) => d.figures.wholesPct), render: (d) => pct(d.figures.wholesPct) },
+    { ...pctCol("Uncut", (d) => d.figures.uncutPct), render: (d) => pct(d.figures.uncutPct) },
+    numCol("SHOT (lbs)", (d) => d.figures.shotLbs),
     ...(can.canFloor ? [{
       label: "", align: "right" as const, nowrap: true,
       render: (d: ShellingDayView) => (
-        <button type="button" onClick={() => remove(d)} aria-label={`Remove the day record of ${formatDate(d.date)}`} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
-          <span className="material-symbols-outlined text-[20px]">delete</span>
-        </button>
+        <IconButton icon="delete" label={`Remove the day record of ${formatDate(d.date)}`} onClick={() => remove(d)} />
       ),
     }] : []),
   ];
@@ -131,7 +131,7 @@ function DayRecords({ lot, can, onChanged }: { lot: LotView; can: LotPermissions
       <p className="text-[13px] text-warmstone-800">Type the kg in and the kg of each output. The app works out everything else; shell is calculated, not weighed.</p>
       {can.canFloor && lot.leftToShellKg > 0 && <Button icon="add" onClick={() => setAdding(true)}>Enter the day record</Button>}
       {can.canFloor && lot.leftToShellKg <= 0 && <Button variant="secondary" icon="add" onClick={() => setAdding(true)}>Add another day</Button>}
-      {lot.shellingDays.length > 0 && <DataTable columns={columns} rows={lot.shellingDays} keyFn={(d) => String(d.id)} />}
+      {lot.shellingDays.length > 0 && <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={columns} rows={lot.shellingDays} keyFn={(d) => String(d.id)} />}
       {lot.shellingDays.length > 0 && <Notes notes={lot.shellingDays.at(-1)!.notes} />}
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       {adding && (

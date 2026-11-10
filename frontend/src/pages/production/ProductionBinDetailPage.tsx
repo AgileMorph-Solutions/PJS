@@ -9,6 +9,7 @@ import { api } from "../../repository/api";
 import type { BtmIntake, ProductionLot, BinStockRow, BinPhaseStep } from "../../repository/api";
 import { productionTableById } from "@anagroci/contract/data/productionTables";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { PRODUCTION_PAGE_SIZE } from "../../components/production/columns";
 
 /** The Bin is the physical identity a set of cashews is actually tracked by — the pivot both the
  * BTM intake spine and the Lot production spine hang off. This page is the featured production
@@ -108,17 +109,17 @@ export function ProductionBinDetailPage() {
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[15px] font-bold text-warmstone-900 mb-3">BTMs in</h3>
-        <DataTable columns={btmColumns} rows={row.btmIntakes} keyFn={(r) => r.btmNo} rowHref={(r) => `/production/btm/${encodeURIComponent(r.btmNo)}`} emptyTitle="No BTMs yet" />
+        <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={btmColumns} rows={row.btmIntakes} keyFn={(r) => r.btmNo} rowHref={(r) => `/production/btm/${encodeURIComponent(r.btmNo)}`} emptyTitle="No BTMs yet" />
       </div>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[15px] font-bold text-warmstone-900 mb-3">Lots cooked from this Bin - each opens its own Phase 3-8 tracker</h3>
-        <DataTable columns={lotColumns} rows={row.lots} keyFn={(r) => r.lotNo} rowHref={(r) => `/production/lots/${encodeURIComponent(r.lotNo)}`} emptyTitle="No Lots cooked from this Bin yet" />
+        <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={lotColumns} rows={row.lots} keyFn={(r) => r.lotNo} rowHref={(r) => `/production/lots/${encodeURIComponent(r.lotNo)}`} emptyTitle="No Lots cooked from this Bin yet" />
       </div>
 
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">
         <h3 className="text-[15px] font-bold text-warmstone-900 mb-3">Running stock</h3>
-        <DataTable columns={stockColumns} rows={row.stock} keyFn={(r) => `${r.date}-${r.movement_type}-${r.running_balance}`} emptyTitle="No movements recorded yet" />
+        <DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={stockColumns} rows={row.stock} keyFn={(r) => `${r.date}-${r.movement_type}-${r.running_balance}`} emptyTitle="No movements recorded yet" />
       </div>
     </div>
   );

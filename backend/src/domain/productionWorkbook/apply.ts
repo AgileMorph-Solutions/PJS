@@ -28,7 +28,7 @@ import { parseCell } from "../workbook/cells.js";
 import { normalizeHeader } from "../workbook/fields.js";
 import type { Change, ParsedSheet, ParsedWorkbook, RowError, RowWarning, Sample } from "../workbook/types.js";
 import { SAMPLE_LIMIT } from "../workbook/types.js";
-import { createBatchIn } from "../../services/production/batches.js";
+import { createBatchIn, runLabel, runWhere } from "../../services/production/batches.js";
 import { addBoilerReadingIn, addTruckIn, updateTruckIn } from "../../services/production/byProducts.js";
 import { addCalibrationRunIn, addManualCalibrationIn, submitSizingCheckIn } from "../../services/production/calibration.js";
 import { addLotEntryIn, addShellingDayIn, cookLotIn, moveToCoolingIn } from "../../services/production/factoryLots.js";
@@ -98,23 +98,31 @@ async function loadOf(ctx: ProductionCtx, cells: Cells) {
 // ── One processor per tab: what a new row does, and what an existing one may and may not do ─────────
 
 async function batchRow(ctx: ProductionCtx, tab: Tab, cells: Cells): Promise<Outcome> {
+  // "Batch Name" holds the run's name (ANA-03B) or, for a run that has none, its system ID (PR-YAK-2026-001).
   const code = upper(cells.get("code") ?? null);
-  if (!code) refuse("Give the batch a name.");
-  const saved = await ctx.tx.productionBatch.findUnique({ where: { code }, include: { bins: { select: { binCode: true } } } });
+  if (!code) refuse("Give the production run a name.");
+  const saved = await ctx.tx.productionBatch.findFirst({ where: runWhere(ctx.site, code!), include: { bins: { select: { binCode: true } } } });
   if (!saved) {
     await createBatchIn(ctx.tx, ctx.site, ctx.actor.id, {
-      code, startDate: cells.get("startDate") ?? undefined, proposedBy: cells.get("proposedBy") ?? undefined, bins: splitList(cells.get("bins") ?? null),
+      name: code!, startDate: cells.get("startDate") ?? undefined, proposedBy: cells.get("proposedBy") ?? undefined, bins: splitList(cells.get("bins") ?? null),
     }, ctx.stock);
     return "created";
   }
-  if (saved.warehouse !== ctx.site) refuse(`Batch ${code} belongs to ${saved.warehouse}.`);
   const binSet = (v: string | null | undefined) => splitList(v ?? null).map((b) => b.toUpperCase()).sort().join("/");
   const off = [
     ...differs(tab, cells, { startDate: saved.startDate, proposedBy: saved.proposedBy }),
     ...differs(tab, cells, { bins: saved.bins.map((b) => b.binCode).join("/") }, (a, b) => binSet(a) === binSet(b)),
   ];
-  if (off.length) refuse(savedNote(`Batch ${code}`, off, "Leave the row as it was exported, or give a new batch a new name."));
+  if (off.length) refuse(savedNote(`Production run ${runLabel(saved.code, saved.name)}`, off, "Leave the row as it was exported, or give a new run a new name."));
   return "unchanged";
+}
+
+/** The production run a row names (by its ID or its name), as its ID; the text itself when no run has it. */
+async function runCodeOf(ctx: ProductionCtx, written: string | null | undefined): Promise<string | null> {
+  const ref = upper(written ?? null);
+  if (!ref) return null;
+  const run = await ctx.tx.productionBatch.findFirst({ where: runWhere(ctx.site, ref), select: { code: true } });
+  return run?.code ?? ref;
 }
 
 async function receiptRow(ctx: ProductionCtx, tab: Tab, cells: Cells, warn: (m: string) => void): Promise<Outcome> {
@@ -122,7 +130,10 @@ async function receiptRow(ctx: ProductionCtx, tab: Tab, cells: Cells, warn: (m: 
   if (id) {
     const saved = await ctx.tx.rcnReceipt.findFirst({ where: { id, batch: { warehouse: ctx.site } } });
     if (!saved) refuse(`RCN Receipt ${id} doesn't exist at ${ctx.site}. Leave the ID blank to add a new load.`);
-    const off = differs(tab, cells, { batchCode: saved!.batchCode, date: saved!.date, btmNo: saved!.btmNo, binCode: saved!.binCode }, (a, b) => upper(a ?? null) === upper(b ?? null));
+    // A row may name the run by its name (ANA-03B) or its ID: either is the same run, so neither counts as a change.
+    const writtenRun = await runCodeOf(ctx, cells.get("batchCode"));
+    const savedRun = writtenRun === saved!.batchCode ? cells.get("batchCode") ?? saved!.batchCode : saved!.batchCode;
+    const off = differs(tab, cells, { batchCode: savedRun, date: saved!.date, btmNo: saved!.btmNo, binCode: saved!.binCode }, (a, b) => upper(a ?? null) === upper(b ?? null));
     if (off.length) refuse(savedNote(id, off, "Leave the row as it was exported."));
     return "unchanged";
   }
@@ -283,7 +294,9 @@ async function siloCheckRow(ctx: ProductionCtx, cells: Cells): Promise<Outcome> 
   const batchCode = upper(cells.get("batchCode") ?? null);
   const date = (cells.get("date") ?? "").trim();
   if (point) {
-    const twins = await ctx.tx.sizingCheck.findMany({ where: { batchCode, date, point, decision, batch: { warehouse: ctx.site } } });
+    // A row naming no run matches no saved check; submitting it then says the run is missing.
+    const runCode = (await runCodeOf(ctx, batchCode)) ?? "";
+    const twins = await ctx.tx.sizingCheck.findMany({ where: { batchCode: runCode, date, point, decision, batch: { warehouse: ctx.site } } });
     if (twins.some((c) => sameGrams(grams, savedGrams(c)))) return "unchanged";
   }
   // As on screen: an Incharge's or Admin's check is approved as it is saved (they are the only ones who upload).
