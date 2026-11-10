@@ -11,6 +11,7 @@
  * 48,290 dispatched, 48,820 − 574 bags = 48,246 at arrival, weight variance −44 kg.
  */
 import { BAG_WEIGHT_KG } from "./receiptMath.js";
+import { isUsableSite } from "./siteType.js";
 import type { ReceiptRecord, TransferRequest, TransferStatus, WarehouseMaster } from "../types/receipt.js";
 
 /**
@@ -38,17 +39,15 @@ export const canTransferBetween = (fromType: string | null, toType: string | nul
 export const TRANSFER_DIRECTION_MESSAGE = "RCN can only be transferred from a Unit warehouse to a Central warehouse.";
 
 /**
- * Where a BKT can go, from the warehouse master: the stores of every Central site, or the site itself
- * until it has stores. A site with no type (BKE-04) can't have users assigned to it, so nobody there
- * could record the truck arriving.
+ * Where a BKT can go: the Central warehouses of the master (isUsableSite), never their stores. The warehouse decides who
+ * receives the truck; which store and bin each Lot goes into is recorded when it is received, so the sender isn't asked.
+ * A row with no type or no ID code (BKE-04) can't have anyone working there, so nobody could record the truck arriving.
  */
 export function transferDestinations(warehouses: WarehouseMaster[], from: string): string[] {
   return warehouses
-    .filter((w) => !w.site && w.type === "CENTRAL" && w.name !== from)
-    .flatMap((site) => {
-      const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name);
-      return stores.length ? stores : [site.name];
-    });
+    .filter((w) => isUsableSite(w) && w.type === "CENTRAL" && w.name !== from)
+    .map((w) => w.name)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 /** How a BKT's destination reads: the site, plus the store when one was chosen. */

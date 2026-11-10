@@ -1,21 +1,25 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { DEMO_USERS, ensureDemoUsers } from "../prisma/demoUsers.js";
+import { demoUsersFor, ensureDemoUsers } from "../prisma/demoUsers.js";
 import { isRole } from "@anagroci/contract/data/roles";
 import { verifyPassword } from "../src/auth/password.js";
 
 const prisma = new PrismaClient();
+const SITE = "DEMOTEST SITE";
 afterAll(() => prisma.$disconnect());
 
-// Demo accounts are opt-in and must satisfy the same rule the users API enforces: non-admins sit on
-// a typed site, or they'd have no section to land in.
+// Demo accounts follow the Warehouses master: no site is named in code, and a non-admin only ever lands on a typed
+// site (the same rule the users API enforces), or they'd have no section to land in.
 describe("demo users", () => {
-  it("covers every role, and every non-admin role on both a Unit and a Central site", () => {
-    expect(new Set(DEMO_USERS.map((u) => u.role))).toEqual(new Set(["admin", "branch_manager", "qfs_officer", "warehouse_incharge"]));
+  it("gives every site one of each non-admin role, plus one admin", () => {
+    const users = demoUsersFor(["NORTH HUB", "MAIN PLANT"]);
+    expect(users.filter((u) => u.role === "admin")).toHaveLength(1);
     for (const role of ["branch_manager", "qfs_officer", "warehouse_incharge"]) {
-      expect(DEMO_USERS.filter((u) => u.role === role).map((u) => u.warehouse).sort(), role).toEqual(["BOUAKE", "YAKRO FACTORY"]);
+      expect(users.filter((u) => u.role === role).map((u) => u.warehouse).sort(), role).toEqual(["MAIN PLANT", "NORTH HUB"]);
     }
-    expect(DEMO_USERS.every((u) => isRole(u.role))).toBe(true);
+    expect(users.map((u) => u.username)).toContain("incharge.north-hub");
+    expect(users.every((u) => isRole(u.role))).toBe(true);
+    expect(demoUsersFor([]).map((u) => u.role)).toEqual(["admin"]);
   });
 
   it("creates nothing unless explicitly enabled with a password", async () => {
@@ -24,31 +28,25 @@ describe("demo users", () => {
     expect(await ensureDemoUsers(prisma, { DEMO_PASSWORD: "x-pass-123" })).toEqual([]);
   });
 
-  it("assigns every non-admin to a typed site", async () => {
-    for (const u of DEMO_USERS.filter((x) => x.role !== "admin")) {
-      const wh = await prisma.warehouse.findUnique({ where: { name: u.warehouse! } });
-      expect(wh?.site, u.username).toBeNull();
-      expect(wh?.type, u.username).toBeTruthy();
-    }
-  });
-
   describe("when enabled", () => {
-    const existing = new Map<string, boolean>();
+    const existing = new Set<string>();
     beforeAll(async () => {
-      for (const u of DEMO_USERS) existing.set(u.username, Boolean(await prisma.user.findUnique({ where: { username: u.username } })));
+      await prisma.warehouse.upsert({ where: { name: SITE }, update: { type: "UNIT", code: "DMT" }, create: { name: SITE, kind: "VILLAGE", type: "UNIT", code: "DMT" } });
+      for (const u of await prisma.user.findMany({ select: { username: true } })) existing.add(u.username);
     });
     afterAll(async () => {
       // Only remove what this test created — the dev database may already have real demo users.
-      for (const u of DEMO_USERS) if (!existing.get(u.username)) await prisma.user.deleteMany({ where: { username: u.username } });
+      await prisma.user.deleteMany({ where: { username: { notIn: [...existing] } } });
+      await prisma.warehouse.deleteMany({ where: { name: SITE } });
     });
 
-    it("is idempotent and never resets an existing user's password", async () => {
+    it("puts accounts on every typed site in the master, idempotently, never resetting a password", async () => {
       const env = { SEED_DEMO_USERS: "true", DEMO_PASSWORD: "first-pass-123" };
       await ensureDemoUsers(prisma, env);
       expect(await ensureDemoUsers(prisma, { ...env, DEMO_PASSWORD: "second-pass-123" })).toEqual([]);
-      const u = await prisma.user.findUniqueOrThrow({ where: { username: "manager.bouake" } });
-      // Password is whatever was there first: either the pre-existing one, or our first-pass.
-      if (!existing.get("manager.bouake")) expect(verifyPassword("first-pass-123", u.passwordHash)).toBe(true);
+      const u = await prisma.user.findUniqueOrThrow({ where: { username: "manager.demotest-site" } });
+      expect(u.warehouse).toBe(SITE);
+      expect(verifyPassword("first-pass-123", u.passwordHash)).toBe(true);
       expect(verifyPassword("second-pass-123", u.passwordHash)).toBe(false);
     });
   });

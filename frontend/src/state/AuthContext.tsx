@@ -8,8 +8,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { UserView } from "../types/user";
 import { api, ApiError, UNAUTHORIZED_EVENT } from "../repository/api";
-import { canWriteStageDirectly, type Role } from "../data/roles";
-import { siteSlugForType, type SiteSlug } from "../config/sites";
+import { canAccessProduction, canWriteStageDirectly, type Role } from "../data/roles";
+import { warehouseSlug } from "../config/sites";
 
 type Status = "loading" | "anonymous" | "authenticated";
 
@@ -88,14 +88,19 @@ export function useCanEditDirectly(): boolean {
   return canWriteStageDirectly(useMe().role);
 }
 
+/** Production is the Central (factory) warehouse's work; a Unit warehouse user never sees it (contract's canAccessProduction). */
+export function useCanAccessProduction(): boolean {
+  const me = useMe();
+  return canAccessProduction(me.role, me.warehouseType);
+}
+
 export function useHasRole(...roles: Role[]): boolean {
   return roles.includes(useMe().role);
 }
 
-/** Where this user lands: admin sees the dashboard; everyone else goes to their own section's
+/** Where this user lands: admin sees the dashboard; everyone else goes to their own warehouse's
  * Reception (a Branch Manager / QFS Officer has no dashboard access). */
 export function homePathFor(me: UserView): string {
-  if (me.role === "admin") return "/";
-  const slug: SiteSlug | undefined = siteSlugForType(me.warehouseType);
-  return slug ? `/${slug}/receipts` : "/";
+  if (me.role === "admin" || !me.warehouse) return "/";
+  return `/${warehouseSlug(me.warehouse)}/receipts`;
 }

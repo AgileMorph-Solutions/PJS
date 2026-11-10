@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { StatBlock } from "../../components/ui/StatBlock";
 import { Pill } from "../../components/ui/Pill";
-import { BATCH_PHASES, BUILT_PHASES, BatchPhaseStepper, BatchStatusPill, formatTonnes, receiptHref, transferHref } from "../../components/production/batchUi";
+import { BATCH_PHASES, BUILT_PHASES, BatchPhaseStepper, BatchStatusPill, formatTonnes, useSiteHrefs } from "../../components/production/batchUi";
 import { BatchSteps } from "../../components/production/BatchSteps";
 import { CalibrationSection } from "../../components/production/CalibrationSection";
 import { CookingSection } from "../../components/production/CookingSection";
@@ -295,6 +295,7 @@ function PhaseSection({ n, current, children }: { n: number; current: number; ch
 }
 
 function LotRows({ bin, warehouse }: { bin: BatchBinView; warehouse: string }) {
+  const { receiptHref, transferHref } = useSiteHrefs();
   if (bin.lots.length === 0) {
     return (
       <tr className="bg-warmstone-50/60">

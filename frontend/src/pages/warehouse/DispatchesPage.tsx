@@ -91,7 +91,7 @@ export function DispatchesPage() {
         rows={rows}
         keyFn={(l) => l.id}
         emptyTitle="No dispatch lines at this site"
-        emptyHint="CHARGEMENT is a unit-warehouse (Bouaké) sheet - the central section has none."
+        emptyHint="CHARGEMENT is a unit-warehouse sheet - a central warehouse has none."
       />
       {detail && (
         <RecordDetailModal title={`Dispatch - SN ${detail.sn ?? "-"}`} record={detail} onClose={() => setDetail(null)} />

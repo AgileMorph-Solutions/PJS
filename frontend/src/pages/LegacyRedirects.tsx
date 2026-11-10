@@ -1,30 +1,26 @@
 import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import { useTracking } from "../state/TrackingContext";
-import { SITES, type SiteSlug } from "../config/sites";
+import { siteForWarehouse } from "../config/sites";
+import { useActiveSite, useSites } from "../state/SiteContext";
 
 /**
  * The pre-split app had one flat `/procurement/*` tree; every page there is now under `/:site/*`
  * (see App.tsx). Old links/bookmarks need to land somewhere real rather than 404 — this file is
- * every rule for "somewhere real".
- *
- * `receipt.warehouse` is always exactly "BOUAKE" or "YAKRO FACTORY" (verified against the live DB —
- * see backend/src/domain/imports/offloadings.ts, which sets it straight from the sheet's own
- * "WH LOCATION" column with no store-level granularity), so this is a plain lookup table, not a
- * guess dressed up as one.
+ * every rule for "somewhere real". The section is resolved from the warehouses of the master: a
+ * receipt's own warehouse when there is one, else the section in view. Nowhere to go (no warehouse
+ * in the master yet) lands on the home page.
  */
-const SITE_BY_WAREHOUSE: Record<string, SiteSlug> = {
-  [SITES.unit.warehouseName]: "unit",
-  [SITES.central.warehouseName]: "central",
-};
-
-/** Bouaké is the default for a legacy URL with nothing to resolve by — it's the larger of the two
- * sites (685 vs 301 receipts, measured against the live DB), so it's the section a stale bookmark
- * is more likely to have meant. Not a guarantee, just the least-wrong default. */
-const DEFAULT_SITE: SiteSlug = "unit";
+function useSiteFor() {
+  const sites = useSites();
+  const { masters } = useTracking();
+  const fallback = useActiveSite()?.slug;
+  return (warehouse: string | null | undefined): string | undefined =>
+    (warehouse ? siteForWarehouse(sites, masters, warehouse)?.slug : undefined) ?? fallback;
+}
 
 /** `/procurement/receipts`, `/procurement/stock`, `/procurement/drying` had an in-page
  * "?warehouse=" filter (Receipts only) — if the old URL still carries one that resolves to a real
- * site, honor it; otherwise fall back to DEFAULT_SITE. `leaf` is "receipts" | "stock" | "drying".
+ * site, honor it; otherwise the section in view. `leaf` is "receipts" | "stock" | "drying".
  *
  * Every OTHER query param is forwarded as-is (Dashboard's KPI tiles still link here with
  * `?status=...` — see pages/DashboardPage.tsx, which has no single site to point at since it
@@ -33,11 +29,11 @@ const DEFAULT_SITE: SiteSlug = "unit";
 export function LegacyListRedirect({ leaf }: { leaf: string }) {
   const [params] = useSearchParams();
   const rawWarehouse = params.get("warehouse");
-  const site = (rawWarehouse && SITE_BY_WAREHOUSE[rawWarehouse]) || DEFAULT_SITE;
+  const site = useSiteFor()(rawWarehouse);
   const rest = new URLSearchParams(params);
   rest.delete("warehouse");
   const qs = rest.toString();
-  return <Navigate to={`/${site}/${leaf}${qs ? `?${qs}` : ""}`} replace />;
+  return <Navigate to={site ? `/${site}/${leaf}${qs ? `?${qs}` : ""}` : "/"} replace />;
 }
 
 /** `/procurement/receipts/:id` — resolves via the receipt's OWN warehouse, not a default, since
@@ -48,12 +44,13 @@ export function LegacyListRedirect({ leaf }: { leaf: string }) {
 export function LegacyReceiptDetailRedirect() {
   const { id = "" } = useParams();
   const { receipts, loading } = useTracking();
+  const siteFor = useSiteFor();
   const receipt = receipts.find((r) => r.id === id);
   if (!receipt && loading) {
     return <div className="p-10 text-warmstone-400 text-sm">Loading…</div>;
   }
-  const site = (receipt && SITE_BY_WAREHOUSE[receipt.warehouse]) || DEFAULT_SITE;
-  return <Navigate to={`/${site}/receipts/${id}`} replace />;
+  const site = siteFor(receipt?.warehouse);
+  return <Navigate to={site ? `/${site}/receipts/${id}` : "/"} replace />;
 }
 
 /** `/procurement/receipts/new/:id/:stageId` — same resolution as the detail page above; a
@@ -62,10 +59,11 @@ export function LegacyReceiptDetailRedirect() {
 export function LegacyIntakeRedirect() {
   const { id = "", stageId = "" } = useParams();
   const { receipts, loading } = useTracking();
+  const siteFor = useSiteFor();
   const receipt = receipts.find((r) => r.id === id);
   if (!receipt && loading) {
     return <div className="p-10 text-warmstone-400 text-sm">Loading…</div>;
   }
-  const site = (receipt && SITE_BY_WAREHOUSE[receipt.warehouse]) || DEFAULT_SITE;
-  return <Navigate to={`/${site}/receipts/new/${id}/${stageId}`} replace />;
+  const site = siteFor(receipt?.warehouse);
+  return <Navigate to={site ? `/${site}/receipts/new/${id}/${stageId}` : "/"} replace />;
 }

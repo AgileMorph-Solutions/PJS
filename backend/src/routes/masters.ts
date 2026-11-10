@@ -2,15 +2,20 @@
 import type { FastifyInstance } from "fastify";
 import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
-import { requireRole } from "../auth/plugin.js";
-import { listMasters, addWarehouse, createBin, createOrigin, setWarehouseType, setWarehouseCode } from "../services/masters.js";
+import { currentUser, requireRole } from "../auth/plugin.js";
+import {
+  listMasters, addWarehouse, createBin, createOrigin, setWarehouseType, setWarehouseCode,
+  viewerWarehouseNames, assertCanAddWarehouse,
+} from "../services/masters.js";
 
 export async function masterRoutes(app: FastifyInstance) {
-  app.get("/api/masters", async () => listMasters());
+  // Scoped to the viewer's own warehouse for everyone but admin (services/masters.ts).
+  app.get("/api/masters", async (req) => listMasters(await viewerWarehouseNames(currentUser(req))));
 
   app.post("/api/masters/warehouses", async (req, reply) => {
     const { name, kind, site, type } = (req.body ?? {}) as { name?: string; kind?: WarehouseKind; site?: string; type?: WarehouseType };
     if (!name) return reply.code(400).send({ error: "name is required" });
+    assertCanAddWarehouse(await viewerWarehouseNames(currentUser(req)), { kind, site });
     // ValidationError (kind+site both set, or an unknown kind) is mapped to 422 by app.ts's
     // global error handler — no try/catch needed here, same as every other route in this file.
     return reply.code(201).send(await addWarehouse(name, { kind, site, type }));
@@ -27,7 +32,8 @@ export async function masterRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/masters/bins", async (req, reply) => {
-    return reply.code(201).send(await createBin((req.body ?? {}) as { code?: string; warehouseName?: string }));
+    const body = (req.body ?? {}) as { code?: string; warehouseName?: string };
+    return reply.code(201).send(await createBin(body, await viewerWarehouseNames(currentUser(req))));
   });
 
   app.post("/api/masters/origins", async (req, reply) => {

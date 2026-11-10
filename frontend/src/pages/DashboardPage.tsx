@@ -8,9 +8,9 @@ import { ReceiptsByStatusChart } from "../components/dashboard/ReceiptsByStatusC
 import { SupplierAnalyticsSection } from "../components/dashboard/SupplierAnalyticsSection";
 import { JuteBalanceTrendChart, parseLedgerDate } from "../components/dashboard/JuteBalanceTrendChart";
 import { useDeliveryPlans, useTracking } from "../state/TrackingContext";
-import { useActiveSite } from "../state/SiteContext";
+import { useActiveSite, useSites } from "../state/SiteContext";
 import { useHasRole } from "../state/AuthContext";
-import { SITES, siteSlugForSiteName } from "../config/sites";
+import { siteForWarehouse } from "../config/sites";
 import { computeDashboardCounts, deriveStatus } from "../domain/receiptStatus";
 import { lastBalance } from "../domain/jute";
 import type { LedgerRow } from "../repository/juteRepo";
@@ -70,7 +70,7 @@ function ChartCard({
 }
 
 export function DashboardPage() {
-  const { receipts, ledgerEntries } = useTracking();
+  const { receipts, ledgerEntries, masters } = useTracking();
   const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const isFiltered = Boolean(range.from || range.to);
 
@@ -95,17 +95,20 @@ export function DashboardPage() {
   const balance = lastBalance(filteredWarehouseRows);
 
   // Late as of today, so the date range above doesn't apply. The server scopes the list to the viewer's own
-  // warehouse; an admin sees both sites, so the tile opens whichever site actually has overdue plans,
+  // warehouse; an admin sees every site, so the tile opens whichever site actually has overdue plans,
   // preferring the one they were last looking at — and counts only that site's, so the number matches the list
-  // it opens. When both sites have late plans the tile names the one it counts.
+  // it opens. When several sites have late plans the tile names the one it counts.
   const canSeePlans = useHasRole("admin", "warehouse_incharge");
   const activeSite = useActiveSite();
   const { plans, loading: plansLoading } = useDeliveryPlans();
   const overduePlans = useMemo(() => plans.filter((p) => p.overdue), [plans]);
-  const overdueSites = new Set(overduePlans.map((p) => siteSlugForSiteName(p.destinationWarehouse)));
-  const overdueSite = overdueSites.has(activeSite.slug) || overdueSites.size === 0 ? activeSite.slug : [...overdueSites].find(Boolean) ?? activeSite.slug;
-  const overdueAtSite = overduePlans.filter((p) => siteSlugForSiteName(p.destinationWarehouse) === overdueSite).length;
-  const overdueLabel = overdueSites.size > 1 ? `Overdue plans · ${SITES[overdueSite].sublabel}` : "Overdue plans";
+  const sites = useSites();
+  const slugOf = (warehouse: string) => siteForWarehouse(sites, masters, warehouse)?.slug;
+  const overdueSites = new Set(overduePlans.map((p) => slugOf(p.destinationWarehouse)).filter((s): s is string => Boolean(s)));
+  const here = activeSite?.slug;
+  const overdueSite = here && (overdueSites.has(here) || overdueSites.size === 0) ? here : [...overdueSites][0] ?? here;
+  const overdueAtSite = overduePlans.filter((p) => slugOf(p.destinationWarehouse) === overdueSite).length;
+  const overdueLabel = overdueSites.size > 1 ? `Overdue plans · ${sites.find((s) => s.slug === overdueSite)?.sublabel ?? ""}` : "Overdue plans";
 
   const recent = [...filteredReceipts].sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1)).slice(0, 8);
 
@@ -129,7 +132,7 @@ export function DashboardPage() {
         {canSeePlans && (
           <KpiTile
             icon={icon("event_busy")} label={overdueLabel} value={plansLoading ? "…" : overdueAtSite}
-            tone={overdueAtSite > 0 ? "gap" : "default"} to={`/${overdueSite}/delivery-plans?overdue`}
+            tone={overdueAtSite > 0 ? "gap" : "default"} to={overdueSite ? `/${overdueSite}/delivery-plans?overdue` : undefined}
           />
         )}
       </div>

@@ -17,7 +17,7 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import type { ReceiptRecord, TransferRequest, TransferStatus } from "@anagroci/contract/types/receipt";
-import { canTransferBetween, TRANSFER_DIRECTION_MESSAGE, transferState, transferVariance, type TransferFacts } from "@anagroci/contract/domain/transfers";
+import { canTransferBetween, TRANSFER_DIRECTION_MESSAGE, transferDestinations, transferState, transferVariance, type TransferFacts } from "@anagroci/contract/domain/transfers";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { prisma } from "../db.js";
@@ -415,4 +415,15 @@ export async function receiveTransfer(id: string, input: ReceiveInput, opts: Wri
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return toWire(row);
+}
+
+/**
+ * Where a BKT from `from` may go: every Central site (or its stores) in the master but `from` itself — contract's
+ * transferDestinations(). Its own read because /api/masters shows a non-admin only their own warehouse, yet a Unit
+ * warehouse must still name the Central one it is sending to. Names only: nothing else about the other site leaks.
+ */
+export async function listTransferDestinations(from: string | undefined): Promise<string[]> {
+  if (!from) return [];
+  const rows = await prisma.warehouse.findMany({ select: { name: true, kind: true, type: true, site: true, code: true } });
+  return transferDestinations(rows, from);
 }

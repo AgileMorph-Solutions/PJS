@@ -10,6 +10,7 @@ import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { prisma } from "../db.js";
 import { hashPassword } from "../auth/password.js";
 import { ValidationError } from "../domain/validation.js";
+import { siteSetupGaps } from "@anagroci/contract/domain/siteType";
 
 async function toView(u: { id: string; username: string; displayName: string; role: string; warehouse: string | null; active: boolean }): Promise<UserView> {
   const wh = u.warehouse ? await prisma.warehouse.findUnique({ where: { name: u.warehouse }, select: { type: true } }) : null;
@@ -21,7 +22,8 @@ async function assertAssignableWarehouse(role: Role, warehouse: string | null | 
   if (!warehouse) throw new ValidationError("Assign this user to a warehouse.");
   const wh = await prisma.warehouse.findUnique({ where: { name: warehouse } });
   if (!wh || wh.site !== null) throw new ValidationError(`"${warehouse}" isn't a warehouse site.`);
-  if (!wh.type) throw new ValidationError(`"${warehouse}" has no Unit/Central type yet — set one in Masters first.`);
+  const gaps = siteSetupGaps(wh);
+  if (gaps.length) throw new ValidationError(`"${warehouse}" isn't ready yet: it needs ${gaps.join(" and ")} (Masters › Warehouses).`);
 }
 
 export async function listUsers(): Promise<UserView[]> {

@@ -10,7 +10,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Outlet } from "react-router-dom";
 import { setProductionFactory } from "../repository/api";
-import { SITES } from "../config/sites";
+import { listSites } from "@anagroci/contract/domain/siteType";
 import { useMe } from "./AuthContext";
 import { useTracking } from "./TrackingContext";
 
@@ -31,16 +31,18 @@ export function ProductionFactoryLayout({ children }: { children?: ReactNode }) 
   const { masters, loading } = useTracking();
   const [chosen, setChosen] = useState<string | null>(() => localStorage.getItem(STORAGE_KEY));
 
-  // Sites, not stores: a store under a factory (ANAGROCI-01) is the same factory.
+  // Production runs at a Central warehouse site — the type set in Masters › Warehouses, the same rule that opens
+  // Production to a user (contract's canAccessProduction). The client's Village/Regional/Factory "kind" plays no part,
+  // and a site with no type is never offered. Sites, not stores: a store (ANAGROCI-01) belongs to its site.
   const factories = isAdmin
-    ? masters.warehouses.filter((w) => w.kind === "FACTORY" && !w.site).map((w) => w.name).sort()
+    ? listSites(masters.warehouses).filter((w) => w.type === "CENTRAL").map((w) => w.name)
     : [];
-  // A remembered choice that's been removed since falls back to the central warehouse, then the first.
+  // A remembered choice that's been removed since falls back to the first factory in the master.
   const factory = !isAdmin
     ? undefined
     : chosen && factories.includes(chosen)
       ? chosen
-      : factories.includes(SITES.central.warehouseName) ? SITES.central.warehouseName : factories[0];
+      : factories[0];
   setProductionFactory(factory);
 
   const choose = (name: string) => {
@@ -63,7 +65,8 @@ export function ProductionFactorySwitcher() {
     <select
       value={factory}
       onChange={(e) => choose(e.target.value)}
-      title="Which factory's batches to show"
+      aria-label="Factory"
+      title="Which factory's production runs to show"
       className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] font-semibold text-warmstone-800 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
     >
       {factories.map((name) => (

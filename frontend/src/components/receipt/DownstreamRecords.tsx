@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useCanAccessProduction } from "../../state/AuthContext";
 import type { ReceiptLinks } from "../../repository/api";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
@@ -62,6 +63,8 @@ function Row({ title, sub, children }: { title: ReactNode; sub?: ReactNode; chil
  * — the point of the page is that none of it needs a visit to another sidebar entry. Sections stay
  * visible when empty so it is plain which steps this Lot has not reached yet. */
 export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | null; loading: boolean }) {
+  // A Unit warehouse user still sees where their Lot went, but not a link into Production's pages, which aren't theirs.
+  const canSeeProduction = useCanAccessProduction();
   if (loading) return <p className="text-[13px] text-warmstone-400 animate-pulse px-1">Gathering this Lot's records…</p>;
   if (!links) return <p className="text-[13px] text-warmstone-500 px-1">Linked records couldn't be loaded.</p>;
 
@@ -132,7 +135,9 @@ export function DownstreamRecords({ links, loading }: { links: ReceiptLinks | nu
           <Row key={b.btmNo} title={`BTM ${b.btmNo}`}>
             <Fact
               label="Production bin"
-              value={<Link to={`/production/btm/${encodeURIComponent(b.btmNo)}`} className="text-brand-700 hover:text-brand-800 font-semibold">{t(b.binNo)}</Link>}
+              value={canSeeProduction
+                ? <Link to={`/production/btm/${encodeURIComponent(b.btmNo)}`} className="text-brand-700 hover:text-brand-800 font-semibold">{t(b.binNo)}</Link>
+                : t(b.binNo)}
             />
           </Row>
         ))}

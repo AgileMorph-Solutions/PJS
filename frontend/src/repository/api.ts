@@ -263,6 +263,8 @@ export const api = {
   },
 
   listTransfers: (warehouse?: string) => request<TransferRequest[]>(withWarehouse("/transfers", warehouse)),
+  /** Where a BKT from `from` may go. Its own read: /api/masters shows a non-admin only their own warehouse. */
+  transferDestinations: (from: string) => request<string[]>(`/transfers/destinations?from=${encodeURIComponent(from)}`),
   createTransfer: (t: {
     transferDate: string; fromWarehouse: string; toWarehouse: string; remarks?: string;
     lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[];

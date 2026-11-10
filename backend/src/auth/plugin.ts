@@ -9,6 +9,7 @@ import type { User } from "@prisma/client";
 import { isRole, type Role } from "@anagroci/contract/data/roles";
 import { ForbiddenError, UnauthorizedError } from "../domain/validation.js";
 import { isAllowed } from "./policy.js";
+import { assertProductionAccess, isProductionPath } from "./productionAccess.js";
 import { redactForRole } from "./redact.js";
 import { SESSION_COOKIE, userForToken } from "./session.js";
 
@@ -35,7 +36,9 @@ export function registerAuth(app: FastifyInstance) {
     const user = token ? await userForToken(token) : null;
     if (!user) throw new UnauthorizedError();
     req.user = user;
-    if (isRole(user.role) && !isAllowed(user.role, req.method, path)) throw new ForbiddenError();
+    if (!isRole(user.role)) return;
+    if (!isAllowed(user.role, req.method, path)) throw new ForbiddenError();
+    if (isProductionPath(path)) await assertProductionAccess(user as User & { role: Role });
   });
   // What a role may not see never leaves the server (price and amount for the Warehouse Incharge): one hook over every JSON response.
   app.addHook("preSerialization", async (req, _reply, payload) => {

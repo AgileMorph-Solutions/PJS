@@ -27,7 +27,7 @@ export function WarehouseActivityLedgerPage() {
   const canEdit = useCanEditDirectly();
   const site = useActiveSite();
   // The places an activity can be at: this warehouse's stores, and the known Bins.
-  const places = useMemo(() => [...masters.warehouses.filter((w) => w.site === site.warehouseName).map((w) => w.name).sort(), ...masters.bins], [masters.warehouses, masters.bins, site.warehouseName]);
+  const places = useMemo(() => [...(site?.stores ?? []), ...masters.bins], [site, masters.bins]);
   const [detail, setDetail] = useState<WarehouseActivityLedgerEntry | null>(null);
 
   const columns: Column<WarehouseActivityLedgerEntry>[] = [
@@ -60,7 +60,7 @@ export function WarehouseActivityLedgerPage() {
 
   return (
     <div className="space-y-5">
-      {canEdit && (
+      {canEdit && site && (
         <CollapsibleCard title="Record an activity" meta={`at ${site.warehouseName}`}>
           <ActivityForm warehouse={site.warehouseName} receipts={receipts} places={places} onSaved={() => void refetch()} />
         </CollapsibleCard>

@@ -56,3 +56,22 @@ describe("price and amount visibility (Oct 2026)", () => {
   });
 });
 
+
+import { canAccessProduction } from "../src/data/roles";
+describe("production access", () => {
+  it("is for the Central (factory) warehouse's Incharge and QFS Officer, and admin", () => {
+    expect(canAccessProduction("admin", null)).toBe(true);
+    expect(canAccessProduction("warehouse_incharge", "CENTRAL")).toBe(true);
+    expect(canAccessProduction("qfs_officer", "CENTRAL")).toBe(true);
+  });
+  it("is closed to Unit warehouse users, whatever their role", () => {
+    for (const role of ["warehouse_incharge", "qfs_officer", "branch_manager"] as const) {
+      expect(canAccessProduction(role, "UNIT")).toBe(false);
+    }
+  });
+  it("is closed to a Branch Manager even at the factory, and to anyone with no warehouse yet", () => {
+    expect(canAccessProduction("branch_manager", "CENTRAL")).toBe(false);
+    expect(canAccessProduction("warehouse_incharge", null)).toBe(false);
+    expect(canAccessProduction("qfs_officer", undefined)).toBe(false);
+  });
+});

@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { readyForTransfer, transferDestinationLabel, transferDestinations, TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
+import { readyForTransfer, transferDestinationLabel, TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -51,7 +51,14 @@ export function TransfersPage() {
   const [picked, setPicked] = useState<Record<string, Pick>>({});
 
   const canSend = siteTypeOf(masters.warehouses, masters.aliases, site.warehouseName) === "UNIT";
-  const destinations = transferDestinations(masters.warehouses, site.warehouseName);
+  // From the server, not the master: a Unit warehouse's own master holds only itself, yet it sends to a Central one.
+  const [destinations, setDestinations] = useState<string[]>([]);
+  useEffect(() => {
+    if (!canSend) return;
+    let live = true;
+    api.transferDestinations(site.warehouseName).then((d) => { if (live) setDestinations(d); }).catch(() => { if (live) setDestinations([]); });
+    return () => { live = false; };
+  }, [canSend, site.warehouseName]);
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
   // Marked "Yes" on the receipt says it is ready; only the BKTs themselves say it has already gone on one.

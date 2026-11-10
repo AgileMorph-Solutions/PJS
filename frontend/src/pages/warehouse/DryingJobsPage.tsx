@@ -234,7 +234,7 @@ export function DryingJobsPage() {
               rows={reportSearch.filtered}
               keyFn={(r) => r.id}
               emptyTitle="No drying/sorting detail recorded"
-              emptyHint="Upload a Drying & Sorting Report workbook to populate this table. Unit (Bouaké) only - this sheet has no central-side rows."
+              emptyHint="Upload a Drying & Sorting Report workbook to populate this table. Unit warehouses only - this sheet has no central-side rows."
             />
           </>
         )}

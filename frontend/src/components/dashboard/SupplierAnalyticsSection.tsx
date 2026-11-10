@@ -10,7 +10,7 @@ import { KpiTile } from "../ui/KpiTile";
 import { useTableSearch } from "../ui/useTableSearch";
 import { useSupplierAnalytics } from "../../state/TrackingContext";
 import { useMe } from "../../state/AuthContext";
-import { SITE_LIST } from "../../config/sites";
+import { useSites } from "../../state/SiteContext";
 import type { DateRange } from "./DateRangeFilter";
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
@@ -29,6 +29,7 @@ const TOP = 10;
  */
 export function SupplierAnalyticsSection({ range }: { range: DateRange }) {
   const me = useMe();
+  const sites = useSites();
   // Only an admin can look at another site; an incharge is pinned to their own warehouse by the server.
   const [site, setSite] = useState("");
   const { data, loading, error } = useSupplierAnalytics(range, me.role === "admin" ? site || undefined : undefined);
@@ -90,7 +91,7 @@ export function SupplierAnalyticsSection({ range }: { range: DateRange }) {
             Site
             <select value={site} onChange={(e) => setSite(e.target.value)} className="px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] font-normal normal-case tracking-normal text-warmstone-900 outline-none focus:border-brand-700">
               <option value="">All sites</option>
-              {SITE_LIST.map((s) => <option key={s.slug} value={s.warehouseName}>{s.label} · {s.sublabel}</option>)}
+              {sites.map((s) => <option key={s.slug} value={s.warehouseName}>{s.sublabel} · {s.label}</option>)}
             </select>
           </label>
         )}

@@ -1,13 +1,37 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { Link, Navigate, Outlet, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
-import { SITES, isSiteSlug, siteSlugForType, type SiteConfig, type SiteSlug } from "../config/sites";
+import { sitesFrom, warehouseSlug, type SiteConfig, type SiteSlug } from "../config/sites";
 import { homePathFor, useMe } from "./AuthContext";
+import { useTracking } from "./TrackingContext";
+import { isWarehouseType } from "../data/warehouseTypes";
+import type { UserView } from "../types/user";
 
 const SiteCtx = createContext<SiteConfig | null>(null);
 
-/** Reads the `:site` param a page is rendered under and resolves it to a real SiteConfig. Every
- * page inside the `/:site/*` route tree calls this instead of re-parsing useParams itself, so
- * there's exactly one place that decides what an unrecognized slug means (see SiteLayout below). */
+/**
+ * The sections this person may open: every site in the Warehouses master for an admin, only their own warehouse for
+ * everyone else. The API already scopes /api/masters to the viewer's warehouse; this filters again so a screen never
+ * offers another site even if the master were to include one.
+ */
+export function useSites(): SiteConfig[] {
+  const me = useMe();
+  const { masters } = useTracking();
+  return useMemo(() => {
+    const all = sitesFrom(masters);
+    if (me.role === "admin") return all;
+    const own = all.find((s) => s.warehouseName === me.warehouse) ?? ownFallback(me);
+    return own ? [own] : [];
+  }, [masters, me]);
+}
+
+/** A non-admin's own section before (or without) its master row — from what the session itself says. */
+function ownFallback(me: UserView): SiteConfig | undefined {
+  if (!me.warehouse) return undefined;
+  const type = isWarehouseType(me.warehouseType) ? me.warehouseType : null;
+  return { slug: warehouseSlug(me.warehouse), label: "Warehouse", sublabel: me.warehouse, warehouseName: me.warehouse, aliases: [], stores: [], type };
+}
+
+/** Reads the `:site` param a page is rendered under, resolved to its master row by SiteLayout below. */
 export function useSite(): SiteConfig {
   const ctx = useContext(SiteCtx);
   if (!ctx) throw new Error("useSite must be used within the /:site route tree (SiteLayout)");
@@ -15,11 +39,8 @@ export function useSite(): SiteConfig {
 }
 
 /**
- * Navigate-mode for `components/SiteSwitcher.tsx`, used by every page under `/:site/*`: swaps just
- * the `:site` segment of the current URL, keeping the same leaf, any nested id, and the query
- * string — `/unit/receipts/REC-1?status=x` -> `/central/receipts/REC-1?status=x`. Only callable
- * from inside the `/:site/*` tree (same requirement as useSite()), since there's no current site
- * segment to swap otherwise.
+ * Navigate-mode for `components/SiteSwitcher.tsx`: swaps just the `:site` segment of the current URL, keeping the
+ * leaf, any nested id and the query string. Only callable inside the `/:site/*` tree.
  */
 export function useSwitchSite() {
   const navigate = useNavigate();
@@ -34,93 +55,77 @@ export function useSwitchSite() {
 
 const LAST_SITE_KEY = "anagroci.lastSite";
 
-function readLastSite(): SiteSlug {
+function readLastSite(): string | null {
   try {
-    const stored = localStorage.getItem(LAST_SITE_KEY);
-    if (isSiteSlug(stored ?? undefined)) return stored as SiteSlug;
+    return localStorage.getItem(LAST_SITE_KEY);
   } catch {
-    // Private window / blocked storage — fall through to the default below.
+    return null; // Private window / blocked storage.
   }
-  return "unit";
 }
 
 /**
- * "Which site's data should the nav / a page's SiteSwitcher point at right now" — resolved from
- * the URL when we're already under `/:site/*` (the source of truth there), or the last site the
- * user was actually looking at otherwise (Dashboard, Masters, Jute pages have no `:site` of their
- * own), or "unit" if neither exists yet. Every resolution from a real URL is remembered, so
- * following "Reception" from the Dashboard lands back wherever you last were, not always
- * back at Bouaké.
+ * "Which section should the nav and site links point at right now": the URL's own `:site` when it names one of this
+ * person's sections, else the last one they looked at, else the first. A non-admin only ever has their own. Null when
+ * there is no section at all yet (no warehouse in the master) — callers leave site links out rather than invent one.
  */
-export function useActiveSite(): SiteConfig {
-  const me = useMe();
+export function useActiveSite(): SiteConfig | null {
+  const sites = useSites();
   const location = useLocation();
   const match = matchPath("/:site/*", location.pathname);
-  const fromUrl = isSiteSlug(match?.params.site) ? match.params.site : undefined;
+  const fromUrl = sites.find((s) => s.slug === match?.params.site);
 
   useEffect(() => {
     if (!fromUrl) return;
     try {
-      localStorage.setItem(LAST_SITE_KEY, fromUrl);
+      localStorage.setItem(LAST_SITE_KEY, fromUrl.slug);
     } catch {
-      // Nothing to do if storage is unavailable — this is a convenience, not a requirement.
+      // A convenience, not a requirement.
     }
   }, [fromUrl]);
 
-  // A non-admin has exactly one section (their warehouse's Unit/Central type) — never a remembered
-  // or URL-derived one, and its warehouse is THEIR warehouse, not the section's default.
-  if (me.role !== "admin") return siteFor(me) ?? SITES[fromUrl ?? readLastSite()];
-  return SITES[fromUrl ?? readLastSite()];
+  if (fromUrl) return fromUrl;
+  const last = readLastSite();
+  return sites.find((s) => s.slug === last) ?? sites[0] ?? null;
 }
 
-/** The section a non-admin belongs to, scoped to their own assigned warehouse (which may differ
- * from the section's default `warehouseName` once a second warehouse of the same type exists). */
-function siteFor(me: { warehouseType: string | null; warehouse: string | null }): SiteConfig | undefined {
-  const slug = siteSlugForType(me.warehouseType);
-  return slug && me.warehouse ? { ...SITES[slug], warehouseName: me.warehouse } : undefined;
-}
+/** Links from before sections came from the master used fixed `/unit/*` and `/central/*` URLs. */
+const LEGACY_TYPE: Record<string, string> = { unit: "UNIT", central: "CENTRAL" };
 
 /**
- * The `/:site/*` route's own element. `:site` is an unconstrained path segment — react-router will
- * happily match `/nonsense/receipts` — so this is the one place that turns an unrecognized slug
- * into a visible, honest "not found" rather than quietly resolving to `undefined` and letting every
- * downstream page guess. No redirect: a mistyped/stale link should tell the visitor it's wrong, not
- * silently land them somewhere else that looks plausible.
+ * The `/:site/*` route's own element: resolves `:site` against this person's sections. A non-admin asking for any
+ * section but their own goes home (the API would refuse it anyway). An old `/unit/*` or `/central/*` link goes to the
+ * first section of that type; anything else unrecognized says so plainly, rather than landing somewhere plausible.
  */
 export function SiteLayout() {
   const me = useMe();
+  const sites = useSites();
+  const location = useLocation();
   const { site } = useParams<{ site: string }>();
-  const own = me.role === "admin" ? undefined : siteFor(me);
-  // Someone stranded without a typed warehouse (or asking for the other section) goes to their own
-  // home rather than seeing another site's data — the API would 403 it anyway.
-  if (me.role !== "admin" && (!own || site !== own.slug)) return <Navigate to={homePathFor(me)} replace />;
-  if (!isSiteSlug(site)) {
+  const current = sites.find((s) => s.slug === site);
+
+  if (!current) {
+    const legacy = site && LEGACY_TYPE[site] ? sites.find((s) => s.type === LEGACY_TYPE[site]) : undefined;
+    if (legacy) return <Navigate to={`/${legacy.slug}${location.pathname.slice(`/${site}`.length)}${location.search}`} replace />;
+    if (me.role !== "admin") return <Navigate to={homePathFor(me)} replace />;
     return (
       <div className="p-10 max-w-md">
         <div className="w-11 h-11 rounded-2xl bg-danger-100 text-danger-700 flex items-center justify-center mb-4">
           <span className="material-symbols-outlined">signpost</span>
         </div>
-        <h2 className="text-lg font-bold text-warmstone-900 mb-1.5">No such warehouse section</h2>
+        <h2 className="text-lg font-bold text-warmstone-900 mb-1.5">No such warehouse</h2>
         <p className="text-sm text-warmstone-500 leading-relaxed mb-4">
-          "{site}" isn't a recognized warehouse section - it must be one of{" "}
-          {Object.keys(SITES).map((s, i) => (
-            <span key={s}>
-              {i > 0 && " or "}
-              <code className="font-mono">{s}</code>
-            </span>
-          ))}
-          .
+          "{site}" isn't a warehouse in Masters › Warehouses.{" "}
+          {sites.length ? `Open one of: ${sites.map((s) => s.sublabel).join(", ")}.` : "No warehouse has been added yet."}
         </p>
-        <Link to="/" className="text-sm font-semibold text-brand-700 hover:text-brand-800">
-          Back to Dashboard
+        <Link to="/masters/warehouses" className="text-sm font-semibold text-brand-700 hover:text-brand-800">
+          Go to Masters › Warehouses
         </Link>
       </div>
     );
   }
   return (
-    <SiteCtx.Provider value={own ?? SITES[site]}>
+    <SiteCtx.Provider value={current}>
       <Outlet />
     </SiteCtx.Provider>
   );
 }
-

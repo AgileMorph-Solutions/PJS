@@ -20,11 +20,11 @@ export interface DownstreamStatus {
 }
 
 export async function getDownstreamStatus(site?: string[]): Promise<Map<string, DownstreamStatus>> {
-  // WarehouseDischarge.warehouseSite stores the sheet's own verbatim site name (e.g.
-  // "YAMOUSSOUKRO" for central, not the canonical "YAKRO FACTORY") — resolveSite() expands the
-  // canonical name to every real alias/store a source row might carry, same as every other
-  // site-scoped query in this codebase.
-  const centralSite = await resolveSite("YAKRO FACTORY");
+  // "Received" means discharged at a Central warehouse — whichever sites the master marks Central, not a fixed name.
+  // WarehouseDischarge.warehouseSite stores the sheet's own verbatim site name (an alias such as "YAMOUSSOUKRO", not
+  // the canonical one) — resolveSite() expands each Central site to every alias/store a source row might carry.
+  const centralSites = await prisma.warehouse.findMany({ where: { type: "CENTRAL", site: null }, select: { name: true } });
+  const centralSite = (await Promise.all(centralSites.map((w) => resolveSite(w.name)))).flat();
 
   const [receipts, dispatchFiches, centralReceivingFiches, dryingBatches, transferIdsByLot] = await Promise.all([
     prisma.receipt.findMany({

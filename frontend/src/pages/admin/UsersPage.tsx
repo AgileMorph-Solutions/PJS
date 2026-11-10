@@ -8,6 +8,7 @@ import { useUsers } from "../../state/userManagement";
 import { api } from "../../repository/api";
 import { ROLES, ROLE_LABEL, type Role } from "../../data/roles";
 import { WAREHOUSE_TYPE_LABEL, type WarehouseType } from "../../data/warehouseTypes";
+import { listSites } from "@anagroci/contract/domain/siteType";
 import type { UserView } from "../../types/user";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
@@ -25,7 +26,8 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const typedSites = useMemo(() => masters.warehouses.filter((w) => !w.site && w.type), [masters.warehouses]);
+  // Warehouses only (never their stores), and only finished ones: a type and an ID code (contract's isUsableSite).
+  const typedSites = useMemo(() => listSites(masters.warehouses), [masters.warehouses]);
   const needsWarehouse = form.role !== "admin";
 
   async function handleCreate(e: FormEvent) {
@@ -83,7 +85,7 @@ export function UsersPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader kicker="Administration" title="Users" lede="Create accounts and assign each person a role and one warehouse. Only warehouses with a Unit/Central type can be assigned (set it in Masters › Warehouses)." />
+      <PageHeader kicker="Administration" title="Users" lede="Create accounts and assign each person a role and one warehouse. Only warehouses with a Unit/Central type and an ID code can be assigned (set both in Masters › Warehouses)." />
       <CollapsibleCard title="Add user" defaultOpen>
         <form onSubmit={handleCreate} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-3 items-end">
           <div><label className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5" htmlFor="u-username">Username</label>

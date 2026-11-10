@@ -10,14 +10,13 @@ import { KpiTile } from "../../components/ui/KpiTile";
 import { useTracking, useDownstreamStatus, useReceiptPlanInfo } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
-import { siteSlugForSiteName } from "../../config/sites";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { receiptColumns, fiche, storeCode } from "./columns";
 import { MODULE_STATUSES, type ReceivingModule } from "@anagroci/contract/data/modules";
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
 
-/** Site-scoped Receipts list — one component for both /unit/receipts and /central/receipts (see
+/** Site-scoped Receipts list — one component for every warehouse's /<site>/receipts (see
  * SiteContext's useSite()). The section itself IS the warehouse filter now, so the old "All
  * warehouses" dropdown is gone; a STORE-level sub-filter takes its place where there's more than
  * one store to choose from (derived from /api/masters' {name,kind,site} shape — a store is any
@@ -43,12 +42,10 @@ export function ReceiptsListPage() {
   const store = params.get("store") ?? "";
   const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
+  // The site's own stores, as config/sites.ts resolved them (a store's `site` may hold the site name or an alias).
   const stores = useMemo(
-    // siteSlugForSiteName, not a raw === — a store's `site` column can legitimately hold either
-    // the canonical site name or one of its known aliases (see config/sites.ts), so a raw compare
-    // would silently drop a real store the moment that column happens to hold the alias value.
-    () => masters.warehouses.filter((w) => siteSlugForSiteName(w.site ?? "") === site.slug),
-    [masters.warehouses, site.slug]
+    () => masters.warehouses.filter((w) => site.stores.includes(w.name)),
+    [masters.warehouses, site.stores]
   );
 
   const siteReceipts = useMemo(
@@ -182,7 +179,7 @@ export function ReceiptsListPage() {
       </FilterBar>
 
       <DataTable
-        columns={receiptColumns(site.slug, downstreamStatus, canEdit ? planInfo : undefined)}
+        columns={receiptColumns(site.stores.length > 1, downstreamStatus, canEdit ? planInfo : undefined)}
         rows={rows}
         keyFn={(r) => r.id}
         rowHref={(r) => `/${site.slug}/receipts/${r.id}`}

@@ -19,6 +19,7 @@ import { resolveSite } from "../../domain/site.js";
 import { ValidationError } from "../../domain/validation.js";
 import { listReceipts } from "../receipts.js";
 import { listTransfers } from "../transfers.js";
+import { isUsableSite } from "@anagroci/contract/domain/siteType";
 
 /**
  * The factory site production works at. Production happens only at a FACTORY site (Yakro); a user
@@ -27,11 +28,12 @@ import { listTransfers } from "../transfers.js";
  */
 export async function productionSite(scoped: string | undefined): Promise<string> {
   if (scoped) {
-    const row = await prisma.warehouse.findUnique({ where: { name: scoped }, select: { kind: true } });
-    if (row?.kind !== "FACTORY") throw new ValidationError(`Production runs at the factory; ${scoped} isn't one.`);
+    // A Central site, by the type set in Masters (contract's canAccessProduction) — not by its Village/Regional/Factory kind.
+    const row = await prisma.warehouse.findUnique({ where: { name: scoped }, select: { type: true, site: true, code: true } });
+    if (!row || !isUsableSite(row) || row.type !== "CENTRAL") throw new ValidationError(`Production runs at a Central warehouse; ${scoped} isn't one.`);
     return scoped;
   }
-  const factories = await prisma.warehouse.findMany({ where: { kind: "FACTORY", site: null }, select: { name: true } });
+  const factories = await prisma.warehouse.findMany({ where: { type: "CENTRAL", site: null, code: { not: null } }, select: { name: true } });
   if (factories.length !== 1) throw new ValidationError("Choose which factory (?warehouse=).");
   return factories[0]!.name;
 }

@@ -1,7 +1,9 @@
 import { Pill } from "../ui/Pill";
 import { BATCH_STATUS_LABELS, type BatchStatus } from "@anagroci/contract/domain/productionBatch";
 import { RCN_RECEIPT_STATUS_LABELS, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
-import { SITE_LIST } from "../../config/sites";
+import { siteSlugFor } from "../../config/sites";
+import { useSites } from "../../state/SiteContext";
+import { useTracking } from "../../state/TrackingContext";
 
 export const primaryButton =
   "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white text-[13px] font-bold shadow-sm transition-all";
@@ -40,17 +42,17 @@ export function RcnReceiptStatusPill({ status }: { status: RcnReceiptStatus }) {
   return <Pill tone={RCN_TONE[status]} label={RCN_RECEIPT_STATUS_LABELS[status]} />;
 }
 
-const siteSlugOf = (warehouse: string) =>
-  (SITE_LIST.find((s) => s.warehouseName === warehouse || s.aliases.includes(warehouse)) ?? SITE_LIST.find((s) => s.slug === "central")!).slug;
-
-/** Where a procurement receipt of `warehouse` opens, so a batch's Lots link back to their trucks. */
-export function receiptHref(warehouse: string, receiptId: string): string {
-  return `/${siteSlugOf(warehouse)}/receipts/${encodeURIComponent(receiptId)}`;
-}
-
-/** Where a BKT that brought a Lot to `warehouse` opens. */
-export function transferHref(warehouse: string, transferId: string): string {
-  return `/${siteSlugOf(warehouse)}/transfers/${encodeURIComponent(transferId)}`;
+/** Links from a batch back to procurement, resolved against the warehouses of the master. */
+export function useSiteHrefs() {
+  const sites = useSites();
+  const { masters } = useTracking();
+  const slug = (warehouse: string) => siteSlugFor(sites, masters, warehouse);
+  return {
+    /** Where a procurement receipt of `warehouse` opens, so a batch's Lots link back to their trucks. */
+    receiptHref: (warehouse: string, receiptId: string) => `/${slug(warehouse)}/receipts/${encodeURIComponent(receiptId)}`,
+    /** Where a BKT that brought a Lot to `warehouse` opens. */
+    transferHref: (warehouse: string, transferId: string) => `/${slug(warehouse)}/transfers/${encodeURIComponent(transferId)}`,
+  };
 }
 
 /** The eight phases a batch walks through (Production module doc, page 1), in order. */

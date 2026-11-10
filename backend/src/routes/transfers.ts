@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
-  listTransfers, getTransfer, createTransfer, addTransferLines, dispatchTransfer, receiveTransfer,
+  listTransfers, listTransferDestinations, getTransfer, createTransfer, addTransferLines, dispatchTransfer, receiveTransfer,
   type TransferInput, type TransferLineInput, type DispatchInput, type ReceiveInput,
 } from "../services/transfers.js";
 import { scopedSite, scopedWarehouse } from "../auth/scope.js";
@@ -22,6 +22,12 @@ export async function transferRoutes(app: FastifyInstance) {
   app.get("/api/transfers", async (req) => {
     const { warehouse } = req.query as { warehouse?: string };
     return listTransfers(await scopedSite(req, warehouse));
+  });
+
+  // Where the caller's warehouse can send a BKT. A Warehouse Incharge asks for their own; an admin names it.
+  app.get("/api/transfers/destinations", async (req) => {
+    const { from } = req.query as { from?: string };
+    return listTransferDestinations(scopedWarehouse(req, from) ?? from);
   });
 
   app.get("/api/transfers/:id", async (req, reply) => {

@@ -52,26 +52,25 @@ describe("a warehouse's site type", () => {
 });
 
 describe("where a BKT can go", () => {
-  // The shape of the real master: two typed sites, their stores, and two sites with no type.
+  // The shape of the real master: two finished sites and their stores, plus top-level rows left unfinished.
   const master = [
-    { name: "BOUAKE", kind: "REGIONAL_CENTRAL", type: "UNIT", site: null },
+    { name: "BOUAKE", kind: "REGIONAL_CENTRAL", type: "UNIT", code: "BKE", site: null },
     { name: "BKE-001", kind: null, type: null, site: "BOUAKE" },
-    { name: "YAKRO FACTORY", kind: "FACTORY", type: "CENTRAL", site: null },
+    { name: "YAKRO FACTORY", kind: "FACTORY", type: "CENTRAL", code: "YAK", site: null },
     { name: "ANAGROCI-01", kind: null, type: null, site: "YAKRO FACTORY" },
     { name: "BKE-06", kind: null, type: null, site: "YAKRO FACTORY" },
-    { name: "BKE-04", kind: "FACTORY", type: null, site: null },
+    { name: "BKE-04", kind: "FACTORY", type: "UNIT", site: null },
+    { name: "BKE-05", kind: "FACTORY", type: "CENTRAL", site: null },
   ];
 
-  it("offers the stores of Central sites, never a Unit site's stores or a site with no type", () => {
-    expect(transferDestinations(master, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06"]);
+  it("offers Central warehouses only — never their stores, a Unit site, or a site with no ID code", () => {
+    expect(transferDestinations(master, "BOUAKE")).toEqual(["YAKRO FACTORY"]);
     expect(transferDestinations(master, "YAKRO FACTORY")).toEqual([]); // Central never sends RCN back
   });
 
-  it("offers a Central site itself until it has stores, and its stores once it does", () => {
-    const added = [...master, { name: "FACTORY-2", kind: "FACTORY", type: "CENTRAL", site: null }];
-    expect(transferDestinations(added, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06", "FACTORY-2"]);
-    const withStore = [...added, { name: "F2-001", kind: null, type: null, site: "FACTORY-2" }];
-    expect(transferDestinations(withStore, "BOUAKE")).toEqual(["ANAGROCI-01", "BKE-06", "F2-001"]);
+  it("offers a second Central warehouse once it has its type and ID code", () => {
+    const added = [...master, { name: "FACTORY-2", kind: "FACTORY", type: "CENTRAL", code: "FC2", site: null }];
+    expect(transferDestinations(added, "BOUAKE")).toEqual(["FACTORY-2", "YAKRO FACTORY"]);
   });
 
   it("only ever moves RCN from Unit to Central", () => {

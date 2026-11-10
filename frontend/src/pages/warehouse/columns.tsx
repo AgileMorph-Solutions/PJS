@@ -1,6 +1,5 @@
 import type { Column } from "../../components/ui/DataTable";
 import type { ReceiptPlanInfo, ReceiptRecord } from "../../types/receipt";
-import type { SiteSlug } from "../../config/sites";
 import type { DownstreamStatus } from "../../repository/api";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { DownstreamStatusChips } from "../../components/DownstreamStatusChips";
@@ -86,12 +85,12 @@ const tailColumns: Column<ReceiptRecord>[] = [
  * Drying pages do NOT get their own columns.ts — there was nothing genuine to split there. This one
  * differs because of what's meaningful to show, not because the underlying field set differs):
  *
- * Bouaké genuinely has 3 physical stores (BKE-001/002/003) sharing the "BOUAKE" site value on
- * `r.warehouse`, so a "Store" column (from n-gate's "WH NO.") carries real information there. Yakro
- * Factory has exactly one (ANAGROCI-01) — showing the same column would be a constant, so central's
- * table doesn't get it.
+ * A site with several physical stores sharing its name on `r.warehouse` (e.g. a regional warehouse's
+ * BKE-001/002/003) gets a "Store" column (from n-gate's "WH NO."), since it carries real information
+ * there. A site with one store or none would show a constant, so it doesn't get the column. Which
+ * sites have stores comes from the Warehouses master, not from a fixed site list.
  */
-export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string, DownstreamStatus>, planInfo?: Map<string, ReceiptPlanInfo>): Column<ReceiptRecord>[] {
+export function receiptColumns(withStore: boolean, downstreamStatus: Map<string, DownstreamStatus>, planInfo?: Map<string, ReceiptPlanInfo>): Column<ReceiptRecord>[] {
   // Downstream comes right after Status — it is the reason that column exists (everything Dispatch
   // to Central / Receiving from Unit / Issue to Production used to show on their own pages).
   return [
@@ -99,7 +98,7 @@ export function receiptColumns(siteSlug: SiteSlug, downstreamStatus: Map<string,
     arrivalColumn,
     supplierColumn,
     ficheColumn,
-    vehicleColumn(siteSlug === "unit"),
+    vehicleColumn(withStore),
     ...(planInfo ? [planColumn(planInfo)] : []),
     ...tailColumns,
     downstreamColumn(downstreamStatus),

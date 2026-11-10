@@ -5,8 +5,7 @@ import { useActiveSite } from "../state/SiteContext";
 import { useMe } from "../state/AuthContext";
 import { usePendingApprovals } from "../state/PendingApprovals";
 import { Pill } from "./ui/Pill";
-import type { Role } from "../data/roles";
-import type { SiteSlug } from "../config/sites";
+import type { UserView } from "../types/user";
 
 interface Props {
   /** Mobile/tablet only — below `lg` the nav is an off-canvas drawer, closed by default. At `lg`
@@ -18,26 +17,28 @@ interface Props {
 /** A `sitePath` leaf ("Reception", ...) resolves against whichever site is currently active
  * (see state/SiteContext.tsx's useActiveSite) — one leaf, two possible hrefs, switched from a
  * control on the page itself rather than by picking a different sidebar section. */
-function resolveHref(item: NavLeaf, activeSite: SiteSlug): string {
+function resolveHref(item: NavLeaf, activeSite: string | undefined): string {
   return item.to ?? `/${activeSite}/${item.sitePath}`;
 }
 
 /** Mirrors react-router's default (non-`end`) NavLink matching, so "which section is the current
  * route in" agrees with which nav item actually lights up. */
-function isItemActive(pathname: string, item: NavLeaf, activeSite: SiteSlug): boolean {
+function isItemActive(pathname: string, item: NavLeaf, activeSite: string | undefined): boolean {
   const to = resolveHref(item, activeSite);
   if (item.end) return pathname === to;
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-/** NAV with each section's items filtered to what this role may see; sections left empty drop out. */
-function navFor(role: Role) {
+/** NAV with each section's items filtered to what this user may see; sections left empty drop out. A site-scoped
+ * leaf needs a warehouse to point at: with none in the master yet, it is left out rather than linking nowhere. */
+function navFor(me: UserView, hasSite: boolean) {
+  const visible = (i: NavLeaf) => (!i.roles || i.roles.includes(me.role)) && (!i.allow || i.allow(me)) && (!i.sitePath || hasSite);
   return NAV
-    .map((section) => ({ ...section, items: section.items.filter((i) => !i.roles || i.roles.includes(role)) }))
+    .map((section) => ({ ...section, items: section.items.filter(visible) }))
     .filter((section) => section.items.length > 0);
 }
 
-function sectionForPath(nav: ReturnType<typeof navFor>, pathname: string, activeSite: SiteSlug): string | undefined {
+function sectionForPath(nav: ReturnType<typeof navFor>, pathname: string, activeSite: string | undefined): string | undefined {
   return nav.find((section) => section.items.some((item) => isItemActive(pathname, item, activeSite)))?.label;
 }
 
@@ -48,7 +49,8 @@ export function AppNav({ open, onClose }: Props) {
   const location = useLocation();
   const activeSite = useActiveSite();
   const me = useMe();
-  const nav = useMemo(() => navFor(me.role), [me.role]);
+  const activeSlug = activeSite?.slug;
+  const nav = useMemo(() => navFor(me, Boolean(activeSlug)), [me, activeSlug]);
   const { count: pendingApprovals } = usePendingApprovals();
   const counts: Record<NonNullable<NavLeaf["count"]>, number> = { pendingApprovals: pendingApprovals ?? 0 };
   const countOf = (item: NavLeaf) => (item.count ? counts[item.count] : 0);
@@ -56,7 +58,7 @@ export function AppNav({ open, onClose }: Props) {
   // Starts on whichever section holds the current route; a section with only one item has
   // nothing to hide, so it's never collapsible in the first place (see the render below).
   const [openSections, setOpenSections] = useState<Set<string>>(() => {
-    const active = sectionForPath(nav, location.pathname, activeSite.slug);
+    const active = sectionForPath(nav, location.pathname, activeSlug);
     return new Set(active ? [active] : []);
   });
 
@@ -64,10 +66,10 @@ export function AppNav({ open, onClose }: Props) {
   // opened by hand — this only ever adds to the set, a manual header click is the only way to
   // remove from it.
   useEffect(() => {
-    const active = sectionForPath(nav, location.pathname, activeSite.slug);
+    const active = sectionForPath(nav, location.pathname, activeSlug);
     if (!active) return;
     setOpenSections((prev) => (prev.has(active) ? prev : new Set(prev).add(active)));
-  }, [nav, location.pathname, activeSite.slug]);
+  }, [nav, location.pathname, activeSlug]);
 
   function toggleSection(label: string) {
     setOpenSections((prev) => {
@@ -155,7 +157,7 @@ export function AppNav({ open, onClose }: Props) {
             {isOpen && items.map((item) => (
               <NavLink
                 key={item.label}
-                to={resolveHref(item, activeSite.slug)}
+                to={resolveHref(item, activeSlug)}
                 end={item.end}
                 onClick={onClose}
                 className={({ isActive }) =>
