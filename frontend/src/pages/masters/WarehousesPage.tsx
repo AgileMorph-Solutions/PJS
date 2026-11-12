@@ -8,7 +8,6 @@ import { useMe } from "../../state/AuthContext";
 import { api } from "../../repository/api";
 import { WAREHOUSE_TYPES } from "../../data/warehouseTypes";
 import { useSites } from "../../state/SiteContext";
-import { WAREHOUSE_KINDS } from "../../data/warehouseKinds";
 import type { WarehouseMaster } from "../../types/receipt";
 
 /** Admin-only: moves a warehouse to the other category (Unit/Central). Users can only be assigned to a warehouse with a
@@ -103,7 +102,6 @@ export function WarehousesPage() {
   const sites = useSites();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
-  const [kind, setKind] = useState("");
 
   const rowOf = (n: string) => masters.warehouses.find((w) => w.name === n);
   /** Trucks of a warehouse: filed under its name, an alias, or an old store row under it. */
@@ -121,8 +119,8 @@ export function WarehousesPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !category || !kind) return;
-    addWarehouse(name.trim().toUpperCase(), { kind, type: category });
+    if (!name.trim() || !category) return;
+    addWarehouse(name.trim().toUpperCase(), { type: category });
     setName("");
   }
 
@@ -146,13 +144,6 @@ export function WarehousesPage() {
               <select id="warehouse-category" required value={category} onChange={(e) => setCategory(e.target.value)} className={fieldCls}>
                 <option value="" disabled>Select a category…</option>
                 {WAREHOUSE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div className="flex-1 min-w-45">
-              <label htmlFor="warehouse-kind" className={labelCls}>Kind</label>
-              <select id="warehouse-kind" required value={kind} onChange={(e) => setKind(e.target.value)} className={fieldCls}>
-                <option value="" disabled>Select a kind…</option>
-                {WAREHOUSE_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
               </select>
             </div>
             <button
@@ -195,7 +186,6 @@ export function WarehousesPage() {
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="material-symbols-outlined text-[18px] text-brand-700">warehouse</span>
                       <span className="font-bold text-warmstone-900">{site.warehouseName}</span>
-                      {row?.kind && <Pill tone="system" label={WAREHOUSE_KINDS.find((k) => k.value === row.kind)?.label ?? row.kind} />}
                       {row && isAdmin && <TypeSelect warehouse={row} />}
                       {row && <CodeInput key={`${row.name}:${row.code ?? ""}`} warehouse={row} editable={isAdmin} />}
                     </span>
