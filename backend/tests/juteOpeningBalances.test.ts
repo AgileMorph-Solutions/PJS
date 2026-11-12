@@ -89,19 +89,25 @@ describe("the opening balance", () => {
 });
 
 describe("changing it", () => {
-  it("is refused to the Warehouse Incharge once it is set, leaving it as it was", async () => {
+  it("is allowed to the Warehouse Incharge for their own warehouse: the same row changes, every balance follows, and it records who", async () => {
     const res = await put("wi", { bags: "9000", date: "2026-09-01" });
-    expect(res.statusCode).toBe(403);
-    expect(res.json().error).toMatch(/Only an Admin/);
-    expect(await balances(A)).toEqual(["5000", "4700", "4500"]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ bags: 9000, createdBy: "wi", updatedBy: "wi" });
+    expect(await balances(A)).toEqual(["9000", "8700", "8500"]);
+    expect((await get("wi")).json()).toHaveLength(1);
   });
 
-  it("is allowed to an Admin: the same row changes, every balance follows, and it records who", async () => {
+  it("is allowed to an Admin too, and records who changed it last", async () => {
     const res = await put("admin", { warehouse: A, bags: "6000", date: "2026-09-02", remarks: "Recount" });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ bags: 6000, date: "2026-09-02", remarks: "Recount", createdBy: "wi", updatedBy: "admin" });
     expect(await balances(A)).toEqual(["6000", "5700", "5500"]);
     expect((await get("wi")).json()).toHaveLength(1);
+  });
+
+  it("is still refused to another warehouse's Incharge", async () => {
+    expect((await put("other", { warehouse: A, bags: "1", date: "2026-09-01" })).statusCode).toBe(403);
+    expect(await balances(A)).toEqual(["6000", "5700", "5500"]);
   });
 
   it("holds one per warehouse in the database itself, not only in the service", async () => {
@@ -157,7 +163,7 @@ describe("the Excel workbook", () => {
     expect(sheet).toMatchObject({ changed: 0, errorCount: 0 });
   });
 
-  it("won't let an upload change it, which would get round the Admin-only rule", async () => {
+  it("won't let an upload change it, which would skip its validation and its record of who changed it", async () => {
     const wb = await exportWorkbook();
     const ws = wb.getWorksheet("Jute Bags")!;
     const heads = (ws.getRow(1).values as unknown[]).map(String);

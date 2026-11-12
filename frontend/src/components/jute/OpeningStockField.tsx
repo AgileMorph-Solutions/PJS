@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { openingBalanceProblems } from "@anagroci/contract/domain/juteOpeningBalance";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import { api, type OpeningBalanceRow } from "../../repository/api";
-import { useCanEditDirectly, useHasRole } from "../../state/AuthContext";
+import { useCanEditDirectly } from "../../state/AuthContext";
 import { useOpeningBalances } from "../../state/TrackingContext";
 import { DateInput } from "../ui/DateInput";
 
@@ -68,7 +68,6 @@ function AllWarehouses({ rows, warehouses, onSelectWarehouse }: { rows: OpeningB
 
 function OneWarehouse({ warehouse, current, onSaved }: { warehouse: string; current?: OpeningBalanceRow; onSaved: () => void }) {
   const canEdit = useCanEditDirectly();
-  const isAdmin = useHasRole("admin");
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState({ bags: "", date: todayIso(), remarks: "" });
   const [busy, setBusy] = useState(false);
@@ -114,8 +113,8 @@ function OneWarehouse({ warehouse, current, onSaved }: { warehouse: string; curr
             "not set yet, so the balance starts from 0."
           )}
         </p>
-        {current && isAdmin && !editing && (
-          <button type="button" onClick={() => setEditing(true)} className="text-[12.5px] font-semibold text-brand-700 hover:text-brand-800 whitespace-nowrap">
+        {current && canEdit && !editing && (
+          <button type="button" onClick={() => setEditing(true)} className="text-[12px] font-semibold text-brand-700 hover:text-brand-800 whitespace-nowrap">
             Change
           </button>
         )}
@@ -136,9 +135,9 @@ function OneWarehouse({ warehouse, current, onSaved }: { warehouse: string; curr
               <input value={v.remarks} onChange={(e) => setV({ ...v, remarks: e.target.value })} className={inputCls} />
             </label>
           </div>
-          <p className="text-[12.5px] text-warmstone-500">
+          <p className="text-[12px] text-warmstone-500">
             Saved for {warehouse} only. Its running balance starts from this number, including the rows already entered.
-            {!isAdmin && " Check the count first: once saved, only an Admin can change it."}
+            {current && " Changing it moves every balance after it."}
           </p>
           {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
           <div className="flex items-center gap-3">
