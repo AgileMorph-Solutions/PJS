@@ -7,6 +7,7 @@ import { useTracking } from "../../state/TrackingContext";
 import { useMe } from "../../state/AuthContext";
 import { api } from "../../repository/api";
 import { WAREHOUSE_TYPES } from "../../data/warehouseTypes";
+import { WAREHOUSE_KINDS } from "../../data/warehouseKinds";
 import { useSites } from "../../state/SiteContext";
 import type { WarehouseMaster } from "../../types/receipt";
 
@@ -119,8 +120,11 @@ export function WarehousesPage() {
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim() || !category) return;
-    addWarehouse(name.trim().toUpperCase(), { type: category });
+    // One dropdown, two groups: a category (`type:UNIT`) makes the warehouse ready for its section once it has an ID
+    // code; a kind under "New site" (`kind:VILLAGE`) adds it unclassified, to be given a category below.
+    const [field, value] = category.split(":");
+    if (!name.trim() || !value) return;
+    addWarehouse(name.trim().toUpperCase(), field === "kind" ? { kind: value } : { type: value });
     setName("");
   }
 
@@ -140,10 +144,15 @@ export function WarehousesPage() {
               <input id="warehouse-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BONDOUKOU" className={fieldCls} />
             </div>
             <div className="flex-1 min-w-45">
-              <label htmlFor="warehouse-category" className={labelCls}>Category</label>
+              <label htmlFor="warehouse-category" className={labelCls}>Type</label>
               <select id="warehouse-category" required value={category} onChange={(e) => setCategory(e.target.value)} className={fieldCls}>
-                <option value="" disabled>Select a category…</option>
-                {WAREHOUSE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                <option value="" disabled>Select a type…</option>
+                <optgroup label="Category">
+                  {WAREHOUSE_TYPES.map((t) => <option key={t.value} value={`type:${t.value}`}>{t.label}</option>)}
+                </optgroup>
+                <optgroup label="New site">
+                  {WAREHOUSE_KINDS.map((k) => <option key={k.value} value={`kind:${k.value}`}>{k.label}</option>)}
+                </optgroup>
               </select>
             </div>
             <button
