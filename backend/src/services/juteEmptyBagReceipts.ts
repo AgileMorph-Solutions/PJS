@@ -8,6 +8,7 @@
  */
 import { JUTE_TRANSFER_IN_ACTIVITY, emptyBagReceiptProblems, type EmptyBagReceiptInput } from "@anagroci/contract/domain/juteEmptyBagReceipt";
 import { parseBags } from "@anagroci/contract/domain/juteVendorReceipt";
+import { isUsableSite } from "@anagroci/contract/domain/siteType";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 import { categoriseActivity } from "./imports.js";
@@ -41,6 +42,18 @@ export async function listEmptyBagReceipts(site?: string[]) {
     orderBy: { movement: { seq: "desc" } },
   });
   return rows.map(toView);
+}
+
+/**
+ * The warehouses empty bags can be received from: every warehouse of a ready category (a type and an ID code), by name.
+ * This is the one place a Warehouse Incharge needs ANOTHER warehouse's name — their /api/masters holds only their own
+ * (services/masters.ts) — so it has its own read, as a BKT's destinations do. Names only; nothing else of another
+ * warehouse is exposed. The categories themselves (BOUAKE, YAKRO FACTORY) only group warehouses and aren't offered.
+ */
+export async function listEmptyBagSources(): Promise<string[]> {
+  const rows = await prisma.warehouse.findMany({ select: { name: true, site: true, type: true, code: true } });
+  const ready = new Set(rows.filter(isUsableSite).map((r) => r.name));
+  return rows.filter((r) => r.site && ready.has(r.site)).map((r) => r.name).sort((a, b) => a.localeCompare(b));
 }
 
 export async function createEmptyBagReceipt(input: EmptyBagReceiptInput, warehouse: string, actorId: string) {

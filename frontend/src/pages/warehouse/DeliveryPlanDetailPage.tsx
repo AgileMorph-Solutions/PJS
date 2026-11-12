@@ -61,7 +61,8 @@ export function DeliveryPlanDetailPage() {
   async function recordArrival() {
     setActionError(null);
     try {
-      const rid = await createReceipt(site.warehouseName, { arrivalDate: todayIso(), deliveryPlanId: id });
+      // A plan for one store opens its truck at that store — Reception is per store.
+      const rid = await createReceipt(plan?.destinationStore ?? site.warehouseName, { arrivalDate: todayIso(), deliveryPlanId: id });
       navigate(`/${site.slug}/receipts/${rid}`);
     } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); }
   }

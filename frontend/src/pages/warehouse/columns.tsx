@@ -39,7 +39,7 @@ const ficheColumn: Column<ReceiptRecord> = {
   render: (r) => <Stack mono main={fiche(r)} sub={[verifyField(r, "FICHE CODE"), verifyField(r, "REF.")].filter(Boolean).join(" · ")} />,
 };
 const vehicleColumn = (withStore: boolean): Column<ReceiptRecord> => ({
-  label: withStore ? "Vehicle / Store" : "Vehicle", 
+  label: withStore ? "Vehicle / WH NO." : "Vehicle", 
   nowrap: true,
   render: (r) => <Stack main={r.vehicleNo} sub={withStore ? storeCode(r) : undefined} />,
 });

@@ -94,6 +94,45 @@ describe("a user assigned to a store", () => {
   });
 });
 
+describe("Reception is per store: a truck and its delivery plan", () => {
+  const plan = { supplierName: "SS Supplier", expectedArrivalDate: "2031-07-01", expectedDeliveryEnd: "2031-07-30" };
+
+  it("opening a truck from a store's plan files it at that store", async () => {
+    const p = (await as("admin", "POST", "/api/delivery-plans", { ...plan, destinationWarehouse: SITE, destinationStore: A })).json();
+    const res = await as("admin", "POST", "/api/receipts", { deliveryPlanId: p.id, arrivalDate: "2031-07-02" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ warehouse: A, deliveryPlanId: p.id });
+  });
+
+  it("refuses a plan for one store on a truck at the sibling store — opening, batch entry and linking alike", async () => {
+    const p = (await as("admin", "POST", "/api/delivery-plans", { ...plan, destinationWarehouse: SITE, destinationStore: A })).json();
+    expect((await as("admin", "POST", "/api/receipts", { warehouse: B, deliveryPlanId: p.id, arrivalDate: "2031-07-02" })).statusCode).toBe(422);
+    const batch = await as("admin", "POST", "/api/receipts/batch", { warehouse: B, rows: [{ "n-gate": { "VEHICLE NO.": "SS-1" } }], deliveryPlanIds: [p.id] });
+    expect(batch.statusCode).toBe(422);
+    expect(batch.json().error).toContain(`is for ${A}, not ${B}`);
+    expect((await as("admin", "POST", `/api/receipts/${ids[B]}/delivery-plan`, { deliveryPlanId: p.id })).statusCode).toBe(422);
+  });
+
+  it("still lets a plan with no store take a truck at any store of its site", async () => {
+    const p = (await as("admin", "POST", "/api/delivery-plans", { ...plan, destinationWarehouse: SITE })).json();
+    expect((await as("admin", "POST", "/api/receipts", { warehouse: B, deliveryPlanId: p.id, arrivalDate: "2031-07-02" })).statusCode).toBe(201);
+  });
+});
+
+describe("empty jute bags received from another warehouse", () => {
+  it("offers a Warehouse Incharge every warehouse to receive from — though their masters list holds only their own", async () => {
+    const res = await as("wiA", "GET", "/api/jute-empty-bag-receipts/sources");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(expect.arrayContaining([A, B]));
+    expect(res.json()).not.toContain(SITE); // a category only groups warehouses
+  });
+
+  it("keeps the list from the roles that never record jute", async () => {
+    await mkUser("bmA", "branch_manager", A);
+    expect((await as("bmA", "GET", "/api/jute-empty-bag-receipts/sources")).statusCode).toBe(403);
+  });
+});
+
 describe("assigning users", () => {
   const body = { password: PW, role: "warehouse_incharge" };
 

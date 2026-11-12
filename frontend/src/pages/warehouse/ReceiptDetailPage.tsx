@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { useParams, Link, Navigate } from "react-router-dom";
 import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans, useDryingBatches, useFieldChanges } from "../../state/TrackingContext";
-import { useSite } from "../../state/SiteContext";
+import { NO_STORE, useSite } from "../../state/SiteContext";
 import { useCanEditDirectly, useMe } from "../../state/AuthContext";
 import { useSubmissions } from "../../state/userManagement";
 import { SubmissionCard } from "../../components/SubmissionCard";
@@ -9,7 +9,7 @@ import { SubmissionReview } from "../../components/SubmissionReview";
 import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
 import { decisionBranchesFor, stageForSite } from "../../domain/decisions";
 import { productionReadinessGaps, productionReadinessNotice } from "@anagroci/contract/domain/productionBatch";
-import { siteTypeOf } from "@anagroci/contract/domain/siteType";
+import { receiptStore, siteTypeOf } from "@anagroci/contract/domain/siteType";
 import { stages, rejectStage, RECEPTION_STEPS } from "../../data/stages";
 import { computeDerivedFields } from "../../domain/receiptMath";
 import { StageForm } from "../../components/StageForm";
@@ -83,7 +83,7 @@ export function ReceiptDetailPage() {
   const dryTypes = useMemo(() => [...new Set(["SUN DRYING", ...siteDryingBatches.map((d) => (d.dryType ?? "").trim()).filter(Boolean)])], [siteDryingBatches]);
   // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself: the store codes the master
   // also holds are left out, and the bins of this truck's own store come first.
-  const store = receipt?.stageData["n-gate"]?.["WH NO."]?.trim();
+  const store = receipt ? receiptStore(masters.warehouses, masters.aliases, receipt) ?? undefined : undefined;
   const storeNames = useMemo(() => masters.warehouses.filter((w) => w.site).map((w) => w.name), [masters.warehouses]);
   const binOptions = useMemo(() => {
     const stores = new Set(storeNames);
@@ -145,7 +145,9 @@ export function ReceiptDetailPage() {
   // The receipt's own site (r.warehouse) may not match the section it's being viewed from — a
   // linked/cross-site view is by design (see this page's own header comment), so the breadcrumb
   // names whichever section this URL actually belongs to, not a guess from the record itself.
-  const backHref = `/${site.slug}/receipts`;
+  // Back to the Reception of this truck's own store (or the site's no-store trucks), not whichever store is the default.
+  const backStore = store ?? (site.stores.length ? NO_STORE : "");
+  const backHref = `/${site.slug}/receipts${backStore ? `?store=${encodeURIComponent(backStore)}` : ""}`;
 
 
   return (

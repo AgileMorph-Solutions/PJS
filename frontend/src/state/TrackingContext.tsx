@@ -412,6 +412,13 @@ export function useEmptyBagReceipts(warehouse?: string) {
   return { rows, loading, refetch };
 }
 
+/** The warehouses empty bags can be received from (every warehouse, not just the viewer's own). */
+export function useEmptyBagSources() {
+  const [sources, setSources] = useState<string[]>([]);
+  useEffect(() => { void api.listEmptyBagSources().then(setSources).catch(() => {}); }, []);
+  return sources;
+}
+
 /** WarehouseDischarge — the raw rows DISCHARGEMENT/Warehouse Receiving actually store, shown on
  * Lots & Bins alongside the page's existing derived-from-Receipt.stageData view. */
 export function useWarehouseDischarges(warehouse?: string) {

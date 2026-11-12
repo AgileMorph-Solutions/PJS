@@ -150,12 +150,12 @@ export function TransfersPage() {
           <form onSubmit={handleCreate} className="space-y-4 pt-3">
             <div className="grid sm:grid-cols-3 gap-4">
               <Field id="tr-date" label="Date"><DateInput id="tr-date" required value={date} onChange={setDate} className={inputClass} /></Field>
-              <Field id="tr-to" label="To warehouse" hint={destinations.length ? undefined : "No warehouse is available. In Masters, a site needs the Central type."}>
+              <Field id="tr-to" label="To warehouse" hint={destinations.length ? undefined : "No warehouse is available. In Masters, a category needs the Central type."}>
                 <select id="tr-to" required value={to} onChange={(e) => setTo(e.target.value)} className={inputClass}>
                   <option value="" disabled>Select…</option>
                   {/* The warehouses of each Central site from Masters › Warehouses; a site with no store yet is offered itself. */}
                   {destinations.map((d) => (
-                    <optgroup key={d.site} label={`${d.site} · ${WAREHOUSE_TYPE_LABEL.CENTRAL}`}>
+                    <optgroup key={d.site} label={d.site}>
                       {(d.stores.length ? d.stores : [d.site]).map((name) => <option key={name} value={name}>{name}</option>)}
                     </optgroup>
                   ))}

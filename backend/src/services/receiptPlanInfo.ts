@@ -89,12 +89,19 @@ export async function approveException(receiptId: string, actorId: string, note?
  * Only a truck with no plan: moving one between plans would erase how it first arrived.
  */
 /**
- * Why a plan can't take a truck, or null when it can: it has to be for the truck's own site, and for the
- * same supplier. Both codes must be known to compare; a blank on either side is "not recorded", not a
- * mismatch. One rule, shared by linking a truck afterwards and by the batch grid, so they can't disagree.
+ * Why a plan can't take a truck, or null when it can: it has to be for the truck's own site, for the truck's own store
+ * when both name one (Reception is per store — a plan for BKE-002 is not BKE-001's), and for the same supplier. A
+ * blank on either side is "not recorded", not a mismatch. One rule, shared by opening a truck from a plan, linking one
+ * afterwards and the batch grid, so they can't disagree.
  */
-export function planFitProblem(plan: { id: string; destinationWarehouse: string; supplierCode: string | null }, truck: { site: string; lbaCode: string }): string | null {
+export function planFitProblem(
+  plan: { id: string; destinationWarehouse: string; destinationStore?: string | null; supplierCode: string | null },
+  truck: { site: string; store?: string | null; lbaCode: string }
+): string | null {
   if (plan.destinationWarehouse !== truck.site) return `Delivery plan ${plan.id} is for ${plan.destinationWarehouse}, not ${truck.site}.`;
+  if (plan.destinationStore && truck.store && plan.destinationStore !== truck.store) {
+    return `Delivery plan ${plan.id} is for ${plan.destinationStore}, not ${truck.store}.`;
+  }
   if (plan.supplierCode && truck.lbaCode.trim() && plan.supplierCode.trim() !== truck.lbaCode.trim()) {
     return `Delivery plan ${plan.id} is for supplier ${plan.supplierCode}, not ${truck.lbaCode.trim()}.`;
   }
@@ -108,7 +115,7 @@ export async function linkReceiptToPlan(receiptId: string, planId: string): Prom
   const plan = await prisma.deliveryPlan.findUnique({ where: { id: planId } });
   if (!plan) throw new ValidationError(`Delivery plan ${planId} doesn't exist.`);
   const site = (await siteOf(prisma, receipt.warehouse)) ?? receipt.warehouse;
-  const problem = planFitProblem(plan, { site, lbaCode: receipt.lbaCode });
+  const problem = planFitProblem(plan, { site, store: receipt.warehouse !== site ? receipt.warehouse : null, lbaCode: receipt.lbaCode });
   if (problem) throw new ValidationError(problem);
   await prisma.receipt.update({ where: { id: receiptId }, data: { deliveryPlanId: plan.id, deliveryPlanLinkedAt: new Date() } });
   return (await getReceiptPlanInfo(receiptId))!;
