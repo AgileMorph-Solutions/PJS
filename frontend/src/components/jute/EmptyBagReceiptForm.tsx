@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { emptyBagReceiptProblems } from "@anagroci/contract/domain/juteEmptyBagReceipt";
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { api } from "../../repository/api";
@@ -8,8 +8,10 @@ import { field, inputCls, receivingWarehouseField } from "./receiptFormParts";
 interface Props {
   /** Where the bags are received: their warehouse stock goes up here. Blank until one is chosen. */
   warehouse: string;
-  /** Every warehouse in the master. */
+  /** The warehouses this person may receive at (the receiving-warehouse choices). */
   warehouses: string[];
+  /** Every warehouse the bags can come from (useEmptyBagSources): wider than `warehouses` for someone assigned to one. */
+  sources: string[];
   /** The person is assigned to `warehouse`, so it isn't theirs to change. */
   fixed: boolean;
   onWarehouseChange: (warehouse: string) => void;
@@ -21,8 +23,8 @@ const othersThan = (warehouses: string[], warehouse: string) => warehouses.filte
 const defaultFrom = (others: string[]) => (others.length === 1 ? others[0]! : "");
 
 /** Records empty bags arriving from another warehouse. The rules shown are the ones the server applies (emptyBagReceiptProblems). */
-export function EmptyBagReceiptForm({ warehouse, warehouses, fixed, onWarehouseChange, onSaved }: Props) {
-  const fromOptions = othersThan(warehouses, warehouse);
+export function EmptyBagReceiptForm({ warehouse, warehouses, sources, fixed, onWarehouseChange, onSaved }: Props) {
+  const fromOptions = othersThan(sources, warehouse);
   const blank = () => ({
     fromWarehouse: defaultFrom(fromOptions),
     date: todayIso(),
@@ -40,13 +42,21 @@ export function EmptyBagReceiptForm({ warehouse, warehouses, fixed, onWarehouseC
     setNotice(null);
   };
 
+  // The sources load after the first render: once they're here, a "from" that isn't one of them is re-picked (the only
+  // other warehouse when there is just one), so the form never sits on an empty choice it could have filled.
+  const fromKey = fromOptions.join("|");
+  useEffect(() => {
+    setV((s) => (fromOptions.includes(s.fromWarehouse) ? s : { ...s, fromWarehouse: defaultFrom(fromOptions) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fromKey is fromOptions' content
+  }, [fromKey]);
+
   const problems = emptyBagReceiptProblems(v, warehouse);
 
   function chooseWarehouse(next: string) {
     onWarehouseChange(next);
     setNotice(null);
     // The rest of the entry stays; only a source that has just become the destination has to change.
-    const others = othersThan(warehouses, next);
+    const others = othersThan(sources, next);
     setV((s) => (others.includes(s.fromWarehouse) ? s : { ...s, fromWarehouse: defaultFrom(others) }));
   }
 

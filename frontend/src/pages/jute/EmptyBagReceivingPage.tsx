@@ -9,7 +9,7 @@ import { useDateRangeFilter } from "../../components/ui/useDateRangeFilter";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import type { EmptyBagReceiptRow } from "../../repository/api";
 import { useCanEditDirectly } from "../../state/AuthContext";
-import { useEmptyBagReceipts, useTracking } from "../../state/TrackingContext";
+import { useEmptyBagReceipts, useEmptyBagSources, useTracking } from "../../state/TrackingContext";
 import { useWarehouseChoices } from "../../state/useWarehouseChoices";
 
 const columns: Column<EmptyBagReceiptRow>[] = [
@@ -27,6 +27,8 @@ export function EmptyBagReceivingPage() {
   const canEdit = useCanEditDirectly();
   const { refresh } = useTracking();
   const { own, all } = useWarehouseChoices();
+  // Where bags can come from is every warehouse — a Warehouse Incharge's own list (`all`) holds only theirs.
+  const sources = useEmptyBagSources();
   // The list follows the choice, so what was just saved is on screen; with none chosen it shows every warehouse.
   const [picked, setPicked] = useState("");
   const receiving = own ?? picked;
@@ -41,6 +43,7 @@ export function EmptyBagReceivingPage() {
           <EmptyBagReceiptForm
             warehouse={receiving}
             warehouses={all}
+            sources={sources}
             fixed={own !== null}
             onWarehouseChange={setPicked}
             // The new stock row belongs to the shared ledger list too, so the Warehouse Stock tab shows it straight away.

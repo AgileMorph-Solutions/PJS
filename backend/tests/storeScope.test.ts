@@ -119,6 +119,20 @@ describe("Reception is per store: a truck and its delivery plan", () => {
   });
 });
 
+describe("empty jute bags received from another warehouse", () => {
+  it("offers a Warehouse Incharge every warehouse to receive from — though their masters list holds only their own", async () => {
+    const res = await as("wiA", "GET", "/api/jute-empty-bag-receipts/sources");
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(expect.arrayContaining([A, B]));
+    expect(res.json()).not.toContain(SITE); // a category only groups warehouses
+  });
+
+  it("keeps the list from the roles that never record jute", async () => {
+    await mkUser("bmA", "branch_manager", A);
+    expect((await as("bmA", "GET", "/api/jute-empty-bag-receipts/sources")).statusCode).toBe(403);
+  });
+});
+
 describe("assigning users", () => {
   const body = { password: PW, role: "warehouse_incharge" };
 

@@ -323,6 +323,8 @@ export const api = {
   listVendorReceipts: (warehouse?: string) => request<VendorReceiptRow[]>(withWarehouse("/jute-vendor-receipts", warehouse)),
   createVendorReceipt: (body: Record<string, unknown>) => request<VendorReceiptRow>("/jute-vendor-receipts", { method: "POST", body: JSON.stringify(body) }),
   listEmptyBagReceipts: (warehouse?: string) => request<EmptyBagReceiptRow[]>(withWarehouse("/jute-empty-bag-receipts", warehouse)),
+  /** Every warehouse empty bags can come from — including ones outside the viewer's own masters list. */
+  listEmptyBagSources: () => request<string[]>("/jute-empty-bag-receipts/sources"),
   createEmptyBagReceipt: (body: Record<string, unknown>) => request<EmptyBagReceiptRow>("/jute-empty-bag-receipts", { method: "POST", body: JSON.stringify(body) }),
   /** WarehouseDischarge — the raw rows behind both DISCHARGEMENT and Warehouse Receiving, shown on
    * Lots & Bins alongside the derived Receipt.stageData view that page already had. */
