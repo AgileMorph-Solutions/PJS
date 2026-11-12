@@ -1,4 +1,4 @@
-/** Creating a Bin from Masters: needs a store, a clean unique code, and says why when it refuses. */
+/** Creating a Bin from Masters: needs a warehouse, a clean unique code, and says why when it refuses. */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
@@ -29,7 +29,13 @@ afterAll(async () => { await cleanup(); await prisma.$disconnect(); await app.cl
 const post = (payload: unknown) => app.inject({ method: "POST", url: "/api/masters/bins", payload: payload as object, headers: { cookie, "content-type": "application/json" } });
 
 describe("creating a Bin", () => {
-  it("stores it upper-cased in its store, stamped with when it was made, and the masters list says which store it is in", async () => {
+  it("stores it upper-cased in its warehouse, stamped with when it was made, and the masters list says where it is", async () => {
+    const res = await post({ code: " binc-000 ", warehouseName: SITE });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ code: "BINC-000", warehouseName: SITE, source: "entered" });
+  });
+
+  it("still takes an old store row as a Bin's home", async () => {
     const res = await post({ code: " binc-001 ", warehouseName: STORE });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ code: "BINC-001", warehouseName: STORE, source: "entered" });
@@ -38,12 +44,13 @@ describe("creating a Bin", () => {
     expect(info).toContainEqual({ code: "BINC-001", store: STORE });
   });
 
-  it("refuses a duplicate instead of merging it, a missing or unknown store, a store's own code, and a code with spaces or slashes", async () => {
+  it("refuses a duplicate instead of merging it, a missing or unknown warehouse, a warehouse's own code, and a code with spaces or slashes", async () => {
     const cases: [object, RegExp][] = [
       [{ code: "BINC-001", warehouseName: STORE }, /already exists/],
-      [{ code: "BINC-002" }, /Choose the store/],
-      [{ code: "BINC-002", warehouseName: "NOWHERE" }, /isn't a store/],
-      [{ code: STORE, warehouseName: STORE }, /is a store/],
+      [{ code: "BINC-002" }, /Choose the warehouse/],
+      [{ code: "BINC-002", warehouseName: "NOWHERE" }, /isn't a warehouse/],
+      [{ code: STORE, warehouseName: STORE }, /is a warehouse, not a Bin/],
+      [{ code: SITE, warehouseName: SITE }, /is a warehouse, not a Bin/],
       [{ code: "BINC 3", warehouseName: STORE }, /can only use letters, digits/],
       [{ code: "BINC/4", warehouseName: STORE }, /can only use letters, digits/],
       [{ code: "", warehouseName: STORE }, /needs a code/],
@@ -53,6 +60,6 @@ describe("creating a Bin", () => {
       expect(res.statusCode, JSON.stringify(body)).toBe(422);
       expect(res.json().error).toMatch(message);
     }
-    expect(await prisma.bin.count({ where: { code: { startsWith: "BINC" } } })).toBe(1);
+    expect(await prisma.bin.count({ where: { code: { startsWith: "BINC" } } })).toBe(2);
   });
 });

@@ -95,9 +95,11 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
         <datalist id="dp-origins">{masters.origins.map((o) => <option key={o} value={o} />)}</datalist>
         {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
       </>)}
-      {field("dp-store", "Destination warehouse", (
+      {/* Only where old store rows still exist under the warehouse (the workbook's WH NO.); otherwise the plan is simply
+          for the warehouse itself and there is nothing to pick. */}
+      {stores.length > 0 && field("dp-store", "Store (WH NO.)", (
         <select id="dp-store" value={form.store} onChange={(e) => set("store", e.target.value)} className={inputClass}>
-          <option value="">Any warehouse in {warehouseName}</option>
+          <option value="">Anywhere in {warehouseName}</option>
           {stores.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       ))}

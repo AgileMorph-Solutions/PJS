@@ -92,15 +92,16 @@ export async function addSupplier(code: string, name: string) {
  * A non-admin adds stores and Bins only at their own warehouse; a new SITE is an admin's to create (it becomes a
  * section of the app and something users can be assigned to). `own` undefined = admin.
  */
-export function assertCanAddWarehouse(own: string[] | undefined, opts: { kind?: string; site?: string }) {
-  if (!own) return;
-  if (opts.kind || !opts.site) throw new ForbiddenError("Only an admin can add a new warehouse site.");
-  if (!own.includes(opts.site)) throw new ForbiddenError("You can only add stores to your own warehouse.");
+/** A warehouse (BOUAKE) is a section of the app and what users are assigned to, so adding one is an admin's call. */
+export function assertCanAddWarehouse(own: string[] | undefined, _opts: { kind?: string; site?: string }) {
+  if (own) throw new ForbiddenError("Only an admin can add a warehouse.");
 }
 
 export async function addWarehouse(name: string, opts: { kind?: WarehouseKind; site?: string; type?: WarehouseType } = {}) {
   const { kind, site, type } = opts;
-  if (kind && site) throw new ValidationError("A warehouse is either a site (kind) or a store under one (site), not both.");
+  // Stores under a warehouse aren't a concept the app offers: a warehouse is one top-level row with its category
+  // (Unit/Central, `type`). Old store rows already in a database are kept, never created anew.
+  if (site) throw new ValidationError("Stores aren't used: add a warehouse with its category (Unit or Central) instead.");
   if (kind && !VALID_KINDS.has(kind)) throw new ValidationError(`Unknown warehouse kind "${kind}".`);
   assertTypeFits(type, site);
   return prisma.warehouse.upsert({
@@ -170,14 +171,15 @@ export async function createBin(input: { code?: string; warehouseName?: string }
   const code = (input.code ?? "").trim().toUpperCase();
   if (!code) throw new ValidationError("A Bin needs a code.");
   if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(code)) throw new ValidationError(`"${code}" can only use letters, digits and - _ . (no spaces, slashes or commas).`);
+  // A Bin is in a warehouse (BOUAKE): any row of the master, so a Bin of an old store row still has a valid home.
   const store = (input.warehouseName ?? "").trim();
-  if (!store) throw new ValidationError("Choose the store this Bin is in.");
-  if (!(await prisma.warehouse.findFirst({ where: { name: store, site: { not: null } }, select: { name: true } }))) {
-    throw new ValidationError(`"${store}" isn't a store. Choose one of the stores of a warehouse.`);
+  if (!store) throw new ValidationError("Choose the warehouse this Bin is in.");
+  if (!(await prisma.warehouse.findUnique({ where: { name: store }, select: { name: true } }))) {
+    throw new ValidationError(`"${store}" isn't a warehouse in Masters › Warehouses.`);
   }
-  if (own && !own.includes(store)) throw new ForbiddenError("You can only add Bins to your own warehouse's stores.");
-  if (await prisma.warehouse.findFirst({ where: { name: code, site: { not: null } }, select: { name: true } })) {
-    throw new ValidationError(`${code} is a store (a warehouse code), not a Bin. Use a Bin code inside it, e.g. ${code}-BIN-012.`);
+  if (own && !own.includes(store)) throw new ForbiddenError("You can only add Bins to your own warehouse.");
+  if (await prisma.warehouse.findUnique({ where: { name: code }, select: { name: true } })) {
+    throw new ValidationError(`${code} is a warehouse, not a Bin. Use a Bin code inside it, e.g. ${code}-BIN-012.`);
   }
   if (await prisma.bin.findUnique({ where: { code }, select: { code: true } })) throw new ValidationError(`Bin ${code} already exists.`);
   return prisma.bin.create({ data: { code, warehouseName: store, source: "entered", createdAt: new Date() } });

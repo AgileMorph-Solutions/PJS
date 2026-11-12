@@ -47,24 +47,3 @@ export function siteOf<W extends WarehouseMaster>(warehouses: W[], aliases: Ware
 export function siteTypeOf(warehouses: WarehouseMaster[], aliases: WarehouseAliasMaster[] | undefined, name: string): string | null {
   return siteOf(warehouses, aliases, name)?.type ?? null;
 }
-
-/**
- * The store a truck is at — Reception works one store at a time, the site above it is only a grouping. A receipt filed
- * at a store (what every store-bound user's receipt is) is at that store. One filed at the site itself (imported, or
- * from before stores were assignable) is at the store its gate recorded as "WH NO." — when that names a store of the
- * same site. Anything else is at no store: null, so Reception can show it as such rather than hide it. Undefined
- * aliases are fine: a receipt only ever names a master row or an alias of one.
- */
-export function receiptStore(
-  warehouses: WarehouseMaster[],
-  aliases: WarehouseAliasMaster[] | undefined,
-  receipt: { warehouse: string; stageData?: Record<string, Record<string, string> | undefined> }
-): string | null {
-  const own = warehouses.find((w) => w.name === receipt.warehouse);
-  if (own?.site) return own.name;
-  const site = siteOf(warehouses, aliases, receipt.warehouse);
-  const gate = (receipt.stageData?.["n-gate"]?.["WH NO."] ?? "").trim();
-  if (!site || !gate) return null;
-  const store = warehouses.find((w) => w.name === gate);
-  return store?.site && siteOf(warehouses, aliases, store.site)?.name === site.name ? store.name : null;
-}

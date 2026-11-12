@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useTracking, useDeliveryPlans } from "../../state/TrackingContext";
-import { useReceptionStore, useSite } from "../../state/SiteContext";
+import { useSite } from "../../state/SiteContext";
 import { api } from "../../repository/api";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { isOpenPlan, supplierOpenPlans } from "@anagroci/contract/domain/deliveryPlan";
@@ -84,15 +84,10 @@ function toPayload(v: Values): BatchTruckRow {
  */
 export function BatchEntryPage() {
   const site = useSite();
-  // The trucks are entered at the store Reception was showing (?store=); the site itself only when it has no store.
-  const { store, isNoStore } = useReceptionStore();
-  const at = store && !isNoStore ? store : site.warehouseName;
-  const back = `/${site.slug}/receipts${at !== site.warehouseName ? `?store=${encodeURIComponent(at)}` : ""}`;
   const { masters, refresh } = useTracking();
   const { plans, refetch: refetchPlans } = useDeliveryPlans(site.warehouseName);
-  // A truck can be linked to a plan that is still expecting trucks — for this store, or for the site with no store
-  // named (the server refuses a plan for another store). Trucks with no plan are fine too (unplanned).
-  const openPlans = plans.filter((p) => isOpenPlan(p) && (!p.destinationStore || at === site.warehouseName || p.destinationStore === at));
+  // A truck can be linked to a plan that is still expecting trucks. Trucks with no plan are fine too (unplanned).
+  const openPlans = plans.filter(isOpenPlan);
   // "Create a delivery plan" opens in another tab, so the rows typed here stay; coming back reads the plans again.
   useEffect(() => {
     const onFocus = () => void refetchPlans();
@@ -180,7 +175,7 @@ export function BatchEntryPage() {
     try {
       // The server numbers "Row N" over what we send, so blank rows are dropped first and the
       // message is mapped back to the row on screen below.
-      const { ids } = await api.createReceiptsBatch(at, filled.map((r) => toPayload(r.v)), filled.map((r) => r.v[PLAN] || null));
+      const { ids } = await api.createReceiptsBatch(site.warehouseName, filled.map((r) => toPayload(r.v)), filled.map((r) => r.v[PLAN] || null));
       await refresh();
       setCreated(ids);
     } catch (e) {
@@ -196,7 +191,7 @@ export function BatchEntryPage() {
   if (created) {
     return (
       <div className="space-y-5">
-        <PageHeader kicker={`${site.label} · ${site.sublabel} · ${at}`} title={`${created.length} receipt${created.length === 1 ? "" : "s"} created`} lede="Open each one to continue with weights, lot and bin." />
+        <PageHeader kicker={`${site.label} · ${site.sublabel}`} title={`${created.length} receipt${created.length === 1 ? "" : "s"} created`} lede="Open each one to continue with weights, lot and bin." />
         <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs p-5 flex flex-wrap gap-2">
           {created.map((id) => (
             <Link key={id} to={`/${site.slug}/receipts/${id}`} className="text-[12.5px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-1 rounded-md hover:bg-brand-100">
@@ -208,7 +203,7 @@ export function BatchEntryPage() {
           <button className={btnSecondary} onClick={() => { setRows(Array.from({ length: INITIAL_ROWS }, () => newRow(today()))); setCreated(null); }}>
             <span className="material-symbols-outlined text-[16px]">add</span>Add more entries
           </button>
-          <Link to={back} className={btnSecondary}>Back to Reception</Link>
+          <Link to={`/${site.slug}/receipts`} className={btnSecondary}>Back to Reception</Link>
         </div>
       </div>
     );
@@ -217,10 +212,10 @@ export function BatchEntryPage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        kicker={`${site.label} · ${site.sublabel} · ${at}`}
+        kicker={`${site.label} · ${site.sublabel}`}
         title="Add entries"
         lede="One row per truck. Picking a supplier links the truck to that supplier's latest open delivery plan (change it, or choose no plan for an unplanned truck). Save creates all of them together - if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
-        actions={<Link to={back} className={btnSecondary}>Cancel</Link>}
+        actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
 
       <datalist id="batch-credit-cash"><option value="CASH" /><option value="CREDIT" /></datalist>

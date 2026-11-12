@@ -1,9 +1,10 @@
 /**
  * Users: creation, listing, updates. Scope rules live here so the route stays thin:
  *  - admin is unscoped (no warehouse);
- *  - every other role is assigned to one STORE (BKE-001, YAKRO…) — the warehouse they actually work at — of a site
- *    that has a Unit/Central type and an ID code, so they land in that site's section and see only their store
- *    (domain/site.ts resolveScope). Accounts assigned to a whole site before this keep working; new ones can't be.
+ *  - every other role is assigned to one WAREHOUSE (BOUAKE, YAKRO FACTORY) — a top-level row of Masters › Warehouses
+ *    with its category (Unit/Central) and an ID code, so they land in that warehouse's section. Stores are not a
+ *    concept the app offers any more; an account left on an old store row keeps working (domain/site.ts resolveScope)
+ *    until an admin moves it, but no account is newly put on one.
  */
 import { isRole, type Role } from "@anagroci/contract/data/roles";
 import type { UserView } from "@anagroci/contract/types/user";
@@ -22,15 +23,15 @@ async function toView(u: { id: string; username: string; displayName: string; ro
   };
 }
 
-/** Only on a create or a change of warehouse/role: an account already on a whole site isn't refused for an unrelated edit. */
+/** Only on a create or a change of warehouse/role: an account already on an old store isn't refused for an unrelated edit. */
 async function assertAssignableWarehouse(role: Role, warehouse: string | null | undefined) {
   if (role === "admin") return;
   if (!warehouse) throw new ValidationError("Assign this user to a warehouse.");
   const wh = await prisma.warehouse.findUnique({ where: { name: warehouse }, include: { siteRef: true } });
   if (!wh) throw new ValidationError(`"${warehouse}" isn't in the warehouse master.`);
-  if (!wh.siteRef) throw new ValidationError(`"${warehouse}" is a site, not a warehouse a person works at. Choose one of its stores.`);
-  const gaps = siteSetupGaps(wh.siteRef);
-  if (gaps.length) throw new ValidationError(`"${warehouse}" belongs to ${wh.siteRef.name}, which isn't ready yet: it needs ${gaps.join(" and ")} (Masters › Warehouses).`);
+  if (wh.siteRef) throw new ValidationError(`"${warehouse}" is an old store of ${wh.siteRef.name}, not a warehouse. Choose ${wh.siteRef.name}.`);
+  const gaps = siteSetupGaps(wh);
+  if (gaps.length) throw new ValidationError(`"${warehouse}" isn't ready yet: it needs ${gaps.join(" and ")} (Masters › Warehouses).`);
 }
 
 export async function listUsers(): Promise<UserView[]> {

@@ -1,7 +1,7 @@
 /**
  * Warehouses come only from the master, and a non-admin sees only their own. Pins: /api/masters returns a non-admin
- * their own site, its stores and its Bins (never another site's); only an admin adds a new site; a non-admin adds
- * stores and Bins only at their own warehouse; and a Unit warehouse still learns where it may send a BKT without
+ * their own site, its stores and its Bins (never another site's); only an admin adds a warehouse, and nobody adds a
+ * store (they aren't a concept any more); a non-admin adds Bins only at their own warehouse; and a Unit warehouse still learns where it may send a BKT without
  * being shown the rest of the master. Made-up site names, so nothing depends on a particular client site existing.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -84,11 +84,17 @@ describe("who adds warehouses", () => {
     expect((await call("admin", "POST", "/api/masters/warehouses", { name: "WST-NEW-SITE", kind: "VILLAGE" })).statusCode).toBe(201);
   });
 
-  it("lets a non-admin add stores and Bins only at their own warehouse", async () => {
-    expect((await call("wiUnit", "POST", "/api/masters/warehouses", { name: "WST-X-NEW", site: CENTRAL })).statusCode).toBe(403);
-    expect((await call("wiUnit", "POST", "/api/masters/warehouses", { name: "WST-U-NEW", site: UNIT })).statusCode).toBe(201);
+  it("adds a warehouse with its category in one step, and refuses a store from anyone", async () => {
+    const res = await call("admin", "POST", "/api/masters/warehouses", { name: "WST-X-NEW", kind: "FACTORY", type: "CENTRAL" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ name: "WST-X-NEW", site: null, type: "CENTRAL" });
+    expect((await call("admin", "POST", "/api/masters/warehouses", { name: "WST-U-NEW", site: UNIT })).statusCode).toBe(422);
+    expect((await call("wiUnit", "POST", "/api/masters/warehouses", { name: "WST-U-NEW", site: UNIT })).statusCode).toBe(403);
+    expect(await prisma.warehouse.count({ where: { name: "WST-U-NEW" } })).toBe(0);
+  });
+
+  it("lets a non-admin add Bins only at their own warehouse", async () => {
     expect((await call("wiUnit", "POST", "/api/masters/bins", { code: "WST-C-001-BIN-2", warehouseName: "WST-C-001" })).statusCode).toBe(403);
-    expect(await prisma.warehouse.count({ where: { name: "WST-X-NEW" } })).toBe(0);
     expect(await prisma.bin.count({ where: { code: "WST-C-001-BIN-2" } })).toBe(0);
   });
 });
