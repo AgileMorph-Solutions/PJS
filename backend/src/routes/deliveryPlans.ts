@@ -15,7 +15,7 @@ export async function deliveryPlanRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const plan = await getDeliveryPlanDetail(id);
     if (!plan) return reply.code(404).send({ error: "Delivery plan not found" });
-    await assertWarehouseAccess(req, plan.destinationWarehouse);
+    await assertWarehouseAccess(req, plan.destinationStore ?? plan.destinationWarehouse);
     return plan;
   });
 
@@ -30,7 +30,7 @@ export async function deliveryPlanRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const plan = await getDeliveryPlan(id);
     if (!plan) return reply.code(404).send({ error: "Delivery plan not found" });
-    await assertWarehouseAccess(req, plan.destinationWarehouse);
+    await assertWarehouseAccess(req, plan.destinationStore ?? plan.destinationWarehouse);
     return updateDeliveryPlan(id, (req.body ?? {}) as DeliveryPlanInput, currentUser(req).id);
   });
 }

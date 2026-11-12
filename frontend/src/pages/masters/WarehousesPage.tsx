@@ -54,7 +54,7 @@ function TypeSelect({ warehouse }: { warehouse: WarehouseMaster }) {
         <option value="">No type</option>
         {WAREHOUSE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
       </select>
-      {error && <span role="alert" className="text-[11.5px] text-danger-700">{error}</span>}
+      {error && <span role="alert" className="text-[12px] text-danger-700">{error}</span>}
     </span>
   );
 }
@@ -99,7 +99,7 @@ function CodeInput({ warehouse, editable }: { warehouse: WarehouseMaster; editab
         maxLength={12}
         className="w-36 px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-mono font-semibold text-warmstone-800 outline-none focus:border-brand-700"
       />
-      {error && <span role="alert" className="text-[11.5px] text-danger-700">{error}</span>}
+      {error && <span role="alert" className="text-[12px] text-danger-700">{error}</span>}
     </span>
   );
 }
@@ -205,39 +205,40 @@ export function WarehousesPage() {
         </div>
       )}
 
-      {sites.map((site) => (
-        <div key={site.slug}>
-          <h3 className="px-1 mb-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider flex items-center gap-3">
-            <span>
-              {site.sublabel} <span className="normal-case font-medium text-warmstone-300">· {site.label}</span>
-            </span>
-            {(() => {
-              const row = masters.warehouses.find((w) => w.name === site.warehouseName);
-              if (!row) return null;
-              return (
-                <>
-                  {isAdmin && <TypeSelect warehouse={row} />}
-                  <CodeInput key={`${row.name}:${row.code ?? ""}`} warehouse={row} editable={isAdmin} />
-                </>
-              );
-            })()}
-          </h3>
-          <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
-            {storesFor(site).map((w) => (
-              <div key={w.name} className="flex items-center justify-between gap-4 px-5 py-3 text-[13px]">
-                <span className="font-semibold text-warmstone-800 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[17px] text-brand-700">warehouse</span>
+      {/* Each site IS a warehouse row of the master (the one users are assigned to), so it is shown as one, with its
+          stores under it, rather than as a heading that reads like a label. */}
+      {sites.map((site) => {
+        const row = masters.warehouses.find((w) => w.name === site.warehouseName);
+        const stores = storesFor(site);
+        return (
+          <div key={site.slug} className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
+            <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 text-[13px]">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-brand-700">warehouse</span>
+                <span className="font-bold text-warmstone-900">{site.warehouseName}</span>
+                <Pill tone="system" label={site.label} />
+                {row && isAdmin && <TypeSelect warehouse={row} />}
+                {row && <CodeInput key={`${row.name}:${row.code ?? ""}`} warehouse={row} editable={isAdmin} />}
+              </span>
+              <span className="text-warmstone-500 tabular-nums">
+                {stores.length} {stores.length === 1 ? "store" : "stores"} · {receipts.filter((r) => r.warehouse === site.warehouseName).length} receipts
+              </span>
+            </div>
+            {stores.map((w) => (
+              <div key={w.name} className="flex items-center justify-between gap-4 pl-12 pr-5 py-3 text-[13px]">
+                <span className="text-warmstone-800 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px] text-warmstone-400">subdirectory_arrow_right</span>
                   {w.name}
                 </span>
                 <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
               </div>
             ))}
-            {!storesFor(site).length && (
-              <div className="px-5 py-3 text-[13px] text-warmstone-400">No warehouses recorded here yet.</div>
+            {!stores.length && (
+              <div className="pl-12 pr-5 py-3 text-[13px] text-warmstone-500">No stores under this warehouse yet.</div>
             )}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {unclassified.length > 0 && (
         <div>

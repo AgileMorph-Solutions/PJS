@@ -10,7 +10,7 @@ import { isValidWarehouseCode } from "@anagroci/contract/domain/ids";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { normalizeOriginName, findSimilarOrigin } from "@anagroci/contract/domain/origin";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
-import { resolveSite } from "../domain/site.js";
+import { resolveScope } from "../domain/site.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
 const VALID_TYPES = new Set<string>(WAREHOUSE_TYPES.map((t) => t.value));
@@ -21,7 +21,7 @@ const VALID_TYPES = new Set<string>(WAREHOUSE_TYPES.map((t) => t.value));
  */
 export async function viewerWarehouseNames(viewer: { role: string; warehouse: string | null }): Promise<string[] | undefined> {
   if (viewer.role === "admin") return undefined;
-  return viewer.warehouse ? resolveSite(viewer.warehouse) : [];
+  return viewer.warehouse ? resolveScope(viewer.warehouse) : [];
 }
 
 /**
@@ -34,7 +34,9 @@ export async function listMasters(own?: string[]) {
   const mine = own ? new Set(own) : undefined;
   const [suppliers, warehouses, bins, origins, aliases] = await Promise.all([
     prisma.supplier.findMany({ orderBy: { code: "asc" } }),
-    prisma.warehouse.findMany({ where: own ? { OR: [{ name: { in: own } }, { site: { in: own } }] } : {}, orderBy: { name: "asc" } }),
+    // By name only: `own` (domain/site.ts resolveScope) already lists every store the viewer may see, and a store-bound
+    // viewer must not be handed their sibling stores through `site in own`.
+    prisma.warehouse.findMany({ where: own ? { name: { in: own } } : {}, orderBy: { name: "asc" } }),
     prisma.bin.findMany({ where: own ? { OR: [{ warehouseName: null }, { warehouseName: { in: own } }] } : {}, orderBy: { code: "asc" } }),
     prisma.origin.findMany({ orderBy: { name: "asc" } }),
     prisma.warehouseAlias.findMany({ orderBy: { alias: "asc" } }),
@@ -119,8 +121,8 @@ export async function setWarehouseType(name: string, type: string | null) {
   const wh = await prisma.warehouse.findUnique({ where: { name } });
   if (!wh) throw Object.assign(new Error("Warehouse not found"), { code: "P2025" });
   assertTypeFits(type, wh.site);
-  // Users are pinned to typed sites; clearing the type of a site that has users would strand them.
-  if (!type && (await prisma.user.count({ where: { warehouse: name, active: true } }))) {
+  // Users are pinned to a typed site or one of its stores; clearing the type would strand them.
+  if (!type && (await prisma.user.count({ where: { OR: [{ warehouse: name }, { warehouseRef: { site: name } }], active: true } }))) {
     throw new ValidationError(`"${name}" has active users — reassign them before clearing its type.`);
   }
   return prisma.warehouse.update({ where: { name }, data: { type } });

@@ -19,7 +19,7 @@ import { resolveSite } from "../../domain/site.js";
 import { ValidationError } from "../../domain/validation.js";
 import { listReceipts } from "../receipts.js";
 import { listTransfers } from "../transfers.js";
-import { nextProductionRunId } from "../ids.js";
+import { nextProductionRunId, siteOf } from "../ids.js";
 import { parseSiteId } from "@anagroci/contract/domain/ids";
 import { isUsableSite } from "@anagroci/contract/domain/siteType";
 
@@ -41,10 +41,12 @@ export const runLabel = (code: string, name: string | null) => (name ? `${code} 
  */
 export async function productionSite(scoped: string | undefined): Promise<string> {
   if (scoped) {
+    // A production run belongs to the factory, not to one of its stores, so a store-bound user's runs are their site's.
+    const site = (await siteOf(prisma, scoped)) ?? scoped;
     // A Central site, by the type set in Masters (contract's canAccessProduction) — not by its Village/Regional/Factory kind.
-    const row = await prisma.warehouse.findUnique({ where: { name: scoped }, select: { type: true, site: true, code: true } });
+    const row = await prisma.warehouse.findUnique({ where: { name: site }, select: { type: true, site: true, code: true } });
     if (!row || !isUsableSite(row) || row.type !== "CENTRAL") throw new ValidationError(`Production runs at a Central warehouse; ${scoped} isn't one.`);
-    return scoped;
+    return site;
   }
   const factories = await prisma.warehouse.findMany({ where: { type: "CENTRAL", site: null, code: { not: null } }, select: { name: true } });
   if (factories.length !== 1) throw new ValidationError("Choose which factory (?warehouse=).");

@@ -11,11 +11,11 @@ import { ForbiddenError, UnauthorizedError } from "../domain/validation.js";
 import { isAllowed } from "./policy.js";
 import { assertProductionAccess, isProductionPath } from "./productionAccess.js";
 import { redactForRole } from "./redact.js";
-import { SESSION_COOKIE, userForToken } from "./session.js";
+import { SESSION_COOKIE, userForToken, type SessionUser } from "./session.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    user?: User;
+    user?: SessionUser;
   }
 }
 
@@ -47,9 +47,15 @@ export function registerAuth(app: FastifyInstance) {
   });
 }
 
-export function currentUser(req: FastifyRequest): User & { role: Role } {
+export function currentUser(req: FastifyRequest): SessionUser & { role: Role } {
   if (!req.user || !isRole(req.user.role)) throw new UnauthorizedError();
-  return req.user as User & { role: Role };
+  return req.user as SessionUser & { role: Role };
+}
+
+/** The site of the caller's warehouse: their store's site, or the warehouse itself when they are assigned a whole site. */
+export function currentSite(req: FastifyRequest): string | null {
+  const user = currentUser(req);
+  return user.warehouseRef?.site ?? user.warehouse;
 }
 
 export function requireRole(...roles: Role[]) {

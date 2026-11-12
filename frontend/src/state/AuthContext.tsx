@@ -101,6 +101,7 @@ export function useHasRole(...roles: Role[]): boolean {
 /** Where this user lands: admin sees the dashboard; everyone else goes to their own warehouse's
  * Reception (a Branch Manager / QFS Officer has no dashboard access). */
 export function homePathFor(me: UserView): string {
-  if (me.role === "admin" || !me.warehouse) return "/";
-  return `/${warehouseSlug(me.warehouse)}/receipts`;
+  const site = me.site ?? me.warehouse;
+  if (me.role === "admin" || !site) return "/";
+  return `/${warehouseSlug(site)}/receipts`;
 }

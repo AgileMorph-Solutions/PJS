@@ -3,17 +3,17 @@ import {
   listTransfers, listTransferDestinations, getTransfer, createTransfer, addTransferLines, dispatchTransfer, receiveTransfer,
   type TransferInput, type TransferLineInput, type DispatchInput, type ReceiveInput,
 } from "../services/transfers.js";
-import { scopedSite, scopedWarehouse } from "../auth/scope.js";
+import { assertWarehouseAccess, scopedSite, scopedWarehouse } from "../auth/scope.js";
 import { currentUser } from "../auth/plugin.js";
 import { ForbiddenError } from "../domain/validation.js";
-import { resolveSite } from "../domain/site.js";
+import { resolveScope } from "../domain/site.js";
 
 /** A Warehouse Incharge sees transfers that leave from or arrive at their own warehouse. */
-async function assertTransferAccess(req: FastifyRequest, t: { fromWarehouse: string; toWarehouse: string }) {
+async function assertTransferAccess(req: FastifyRequest, t: { fromWarehouse: string; toWarehouse: string; toStore?: string | null }) {
   const user = currentUser(req);
   if (user.role === "admin") return;
-  const mine = user.warehouse ? await resolveSite(user.warehouse) : [];
-  if (!mine.includes(t.fromWarehouse) && !mine.includes(t.toWarehouse)) throw new ForbiddenError("That transfer isn't to or from your warehouse.");
+  const mine = user.warehouse ? await resolveScope(user.warehouse) : [];
+  if (!mine.includes(t.fromWarehouse) && !mine.includes(t.toStore ?? t.toWarehouse)) throw new ForbiddenError("That transfer isn't to or from your warehouse.");
 }
 
 const actorOf = (req: FastifyRequest) => ({ actor: { id: currentUser(req).id, via: "direct" as const } });
@@ -69,7 +69,8 @@ export async function transferRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const t = await getTransfer(id);
     if (!t) return reply.code(404).send({ error: "Transfer not found" });
-    if (currentUser(req).role !== "admin") scopedWarehouse(req, t.toWarehouse);
+    // Sent to one store: only that store (or an account over its whole site) receives it, never a sibling store.
+    await assertWarehouseAccess(req, t.toStore ?? t.toWarehouse);
     return receiveTransfer(id, (req.body ?? {}) as ReceiveInput, actorOf(req));
   });
 }

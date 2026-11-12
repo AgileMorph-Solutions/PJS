@@ -9,6 +9,7 @@ import { canAccessProduction, type Role } from "@anagroci/contract/data/roles";
 import { isWarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { prisma } from "../db.js";
 import { ForbiddenError } from "../domain/validation.js";
+import { siteTypeOf } from "../services/ids.js";
 
 export function isProductionPath(path: string): boolean {
   return path === "/api/production" || path.startsWith("/api/production/");
@@ -16,7 +17,8 @@ export function isProductionPath(path: string): boolean {
 
 export async function assertProductionAccess(user: User & { role: Role }): Promise<void> {
   if (user.role === "admin") return;
-  const wh = user.warehouse ? await prisma.warehouse.findUnique({ where: { name: user.warehouse }, select: { type: true } }) : null;
-  const type = isWarehouseType(wh?.type) ? wh.type : null;
+  // A user assigned to a store takes its site's type (the type is set on sites only).
+  const siteType = user.warehouse ? await siteTypeOf(prisma, user.warehouse) : null;
+  const type = isWarehouseType(siteType) ? siteType : null;
   if (!canAccessProduction(user.role, type)) throw new ForbiddenError("Production is only open to the factory (Central warehouse).");
 }

@@ -87,7 +87,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 /** `site` is a resolved list of names (domain/site.ts's resolveSite), as every scoped list takes. */
 export async function listDeliveryPlans(site?: string[], db: Prisma.TransactionClient | typeof prisma = prisma) {
   const rows = await db.deliveryPlan.findMany({
-    where: site ? { destinationWarehouse: { in: site } } : {},
+    // A plan for one store (destinationStore) belongs to that store's people only; one with no store, to the whole site.
+    where: site ? { destinationWarehouse: { in: site }, OR: [{ destinationStore: null }, { destinationStore: { in: site } }] } : {},
     include: INCLUDE,
     orderBy: [{ expectedArrivalDate: "asc" }, { id: "asc" }],
   });
@@ -171,7 +172,10 @@ export async function createDeliveryPlan(input: DeliveryPlanInput) {
     // Plans are filed under the SITE, like receipts, whichever of its names was picked.
     const site = await siteOf(tx, destination);
     if (!site) throw new ValidationError(`Warehouse "${destination}" isn't in the warehouse master.`);
-    const store = text(input.destinationStore);
+    // Naming a store as the destination (a store-bound user's own) files the plan at its site, for that store.
+    const named = destination !== site ? destination : null;
+    const store = text(input.destinationStore) ?? named;
+    if (named && store !== named) throw new ValidationError(`This plan is for ${named}; it can't be sent to ${store}.`);
     await checkStore(tx, site, store);
     const id = await nextDeliveryPlanId(tx, site, expectedArrivalDate);
     await tx.deliveryPlan.create({

@@ -300,11 +300,10 @@ describe("each warehouse writes only its own half", () => {
     const names = (await as("sender", "GET", "/api/masters")).json().warehouses.map((w: { name: string }) => w.name);
     expect(names).toContain(A);
     expect(names).not.toContain(B);
-    // Warehouses only — never their stores (which store and bin is recorded when the truck is received).
-    const destinations = (await as("sender", "GET", "/api/transfers/destinations")).json();
-    expect(destinations).toContain(B);
-    expect(destinations).not.toContain(B_STORE);
-    expect(destinations).not.toContain(A);
+    // Each Central site with its stores (the warehouses a truck can be sent to); never the sender's own site.
+    const destinations = (await as("sender", "GET", "/api/transfers/destinations")).json() as { site: string; stores: string[] }[];
+    expect(destinations).toContainEqual({ site: B, stores: expect.arrayContaining([B_STORE]) });
+    expect(destinations.map((d) => d.site)).not.toContain(A);
   });
 
   it("a store chosen as the destination is kept, while its site still decides who sees and receives the BKT", async () => {

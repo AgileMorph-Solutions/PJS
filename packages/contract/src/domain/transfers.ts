@@ -39,8 +39,8 @@ export const canTransferBetween = (fromType: string | null, toType: string | nul
 export const TRANSFER_DIRECTION_MESSAGE = "RCN can only be transferred from a Unit warehouse to a Central warehouse.";
 
 /**
- * Where a BKT can go: the Central warehouses of the master (isUsableSite), never their stores. The warehouse decides who
- * receives the truck; which store and bin each Lot goes into is recorded when it is received, so the sender isn't asked.
+ * Where a BKT can go: the Central sites of the master (isUsableSite). The site decides who receives the truck; the
+ * sender may also name one of its stores (transferDestinationGroups), and each Lot's bin is recorded on arrival.
  * A row with no type or no ID code (BKE-04) can't have anyone working there, so nobody could record the truck arriving.
  */
 export function transferDestinations(warehouses: WarehouseMaster[], from: string): string[] {
@@ -48,6 +48,24 @@ export function transferDestinations(warehouses: WarehouseMaster[], from: string
     .filter((w) => isUsableSite(w) && w.type === "CENTRAL" && w.name !== from)
     .map((w) => w.name)
     .sort((a, b) => a.localeCompare(b));
+}
+
+/** A Central site a BKT may go to, with the stores (the actual warehouses: ANAGROCI-01, YAKRO…) a truck can be sent to. */
+export interface TransferDestination {
+  site: string;
+  stores: string[];
+}
+
+/**
+ * transferDestinations(), each with its stores, for the sender to pick the warehouse the truck goes to. Naming a store
+ * files the BKT at its site with that store kept (backend createTransfer), so the site's people still see and receive
+ * it, and only that store's people among them (backend domain/site.ts resolveScope).
+ */
+export function transferDestinationGroups(warehouses: WarehouseMaster[], from: string): TransferDestination[] {
+  return transferDestinations(warehouses, from).map((site) => ({
+    site,
+    stores: warehouses.filter((w) => w.site === site).map((w) => w.name).sort((a, b) => a.localeCompare(b)),
+  }));
 }
 
 /** How a BKT's destination reads: the site, plus the store when one was chosen. */

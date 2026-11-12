@@ -19,16 +19,19 @@ export function useSites(): SiteConfig[] {
   return useMemo(() => {
     const all = sitesFrom(masters);
     if (me.role === "admin") return all;
-    const own = all.find((s) => s.warehouseName === me.warehouse) ?? ownFallback(me);
+    // A user works at a store (BKE-001); their section is the site it belongs to (BOUAKE). The API narrows the data to
+    // their store — this only picks which section's pages they see.
+    const own = all.find((s) => s.warehouseName === (me.site ?? me.warehouse)) ?? ownFallback(me);
     return own ? [own] : [];
   }, [masters, me]);
 }
 
 /** A non-admin's own section before (or without) its master row — from what the session itself says. */
 function ownFallback(me: UserView): SiteConfig | undefined {
-  if (!me.warehouse) return undefined;
+  const site = me.site ?? me.warehouse;
+  if (!site) return undefined;
   const type = isWarehouseType(me.warehouseType) ? me.warehouseType : null;
-  return { slug: warehouseSlug(me.warehouse), label: "Warehouse", sublabel: me.warehouse, warehouseName: me.warehouse, aliases: [], stores: [], type };
+  return { slug: warehouseSlug(site), label: "Warehouse", sublabel: site, warehouseName: site, aliases: [], stores: me.warehouse && me.warehouse !== site ? [me.warehouse] : [], type };
 }
 
 /** Reads the `:site` param a page is rendered under, resolved to its master row by SiteLayout below. */
@@ -46,10 +49,15 @@ export function useSwitchSite() {
   const navigate = useNavigate();
   const location = useLocation();
   const { site } = useParams<{ site: string }>();
-  return (target: SiteSlug) => {
+  /** `params` sets (a string) or clears (null) query parameters on the way, e.g. the `store` filter, which names a
+   * store of one site and would match nothing at another. */
+  return (target: SiteSlug, params?: Record<string, string | null>) => {
     if (!site) return;
     const rest = location.pathname.slice(`/${site}`.length);
-    navigate(`/${target}${rest}${location.search}`);
+    const search = new URLSearchParams(location.search);
+    for (const [k, v] of Object.entries(params ?? {})) if (v) search.set(k, v); else search.delete(k);
+    const qs = search.toString();
+    navigate(`/${target}${rest}${qs ? `?${qs}` : ""}`);
   };
 }
 

@@ -94,12 +94,11 @@ describe("who adds warehouses", () => {
 });
 
 describe("BKT destinations", () => {
-  it("tells a Unit warehouse which Central warehouses it may send to — not their stores — without opening the rest of the master", async () => {
+  it("tells a Unit warehouse which Central warehouses (and their stores) it may send to, without opening the rest of the master", async () => {
     const res = await call("wiUnit", "GET", "/api/transfers/destinations");
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toContain(CENTRAL);
-    expect(res.json()).not.toContain("WST-C-001");
-    expect(res.json()).not.toContain(UNIT);
+    expect(res.json()).toContainEqual({ site: CENTRAL, stores: ["WST-C-001"] });
+    expect(res.json().map((d: { site: string }) => d.site)).not.toContain(UNIT);
     // Another warehouse's destinations are not theirs to ask for.
     expect((await call("wiUnit", "GET", `/api/transfers/destinations?from=${encodeURIComponent(CENTRAL)}`)).statusCode).toBe(403);
     expect((await call("bmUnit", "GET", "/api/transfers/destinations")).statusCode).toBe(403);

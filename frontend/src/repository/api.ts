@@ -4,6 +4,7 @@
  * Same-origin /api in both dev and prod — vite proxies it, nginx proxies it — so the browser never
  * needs CORS and there is no API base URL to configure per environment.
  */
+import type { TransferDestination } from "@anagroci/contract/domain/transfers";
 import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
@@ -264,7 +265,7 @@ export const api = {
 
   listTransfers: (warehouse?: string) => request<TransferRequest[]>(withWarehouse("/transfers", warehouse)),
   /** Where a BKT from `from` may go. Its own read: /api/masters shows a non-admin only their own warehouse. */
-  transferDestinations: (from: string) => request<string[]>(`/transfers/destinations?from=${encodeURIComponent(from)}`),
+  transferDestinations: (from: string) => request<TransferDestination[]>(`/transfers/destinations?from=${encodeURIComponent(from)}`),
   createTransfer: (t: {
     transferDate: string; fromWarehouse: string; toWarehouse: string; remarks?: string;
     lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[];
