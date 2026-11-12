@@ -95,9 +95,9 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
         <datalist id="dp-origins">{masters.origins.map((o) => <option key={o} value={o} />)}</datalist>
         {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
       </>)}
-      {field("dp-store", "Destination store", (
+      {field("dp-store", "Destination warehouse", (
         <select id="dp-store" value={form.store} onChange={(e) => set("store", e.target.value)} className={inputClass}>
-          <option value="">Any store at {warehouseName}</option>
+          <option value="">Any warehouse in {warehouseName}</option>
           {stores.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       ))}

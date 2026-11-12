@@ -28,7 +28,7 @@ function StoreOptions({ sites, warehouses }: { sites: SiteRow[]; warehouses: War
       {WAREHOUSE_TYPES.flatMap((t) => sites.filter((site) => site.type === t.value).map((site) => {
         const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name).sort();
         return stores.length ? (
-          <optgroup key={site.name} label={`${site.name} · ${t.label}`}>
+          <optgroup key={site.name} label={site.name}>
             {stores.map((store) => <option key={store} value={store}>{store}</option>)}
           </optgroup>
         ) : null;
@@ -96,7 +96,7 @@ export function UsersPage() {
             </select>
             {onStore
               ? <span className="text-[11px] text-warmstone-500">{u.site} · {u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "untyped"}</span>
-              : <Pill tone="decision" label={u.warehouse ? "On a whole site — move to a store" : "Not assigned to a store"} />}
+              : <Pill tone="decision" label={u.warehouse ? "On a whole category: move to a warehouse" : "Not assigned to a warehouse"} />}
           </div>
         );
       },
@@ -134,7 +134,7 @@ export function UsersPage() {
             <select id="u-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className={inputCls}>
               {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select></div>
-          <Field label="Warehouse" hint={needsWarehouse && !storeNames.size ? "No store is ready yet: add one under a warehouse in Masters › Warehouses." : undefined}>
+          <Field label="Warehouse" hint={needsWarehouse && !storeNames.size ? "No warehouse is ready yet: add one to a category in Masters › Warehouses." : undefined}>
             <Select required={needsWarehouse} disabled={!needsWarehouse} value={needsWarehouse ? form.warehouse : ""} onChange={(e) => setForm({ ...form, warehouse: e.target.value })}>
               <option value="">{needsWarehouse ? "Select a warehouse…" : "All (admin)"}</option>
               <StoreOptions sites={typedSites} warehouses={masters.warehouses} />

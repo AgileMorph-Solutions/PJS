@@ -76,7 +76,7 @@ export function NewProductionRunPage() {
         </span>
       ),
     },
-    textCol("Store", (b) => b.store, { mono: true }),
+    textCol("Warehouse", (b) => b.store, { mono: true }),
     numCol("Lots", (b) => b.lotCount, { digits: 0 }),
     { ...kgCol("Net stock", (b) => b.kg, { zeroAsDash: true, strong: true }), render: (b) => (b.kg ? <b className="font-semibold">{formatTonnes(b.kg)}</b> : "-") },
     statusCol("Can be taken", (b) => unavailableReason(b) ?? "Yes", (b) => {

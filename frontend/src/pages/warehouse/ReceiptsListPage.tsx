@@ -8,7 +8,8 @@ import { WorkbookModal } from "../../components/WorkbookModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
 import { useTracking, useDownstreamStatus, useReceiptPlanInfo } from "../../state/TrackingContext";
-import { useSite, useSites, useSwitchSite } from "../../state/SiteContext";
+import { NO_STORE, useReceptionStore, useSite, useSwitchSite } from "../../state/SiteContext";
+import { receiptStore } from "@anagroci/contract/domain/siteType";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { receiptColumns, fiche, storeCode } from "./columns";
@@ -16,17 +17,16 @@ import { MODULE_STATUSES, type ReceivingModule } from "@anagroci/contract/data/m
 
 const icon = (name: string) => <span className="material-symbols-outlined">{name}</span>;
 
-/** Site-scoped Receipts list — one component for every warehouse's /<site>/receipts (see
- * SiteContext's useSite()). The section itself IS the warehouse filter now, so the old "All
- * warehouses" dropdown is gone; a STORE-level sub-filter takes its place where there's more than
- * one store to choose from (derived from /api/masters' {name,kind,site} shape — a store is any
- * warehouse row whose `site` equals this section's warehouseName). */
+/** Reception for ONE STORE (BKE-001) — the warehouse the trucks actually come into. The site above it (BOUAKE) is
+ * only the group the store sits in: it picks the URL's `/<site>/` section, and the switcher lists each site's stores
+ * under it. Which store a truck is at is contract's receiptStore; trucks the site holds at no store get a view of
+ * their own ("No store") rather than disappearing from every store's list. A site with no store yet shows its own. */
 export function ReceiptsListPage() {
   const { receipts, masters, refresh } = useTracking();
   const site = useSite();
   const canEdit = useCanEditDirectly();
   const switchSite = useSwitchSite();
-  const sites = useSites();
+  const { store, isNoStore } = useReceptionStore();
   const { status: downstreamStatus, refetch: refetchDownstream } = useDownstreamStatus(site.warehouseName);
   const { info: planInfo } = useReceiptPlanInfo(site.warehouseName, canEdit);
   const [params, setParams] = useSearchParams();
@@ -40,26 +40,38 @@ export function ReceiptsListPage() {
   const status = params.get("status") ?? "";
   const part = status === "reception" || status === "offloading" ? (status as ReceivingModule) : null;
   const base = `/${site.slug}/receipts`;
-  const store = params.get("store") ?? "";
   const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
-  // The site's own stores, as config/sites.ts resolved them (a store's `site` may hold the site name or an alias).
-  const stores = useMemo(
-    () => masters.warehouses.filter((w) => site.stores.includes(w.name)),
-    [masters.warehouses, site.stores]
+  // Every truck of this site — filed at the site, an alias of it, or one of its stores — with the store it is at.
+  const siteReceipts = useMemo(() => {
+    const names = new Set([site.warehouseName, ...site.aliases, ...site.stores]);
+    return receipts
+      .filter((r) => names.has(r.warehouse))
+      .map((r) => ({ r, at: receiptStore(masters.warehouses, masters.aliases, r) }));
+  }, [receipts, site, masters.warehouses, masters.aliases]);
+
+  const noStoreCount = useMemo(() => (site.stores.length ? siteReceipts.filter((x) => !x.at).length : 0), [siteReceipts, site.stores.length]);
+
+  // With no store in the master the site is the one place, so every truck is shown.
+  const storeReceipts = useMemo(
+    () => siteReceipts.filter((x) => !site.stores.length || (isNoStore ? !x.at : x.at === store)).map((x) => x.r),
+    [siteReceipts, site.stores.length, isNoStore, store]
   );
 
-  const siteReceipts = useMemo(
-    () => receipts.filter((r) => r.warehouse === site.warehouseName),
-    [receipts, site.warehouseName]
-  );
-
-  const counts = useMemo(() => computeDashboardCounts(siteReceipts), [siteReceipts]);
+  const counts = useMemo(() => computeDashboardCounts(storeReceipts), [storeReceipts]);
+  const place = isNoStore ? "No warehouse" : store || site.sublabel;
+  const pickStore = (st: string) => setParams((p) => setOrDelete(p, "store", st));
+  // The KPI tiles keep the store being looked at; dropping it would land on the default store instead.
+  const tile = (st?: string) => {
+    const q = new URLSearchParams();
+    if (params.get("store")) q.set("store", params.get("store")!);
+    if (st) q.set("status", st);
+    return q.size ? `${base}?${q}` : base;
+  };
 
   const rows = useMemo(() => {
-    return siteReceipts
+    return storeReceipts
       .filter((r) => (part ? MODULE_STATUSES[part].includes(deriveStatus(r)) : !status || status === "all" || deriveStatus(r) === status))
-      .filter((r) => !store || storeCode(r) === store)
       .filter((r) => !dateRange.from || r.arrivalDate >= dateRange.from)
       .filter((r) => !dateRange.to || r.arrivalDate <= dateRange.to)
       .filter((r) => {
@@ -77,13 +89,13 @@ export function ReceiptsListPage() {
         );
       })
       .sort((a, b) => (a.arrivalDate < b.arrivalDate ? 1 : -1));
-  }, [siteReceipts, status, store, dateRange.from, dateRange.to, q]);
+  }, [storeReceipts, part, status, dateRange.from, dateRange.to, q]);
 
   return (
     <>
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
-        title="Reception"
+        title={`Reception · ${place}`}
         lede="Every truck from gate entry to GRN. To see only the trucks still being checked, or only the accepted ones being unloaded and recorded, use the status filter (Reception / Offloading)."
         actions={
           <div className="flex items-center gap-3">
@@ -91,7 +103,8 @@ export function ReceiptsListPage() {
               value={site.slug}
               onChange={(s) => s && switchSite(s, { store: null })}
               store={store}
-              onPickStore={(s, st) => (s === site.slug ? setParams((p) => setOrDelete(p, "store", st)) : switchSite(s, { store: st || null }))}
+              onPickStore={(s, st) => (s === site.slug ? pickStore(st) : switchSite(s, { store: st || null }))}
+              extraOption={noStoreCount ? { store: NO_STORE, label: `No warehouse (${noStoreCount})` } : undefined}
             />
             {/* Direct writes and workbook imports are Warehouse Incharge/admin only; a Branch
                 Manager or QFS Officer submits a form from the receipt page instead. */}
@@ -114,9 +127,9 @@ export function ReceiptsListPage() {
               </button>
               {/* The one way to add entries: a grid, whether it's one truck or twenty. */}
               <button
-                onClick={() => navigate(`/${site.slug}/receipts/batch`)}
+                onClick={() => navigate(`/${site.slug}/receipts/batch${store && !isNoStore ? `?store=${encodeURIComponent(store)}` : ""}`)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
-                title="Add one or more entries from a grid"
+                title={`Add one or more entries at ${isNoStore ? "a warehouse" : place}, from a grid`}
               >
                 <span className="material-symbols-outlined text-[17px]">add</span>
                 Add entries
@@ -128,12 +141,12 @@ export function ReceiptsListPage() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
-        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={base} />
-        <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={`${base}?status=unloaded`} />
-        <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={`${base}?status=grn_completed`} />
-        <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={`${base}?status=pending_qa`} />
-        <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to={`${base}?status=pending_unload`} />
-        <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={`${base}?status=rejected`} tone="gap" />
+        <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={tile()} />
+        <KpiTile icon={icon("package_2")} label="Accepted & unloaded" value={counts.acceptedUnloaded} to={tile("unloaded")} />
+        <KpiTile icon={icon("fact_check")} label="GRN completed" value={counts.grnCompleted} to={tile("grn_completed")} />
+        <KpiTile icon={icon("schedule")} label="Pending QA" value={counts.pendingQa} to={tile("pending_qa")} />
+        <KpiTile icon={icon("inventory_2")} label="Pending unload after QA" value={counts.pendingUnload} to={tile("pending_unload")} />
+        <KpiTile icon={icon("cancel")} label="Rejected" value={counts.rejected} to={tile("rejected")} tone="gap" />
       </div>
 
       {dialogMode && (
@@ -151,7 +164,7 @@ export function ReceiptsListPage() {
 
       <FilterBar>
         <input
-          placeholder="Search vehicle, supplier, LBA code, Fiche, Lot, Bin, Store, receipt ID…"
+          placeholder="Search vehicle, supplier, LBA code, Fiche, Lot, Bin, WH NO., receipt ID…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="w-full sm:w-64"
@@ -166,16 +179,15 @@ export function ReceiptsListPage() {
             </option>
           ))}
         </select>
-        {/* An admin picks the store in the warehouse switcher above; everyone else filters here. */}
-        {stores.length > 0 && sites.length < 2 && (
-          <select value={store} onChange={(e) => setParams((p) => setOrDelete(p, "store", e.target.value))}>
-            <option value="">All stores</option>
-            {stores.map((w) => (
-              <option key={w.name} value={w.name}>
-                {w.name}
-              </option>
-            ))}
-          </select>
+        {/* Someone with only their own store has no switcher above, so the way to the site's no-store trucks is here. */}
+        {noStoreCount > 0 && (
+          <button
+            type="button"
+            onClick={() => pickStore(isNoStore ? "" : NO_STORE)}
+            className="text-[12px] font-semibold text-brand-700 hover:text-brand-800"
+          >
+            {isNoStore ? "Back to the warehouse's trucks" : `${noStoreCount} ${noStoreCount === 1 ? "truck" : "trucks"} in ${site.sublabel} with no warehouse`}
+          </button>
         )}
         <DateRangeInputs
           value={dateRange}
@@ -186,12 +198,12 @@ export function ReceiptsListPage() {
       </FilterBar>
 
       <DataTable
-        columns={receiptColumns(site.stores.length > 1, downstreamStatus, canEdit ? planInfo : undefined)}
+        columns={receiptColumns(isNoStore, downstreamStatus, canEdit ? planInfo : undefined)}
         rows={rows}
         keyFn={(r) => r.id}
         rowHref={(r) => `/${site.slug}/receipts/${r.id}`}
         emptyTitle="No receipts match these filters"
-        emptyHint="Clear the search or filters, or add a new RCN receipt."
+        emptyHint={`Clear the search or filters, or add a new RCN receipt at ${isNoStore ? "a warehouse" : place}.`}
       />
     </>
   );

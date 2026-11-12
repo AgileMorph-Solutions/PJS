@@ -112,8 +112,8 @@ export function WarehousesPage() {
   const [name, setName] = useState("");
   const [type, setType] = useState("");
 
-  /** A site's stores, as config/sites.ts resolved them (a store's `site` may hold the site name or an alias). The
-   * site's own row is not listed under itself: it already IS the section heading. */
+  /** A category's warehouses, as config/sites.ts resolved them (a warehouse's `site` may hold the category name or an
+   * alias). */
   const storesFor = (site: (typeof sites)[number]): WarehouseMaster[] =>
     masters.warehouses.filter((w) => site.stores.includes(w.name));
 
@@ -138,13 +138,13 @@ export function WarehousesPage() {
       <PageHeader
         kicker="Masters"
         title="Warehouses"
-        lede="Village, Regional Central, and Factory warehouses."
+        lede="Every warehouse, grouped by its category. Users, receipts and jute stock belong to a warehouse; a category (Village, Regional Central or Factory) only groups them and sets their Unit/Central type and ID code."
       />
       <CollapsibleCard title="Add warehouse">
         <form onSubmit={handleSubmit} className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-45">
-            <label htmlFor="warehouse-name" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
-              Warehouse name
+            <label htmlFor="warehouse-name" className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">
+              Name
             </label>
             <input
               id="warehouse-name"
@@ -155,8 +155,8 @@ export function WarehousesPage() {
             />
           </div>
           <div className="flex-1 min-w-55">
-            <label htmlFor="warehouse-type" className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">
-              Type
+            <label htmlFor="warehouse-type" className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">
+              Category
             </label>
             <select
               id="warehouse-type"
@@ -166,20 +166,20 @@ export function WarehousesPage() {
               className="w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
             >
               <option value="" disabled>
-                Select a type…
+                Select a category…
               </option>
               {sites.length > 0 && (
-                <optgroup label="Store under an existing site">
+                <optgroup label="A warehouse in">
                   {sites.map((s) => (
                     <option key={s.slug} value={encodeChoice({ group: "store", site: s.warehouseName })}>
-                      {s.sublabel} · {s.label}
+                      {s.sublabel}
                     </option>
                   ))}
                 </optgroup>
               )}
-              {/* A new site becomes a section of the app and something users are assigned to: an admin's call. */}
+              {/* A new category becomes a section of the app: an admin's call. */}
               {isAdmin && (
-                <optgroup label="New site">
+                <optgroup label="A new category">
                   {WAREHOUSE_KINDS.map((k) => (
                     <option key={k.value} value={encodeChoice({ group: "site", kind: k.value })}>
                       {k.label}
@@ -193,20 +193,20 @@ export function WarehousesPage() {
             type="submit"
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm"
           >
-            <span className="material-symbols-outlined text-[17px]">add</span>
-            Add warehouse
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            {decodeChoice(type)?.group === "site" ? "Add category" : "Add warehouse"}
           </button>
         </form>
       </CollapsibleCard>
 
       {sites.length === 0 && (
         <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs px-5 py-4 text-[13px] text-warmstone-500">
-          {isAdmin ? "No warehouse is ready yet. Add one above (New site), then give it a Unit/Central type and an ID code so users can be assigned to it." : "Your account isn't assigned to a warehouse yet. Ask an admin."}
+          {isAdmin ? "No category is ready yet. Add one above (A new category), give it a Unit/Central type and an ID code, then add its warehouses." : "Your account isn't assigned to a warehouse yet. Ask an admin."}
         </div>
       )}
 
-      {/* Each site IS a warehouse row of the master (the one users are assigned to), so it is shown as one, with its
-          stores under it, rather than as a heading that reads like a label. */}
+      {/* Each category (a site row of the master: BOUAKE, YAKRO FACTORY) heads a card with its warehouses under it. The
+          category carries the Unit/Central type and the ID code; people, receipts and stock are at a warehouse. */}
       {sites.map((site) => {
         const row = masters.warehouses.find((w) => w.name === site.warehouseName);
         const stores = storesFor(site);
@@ -214,27 +214,28 @@ export function WarehousesPage() {
           <div key={site.slug} className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
             <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-3 text-[13px]">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="material-symbols-outlined text-[18px] text-brand-700">warehouse</span>
+                <span className="material-symbols-outlined text-[18px] text-brand-700">category</span>
                 <span className="font-bold text-warmstone-900">{site.warehouseName}</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500">Category</span>
                 <Pill tone="system" label={site.label} />
                 {row && isAdmin && <TypeSelect warehouse={row} />}
                 {row && <CodeInput key={`${row.name}:${row.code ?? ""}`} warehouse={row} editable={isAdmin} />}
               </span>
               <span className="text-warmstone-500 tabular-nums">
-                {stores.length} {stores.length === 1 ? "store" : "stores"} · {receipts.filter((r) => r.warehouse === site.warehouseName).length} receipts
+                {stores.length} {stores.length === 1 ? "warehouse" : "warehouses"}
               </span>
             </div>
             {stores.map((w) => (
               <div key={w.name} className="flex items-center justify-between gap-4 pl-12 pr-5 py-3 text-[13px]">
                 <span className="text-warmstone-800 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[16px] text-warmstone-400">subdirectory_arrow_right</span>
+                  <span className="material-symbols-outlined text-[16px] text-brand-700">warehouse</span>
                   {w.name}
                 </span>
                 <span className="text-warmstone-500 tabular-nums">{receipts.filter((r) => r.warehouse === w.name).length} receipts</span>
               </div>
             ))}
             {!stores.length && (
-              <div className="pl-12 pr-5 py-3 text-[13px] text-warmstone-500">No stores under this warehouse yet.</div>
+              <div className="pl-12 pr-5 py-3 text-[13px] text-warmstone-500">No warehouse in this category yet.</div>
             )}
           </div>
         );
@@ -246,8 +247,8 @@ export function WarehousesPage() {
             Not ready to use
           </h3>
           <p className="px-1 mb-2 text-[12px] text-warmstone-500">
-            A warehouse is offered for users, production and transfers only once it has a Unit/Central type and an ID code.
-            Until then nobody can work there. If one of these was meant to be a store, it should be under its warehouse instead.
+            A category's warehouses are offered for users, production and transfers only once the category has a Unit/Central
+            type and an ID code. If one of these was meant to be a warehouse, it should be in its category instead.
           </p>
           <div className="bg-white border border-warmstone-200 rounded-2xl shadow-xs divide-y divide-warmstone-100">
             {unclassified.map((w) => {
@@ -258,7 +259,7 @@ export function WarehousesPage() {
                     <span className="material-symbols-outlined text-[18px] text-ambernut-700">warning</span>
                     {w.name}
                     {w.site
-                      ? <span className="text-[12px] font-normal text-warmstone-500">store of {w.site}, which isn't ready either</span>
+                      ? <span className="text-[12px] font-normal text-warmstone-500">warehouse in {w.site}, which isn't ready either</span>
                       : <Pill tone="decision" label={`Needs ${gaps.join(" and ")}`} />}
                     {isAdmin && !w.site && <TypeSelect warehouse={w} />}
                     {!w.site && <CodeInput key={`${w.name}:${w.code ?? ""}`} warehouse={w} editable={isAdmin} />}

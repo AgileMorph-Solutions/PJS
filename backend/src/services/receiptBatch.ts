@@ -78,7 +78,7 @@ export async function createReceiptsBatch(warehouse: string, rawRows: unknown, a
       const plan = planIds[n] ? await tx.deliveryPlan.findUnique({ where: { id: planIds[n]! } }) : null;
       if (planIds[n] && !plan) throw new ValidationError(`Row ${n + 1}: delivery plan ${planIds[n]} doesn't exist.`);
       if (plan) {
-        const problem = planFitProblem(plan, { site, lbaCode: verify?.["LBA CODE"] ?? plan.supplierCode ?? "" });
+        const problem = planFitProblem(plan, { site, store: warehouse !== site ? warehouse : null, lbaCode: verify?.["LBA CODE"] ?? plan.supplierCode ?? "" });
         if (problem) throw new ValidationError(`Row ${n + 1}: ${problem}`);
       }
       // Sequential within the transaction, so each call sees the receipt the previous one created.

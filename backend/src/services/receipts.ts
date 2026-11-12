@@ -26,6 +26,7 @@ import { toReceiptRecord } from "../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, ForbiddenError, ValidationError } from "../domain/validation.js";
 import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
+import { planFitProblem } from "./receiptPlanInfo.js";
 
 type Tx = Prisma.TransactionClient;
 export interface WriteOpts {
@@ -102,12 +103,15 @@ export async function createReceipt(warehouse?: string, arrivalDate?: string, de
     const plan = deliveryPlanId ? await tx.deliveryPlan.findUnique({ where: { id: deliveryPlanId } }) : null;
     if (deliveryPlanId && !plan) throw new ValidationError(`Delivery plan ${deliveryPlanId} doesn't exist.`);
     // A plan is filed under its site; the receipt may name the site or one of its stores (a store-bound user's own).
-    if (plan && warehouse && plan.destinationWarehouse !== (await siteOf(tx, warehouse))) {
-      throw new ValidationError(`Delivery plan ${plan.id} is for ${plan.destinationWarehouse}, not ${warehouse}.`);
+    // Same rule as linking a truck afterwards (planFitProblem); the supplier isn't known yet, so it isn't compared.
+    if (plan && warehouse) {
+      const site = (await siteOf(tx, warehouse)) ?? warehouse;
+      const problem = planFitProblem(plan, { site, store: warehouse !== site ? warehouse : null, lbaCode: "" });
+      if (problem) throw new ValidationError(problem);
     }
     // Receipt.warehouse is a hard FK, so a blank receipt needs a real warehouse to point at. The named warehouse wins
-    // over the plan's site, so a truck received at a store is filed at that store.
-    const wh = warehouse ?? plan?.destinationWarehouse
+    // over the plan; with none named, a plan for one store files the truck at that store (Reception is per store).
+    const wh = warehouse ?? plan?.destinationStore ?? plan?.destinationWarehouse
       ?? (await tx.warehouse.findFirst({ where: { site: null, code: { not: null } }, orderBy: { name: "asc" } }))?.name;
     if (!wh) throw new ValidationError("No warehouse with a code exists yet — set one in Masters › Warehouses before creating a receipt.");
     const date = arrivalDate ?? now.slice(0, 10);
