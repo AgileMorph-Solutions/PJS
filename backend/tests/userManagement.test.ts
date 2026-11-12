@@ -122,20 +122,26 @@ describe("user administration", () => {
     expect((await as(P + "admin", "GET", "/api/users")).statusCode).toBe(200);
   });
 
-  // People work at a store (BKE-001), never at the site above it (BOUAKE): see services/users.ts.
-  it("refuses a name that isn't in the master, and a site itself", async () => {
+  // People work at a warehouse (BOUAKE); stores aren't a concept any more, so an old store row is refused: services/users.ts.
+  it("refuses a name that isn't in the master, and an old store row", async () => {
     const body = { username: P + "x", password: PW, role: "warehouse_incharge" };
     const unknown = await as(P + "admin", "POST", "/api/users", { ...body, warehouse: "YAMOUSSOUKRO" });
     expect(unknown.statusCode).toBe(422);
-    const site = await as(P + "admin", "POST", "/api/users", { ...body, warehouse: "BOUAKE" });
-    expect(site.statusCode).toBe(422);
+    await prisma.warehouse.create({ data: { name: "UMTEST-STORE", site: "BOUAKE" } });
+    try {
+      const store = await as(P + "admin", "POST", "/api/users", { ...body, warehouse: "UMTEST-STORE" });
+      expect(store.statusCode).toBe(422);
+      expect(store.json().error).toMatch(/Choose BOUAKE/);
+    } finally {
+      await prisma.warehouse.delete({ where: { name: "UMTEST-STORE" } });
+    }
     expect(await prisma.user.count({ where: { username: P + "x" } })).toBe(0);
   });
 
-  it("creates a user on a store of a typed site, landing in that site's section", async () => {
-    const res = await as(P + "admin", "POST", "/api/users", { username: P + "made", password: PW, role: "qfs_officer", warehouse: "BKE-001" });
+  it("creates a user on a warehouse, landing in its section", async () => {
+    const res = await as(P + "admin", "POST", "/api/users", { username: P + "made", password: PW, role: "qfs_officer", warehouse: "BOUAKE" });
     expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ warehouse: "BKE-001", site: "BOUAKE", warehouseType: "UNIT" });
+    expect(res.json()).toMatchObject({ warehouse: "BOUAKE", site: "BOUAKE", warehouseType: "UNIT" });
   });
 });
 

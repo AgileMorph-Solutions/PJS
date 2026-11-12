@@ -68,12 +68,12 @@ export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
         ), "The activity stays linked to this Lot's stock")}
         {field(cat?.needsTwoLocations ? "Moved from *" : "Where *", (
           <select value={v.locationFrom} onChange={(e) => set("locationFrom", e.target.value)} className={inputCls}>
-            <option value="">Choose a warehouse or bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
+            <option value="">Choose a Bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         ))}
         {cat?.needsTwoLocations && field("Moved to *", (
           <select value={v.locationTo} onChange={(e) => set("locationTo", e.target.value)} className={inputCls}>
-            <option value="">Choose a warehouse or bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
+            <option value="">Choose a Bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         ))}
         {field("Bags", <input inputMode="numeric" value={v.bags} onChange={(e) => set("bags", e.target.value)} className={inputCls} />)}

@@ -41,12 +41,12 @@ export async function ensureDemoUsers(prisma: PrismaClient, env: NodeJS.ProcessE
   const password = env.DEMO_PASSWORD;
   if (env.SEED_DEMO_USERS !== "true" || !password) return [];
 
-  // Stores of finished sites only (contract's isUsableSite): a type and an ID code.
-  const stores = await prisma.warehouse.findMany({
-    where: { siteRef: { site: null, type: { not: null }, code: { not: null } } }, select: { name: true }, orderBy: { name: "asc" },
+  // Finished warehouses only (contract's isUsableSite): a category (Unit/Central) and an ID code.
+  const warehouses = await prisma.warehouse.findMany({
+    where: { site: null, type: { not: null }, code: { not: null } }, select: { name: true }, orderBy: { name: "asc" },
   });
   const created: string[] = [];
-  for (const u of demoUsersFor(stores.map((s) => s.name))) {
+  for (const u of demoUsersFor(warehouses.map((w) => w.name))) {
     if (await prisma.user.findUnique({ where: { username: u.username } })) continue;
     await prisma.user.create({ data: { ...u, passwordHash: hashPassword(password) } });
     created.push(u.username);

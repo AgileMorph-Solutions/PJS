@@ -20,25 +20,25 @@ const inputCls =
 
 type SiteRow = ReturnType<typeof listSites<WarehouseMaster>>[number];
 
-/** The warehouses a person can work at: the STORES of each finished site (Masters › Warehouses), grouped under that
- * site and its Unit/Central type. The site itself isn't offered — the API refuses it (services/users.ts). */
-function StoreOptions({ sites, warehouses }: { sites: SiteRow[]; warehouses: WarehouseMaster[] }) {
+/** The warehouses a person can work at (BOUAKE, YAKRO FACTORY), grouped under their category, Unit or Central. Only
+ * ready ones (a category and an ID code) — the API refuses anything else (services/users.ts). */
+function WarehouseOptions({ warehouses }: { warehouses: SiteRow[] }) {
   return (
     <>
-      {WAREHOUSE_TYPES.flatMap((t) => sites.filter((site) => site.type === t.value).map((site) => {
-        const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name).sort();
-        return stores.length ? (
-          <optgroup key={site.name} label={site.name}>
-            {stores.map((store) => <option key={store} value={store}>{store}</option>)}
+      {WAREHOUSE_TYPES.map((t) => {
+        const inCategory = warehouses.filter((w) => w.type === t.value);
+        return inCategory.length ? (
+          <optgroup key={t.value} label={t.label}>
+            {inCategory.map((w) => <option key={w.name} value={w.name}>{w.name}</option>)}
           </optgroup>
         ) : null;
-      }))}
+      })}
     </>
   );
 }
 
-/** Admin only: create users, set their role, assign each to the one store they work at. They land in that store's
- * site's section and see only their store (backend domain/site.ts resolveScope). */
+/** Admin only: create users, set their role, assign each to the one warehouse they work at, which is the section they
+ * land in. */
 export function UsersPage() {
   const { masters } = useTracking();
   const users = useUsers();
@@ -46,9 +46,9 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Finished sites only (a type and an ID code, contract's isUsableSite): their stores are what can be assigned.
-  const typedSites = useMemo(() => listSites(masters.warehouses), [masters.warehouses]);
-  const storeNames = useMemo(() => new Set(masters.warehouses.filter((w) => w.site && typedSites.some((s) => s.name === w.site)).map((w) => w.name)), [masters.warehouses, typedSites]);
+  // Ready warehouses only (a category and an ID code, contract's isUsableSite): those are what can be assigned.
+  const ready = useMemo(() => listSites(masters.warehouses), [masters.warehouses]);
+  const readyNames = useMemo(() => new Set(ready.map((w) => w.name)), [ready]);
   const needsWarehouse = form.role !== "admin";
 
   async function handleCreate(e: FormEvent) {
@@ -84,19 +84,19 @@ export function UsersPage() {
       label: "Warehouse", filter: { value: (u) => u.warehouse ?? (u.role === "admin" ? "All" : "Not assigned"), kind: "select" },
       render: (u) => {
         if (u.role === "admin") return <span className="text-warmstone-500">All</span>;
-        // Assigned to a whole site (before stores were assignable) or to nothing: say so, and let the admin pick the store.
-        const onStore = u.warehouse !== null && storeNames.has(u.warehouse);
+        // On an old store row, or on nothing: say so, and let the admin pick the warehouse.
+        const onWarehouse = u.warehouse !== null && readyNames.has(u.warehouse);
         return (
           <div className="flex flex-col gap-1">
-            <select aria-label={`Store for ${u.username}`} value={onStore ? u.warehouse! : ""}
+            <select aria-label={`Warehouse for ${u.username}`} value={onWarehouse ? u.warehouse! : ""}
               onChange={(e) => e.target.value && void patch(u, { warehouse: e.target.value })}
               className="px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-semibold text-warmstone-800 outline-none focus:border-brand-700">
-              <option value="">{u.warehouse && !onStore ? `${u.warehouse} — choose a store…` : "Choose a store…"}</option>
-              <StoreOptions sites={typedSites} warehouses={masters.warehouses} />
+              <option value="">{u.warehouse && !onWarehouse ? `${u.warehouse}: choose a warehouse…` : "Choose a warehouse…"}</option>
+              <WarehouseOptions warehouses={ready} />
             </select>
-            {onStore
-              ? <span className="text-[11px] text-warmstone-500">{u.site} · {u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "untyped"}</span>
-              : <Pill tone="decision" label={u.warehouse ? "On a whole category: move to a warehouse" : "Not assigned to a warehouse"} />}
+            {onWarehouse
+              ? <span className="text-[11px] text-warmstone-500">{u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "No category"}</span>
+              : <Pill tone="decision" label={u.warehouse ? `${u.warehouse} isn't a warehouse: choose one` : "Not assigned to a warehouse"} />}
           </div>
         );
       },
@@ -121,7 +121,7 @@ export function UsersPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader kicker="Administration" title="Users" lede="Create accounts and assign each person a role and the one warehouse they work at. Warehouses are listed under their Unit or Central site from Masters › Warehouses; a site needs a type and an ID code before its warehouses can be assigned." />
+      <PageHeader kicker="Administration" title="Users" lede="Create accounts and assign each person a role and the one warehouse they work at. Warehouses are listed under their category, Unit or Central; a warehouse needs a category and an ID code (Masters › Warehouses) before anyone can be assigned to it." />
       <CollapsibleCard title="Add user" defaultOpen>
         <form onSubmit={handleCreate} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-3 items-end">
           <div><label className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5" htmlFor="u-username">Username</label>
@@ -134,10 +134,10 @@ export function UsersPage() {
             <select id="u-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className={inputCls}>
               {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select></div>
-          <Field label="Warehouse" hint={needsWarehouse && !storeNames.size ? "No warehouse is ready yet: add one to a category in Masters › Warehouses." : undefined}>
+          <Field label="Warehouse" hint={needsWarehouse && !ready.length ? "No warehouse is ready yet: add one in Masters › Warehouses, with its category and ID code." : undefined}>
             <Select required={needsWarehouse} disabled={!needsWarehouse} value={needsWarehouse ? form.warehouse : ""} onChange={(e) => setForm({ ...form, warehouse: e.target.value })}>
               <option value="">{needsWarehouse ? "Select a warehouse…" : "All (admin)"}</option>
-              <StoreOptions sites={typedSites} warehouses={masters.warehouses} />
+              <WarehouseOptions warehouses={ready} />
             </Select>
           </Field>
           <button type="submit" disabled={busy}

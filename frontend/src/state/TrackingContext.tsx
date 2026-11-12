@@ -44,10 +44,9 @@ interface TrackingApi {
 
   masters: Masters;
   addSupplier: (s: Supplier) => void;
-  /** `classification` is either `{ kind }` (a new SITE) or `{ site }` (a STORE under an existing
-   * site) — never both, matching Warehouse's Site -> Store hierarchy. Omitted entirely, the
-   * warehouse is added unclassified, same as this method's original behavior. */
-  addWarehouse: (name: string, classification?: { kind?: string; site?: string }) => void;
+  /** `classification` is a new warehouse's `kind` (Village/Regional/Factory) and `type`, its category (UNIT/CENTRAL).
+   * Stores under a warehouse aren't offered any more; the API refuses `site`. */
+  addWarehouse: (name: string, classification?: { kind?: string; type?: string }) => void;
 
   /** Flush any buffered edits for a stage immediately — call on blur / before navigating away. */
   flushStage: (id: string, stageId: string) => void;
@@ -225,8 +224,8 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       },
       addWarehouse: (name, classification) => {
         const kind = classification?.kind ?? null;
-        const site = classification?.site ?? null;
-        setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind, site }] }));
+        const type = classification?.type ?? null;
+        setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind, type, site: null }] }));
         api.addWarehouse(name, classification).catch((e) => { fail(e); void refresh(); });
       },
 

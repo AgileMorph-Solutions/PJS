@@ -1,9 +1,10 @@
 /**
- * Users work at a STORE (BKE-001), not at the site above it (BOUAKE). Pins the rule in domain/site.ts resolveScope,
- * through the HTTP layer: a store-bound user sees their own store's records and what is filed under the site's own
- * name, never a sibling store's; the masters list shows them their site and their store only; they land in their
- * site's section (`site` + its Unit/Central type on /me); and new accounts can only be put on a store of a ready site.
- * The failure this guards against is silent: a sibling store's trucks quietly showing up in someone's list.
+ * Users work at a WAREHOUSE (BOUAKE); stores under one aren't a concept the app offers any more, but a database may still
+ * hold old store rows and accounts on them. Pins how those keep behaving (domain/site.ts resolveScope), through the HTTP
+ * layer: an account on an old store sees its own store's records and what is filed under the warehouse's own name,
+ * never a sibling store's; the masters list shows them their warehouse and their store only; they land in their
+ * warehouse's section. And new accounts go on a warehouse, never a store. The failure this guards against is silent: a
+ * sibling store's trucks quietly showing up in someone's list.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -123,8 +124,9 @@ describe("empty jute bags received from another warehouse", () => {
   it("offers a Warehouse Incharge every warehouse to receive from — though their masters list holds only their own", async () => {
     const res = await as("wiA", "GET", "/api/jute-empty-bag-receipts/sources");
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual(expect.arrayContaining([A, B]));
-    expect(res.json()).not.toContain(SITE); // a category only groups warehouses
+    expect(res.json()).toContain(SITE);
+    expect(res.json()).not.toContain(A); // old store rows are not warehouses
+    expect(res.json()).not.toContain(B);
   });
 
   it("keeps the list from the roles that never record jute", async () => {
@@ -136,11 +138,11 @@ describe("empty jute bags received from another warehouse", () => {
 describe("assigning users", () => {
   const body = { password: PW, role: "warehouse_incharge" };
 
-  it("puts a new user on a store, and refuses the site itself", async () => {
-    const ok = await as("admin", "POST", "/api/users", { ...body, username: P + "new", warehouse: B });
+  it("puts a new user on the warehouse, and refuses an old store row", async () => {
+    const ok = await as("admin", "POST", "/api/users", { ...body, username: P + "new", warehouse: SITE });
     expect(ok.statusCode).toBe(201);
-    expect(ok.json()).toMatchObject({ warehouse: B, site: SITE, warehouseType: "UNIT" });
-    expect((await as("admin", "POST", "/api/users", { ...body, username: P + "onsite", warehouse: SITE })).statusCode).toBe(422);
+    expect(ok.json()).toMatchObject({ warehouse: SITE, site: SITE, warehouseType: "UNIT" });
+    expect((await as("admin", "POST", "/api/users", { ...body, username: P + "onstore", warehouse: B })).statusCode).toBe(422);
   });
 
   it("keeps an account already on a whole site working: it still sees every store, and a password reset isn't refused", async () => {

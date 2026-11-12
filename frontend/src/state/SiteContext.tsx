@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo } from "react";
-import { Link, Navigate, Outlet, matchPath, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, Outlet, matchPath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { sitesFrom, warehouseSlug, type SiteConfig, type SiteSlug } from "../config/sites";
 import { homePathFor, useMe } from "./AuthContext";
 import { useTracking } from "./TrackingContext";
@@ -59,26 +59,6 @@ export function useSwitchSite() {
     const qs = search.toString();
     navigate(`/${target}${rest}${qs ? `?${qs}` : ""}`);
   };
-}
-
-/** The `?store=` value for Reception's view of a site's trucks that are at no store (contract's receiptStore is null). */
-export const NO_STORE = "none";
-
-/**
- * Which store Reception is showing: Reception works one store (BKE-001) at a time, and the site above it (BOUAKE) is
- * only the group it sits in. `?store=` when it names one of this site's stores (or NO_STORE), else the person's own
- * store, else the site's first. "" only when the site has no store at all, in which case the site is the one place.
- * Shared by the list and the batch grid, so the store a truck is entered at is the store being looked at.
- */
-export function useReceptionStore(): { store: string; isNoStore: boolean } {
-  const site = useSite();
-  const me = useMe();
-  const [params] = useSearchParams();
-  const asked = params.get("store") ?? "";
-  if (asked === NO_STORE && site.stores.length) return { store: NO_STORE, isNoStore: true };
-  if (site.stores.includes(asked)) return { store: asked, isNoStore: false };
-  const own = me.warehouse && site.stores.includes(me.warehouse) ? me.warehouse : undefined;
-  return { store: own ?? site.stores[0] ?? "", isNoStore: false };
 }
 
 const LAST_SITE_KEY = "anagroci.lastSite";

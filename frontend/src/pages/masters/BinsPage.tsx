@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { listSites } from "@anagroci/contract/domain/siteType";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
@@ -19,15 +20,9 @@ export function BinsPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  // The stores a Bin can be in: every warehouse row that belongs to a site (BKE-001, ANAGROCI-01, ...).
-  const stores = useMemo(
-    () =>
-      masters.warehouses
-        .filter((w) => w.site)
-        .map((w) => w.name)
-        .sort(),
-    [masters.warehouses],
-  );
+  // The warehouses a Bin can be in (BOUAKE, YAKRO FACTORY): the ready ones this person can see — only their own for a
+  // non-admin, since /api/masters is scoped to it.
+  const stores = useMemo(() => listSites(masters.warehouses).map((w) => w.name), [masters.warehouses]);
   const storeOf = useMemo(
     () => new Map((masters.binInfo ?? []).map((b) => [b.code, b.store])),
     [masters.binInfo],
@@ -83,7 +78,7 @@ export function BinsPage() {
           <div>
             <label
               htmlFor="bin-store"
-              className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5"
+              className="block text-[12px] font-semibold text-warmstone-700 mb-1.5"
             >
               Warehouse it is in
             </label>
@@ -101,11 +96,10 @@ export function BinsPage() {
                 </option>
               ))}
             </select>
-            {/* A site (BOUAKE, YAKRO FACTORY) can't hold a Bin, only a store under one can — so an
-                empty list means no store exists yet, and the fix lives on the Warehouses page. */}
+            {/* An empty list means no warehouse is ready yet (a category and an ID code): the fix is on the Warehouses page. */}
             {!stores.length && (
               <p className="mt-1.5 text-[12px] text-warmstone-500">
-                No warehouses yet.{" "}
+                No warehouse is ready yet.{" "}
                 <Link
                   to="/masters/warehouses"
                   className="font-semibold text-brand-700 hover:underline"
