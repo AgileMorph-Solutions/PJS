@@ -9,19 +9,39 @@ import { WAREHOUSE_TYPES, type WarehouseType } from "@anagroci/contract/data/war
 import { isValidWarehouseCode } from "@anagroci/contract/domain/ids";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { normalizeOriginName, findSimilarOrigin } from "@anagroci/contract/domain/origin";
-import { ValidationError } from "../domain/validation.js";
+import { ForbiddenError, ValidationError } from "../domain/validation.js";
+import { resolveScope } from "../domain/site.js";
 
 const VALID_KINDS = new Set<string>(WAREHOUSE_KINDS.map((k) => k.value));
 const VALID_TYPES = new Set<string>(WAREHOUSE_TYPES.map((t) => t.value));
 
-export async function listMasters() {
+/**
+ * The names a viewer's warehouse covers (its site row, stores and aliases), or undefined for admin, who sees every
+ * warehouse. A non-admin with no warehouse yet covers nothing: they are shown no warehouse, never someone else's.
+ */
+export async function viewerWarehouseNames(viewer: { role: string; warehouse: string | null }): Promise<string[] | undefined> {
+  if (viewer.role === "admin") return undefined;
+  return viewer.warehouse ? resolveScope(viewer.warehouse) : [];
+}
+
+/**
+ * `own` scopes the warehouse lists to one site (undefined = admin, everything): its own row, its stores, its aliases
+ * and the Bins in its stores. Other sites never reach a non-admin's screen — where a person genuinely needs another
+ * site's name (a BKT's destination), that has its own endpoint (services/transfers.ts listTransferDestinations).
+ * Bins imported without a store belong to no site, so they stay visible: hiding them would strand real stock.
+ */
+export async function listMasters(own?: string[]) {
+  const mine = own ? new Set(own) : undefined;
   const [suppliers, warehouses, bins, origins, aliases] = await Promise.all([
     prisma.supplier.findMany({ orderBy: { code: "asc" } }),
-    prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
-    prisma.bin.findMany({ orderBy: { code: "asc" } }),
+    // By name only: `own` (domain/site.ts resolveScope) already lists every store the viewer may see, and a store-bound
+    // viewer must not be handed their sibling stores through `site in own`.
+    prisma.warehouse.findMany({ where: own ? { name: { in: own } } : {}, orderBy: { name: "asc" } }),
+    prisma.bin.findMany({ where: own ? { OR: [{ warehouseName: null }, { warehouseName: { in: own } }] } : {}, orderBy: { code: "asc" } }),
     prisma.origin.findMany({ orderBy: { name: "asc" } }),
     prisma.warehouseAlias.findMany({ orderBy: { alias: "asc" } }),
   ]);
+  const visibleAliases = mine ? aliases.filter((a) => mine.has(a.warehouseName)) : aliases;
   return {
     // Lean on purpose: every signed-in role reads this list (Branch Managers and QFS Officers too), so the register's
     // contact and bank details stay on the supplier page (services/suppliers.ts), which only admin / Incharge reach.
@@ -34,7 +54,7 @@ export async function listMasters() {
     // which users can be assigned to it; `aliases` lets the UI group a store under its site.
     // `code` (site rows only) is what every system ID issued there carries — see setWarehouseCode.
     warehouses: warehouses.map((w) => ({ name: w.name, kind: w.kind, type: w.type, site: w.site, code: w.code })),
-    aliases: aliases.map((a) => ({ alias: a.alias, warehouseName: a.warehouseName })),
+    aliases: visibleAliases.map((a) => ({ alias: a.alias, warehouseName: a.warehouseName })),
     bins: bins.map((b) => b.code),
     // Which store each Bin is in (null = imported without one), so a truck can be offered the Bins of its own store first.
     binInfo: bins.map((b) => ({ code: b.code, store: b.warehouseName })),
@@ -68,6 +88,16 @@ export async function addSupplier(code: string, name: string) {
  * behavior this endpoint always had), but never both at once: that would leave a row claiming to
  * be a site and someone's store simultaneously, which nothing else in this app expects.
  */
+/**
+ * A non-admin adds stores and Bins only at their own warehouse; a new SITE is an admin's to create (it becomes a
+ * section of the app and something users can be assigned to). `own` undefined = admin.
+ */
+export function assertCanAddWarehouse(own: string[] | undefined, opts: { kind?: string; site?: string }) {
+  if (!own) return;
+  if (opts.kind || !opts.site) throw new ForbiddenError("Only an admin can add a new warehouse site.");
+  if (!own.includes(opts.site)) throw new ForbiddenError("You can only add stores to your own warehouse.");
+}
+
 export async function addWarehouse(name: string, opts: { kind?: WarehouseKind; site?: string; type?: WarehouseType } = {}) {
   const { kind, site, type } = opts;
   if (kind && site) throw new ValidationError("A warehouse is either a site (kind) or a store under one (site), not both.");
@@ -91,8 +121,8 @@ export async function setWarehouseType(name: string, type: string | null) {
   const wh = await prisma.warehouse.findUnique({ where: { name } });
   if (!wh) throw Object.assign(new Error("Warehouse not found"), { code: "P2025" });
   assertTypeFits(type, wh.site);
-  // Users are pinned to typed sites; clearing the type of a site that has users would strand them.
-  if (!type && (await prisma.user.count({ where: { warehouse: name, active: true } }))) {
+  // Users are pinned to a typed site or one of its stores; clearing the type would strand them.
+  if (!type && (await prisma.user.count({ where: { OR: [{ warehouse: name }, { warehouseRef: { site: name } }], active: true } }))) {
     throw new ValidationError(`"${name}" has active users — reassign them before clearing its type.`);
   }
   return prisma.warehouse.update({ where: { name }, data: { type } });
@@ -133,8 +163,10 @@ const siteIdPrefixAnyYear = (kind: string, code: string) => `${kind}-${code}-`;
  * A new Bin from Masters › Bins. A Bin is a place inside a store, so the store is required (it is also what lets the Allocate-Bin
  * step offer a truck the Bins of its own store first). The code is kept to letters, digits and - _ . (the Bin step reads several
  * Bins separated by "/" or ","), can't be a store's own code, and can't already exist: a duplicate is refused, never quietly merged.
+ * `own` (undefined = admin) is the caller's warehouse: a non-admin adds Bins only to its stores. Checked after the store is
+ * known to be real, so a missing or mistyped store still gets its own message.
  */
-export async function createBin(input: { code?: string; warehouseName?: string }) {
+export async function createBin(input: { code?: string; warehouseName?: string }, own?: string[]) {
   const code = (input.code ?? "").trim().toUpperCase();
   if (!code) throw new ValidationError("A Bin needs a code.");
   if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(code)) throw new ValidationError(`"${code}" can only use letters, digits and - _ . (no spaces, slashes or commas).`);
@@ -143,6 +175,7 @@ export async function createBin(input: { code?: string; warehouseName?: string }
   if (!(await prisma.warehouse.findFirst({ where: { name: store, site: { not: null } }, select: { name: true } }))) {
     throw new ValidationError(`"${store}" isn't a store. Choose one of the stores of a warehouse.`);
   }
+  if (own && !own.includes(store)) throw new ForbiddenError("You can only add Bins to your own warehouse's stores.");
   if (await prisma.warehouse.findFirst({ where: { name: code, site: { not: null } }, select: { name: true } })) {
     throw new ValidationError(`${code} is a store (a warehouse code), not a Bin. Use a Bin code inside it, e.g. ${code}-BIN-012.`);
   }

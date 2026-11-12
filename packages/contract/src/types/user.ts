@@ -1,14 +1,16 @@
 import type { Role } from "../data/roles.js";
 import type { WarehouseType } from "../data/warehouseTypes.js";
 
-/** What the API returns for a user — never the password hash. `warehouseType` is looked up from the
- * user's warehouse (null for admin, who has none). */
+/** What the API returns for a user — never the password hash. `warehouse` is the store they work at (BKE-001), or a
+ * whole site for an account assigned before stores were assignable; null for admin. `site` and `warehouseType` are
+ * looked up from it: the site that store belongs to (the app section they land in) and that site's Unit/Central type. */
 export interface UserView {
   id: string;
   username: string;
   displayName: string;
   role: Role;
   warehouse: string | null;
+  site: string | null;
   warehouseType: WarehouseType | null;
   active: boolean;
 }

@@ -1,6 +1,7 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { readyForTransfer, transferDestinationLabel, transferDestinations, TRANSFER_STATE_LABELS } from "@anagroci/contract/domain/transfers";
+import { readyForTransfer, transferDestinationLabel, TRANSFER_STATE_LABELS, type TransferDestination } from "@anagroci/contract/domain/transfers";
+import { WAREHOUSE_TYPE_LABEL } from "../../data/warehouseTypes";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -51,7 +52,14 @@ export function TransfersPage() {
   const [picked, setPicked] = useState<Record<string, Pick>>({});
 
   const canSend = siteTypeOf(masters.warehouses, masters.aliases, site.warehouseName) === "UNIT";
-  const destinations = transferDestinations(masters.warehouses, site.warehouseName);
+  // From the server, not the master: a Unit warehouse's own master holds only itself, yet it sends to a Central one.
+  const [destinations, setDestinations] = useState<TransferDestination[]>([]);
+  useEffect(() => {
+    if (!canSend) return;
+    let live = true;
+    api.transferDestinations(site.warehouseName).then((d) => { if (live) setDestinations(d); }).catch(() => { if (live) setDestinations([]); });
+    return () => { live = false; };
+  }, [canSend, site.warehouseName]);
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
   // Marked "Yes" on the receipt says it is ready; only the BKTs themselves say it has already gone on one.
@@ -145,7 +153,12 @@ export function TransfersPage() {
               <Field id="tr-to" label="To warehouse" hint={destinations.length ? undefined : "No warehouse is available. In Masters, a site needs the Central type."}>
                 <select id="tr-to" required value={to} onChange={(e) => setTo(e.target.value)} className={inputClass}>
                   <option value="" disabled>Select…</option>
-                  {destinations.map((name) => <option key={name} value={name}>{name}</option>)}
+                  {/* The warehouses of each Central site from Masters › Warehouses; a site with no store yet is offered itself. */}
+                  {destinations.map((d) => (
+                    <optgroup key={d.site} label={`${d.site} · ${WAREHOUSE_TYPE_LABEL.CENTRAL}`}>
+                      {(d.stores.length ? d.stores : [d.site]).map((name) => <option key={name} value={name}>{name}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
               </Field>
               <Field id="tr-remarks" label="Remarks"><input id="tr-remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} className={inputClass} /></Field>

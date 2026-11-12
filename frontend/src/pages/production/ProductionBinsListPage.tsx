@@ -4,6 +4,7 @@ import { FilterBar } from "../../components/ui/FilterBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import { useProductionBins } from "../../state/TrackingContext";
 import type { ProductionBinSummary } from "../../repository/api";
+import { PRODUCTION_PAGE_SIZE } from "../../components/production/columns";
 
 /** The pivot view: every production Bin, with how many BTMs fed it and how many Lots came out of
  * it. A Bin holds many BTMs and many Lots, never the reverse (confirmed rule) — this list is the
@@ -38,7 +39,7 @@ export function ProductionBinsListPage() {
               className="w-full sm:w-64"
             />
           </FilterBar>
-          <DataTable
+          <DataTable pageSize={PRODUCTION_PAGE_SIZE}
             columns={columns}
             rows={search.filtered}
             keyFn={(r) => r.binNo}

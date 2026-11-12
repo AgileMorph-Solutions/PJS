@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { AuthProvider, useAuth, homePathFor } from "./state/AuthContext";
 import { RequireRole } from "./components/RequireRole";
 import { LoginPage } from "./pages/LoginPage";
@@ -8,7 +8,7 @@ import { BatchEntryPage } from "./pages/warehouse/BatchEntryPage";
 import { SupplierAssignmentPage } from "./pages/masters/SupplierAssignmentPage";
 import { MySuppliersPage } from "./pages/MySuppliersPage";
 import { MySubmissionsPage } from "./pages/MySubmissionsPage";
-import type { Role } from "./data/roles";
+import { canAccessProduction, type Role } from "./data/roles";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 import { PendingApprovalsProvider } from "./state/PendingApprovals";
@@ -16,9 +16,9 @@ import { SiteLayout } from "./state/SiteContext";
 import { ProductionFactoryLayout } from "./state/productionFactory";
 
 import { DashboardPage } from "./pages/DashboardPage";
-import { BatchesListPage } from "./pages/production/BatchesListPage";
-import { NewBatchPage } from "./pages/production/NewBatchPage";
-import { BatchDetailPage } from "./pages/production/BatchDetailPage";
+import { ProductionRunsPage } from "./pages/production/ProductionRunsPage";
+import { NewProductionRunPage } from "./pages/production/NewProductionRunPage";
+import { ProductionRunPage } from "./pages/production/ProductionRunPage";
 import { BtmListPage } from "./pages/production/BtmListPage";
 import { BtmDetailPage } from "./pages/production/BtmDetailPage";
 import { ProductionBinsListPage } from "./pages/production/ProductionBinsListPage";
@@ -58,6 +58,18 @@ import { OriginsPage } from "./pages/masters/OriginsPage";
 
 /** Everything a Branch Manager / QFS Officer can't reach; the API refuses it for them too. */
 const REVIEWERS: Role[] = ["admin", "warehouse_incharge"];
+
+/** /production/runs/:code/loads/:id from when a load had a page of its own: the load now opens inside its run. */
+function OldLoadLink() {
+  const { code = "", id = "" } = useParams();
+  return <Navigate to={`/production/runs/${encodeURIComponent(code)}?stage=intake&load=${encodeURIComponent(id)}`} replace />;
+}
+
+/** /production/batches/:code from before production runs were renamed. */
+function OldBatchLink() {
+  const { code = "" } = useParams();
+  return <Navigate to={`/production/runs/${encodeURIComponent(code)}`} replace />;
+}
 
 /** Dashboard for admin / Warehouse Incharge; everyone else lands on their own Reception. */
 function HomeRoute() {
@@ -105,9 +117,9 @@ function AppRoutes() {
           <Routes>
             <Route path="/" element={<HomeRoute />} />
 
-            {/* One /:site/* tree for both sections (see state/SiteContext.tsx) - "/unit/receipts"
-                and "/central/receipts" render the exact same components, scoped by useSite(), not
-                two literal duplicated route trees. SiteLayout 404s on an unrecognized :site rather
+            {/* One /:site/* tree for every warehouse of the master (see state/SiteContext.tsx) -
+                "/bouake/receipts" and "/yakro-factory/receipts" render the exact same components,
+                scoped by useSite(), not duplicated route trees. SiteLayout 404s on an unrecognized :site rather
                 than silently rendering garbage. */}
             <Route path="/:site" element={<SiteLayout />}>
               <Route path="receipts" element={<ReceiptsListPage />} />
@@ -164,19 +176,6 @@ function AppRoutes() {
                 <Route path="warehouse-activity-ledger" element={<WarehouseActivityLedgerPage />} />
               </Route>
 
-              <Route path="/production/btm" element={<BtmListPage />} />
-              <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />
-              <Route path="/production/bins" element={<ProductionBinsListPage />} />
-              <Route path="/production/bins/:binNo" element={<ProductionBinDetailPage />} />
-              <Route path="/production/lots" element={<LotsListPage />} />
-              <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
-              <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
-              {/* The workbook-import pages above are not linked from the sidebar; Batches is. */}
-              <Route path="/production" element={<Navigate to="/production/batches" replace />} />
-              <Route element={<ProductionFactoryLayout />}>
-                <Route path="/production/batches/new" element={<NewBatchPage />} />
-              </Route>
-
               <Route path="/masters/suppliers" element={<SuppliersPage />} />
               <Route path="/masters/suppliers/:code" element={<SupplierDetailPage />} />
               <Route path="/masters/warehouses" element={<WarehousesPage />} />
@@ -187,12 +186,33 @@ function AppRoutes() {
               <Route path="/supplier-assignment" element={<SupplierAssignmentPage />} />
             </Route>
 
-            {/* The QFS Officer takes each load's moisture check and the silo checks on the batch page (auth/policy.ts). */}
-            <Route element={<RequireRole roles={[...REVIEWERS, "qfs_officer"]} />}>
-              {/* Batch & Intake is for one factory: an admin's choice of it is held here. */}
+            {/* Production is the factory's (Central warehouse's) work: a Unit warehouse user sees none of it, whatever their
+                role (contract's canAccessProduction; the API refuses them in auth/productionAccess.ts). */}
+            <Route element={<RequireRole allow={(me) => canAccessProduction(me.role, me.warehouseType)} />}>
+              <Route element={<RequireRole roles={REVIEWERS} />}>
+                <Route path="/production/btm" element={<BtmListPage />} />
+                <Route path="/production/btm/:btmNo" element={<BtmDetailPage />} />
+                <Route path="/production/bins" element={<ProductionBinsListPage />} />
+                <Route path="/production/bins/:binNo" element={<ProductionBinDetailPage />} />
+                <Route path="/production/lots" element={<LotsListPage />} />
+                <Route path="/production/lots/:lotNo" element={<LotDetailPage />} />
+                <Route path="/production/tables/:tableId" element={<StandaloneTablePage />} />
+                <Route element={<ProductionFactoryLayout />}>
+                  <Route path="/production/runs/new" element={<NewProductionRunPage />} />
+                </Route>
+              </Route>
+              {/* The workbook-import pages above are not linked from the sidebar; Batches is. */}
+              <Route path="/production" element={<Navigate to="/production/runs" replace />} />
+              {/* Production runs were called batches; old links still land on the same page. */}
+              <Route path="/production/batches" element={<Navigate to="/production/runs" replace />} />
+              <Route path="/production/batches/:code" element={<OldBatchLink />} />
+              {/* The QFS Officer takes each load's moisture check and the silo checks on the batch page (auth/policy.ts).
+                  Batch & Intake is for one factory: an admin's choice of it is held here. */}
               <Route element={<ProductionFactoryLayout />}>
-                <Route path="/production/batches" element={<BatchesListPage />} />
-                <Route path="/production/batches/:code" element={<BatchDetailPage />} />
+                <Route path="/production/runs" element={<ProductionRunsPage />} />
+                <Route path="/production/runs/:code" element={<ProductionRunPage />} />
+                {/* A load is worked on inside its run; an old link to a load page opens it there. */}
+                <Route path="/production/runs/:code/loads/:id" element={<OldLoadLink />} />
               </Route>
             </Route>
 

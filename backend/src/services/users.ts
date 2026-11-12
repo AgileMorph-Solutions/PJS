@@ -1,8 +1,9 @@
 /**
  * Users: creation, listing, updates. Scope rules live here so the route stays thin:
  *  - admin is unscoped (no warehouse);
- *  - every other role needs a warehouse that is a SITE row with a `type` set — a user pinned to an
- *    untyped or store-level row would have no section to land in.
+ *  - every other role is assigned to one STORE (BKE-001, YAKRO…) — the warehouse they actually work at — of a site
+ *    that has a Unit/Central type and an ID code, so they land in that site's section and see only their store
+ *    (domain/site.ts resolveScope). Accounts assigned to a whole site before this keep working; new ones can't be.
  */
 import { isRole, type Role } from "@anagroci/contract/data/roles";
 import type { UserView } from "@anagroci/contract/types/user";
@@ -10,18 +11,26 @@ import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { prisma } from "../db.js";
 import { hashPassword } from "../auth/password.js";
 import { ValidationError } from "../domain/validation.js";
+import { siteSetupGaps } from "@anagroci/contract/domain/siteType";
 
 async function toView(u: { id: string; username: string; displayName: string; role: string; warehouse: string | null; active: boolean }): Promise<UserView> {
-  const wh = u.warehouse ? await prisma.warehouse.findUnique({ where: { name: u.warehouse }, select: { type: true } }) : null;
-  return { id: u.id, username: u.username, displayName: u.displayName, role: u.role as Role, warehouse: u.warehouse, warehouseType: (wh?.type as WarehouseType | null | undefined) ?? null, active: u.active };
+  const wh = u.warehouse ? await prisma.warehouse.findUnique({ where: { name: u.warehouse }, select: { site: true, type: true, siteRef: { select: { type: true } } } }) : null;
+  const type = wh ? (wh.site ? wh.siteRef?.type : wh.type) : null;
+  return {
+    id: u.id, username: u.username, displayName: u.displayName, role: u.role as Role, warehouse: u.warehouse,
+    site: wh ? wh.site ?? u.warehouse : null, warehouseType: (type as WarehouseType | null | undefined) ?? null, active: u.active,
+  };
 }
 
+/** Only on a create or a change of warehouse/role: an account already on a whole site isn't refused for an unrelated edit. */
 async function assertAssignableWarehouse(role: Role, warehouse: string | null | undefined) {
   if (role === "admin") return;
   if (!warehouse) throw new ValidationError("Assign this user to a warehouse.");
-  const wh = await prisma.warehouse.findUnique({ where: { name: warehouse } });
-  if (!wh || wh.site !== null) throw new ValidationError(`"${warehouse}" isn't a warehouse site.`);
-  if (!wh.type) throw new ValidationError(`"${warehouse}" has no Unit/Central type yet — set one in Masters first.`);
+  const wh = await prisma.warehouse.findUnique({ where: { name: warehouse }, include: { siteRef: true } });
+  if (!wh) throw new ValidationError(`"${warehouse}" isn't in the warehouse master.`);
+  if (!wh.siteRef) throw new ValidationError(`"${warehouse}" is a site, not a warehouse a person works at. Choose one of its stores.`);
+  const gaps = siteSetupGaps(wh.siteRef);
+  if (gaps.length) throw new ValidationError(`"${warehouse}" belongs to ${wh.siteRef.name}, which isn't ready yet: it needs ${gaps.join(" and ")} (Masters › Warehouses).`);
 }
 
 export async function listUsers(): Promise<UserView[]> {
@@ -57,7 +66,7 @@ export async function updateUser(id: string, patch: UserPatch): Promise<UserView
   const role = patch.role ?? current.role;
   if (!isRole(role)) throw new ValidationError(`Unknown role "${role}".`);
   const warehouse = role === "admin" ? null : patch.warehouse !== undefined ? patch.warehouse : current.warehouse;
-  await assertAssignableWarehouse(role, warehouse);
+  if (role !== current.role || warehouse !== current.warehouse) await assertAssignableWarehouse(role, warehouse);
   if (patch.password !== undefined && patch.password.length < 8) throw new ValidationError("Password must be at least 8 characters.");
 
   const u = await prisma.user.update({

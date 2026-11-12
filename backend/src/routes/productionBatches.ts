@@ -6,7 +6,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { currentUser } from "../auth/plugin.js";
 import { scopedWarehouse } from "../auth/scope.js";
-import { batchOfBin, createBatch, getBatch, listAvailableBins, listBatches, productionSite, type CreateBatchInput } from "../services/production/batches.js";
+import { batchOfBin, getBatch, listAvailableBins, listBatches, productionSite } from "../services/production/batches.js";
+import { startRun, type StartRunInput } from "../services/production/startRun.js";
 
 /** The factory site the caller works at — shared by every production route. */
 export async function siteFor(req: FastifyRequest) {
@@ -21,7 +22,8 @@ export async function productionBatchRoutes(app: FastifyInstance) {
 
   app.post("/api/production/batches", async (req, reply) => {
     const site = await siteFor(req);
-    const code = await createBatch(site, currentUser(req).id, (req.body ?? {}) as CreateBatchInput);
+    // The bins, and any loads already brought from them, in one save (services/production/startRun.ts).
+    const code = await startRun(site, currentUser(req).id, (req.body ?? {}) as StartRunInput);
     return reply.code(201).send(await getBatch(site, code));
   });
 

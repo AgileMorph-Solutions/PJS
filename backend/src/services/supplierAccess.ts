@@ -8,7 +8,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "../db.js";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
 import { addSupplier } from "./masters.js";
-import { resolveSite } from "../domain/site.js";
+import { resolveScope } from "../domain/site.js";
 
 /** A Warehouse Incharge manages only their own warehouse's Branch Managers; admin manages any. */
 async function assertManagesBranchManager(actor: User, bmId: string) {
@@ -66,7 +66,7 @@ export async function requestSupplier(user: User, name: string | undefined, code
 
 /** BM: own requests. Warehouse Incharge/admin: requests from Branch Managers in their scope. */
 export async function listSupplierRequests(user: User, status?: string) {
-  const site = user.role === "branch_manager" ? undefined : user.role === "admin" || !user.warehouse ? undefined : await resolveSite(user.warehouse);
+  const site = user.role === "branch_manager" ? undefined : user.role === "admin" || !user.warehouse ? undefined : await resolveScope(user.warehouse);
   const rows = await prisma.supplierRequest.findMany({
     where: {
       status,

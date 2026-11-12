@@ -60,7 +60,8 @@ export interface CalibrationRunValues {
  * 33,956.05 + 14,743.1 — so a run can't size more than what is still left of the load, and the load is
  * Calibrated once its runs add up to its into-silo kg.
  */
-export function calibrationRunError(v: CalibrationRunValues, leftKg: number): string | null {
+/** `leftKg` null = the load's final weight isn't saved yet, so there is no total to keep the run within. */
+export function calibrationRunError(v: CalibrationRunValues, leftKg: number | null): string | null {
   if (!(v.date ?? "").trim()) return "A date is required.";
   for (const s of SILO_SIZES) {
     const n = num(v.sizes?.[s.key]);
@@ -68,6 +69,7 @@ export function calibrationRunError(v: CalibrationRunValues, leftKg: number): st
   }
   const total = sizesTotal(v.sizes ?? {});
   if (total <= 0) return "Enter the kg that went into at least one silo.";
+  if (leftKg === null) return null;
   if (leftKg <= 0) return "This load is already fully calibrated.";
   if (total > kg2(leftKg)) return `The sizes add up to ${fmt(total)} kg, more than the ${fmt(leftKg)} kg of this load still to calibrate.`;
   return null;
@@ -76,9 +78,10 @@ export function calibrationRunError(v: CalibrationRunValues, leftKg: number): st
 const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 /** Into-silo kg of the load, how much its runs have sized so far, and what is left. */
-export function calibrationProgress(toSilosKg: number, runs: { sizes: SizeValues }[]): { toSilosKg: number; sizedKg: number; leftKg: number } {
+/** `toSilosKg` is null until the final weight is saved (it is what says how much the load hands over); "left" is then unknown too. */
+export function calibrationProgress(toSilosKg: number | null, runs: { sizes: SizeValues }[]): { toSilosKg: number | null; sizedKg: number; leftKg: number | null } {
   const sizedKg = kg2(runs.reduce((n, r) => n + sizesTotal(r.sizes), 0));
-  return { toSilosKg, sizedKg, leftKg: kg2(toSilosKg - sizedKg) };
+  return { toSilosKg, sizedKg, leftKg: toSilosKg === null ? null : kg2(toSilosKg - sizedKg) };
 }
 
 // ── Step 3 · QC-2 sizing check ──────────────────────────────────────────────────────────────────
@@ -339,9 +342,12 @@ export function siloDailyStock(
   });
 }
 
-/** One batch's loads, added up: what Intake handed over, what has been sorted so far, and how many loads are finished. */
-export function batchCalibrationTotals(loads: { calibration: { toSilosKg: number; sizedKg: number; leftKg: number } | null }[]): { toSilosKg: number; sizedKg: number; leftKg: number; loads: number; loadsDone: number } {
-  const ready = loads.flatMap((l) => (l.calibration ? [l.calibration] : []));
+/**
+ * One run's loads, added up: what Intake handed over, what has been sorted so far, and how many loads are finished.
+ * Only loads whose final weight is saved have a total to count (a load sorted before it is weighed has none yet).
+ */
+export function batchCalibrationTotals(loads: { calibration: { toSilosKg: number | null; sizedKg: number; leftKg: number | null } | null }[]): { toSilosKg: number; sizedKg: number; leftKg: number; loads: number; loadsDone: number } {
+  const ready = loads.flatMap((l) => (l.calibration && l.calibration.toSilosKg !== null && l.calibration.leftKg !== null ? [{ ...l.calibration, toSilosKg: l.calibration.toSilosKg, leftKg: l.calibration.leftKg }] : []));
   return {
     toSilosKg: kg2(ready.reduce((n, c) => n + c.toSilosKg, 0)),
     sizedKg: kg2(ready.reduce((n, c) => n + c.sizedKg, 0)),

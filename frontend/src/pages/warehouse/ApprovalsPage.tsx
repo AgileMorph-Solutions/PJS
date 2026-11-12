@@ -7,7 +7,8 @@ import { SubmissionReview } from "../../components/SubmissionReview";
 import { useTracking } from "../../state/TrackingContext";
 import { usePendingApprovals } from "../../state/PendingApprovals";
 import { api } from "../../repository/api";
-import { siteSlugForSiteName } from "../../config/sites";
+import { siteSlugFor } from "../../config/sites";
+import { useSites } from "../../state/SiteContext";
 import type { SupplierRequestView } from "../../types/user";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
@@ -15,7 +16,8 @@ import { formatDate } from "@anagroci/contract/domain/dateFormat";
  * decision. Approving a submission applies its values to the receipt (atomically, server-side). The
  * rows come from PendingApprovalsProvider — the same copy the sidebar badge counts. */
 export function ApprovalsPage() {
-  const { receipts } = useTracking();
+  const { receipts, masters } = useTracking();
+  const sites = useSites();
   const { submissions: pending, supplierRequests: requests } = usePendingApprovals();
 
   return (
@@ -27,7 +29,7 @@ export function ApprovalsPage() {
         {pending.rows.length === 0 && <EmptyState title={pending.loading ? "Loading…" : "No submissions waiting"} />}
         {pending.rows.map((s) => {
           const receipt = receipts.find((r) => r.id === s.receiptId);
-          const slug = siteSlugForSiteName(s.warehouse) ?? "unit";
+          const slug = siteSlugFor(sites, masters, s.warehouse);
           return (
             <div key={s.id} className="bg-white border border-warmstone-200 rounded-2xl shadow-xs p-5 space-y-3">
               <Link to={`/${slug}/receipts/${s.receiptId}`} className="text-[13px] font-bold text-brand-700 hover:text-brand-800">

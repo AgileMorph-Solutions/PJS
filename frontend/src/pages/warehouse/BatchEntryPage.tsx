@@ -1,10 +1,12 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { useTracking, useDeliveryPlans } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
 import { api } from "../../repository/api";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
+import { isOpenPlan, supplierOpenPlans } from "@anagroci/contract/domain/deliveryPlan";
+import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { BATCH_TRUCK_COLUMNS, BATCH_REQUIRED_LABEL, BATCH_MAX_ROWS, type BatchTruckRow } from "../../data/batchEntry";
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
@@ -20,6 +22,27 @@ interface Row { key: number; v: Values }
 const SUPPLIER = "SUPPLIER";
 /** Which delivery plan the truck is for. Not a stage field: it travels beside the rows (see save()). */
 const PLAN = "DELIVERY PLAN";
+/** Set when the person chose "No plan · unplanned truck" themselves, so a plan made later isn't linked over it. Never sent. */
+const UNPLANNED = "UNPLANNED";
+/** The origin a delivery plan filled in, so changing the plan can take it back out. Never sent. */
+const PLAN_ORIGIN = "PLAN_ORIGIN";
+
+/**
+ * The row with `plan` as its delivery plan (or none). The plan's origin comes along — but only into an origin the
+ * person hasn't typed: an origin that came from the previous plan is replaced (or cleared when there is no plan now),
+ * one they typed themselves is left alone.
+ */
+function withPlan(v: Values, plan: { id: string; expectedOrigin: string | null } | undefined): Values {
+  const origin = (v["ORIGIN"] ?? "").trim();
+  const typed = origin !== "" && origin !== (v[PLAN_ORIGIN] ?? "");
+  const fromPlan = plan?.expectedOrigin ?? "";
+  return {
+    ...v,
+    [PLAN]: plan?.id ?? "",
+    ORIGIN: typed ? v["ORIGIN"]! : fromPlan,
+    [PLAN_ORIGIN]: typed ? "" : fromPlan,
+  };
+}
 const COLUMNS: { key: string; label: string; type?: string; width: string }[] = [
   { key: "DATE OF ARRIVAL", label: "Date of arrival", type: "date", width: "w-40" },
   { key: BATCH_REQUIRED_LABEL, label: "Vehicle no.", width: "w-40" },
@@ -62,14 +85,37 @@ function toPayload(v: Values): BatchTruckRow {
 export function BatchEntryPage() {
   const site = useSite();
   const { masters, refresh } = useTracking();
-  const { plans } = useDeliveryPlans(site.warehouseName);
-  // A truck can be linked to a plan that is still expecting trucks. Trucks with no plan are fine too.
-  const openPlans = plans.filter((p) => p.status === "planned" || p.status === "partially_received");
+  const { plans, refetch: refetchPlans } = useDeliveryPlans(site.warehouseName);
+  // A truck can be linked to a plan that is still expecting trucks. Trucks with no plan are fine too (unplanned).
+  const openPlans = plans.filter(isOpenPlan);
+  // "Create a delivery plan" opens in another tab, so the rows typed here stay; coming back reads the plans again.
+  useEffect(() => {
+    const onFocus = () => void refetchPlans();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [refetchPlans]);
   const [rows, setRows] = useState<Row[]>(() => Array.from({ length: INITIAL_ROWS }, () => newRow(today())));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string[] | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
+
+  // A row whose supplier had no plan picks up the one just created — unless the person chose "unplanned" themselves.
+  useEffect(() => {
+    setRows((prev) => {
+      let changed = false;
+      const next = prev.map((r) => {
+        const code = r.v["LBA CODE"];
+        if (!code || r.v[PLAN] || r.v[UNPLANNED] === "1") return r;
+        const latest = supplierOpenPlans(openPlans, code)[0];
+        if (!latest) return r;
+        changed = true;
+        return { ...r, v: withPlan(r.v, latest) };
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plans]);
 
   const filled = rows.filter((r) => !isBlank(r.v));
   const missingVehicle = filled.filter((r) => !(r.v[BATCH_REQUIRED_LABEL] ?? "").trim());
@@ -79,27 +125,24 @@ export function BatchEntryPage() {
   function setValue(key: number, col: string, value: string) {
     setRows((prev) => prev.map((r) => {
       if (r.key !== key) return r;
-      // Picking a supplier sets both stage fields; clearing it clears both.
+      // Picking a supplier sets both stage fields, and links the truck to that supplier's latest open delivery plan —
+      // the plan already names the supplier, so it is the one the truck most likely came under. A plan already picked
+      // for this same supplier is kept; with no open plan the truck goes in unplanned (the row says so).
       if (col === SUPPLIER) {
         const s = masters.suppliers.find((x) => x.code === value);
-        // A plan is for one supplier, so a different supplier un-picks it rather than leave a pair the server would refuse.
-        const plan = openPlans.find((p) => p.id === r.v[PLAN]);
-        const keepPlan = plan && (!plan.supplierCode || plan.supplierCode === s?.code);
-        return { ...r, v: { ...r.v, "LBA CODE": s?.code ?? "", "SUPPLIERS NAME": s?.name ?? "", [PLAN]: keepPlan ? plan.id : "" } };
+        const current = openPlans.find((p) => p.id === r.v[PLAN]);
+        const keep = current && s && current.supplierCode === s.code;
+        const latest = s ? supplierOpenPlans(openPlans, s.code)[0] : undefined;
+        const v = { ...r.v, "LBA CODE": s?.code ?? "", "SUPPLIERS NAME": s?.name ?? "", [UNPLANNED]: "" };
+        return { ...r, v: keep ? v : withPlan(v, latest) };
       }
       // Picking a plan brings along what it already knows (its supplier and origin) so they aren't typed again; the
-      // person still sees them in the row and can change them before saving.
+      // person still sees them in the row and can change them before saving. Choosing no plan takes a plan's origin out.
       if (col === PLAN) {
         const plan = openPlans.find((p) => p.id === value);
         const s = plan?.supplierCode ? masters.suppliers.find((x) => x.code === plan.supplierCode) : undefined;
-        return {
-          ...r,
-          v: {
-            ...r.v, [PLAN]: value,
-            ...(s ? { "LBA CODE": s.code, "SUPPLIERS NAME": s.name } : {}),
-            ...(plan?.expectedOrigin && !(r.v["ORIGIN"] ?? "").trim() ? { ORIGIN: plan.expectedOrigin } : {}),
-          },
-        };
+        const v = { ...r.v, [UNPLANNED]: value || !r.v["LBA CODE"] ? "" : "1", ...(s ? { "LBA CODE": s.code, "SUPPLIERS NAME": s.name } : {}) };
+        return { ...r, v: withPlan(v, plan) };
       }
       return { ...r, v: { ...r.v, [col]: value } };
     }));
@@ -171,7 +214,7 @@ export function BatchEntryPage() {
       <PageHeader
         kicker={`${site.label} · ${site.sublabel}`}
         title="Add entries"
-        lede="One row per truck. Pick a delivery plan if the truck was expected under one (it fills in the supplier and origin); leave it as 'No plan' otherwise. Save creates all of them together - if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
+        lede="One row per truck. Picking a supplier links the truck to that supplier's latest open delivery plan (change it, or choose no plan for an unplanned truck). Save creates all of them together - if a row is wrong, none are created. Weights, lot and bin are filled on each receipt afterwards."
         actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
 
@@ -215,17 +258,11 @@ export function BatchEntryPage() {
                         )}
                         </>
                       ) : c.key === PLAN ? (
-                        <select
-                          aria-label={`Delivery plan, row ${i + 1}`} data-row={i} data-col={c.key}
-                          value={r.v[PLAN] ?? ""} onChange={(e) => setValue(r.key, PLAN, e.target.value)}
-                          onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
-                        >
-                          <option value="">No plan</option>
-                          {/* Once a supplier is picked only that supplier's plans are offered, as the server will only accept those. */}
-                          {openPlans
-                            .filter((p) => !r.v["LBA CODE"] || !p.supplierCode || p.supplierCode === r.v["LBA CODE"])
-                            .map((p) => <option key={p.id} value={p.id}>{p.id} · {normalizeSupplierName(p.supplierName)}</option>)}
-                        </select>
+                        <PlanCell
+                          row={i} supplierCode={r.v["LBA CODE"] ?? ""} value={r.v[PLAN] ?? ""} openPlans={openPlans}
+                          createHref={`/${site.slug}/delivery-plans?new=1${r.v["LBA CODE"] ? `&supplier=${encodeURIComponent(r.v["LBA CODE"])}` : ""}`}
+                          onChange={(v) => setValue(r.key, PLAN, v)} onKeyDown={(e) => onEnter(e, i, c.key)}
+                        />
                       ) : (
                         c.type === "date" ? (
                           <DateInput
@@ -282,5 +319,47 @@ export function BatchEntryPage() {
       {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
       <p className="text-xs text-warmstone-400">Tip: press Enter to jump to the same column in the next row.</p>
     </div>
+  );
+}
+
+type OpenPlan = ReturnType<typeof useDeliveryPlans>["plans"][number];
+
+/**
+ * A row's Delivery plan. Before a supplier is picked: every open plan (picking one fills the supplier in). With a
+ * supplier: only that supplier's open plans, the latest first and picked for it — or, when it has none, a plain
+ * "no delivery plan for this supplier" with a link to create one; the truck can still be saved as unplanned.
+ */
+function PlanCell({ row, supplierCode, value, openPlans, createHref, onChange, onKeyDown }: {
+  row: number;
+  supplierCode: string;
+  value: string;
+  openPlans: OpenPlan[];
+  createHref: string;
+  onChange: (value: string) => void;
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+}) {
+  const mine = supplierCode ? supplierOpenPlans(openPlans, supplierCode) : openPlans;
+  const label = (p: OpenPlan) => `${p.id} · ${supplierCode ? `arrival ${formatDate(p.expectedArrivalDate)}` : normalizeSupplierName(p.supplierName)}`;
+
+  if (supplierCode && mine.length === 0) {
+    return (
+      <div>
+        <select aria-label={`Delivery plan, row ${row + 1}`} data-row={row} data-col={PLAN} value="" disabled className={cellCls}>
+          <option value="">No delivery plan for this supplier</option>
+        </select>
+        <span className="block mt-1 text-[11px] text-warmstone-500">
+          <a href={createHref} target="_blank" rel="noreferrer" className="font-semibold text-brand-700 hover:underline">Create a delivery plan</a>
+          {" "}or save the truck without one.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <select aria-label={`Delivery plan, row ${row + 1}`} data-row={row} data-col={PLAN} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} className={cellCls}>
+      {!supplierCode && <option value="">No plan</option>}
+      {mine.map((p, i) => <option key={p.id} value={p.id}>{label(p)}{supplierCode && i === 0 ? " (latest)" : ""}</option>)}
+      {/* A truck can still arrive outside its supplier's plans (an unplanned truck, as the client's workbook records). */}
+      {supplierCode && <option value="">No plan · unplanned truck</option>}
+    </select>
   );
 }

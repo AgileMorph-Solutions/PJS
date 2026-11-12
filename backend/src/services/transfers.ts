@@ -17,7 +17,7 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import type { ReceiptRecord, TransferRequest, TransferStatus } from "@anagroci/contract/types/receipt";
-import { canTransferBetween, TRANSFER_DIRECTION_MESSAGE, transferState, transferVariance, type TransferFacts } from "@anagroci/contract/domain/transfers";
+import { canTransferBetween, TRANSFER_DIRECTION_MESSAGE, transferDestinationGroups, transferState, transferVariance, type TransferDestination, type TransferFacts } from "@anagroci/contract/domain/transfers";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { prisma } from "../db.js";
@@ -159,7 +159,8 @@ function toWire(t: TransferRow): TransferRequest {
 /** Transfers out of OR into any of the given names (a resolved site — domain/site.ts). */
 export async function listTransfers(site?: string[]) {
   const rows = await prisma.transferRequest.findMany({
-    where: site ? { OR: [{ fromWarehouse: { in: site } }, { toWarehouse: { in: site } }] } : {},
+    // Incoming to one store (toStore) belongs to that store's people only, never its siblings'.
+    where: site ? { OR: [{ fromWarehouse: { in: site } }, { toWarehouse: { in: site }, OR: [{ toStore: null }, { toStore: { in: site } }] }] } : {},
     include: INCLUDE,
     orderBy: { id: "desc" },
   });
@@ -415,4 +416,17 @@ export async function receiveTransfer(id: string, input: ReceiveInput, opts: Wri
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return toWire(row);
+}
+
+/**
+ * Where a BKT from `from` may go: every Central site (or its stores) in the master but `from` itself — contract's
+ * transferDestinationGroups(). Its own read because /api/masters shows a non-admin only their own warehouse, yet a Unit
+ * warehouse must still name the Central one (and which of its stores) it is sending to. Names only: nothing else
+ * about the other site leaks.
+ */
+export async function listTransferDestinations(from: string | undefined): Promise<TransferDestination[]> {
+  if (!from) return [];
+  const rows = await prisma.warehouse.findMany({ select: { name: true, kind: true, type: true, site: true, code: true } });
+  // A BKT is sent site to site: from a store, that is its site (never a destination to itself).
+  return transferDestinationGroups(rows, (await siteOf(prisma, from)) ?? from);
 }

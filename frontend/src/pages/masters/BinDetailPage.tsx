@@ -12,6 +12,7 @@ import type { ReceiptRecord } from "../../types/receipt";
 import type { ReceiptStatus } from "@anagroci/contract/types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { api } from "../../repository/api";
+import { useCanAccessProduction } from "../../state/AuthContext";
 import { formatTonnes } from "../../components/production/batchUi";
 
 export function BinDetailPage() {
@@ -23,11 +24,14 @@ export function BinDetailPage() {
   // rule, same reason the `inBin` useMemo above it also sits ahead of that return.
   const search = useTableSearch(inBin, (r) => [r.lotNo, r.supplierName, r.vehicleNo]);
   // The production batch this bin is planned into, if any — the procurement end of the batch → bin → Lot link.
+  // Not asked for by a Unit warehouse user: production isn't theirs, and the API would refuse it.
+  const canSeeProduction = useCanAccessProduction();
   const [batch, setBatch] = useState<{ batchCode: string; plannedKg: number } | null>(null);
   useEffect(() => {
     setBatch(null);
+    if (!canSeeProduction) return;
     api.binBatch(binNo).then((r) => setBatch(r.batch)).catch(() => setBatch(null));
-  }, [binNo]);
+  }, [binNo, canSeeProduction]);
 
   if (!masters.bins.includes(binNo)) return <Navigate to="/masters/bins" replace />;
 
@@ -64,8 +68,8 @@ export function BinDetailPage() {
       {batch && (
         <div className="rounded-xl border border-brand-200 bg-brand-50 px-4 py-3 text-[13px] text-brand-800 flex items-center gap-2">
           <span className="material-symbols-outlined text-[18px]">precision_manufacturing</span>
-          Planned for production in batch
-          <Link to={`/production/batches/${encodeURIComponent(batch.batchCode)}`} className="font-mono font-bold hover:underline">{batch.batchCode}</Link>
+          Planned for production in run
+          <Link to={`/production/runs/${encodeURIComponent(batch.batchCode)}`} className="font-mono font-bold hover:underline">{batch.batchCode}</Link>
           ({formatTonnes(batch.plannedKg)} planned). Nothing has left the bin until loads are weighed in production.
         </div>
       )}

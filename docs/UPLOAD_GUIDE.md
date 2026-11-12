@@ -75,8 +75,9 @@ Incharge approves them.
 | **Cooling Checks** | a QC-4 | Entry ID (blank = new) | Result is `OK` or `Wait`; shelling opens on OK |
 | **Shelling Days** | a day's outputs | Day ID (blank = new) | the app works out good and final kernels, shell dust, shell and every % |
 | **Line Runs, Machine Frequency, Machine Samples, Uncut Checks, Shell Samples** | one row of each sheet | Entry ID (blank = new) | recorded on a Lot past QC-4 |
+| **Sorter Before, Sorter After** | a QC-7 sample either side of the colour sorter | Entry ID (blank = new) | recorded on a shelled Lot; an after-sorter row's Result is `OK` or `No` |
 | **Boiler** | a day's shell burned | Reading ID (blank = new) | takes the kg out of the shell silo |
-| **Trucks** | one truck at the gate | Truck ID (blank = new) | filled in as the truck moves; a Gate Pass No closes it and takes its net out of the store |
+| **Trucks** | one truck at the gate (dust & voids, waste water, shell, shell dust or black rejection) | Truck ID (blank = new) | filled in as the truck moves; a Gate Pass No closes it and takes its net out of the store |
 
 - **Checks, pallets and the final weight name their load** by RCN Receipt ID or by BTM No. The BTM No is
   enough when one load has it, which is what lets a new load and its checks come in the same file. When two

@@ -1,4 +1,5 @@
-import type { Role } from "../data/roles";
+import { canAccessProduction, type Role } from "../data/roles";
+import type { UserView } from "../types/user";
 
 export interface NavLeaf {
   label: string;
@@ -6,8 +7,8 @@ export interface NavLeaf {
    * `to`/`sitePath` should be set. */
   to?: string;
   /** A path segment resolved against whichever site is currently active (e.g. `"receipts"` becomes
-   * `/unit/receipts` or `/central/receipts`) — see `AppNav.tsx` and `state/SiteContext.tsx`'s
-   * `useActiveSite()`. Lets one nav leaf serve both sections instead of listing each one twice. */
+   * `/<warehouse slug>/receipts`) — see `AppNav.tsx` and `state/SiteContext.tsx`'s `useActiveSite()`.
+   * Lets one nav leaf serve every warehouse of the master. Left out while there is no warehouse yet. */
   sitePath?: string;
   /** Material Symbols Outlined icon name (e.g. "dashboard"). */
   icon: string;
@@ -21,6 +22,8 @@ export interface NavLeaf {
   /** Who sees this item. Omitted = every signed-in role. The API is the real gate (see
    * backend/src/auth/policy.ts); this only keeps people from seeing links that would 403. */
   roles?: Role[];
+  /** For a rule that needs more than the role (e.g. which warehouse the user is at). Checked as well as `roles`. */
+  allow?: (me: UserView) => boolean;
 }
 
 export interface NavSection {
@@ -71,13 +74,15 @@ export const NAV: NavSection[] = [
     items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2", roles: ["admin", "warehouse_incharge"] }],
   },
   {
-    // The client's "Phase 1 — Batch & Intake" doc. One leaf: every step after creating a batch (an RCN Receipt, ...) is
-    // entered on that batch's own page, like a truck's stages on its Reception page. The older workbook-import pages (BTM/Bin/Lot under pages/production/) still exist
-    // and still route; they are not linked here.
+    // One leaf: a production run is warehouse bins sent to production together; every stage after it (Intake's RCN
+    // receipts, Calibration, Cooking, ...) is entered on the run's own page, one stage at a time. (The client's documents
+    // call it a "batch"; the screens don't, to keep one plain name.) The older workbook-import pages (BTM/Bin/Lot under
+    // pages/production/) still exist and still route; they are not linked here.
     label: "Production",
     items: [
-      // The QFS Officer opens a batch to do its loads' moisture checks (Phase 1, step 2).
-      { label: "Batches", to: "/production/batches", icon: "precision_manufacturing", roles: ["admin", "warehouse_incharge", "qfs_officer"] },
+      // The QFS Officer opens a run to do its loads' moisture checks (Phase 1, step 2). Factory (Central) users only:
+      // a Unit warehouse's Incharge or QFS Officer has no production to see.
+      { label: "Production runs", to: "/production/runs", icon: "precision_manufacturing", allow: (me) => canAccessProduction(me.role, me.warehouseType) },
     ],
   },
   {

@@ -47,6 +47,12 @@ interface Props {
   onEntryAdded?: () => void;
   /** Shown inside the section, above its "Add entry". */
   aboveEntry?: ReactNode;
+  /** Replaces the default column-per-field table, keeping the date filter and pagination. For a ledger whose raw columns
+   * don't read well on their own (Warehouse Stock's StockRegisterTable). */
+  renderTable?: (t: { pageRows: Row[]; allRows: Row[]; emptyText: string | null }) => ReactNode;
+  /** List the latest entry first. Display only: `allRows` handed to renderTable stays oldest first, the order the server
+   * adds the running balance up in. */
+  newestFirst?: boolean;
   /** A ledger column that must name a warehouse in the master. Filled from `selected`, or picked from `options` when no
    * single warehouse is selected, so it is never free text the server would refuse. */
   warehouse?: { column: string; selected?: string; options: string[] };
@@ -67,7 +73,7 @@ function withoutKey(row: Row, key: string): Row {
   return rest;
 }
 
-export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, warehouse, calculatedField }: Props) {
+export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, renderTable, newestFirst, warehouse, calculatedField }: Props) {
   const { ledgerEntries, addLedgerEntry } = useTracking();
   const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label) || c.label === calculatedField?.column);
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
@@ -81,7 +87,8 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
   // rather than hardcoded per ledger, since JuteLedgerColumn carries no `kind: "date"` flag of its
   // own. Falls back to no filter row at all if a future ledger genuinely has none.
   const dateColumn = ledger.columns.find((c) => c.label.toLowerCase().includes("date"));
-  const dateFilter = useDateRangeFilter(allRows, (row) => (dateColumn ? row[dateColumn.label] : undefined));
+  const shownRows = newestFirst ? [...allRows].reverse() : allRows;
+  const dateFilter = useDateRangeFilter(shownRows,(row) => (dateColumn ? row[dateColumn.label] : undefined));
   const page = usePagination(dateFilter.filtered);
   const calculated = calculatedField?.preview(allRows, draft) ?? "";
   // Read from every row, not the filtered page: narrowing the dates doesn't change what a supplier holds today.
@@ -236,6 +243,11 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
       )}
 
       <div className="overflow-x-auto border border-warmstone-200 rounded-xl">
+        {renderTable ? renderTable({
+          pageRows: page.pageRows,
+          allRows,
+          emptyText: dateFilter.filtered.length > 0 ? null : allRows.length === 0 ? "No entries yet - add one above." : "No entries in this date range.",
+        }) : (
         <table className="w-full text-[12.5px] border-collapse">
           <thead>
             <tr className="border-b border-warmstone-200 bg-warmstone-50">
@@ -277,6 +289,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
             ))}
           </tbody>
         </table>
+        )}
         <Pagination state={page} />
       </div>
 

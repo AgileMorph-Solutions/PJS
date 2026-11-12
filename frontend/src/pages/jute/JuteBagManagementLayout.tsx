@@ -102,7 +102,8 @@ export function JuteBagManagementLayout() {
         }
       />
       <Tabs items={TABS} />
-      {dialogMode && (
+      {/* An upload is for a warehouse: with none in the master yet there is nothing to upload into. */}
+      {dialogMode && site && (
         <WorkbookModal
           mode={dialogMode}
           warehouse={site.warehouseName}

@@ -4,6 +4,7 @@
  * Same-origin /api in both dev and prod — vite proxies it, nginx proxies it — so the browser never
  * needs CORS and there is no API base URL to configure per environment.
  */
+import type { TransferDestination } from "@anagroci/contract/domain/transfers";
 import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
@@ -263,6 +264,8 @@ export const api = {
   },
 
   listTransfers: (warehouse?: string) => request<TransferRequest[]>(withWarehouse("/transfers", warehouse)),
+  /** Where a BKT from `from` may go. Its own read: /api/masters shows a non-admin only their own warehouse. */
+  transferDestinations: (from: string) => request<TransferDestination[]>(`/transfers/destinations?from=${encodeURIComponent(from)}`),
   createTransfer: (t: {
     transferDate: string; fromWarehouse: string; toWarehouse: string; remarks?: string;
     lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[];
@@ -371,7 +374,8 @@ export const api = {
   listBatchBins: () => request<AvailableBin[]>(prod("/production/batch-bins")),
   listBatches: () => request<BatchSummary[]>(prod("/production/batches")),
   getBatch: (code: string) => request<BatchDetail>(prod(`/production/batches/${encodeURIComponent(code)}`)),
-  createBatch: (b: { code: string; startDate: string; proposedBy: string; bins: string[] }) =>
+  /** Start a production run: its bins, and optionally the loads already brought from them, saved together or not at all. */
+  createBatch: (b: { code?: string; startDate: string; proposedBy?: string; bins: string[]; loads?: { date: string; btmNo: string; binCode: string }[] }) =>
     request<BatchDetail>(prod("/production/batches"), { method: "POST", body: JSON.stringify(b) }),
   binBatch: (binCode: string) => request<{ batch: { batchCode: string; plannedKg: number } | null }>(`/production/bin-batch/${encodeURIComponent(binCode)}`),
 

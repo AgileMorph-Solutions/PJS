@@ -5,11 +5,12 @@ import { useAuth } from "../state/AuthContext";
 import { usePendingApprovals } from "../state/PendingApprovals";
 import { ROLE_LABEL } from "../data/roles";
 import { WAREHOUSE_TYPE_LABEL } from "../data/warehouseTypes";
-import { siteSlugForType } from "../config/sites";
+import { useActiveSite } from "../state/SiteContext";
 
 export function Layout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { me, logout } = useAuth();
+  const activeSite = useActiveSite();
   const [q, setQ] = useState("");
   // Below `lg` the sidebar is an off-canvas drawer (see AppNav), closed by default so it never
   // covers the content on a phone/tablet the way a permanently-fixed w-72 sidebar used to.
@@ -19,12 +20,10 @@ export function Layout({ children }: { children: ReactNode }) {
   function handleSearch(e: FormEvent) {
     e.preventDefault();
     if (!q.trim()) return;
-    // No site to scope a header search to — lands on the unit section (the larger of the two,
-    // matching pages/LegacyRedirects.tsx's own default), same as visiting a stale /procurement/*
-    // link with no other info to resolve from.
-    // A non-admin only has their own section.
-    const slug = me && me.role !== "admin" ? siteSlugForType(me.warehouseType) ?? "unit" : "unit";
-    navigate(`/${slug}/receipts?q=${encodeURIComponent(q.trim())}`);
+    // Searches the section in view (a non-admin only has their own); with no warehouse in the master yet there is
+    // no Reception to search.
+    if (!activeSite) return;
+    navigate(`/${activeSite.slug}/receipts?q=${encodeURIComponent(q.trim())}`);
     setNavOpen(false);
   }
 

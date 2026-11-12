@@ -296,9 +296,14 @@ describe("each warehouse writes only its own half", () => {
     const line = async () => [{ receiptId: await lot(), bags: 5 }];
     const other = await as("sender", "POST", "/api/transfers", { transferDate: D, fromWarehouse: C, toWarehouse: B, lines: await line() });
     expect(other.statusCode).toBe(403);
-    // The destination dropdown is read from the master, which isn't limited to the reader's own warehouse.
+    // The master shows them only their own warehouse; where they may send comes from its own read.
     const names = (await as("sender", "GET", "/api/masters")).json().warehouses.map((w: { name: string }) => w.name);
-    expect(names).toEqual(expect.arrayContaining([A, B]));
+    expect(names).toContain(A);
+    expect(names).not.toContain(B);
+    // Each Central site with its stores (the warehouses a truck can be sent to); never the sender's own site.
+    const destinations = (await as("sender", "GET", "/api/transfers/destinations")).json() as { site: string; stores: string[] }[];
+    expect(destinations).toContainEqual({ site: B, stores: expect.arrayContaining([B_STORE]) });
+    expect(destinations.map((d) => d.site)).not.toContain(A);
   });
 
   it("a store chosen as the destination is kept, while its site still decides who sees and receives the BKT", async () => {

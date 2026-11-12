@@ -19,11 +19,14 @@ src/state/AuthContext.tsx   `useAuth()` / `useMe()` — who is signed in. App.ts
                              `components/RequireRole`, nav items carry `roles` (config/nav.ts) — both
                              are courtesy; backend/src/auth/policy.ts is the real gate. Non-admins are
                              pinned to their own warehouse's section in SiteContext.
-src/config/sites.ts          The two real sites (Bouaké/Yakro Factory) as URL slugs + the real
-                             `Warehouse.name` each one scopes API reads by. Adding a third site is
-                             meant to be one more entry here — see its own header comment.
-src/state/SiteContext.tsx   `useSite()` — reads the `/:site/*` route's own param, resolves it via
-                             `config/sites.ts`, 404s on an unrecognized slug. Every page under
+src/config/sites.ts          Builds the warehouse sections FROM THE WAREHOUSES MASTER (`sitesFrom`) —
+                             there is no fixed site list anywhere. A site is a classified top-level
+                             master row; its URL slug is its name (contract's `warehouseSlug`, e.g.
+                             `/yakro-factory/receipts`). Adding a site = an admin adds it in Masters.
+src/state/SiteContext.tsx   `useSites()` — the sections this person may open (all for admin, only
+                             their own warehouse otherwise; /api/masters is scoped the same way).
+                             `useSite()` — the `/:site/*` route's own site, resolved by SiteLayout,
+                             which says plainly when a slug isn't in the master. Every page under
                              `pages/warehouse/`, `pages/unit/`, `pages/central/` calls this for
                              which warehouse to scope its own API calls by — never a hardcoded site
                              name in a page component.

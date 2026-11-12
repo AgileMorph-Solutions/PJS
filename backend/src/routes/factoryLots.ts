@@ -13,6 +13,7 @@ import {
   addLotEntry, addShellingDay, approveAllOfKind, cookLot, deleteCookRun, deleteLotEntry, deleteShellingDay, listLots, moveToCooling, reviewLotEntry,
 } from "../services/production/factoryLots.js";
 import { siteFor } from "./productionBatches.js";
+import { runWhere } from "../services/production/batches.js";
 
 export async function factoryLotRoutes(app: FastifyInstance) {
   const reviewers = { preHandler: requireRole("admin", "warehouse_incharge") };
@@ -20,13 +21,13 @@ export async function factoryLotRoutes(app: FastifyInstance) {
   app.get("/api/production/batches/:code/lots", async (req, reply): Promise<BatchLots | undefined> => {
     const { code } = req.params as { code: string };
     const site = await siteFor(req);
-    const batch = await prisma.productionBatch.findFirst({ where: { code, warehouse: site }, select: { code: true } });
+    const batch = await prisma.productionBatch.findFirst({ where: runWhere(site, code), select: { code: true } });
     if (!batch) {
-      reply.code(404).send({ error: `Batch ${code} not found` });
+      reply.code(404).send({ error: `Production run ${code} not found` });
       return undefined;
     }
     const [lots, stores, trucks, boiler, all] = await Promise.all([
-      listLots(site, code), storeBalances(prisma, site), listTrucks(site), listBoilerReadings(site),
+      listLots(site, batch.code), storeBalances(prisma, site), listTrucks(site), listBoilerReadings(site),
       prisma.factoryLot.findMany({ where: { batch: { warehouse: site } }, select: { code: true } }),
     ]);
     return { lots, stores, trucks, boiler, allLotCodes: all.map((l) => l.code) };

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { LedgerSection } from "../../components/LedgerSection";
 import { OpeningStockField } from "../../components/jute/OpeningStockField";
+import { StockRegisterTable } from "../../components/jute/StockRegisterTable";
+import { StockSummary } from "../../components/jute/StockSummary";
 import { WarehouseFilter } from "../../components/jute/WarehouseFilter";
 import { juteLedgers, juteReconciliationRule } from "../../data/juteBags";
 import { useJuteLedgerEntries, useTracking } from "../../state/TrackingContext";
@@ -29,13 +31,20 @@ export function WarehouseStockPage() {
         rows={selectedWarehouse ? filtered.rows : undefined}
         onEntryAdded={() => selectedWarehouse && filtered.refetch()}
         warehouse={{ column: "WH location", selected: selectedWarehouse, options: all }}
+        newestFirst
+        renderTable={({ pageRows, allRows, emptyText }) => (
+          <StockRegisterTable rows={pageRows} allRows={allRows} emptyText={emptyText} showWarehouse={!selectedWarehouse} />
+        )}
         aboveEntry={(
+          <>
+          {selectedWarehouse && <StockSummary warehouse={selectedWarehouse} rows={filtered.rows} />}
           <OpeningStockField
             warehouse={selectedWarehouse}
             warehouses={all}
             onSelectWarehouse={setPicked}
             onSaved={() => { void refresh(); if (selectedWarehouse) void filtered.refetch(); }}
           />
+          </>
         )}
       />
       <div className="bg-white border border-warmstone-200 rounded-2xl p-5 shadow-xs">

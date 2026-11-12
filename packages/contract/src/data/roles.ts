@@ -6,7 +6,9 @@
  * asserts every label here still exists in STAGE_FIELD_MAP, so a stages.ts rename can't silently
  * orphan a form.
  */
-export type Role = "admin" | "warehouse_incharge" | "branch_manager" | "qfs_officer";
+import type { WarehouseType } from "./warehouseTypes.js";
+
+export type Role ="admin" | "warehouse_incharge" | "branch_manager" | "qfs_officer";
 
 export const ROLES: { value: Role; label: string }[] = [
   { value: "admin", label: "Admin" },
@@ -139,6 +141,20 @@ export function canSetPrice(role: Role): boolean {
 /** Admin and Warehouse Incharge are top of the hierarchy: their stage edits apply immediately (except fields hidden from them). */
 export function canWriteStageDirectly(role: Role): boolean {
   return role === "admin" || role === "warehouse_incharge";
+}
+
+/** The roles with work in Production: the Incharge runs it, the QFS Officer takes its quality checks. */
+export const PRODUCTION_ROLES: readonly Role[] = ["admin", "warehouse_incharge", "qfs_officer"];
+
+/**
+ * Production runs at the factory, which is the Central warehouse. So a role that works in Production
+ * still sees none of it from a Unit warehouse (a Bouaké Warehouse Incharge has no batches to run).
+ * Admin has no warehouse and may pick any factory. A user with no warehouse yet is refused, not guessed.
+ * The API enforces this (backend auth/plugin.ts); the sidebar and routes read the same function.
+ */
+export function canAccessProduction(role: Role, warehouseType: WarehouseType | null | undefined): boolean {
+  if (role === "admin") return true;
+  return PRODUCTION_ROLES.includes(role) && warehouseType === "CENTRAL";
 }
 
 export function formForRole(role: Role): RoleForm | undefined {

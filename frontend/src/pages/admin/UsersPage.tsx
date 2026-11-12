@@ -7,7 +7,10 @@ import { useTracking } from "../../state/TrackingContext";
 import { useUsers } from "../../state/userManagement";
 import { api } from "../../repository/api";
 import { ROLES, ROLE_LABEL, type Role } from "../../data/roles";
-import { WAREHOUSE_TYPE_LABEL, type WarehouseType } from "../../data/warehouseTypes";
+import { WAREHOUSE_TYPES, WAREHOUSE_TYPE_LABEL, type WarehouseType } from "../../data/warehouseTypes";
+import type { WarehouseMaster } from "../../types/receipt";
+import { Field, Select } from "../../components/ui/Input";
+import { listSites } from "@anagroci/contract/domain/siteType";
 import type { UserView } from "../../types/user";
 import { FilterBar } from "../../components/ui/FilterBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
@@ -15,9 +18,27 @@ import { useTableSearch } from "../../components/ui/useTableSearch";
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
 
-/** Admin only: create users, set their role, assign them to one warehouse. Only SITE warehouses
- * with a Unit/Central type are offered (the API refuses anything else), so a user always has a
- * section to land in. */
+type SiteRow = ReturnType<typeof listSites<WarehouseMaster>>[number];
+
+/** The warehouses a person can work at: the STORES of each finished site (Masters › Warehouses), grouped under that
+ * site and its Unit/Central type. The site itself isn't offered — the API refuses it (services/users.ts). */
+function StoreOptions({ sites, warehouses }: { sites: SiteRow[]; warehouses: WarehouseMaster[] }) {
+  return (
+    <>
+      {WAREHOUSE_TYPES.flatMap((t) => sites.filter((site) => site.type === t.value).map((site) => {
+        const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name).sort();
+        return stores.length ? (
+          <optgroup key={site.name} label={`${site.name} · ${t.label}`}>
+            {stores.map((store) => <option key={store} value={store}>{store}</option>)}
+          </optgroup>
+        ) : null;
+      }))}
+    </>
+  );
+}
+
+/** Admin only: create users, set their role, assign each to the one store they work at. They land in that store's
+ * site's section and see only their store (backend domain/site.ts resolveScope). */
 export function UsersPage() {
   const { masters } = useTracking();
   const users = useUsers();
@@ -25,7 +46,9 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const typedSites = useMemo(() => masters.warehouses.filter((w) => !w.site && w.type), [masters.warehouses]);
+  // Finished sites only (a type and an ID code, contract's isUsableSite): their stores are what can be assigned.
+  const typedSites = useMemo(() => listSites(masters.warehouses), [masters.warehouses]);
+  const storeNames = useMemo(() => new Set(masters.warehouses.filter((w) => w.site && typedSites.some((s) => s.name === w.site)).map((w) => w.name)), [masters.warehouses, typedSites]);
   const needsWarehouse = form.role !== "admin";
 
   async function handleCreate(e: FormEvent) {
@@ -55,24 +78,39 @@ export function UsersPage() {
   const search = useTableSearch(users.rows, (u) => [u.displayName, u.username, ROLE_LABEL[u.role], u.warehouse]);
 
   const columns: Column<UserView>[] = [
-    { label: "Name", render: (u) => <div><div className="font-semibold">{u.displayName}</div><div className="text-[11.5px] text-warmstone-500">{u.username}</div></div> },
+    { label: "Name", render: (u) => <div><div className="font-semibold">{u.displayName}</div><div className="text-[11px] text-warmstone-500">{u.username}</div></div> },
     { label: "Role", filter: { value: (u) => ROLE_LABEL[u.role], kind: "select" }, render: (u) => ROLE_LABEL[u.role] },
     {
-      label: "Warehouse", filter: { value: (u) => u.warehouse ?? "All", kind: "select" },
-      render: (u) => u.warehouse
-        ? <span>{u.warehouse} <span className="text-warmstone-400">· {u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "untyped"}</span></span>
-        : <span className="text-warmstone-400">All</span>,
+      label: "Warehouse", filter: { value: (u) => u.warehouse ?? (u.role === "admin" ? "All" : "Not assigned"), kind: "select" },
+      render: (u) => {
+        if (u.role === "admin") return <span className="text-warmstone-500">All</span>;
+        // Assigned to a whole site (before stores were assignable) or to nothing: say so, and let the admin pick the store.
+        const onStore = u.warehouse !== null && storeNames.has(u.warehouse);
+        return (
+          <div className="flex flex-col gap-1">
+            <select aria-label={`Store for ${u.username}`} value={onStore ? u.warehouse! : ""}
+              onChange={(e) => e.target.value && void patch(u, { warehouse: e.target.value })}
+              className="px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-semibold text-warmstone-800 outline-none focus:border-brand-700">
+              <option value="">{u.warehouse && !onStore ? `${u.warehouse} — choose a store…` : "Choose a store…"}</option>
+              <StoreOptions sites={typedSites} warehouses={masters.warehouses} />
+            </select>
+            {onStore
+              ? <span className="text-[11px] text-warmstone-500">{u.site} · {u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "untyped"}</span>
+              : <Pill tone="decision" label={u.warehouse ? "On a whole site — move to a store" : "Not assigned to a store"} />}
+          </div>
+        );
+      },
     },
     { label: "Status", filter: { value: (u) => u.active ? "Active" : "Deactivated", kind: "select" }, render: (u) => <Pill tone={u.active ? "entry" : "gap"} label={u.active ? "Active" : "Deactivated"} /> },
     {
       label: "",
       render: (u) => (
         <div className="flex gap-3 justify-end">
-          <button type="button" className="text-[12.5px] font-semibold text-brand-700 hover:text-brand-800"
+          <button type="button" className="text-[12px] font-semibold text-brand-700 hover:text-brand-800"
             onClick={() => { const pw = window.prompt(`New password for ${u.username} (min 8 characters)`); if (pw) void patch(u, { password: pw }); }}>
             Reset password
           </button>
-          <button type="button" className="text-[12.5px] font-semibold text-warmstone-600 hover:text-warmstone-900"
+          <button type="button" className="text-[12px] font-semibold text-warmstone-600 hover:text-warmstone-900"
             onClick={() => void patch(u, { active: !u.active })}>
             {u.active ? "Deactivate" : "Reactivate"}
           </button>
@@ -83,7 +121,7 @@ export function UsersPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader kicker="Administration" title="Users" lede="Create accounts and assign each person a role and one warehouse. Only warehouses with a Unit/Central type can be assigned (set it in Masters › Warehouses)." />
+      <PageHeader kicker="Administration" title="Users" lede="Create accounts and assign each person a role and the one warehouse they work at. Warehouses are listed under their Unit or Central site from Masters › Warehouses; a site needs a type and an ID code before its warehouses can be assigned." />
       <CollapsibleCard title="Add user" defaultOpen>
         <form onSubmit={handleCreate} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-3 items-end">
           <div><label className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5" htmlFor="u-username">Username</label>
@@ -96,11 +134,12 @@ export function UsersPage() {
             <select id="u-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className={inputCls}>
               {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select></div>
-          <div><label className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5" htmlFor="u-wh">Warehouse</label>
-            <select id="u-wh" required={needsWarehouse} disabled={!needsWarehouse} value={needsWarehouse ? form.warehouse : ""} onChange={(e) => setForm({ ...form, warehouse: e.target.value })} className={inputCls}>
+          <Field label="Warehouse" hint={needsWarehouse && !storeNames.size ? "No store is ready yet: add one under a warehouse in Masters › Warehouses." : undefined}>
+            <Select required={needsWarehouse} disabled={!needsWarehouse} value={needsWarehouse ? form.warehouse : ""} onChange={(e) => setForm({ ...form, warehouse: e.target.value })}>
               <option value="">{needsWarehouse ? "Select a warehouse…" : "All (admin)"}</option>
-              {typedSites.map((w) => <option key={w.name} value={w.name}>{w.name} · {WAREHOUSE_TYPE_LABEL[w.type as WarehouseType]}</option>)}
-            </select></div>
+              <StoreOptions sites={typedSites} warehouses={masters.warehouses} />
+            </Select>
+          </Field>
           <button type="submit" disabled={busy}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 disabled:opacity-50 text-white text-[13px] font-bold shadow-sm h-fit">
             <span className="material-symbols-outlined text-[17px]">person_add</span>Add user

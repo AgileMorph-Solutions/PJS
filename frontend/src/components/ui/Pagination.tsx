@@ -5,7 +5,7 @@ export function Pagination({ state }: { state: PageState<unknown> }) {
   const { page, totalPages, from, to, total, setPage } = state;
 
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-warmstone-100 text-[12.5px] text-warmstone-500">
+    <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-warmstone-100 text-[12px] text-warmstone-500">
       <span>
         {from}–{to} of {total}
       </span>

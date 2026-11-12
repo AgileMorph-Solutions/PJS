@@ -10,7 +10,7 @@ import { KpiTile } from "../../components/ui/KpiTile";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
-import { useDeliveryPlans } from "../../state/TrackingContext";
+import { useDeliveryPlans, useTracking } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
@@ -44,6 +44,11 @@ export function DeliveryPlansPage() {
   // filter ticked on every overdue value actually present — the checklist only offers values in the rows.
   const [params] = useSearchParams();
   const overdueOnly = params.has("overdue");
+  // ?new=1&supplier=LBA-… (from Add entries, for a supplier with no plan): the form opens with that supplier filled in.
+  const { masters } = useTracking();
+  const askedNew = params.has("new");
+  const askedSupplier = masters.suppliers.find((s) => s.code === params.get("supplier"));
+  const newPlanForm = () => ({ ...emptyPlanForm(), ...(askedSupplier ? { supplierName: askedSupplier.name, supplierCode: askedSupplier.code } : {}) });
   const overduePlans = useMemo(() => plans.filter((p) => p.overdue), [plans]);
   const overdueCount = overduePlans.length;
   const overdueFilter = useMemo(
@@ -182,9 +187,10 @@ export function DeliveryPlansPage() {
       </div>
 
       {canEdit && (
-        <CollapsibleCard title="New delivery plan" meta={`for ${site.warehouseName}`}>
+        <CollapsibleCard title="New delivery plan" meta={`for ${site.warehouseName}`} defaultOpen={askedNew}>
           <DeliveryPlanForm
-            initial={emptyPlanForm()} warehouseName={site.warehouseName} editing={false} saving={saving}
+            key={askedSupplier?.code ?? "new"}
+            initial={newPlanForm()} warehouseName={site.warehouseName} editing={false} saving={saving}
             onSubmit={(payload) => void run(() => api.createDeliveryPlan({ ...payload, plannedDeliveryDate: today(), destinationWarehouse: site.warehouseName }))}
           />
         </CollapsibleCard>

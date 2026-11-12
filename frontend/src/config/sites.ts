@@ -1,77 +1,62 @@
 /**
- * The two real sites the client's workbooks split on (see backend/src/domain/site.ts and
- * packages/contract/src/data/warehouseKinds.ts) — "unit"/"central" are only the URL slugs; the
- * `warehouseName` is the actual `Warehouse.name` row every site-scoped endpoint's `?warehouse=`
- * expects (it gets expanded server-side to its stores/aliases by `resolveSite()`).
- *
- * Adding a third site later is meant to be exactly: one more entry here + the two nav items in
- * config/nav.ts — every page under `/:site/*` reads its warehouse to scope by from `useSite()`,
- * never a hardcoded name.
+ * The app's warehouse sections, built from the Warehouses master — there is no fixed list. Every site an admin adds in
+ * Masters › Warehouses (and classifies) becomes a section at `/<slug>/*`; a non-admin is only ever shown their own
+ * (the API scopes /api/masters to it too). Rules live in contract's domain/siteType.ts; this only adds what the
+ * screens print.
  */
-export type SiteSlug = "unit" | "central";
+import type { Masters, WarehouseMaster } from "../types/receipt";
+import { listSites, siteOf, warehouseSlug } from "@anagroci/contract/domain/siteType";
+import { WAREHOUSE_TYPE_LABEL, isWarehouseType, type WarehouseType } from "../data/warehouseTypes";
+import { WAREHOUSE_KIND_LABEL, type WarehouseKind } from "../data/warehouseKinds";
+
+/** A section's URL segment: the site's name, slugged (contract's warehouseSlug). */
+export type SiteSlug = string;
 
 export interface SiteConfig {
   slug: SiteSlug;
-  /** Section label, without the site name — matches NavSection.label. */
+  /** What kind of section it is ("Unit Warehouse", "Central Warehouse", or the client's own kind) — the kicker. */
   label: string;
-  /** The site name shown under the label (NavSection.sublabel) and in page kickers. */
+  /** The site's own name, as the master has it — what people recognise. */
   sublabel: string;
-  /** The real `Warehouse.name` this section scopes every API read by by (`?warehouse=`). */
+  /** The real `Warehouse.name` every site-scoped API read sends as `?warehouse=`. */
   warehouseName: string;
-  /**
-   * Known alternate names for this site (WarehouseAlias rows, e.g. "YAMOUSSOUKRO" for Yakro
-   * Factory — see backend's warehouse_site_name_variants finding). `/api/masters` doesn't expose
-   * aliases today, so this is hardcoded here for the one place the frontend needs to recognize
-   * them: grouping a store under the right site on the Masters > Warehouses page even when a real
-   * upload has left that store's own `site` column pointing at the alias rather than the canonical
-   * name (a genuine, known data quirk — see WarehousesPage.tsx's own comment).
-   */
+  /** Other names rows of this site may carry (WarehouseAlias rows). */
   aliases: string[];
+  /** Its stores (master rows whose `site` is this one). */
+  stores: string[];
+  type: WarehouseType | null;
 }
 
-export const SITES: Record<SiteSlug, SiteConfig> = {
-  unit: {
-    slug: "unit",
-    label: "Unit / Regional Warehouse",
-    sublabel: "Bouaké",
-    warehouseName: "BOUAKE",
-    aliases: [],
-  },
-  central: {
-    slug: "central",
-    label: "Central Warehouse",
-    sublabel: "Yakro Factory",
-    warehouseName: "YAKRO FACTORY",
-    aliases: ["YAMOUSSOUKRO"],
-  },
-};
+export { warehouseSlug };
 
-export const SITE_LIST: SiteConfig[] = Object.values(SITES);
-
-/** The Unit/Central `Warehouse.type` each section corresponds to (data/warehouseTypes.ts). */
-export const SITE_TYPE: Record<SiteSlug, "UNIT" | "CENTRAL"> = { unit: "UNIT", central: "CENTRAL" };
-
-/** A user is assigned one warehouse, whose DB-side `type` (UNIT | CENTRAL — see
- * data/warehouseTypes.ts) decides which section of the app they belong to. */
-export function siteSlugForType(type: string | null | undefined): SiteSlug | undefined {
-  return type === "UNIT" ? "unit" : type === "CENTRAL" ? "central" : undefined;
+function toSite(w: WarehouseMaster, masters: Pick<Masters, "warehouses" | "aliases">): SiteConfig {
+  const aliases = (masters.aliases ?? []).filter((a) => a.warehouseName === w.name).map((a) => a.alias);
+  const names = new Set([w.name, ...aliases]);
+  const type = isWarehouseType(w.type) ? w.type : null;
+  return {
+    slug: warehouseSlug(w.name),
+    label: type ? WAREHOUSE_TYPE_LABEL[type] : w.kind ? WAREHOUSE_KIND_LABEL[w.kind as WarehouseKind] ?? w.kind : "Warehouse",
+    sublabel: w.name,
+    warehouseName: w.name,
+    aliases,
+    stores: masters.warehouses.filter((s) => s.site && names.has(s.site)).map((s) => s.name).sort(),
+    type,
+  };
 }
 
-export function isSiteSlug(value: string | undefined): value is SiteSlug {
-  return value === "unit" || value === "central";
+/** Every section the master defines, sorted by name. */
+export function sitesFrom(masters: Pick<Masters, "warehouses" | "aliases">): SiteConfig[] {
+  return listSites(masters.warehouses).map((w) => toSite(w, masters));
 }
 
-/** The reverse of `SITES[slug].warehouseName` — for the one spot that starts from a warehouse name
- * instead of a slug (WarehouseTransfersPage reads an incoming `?warehouse=` deep link). Canonical
- * name only, deliberately — a `?warehouse=` deep link is always written by this app itself, using
- * the canonical name, never an alias. */
-export function siteSlugForWarehouse(name: string): SiteSlug | undefined {
-  return SITE_LIST.find((s) => s.warehouseName === name)?.slug;
+/** The section a warehouse name (site, store or alias) belongs to, among `sites`. */
+export function siteForWarehouse(sites: SiteConfig[], masters: Pick<Masters, "warehouses" | "aliases">, name: string): SiteConfig | undefined {
+  const row = siteOf(masters.warehouses, masters.aliases, name);
+  return row ? sites.find((s) => s.warehouseName === row.name) : sites.find((s) => s.aliases.includes(name) || s.stores.includes(name));
 }
 
-/** Like `siteSlugForWarehouse`, but also matches a site's known aliases — for grouping a STORE
- * (whose own `site` column may hold either the canonical name or an alias, depending on which of
- * two upserts last touched it) under the right site bucket. See `SiteConfig.aliases`'s comment. */
-export function siteSlugForSiteName(name: string): SiteSlug | undefined {
-  return SITE_LIST.find((s) => s.warehouseName === name || s.aliases.includes(name))?.slug;
+/** The `:site` segment for a record of `warehouse`: its site's slug, or the name's own when the master doesn't place
+ * it (that section then says plainly it doesn't exist, rather than the link guessing another one). */
+export function siteSlugFor(sites: SiteConfig[], masters: Pick<Masters, "warehouses" | "aliases">, warehouse: string): SiteSlug {
+  return siteForWarehouse(sites, masters, warehouse)?.slug ?? warehouseSlug(warehouse);
 }

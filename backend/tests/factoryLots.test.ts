@@ -117,7 +117,7 @@ describe("Cooking (Phase 3)", () => {
     const over = await call("wi", "POST", "/factory-lots", { batchCode: BATCH, code: "ANG26G17", date: "2026-07-20", sizes: { A: "70001" } });
     expect(over.statusCode).toBe(422);
     expect(over.json().error).toMatch(/holds 70,000 kg; 70,001 kg can't be cooked/);
-    expect((await call("wi", "POST", "/factory-lots", { batchCode: "NOPE", code: "X1", date: "2026-07-20", sizes: { A: "1" } })).json().error).toMatch(/Batch NOPE doesn't exist/);
+    expect((await call("wi", "POST", "/factory-lots", { batchCode: "NOPE", code: "X1", date: "2026-07-20", sizes: { A: "1" } })).json().error).toMatch(/Production run NOPE doesn't exist/);
     expect((await call("qfs", "POST", "/factory-lots", { batchCode: BATCH, code: "X1", date: "2026-07-20", sizes: { A: "1" } })).statusCode).toBe(403);
   });
 
@@ -235,8 +235,48 @@ describe("Shelling (Phase 4)", () => {
   it("a QFS Officer reads the Lots, and sees the same stores", async () => {
     const res = await call("qfs", "GET", `/batches/${BATCH}/lots`);
     expect(res.statusCode).toBe(200);
-    expect(res.json().lots.map((l: { code: string }) => l.code)).toEqual(["ANG26G16", "ANG26G18"]);
+    expect(res.json().lots.map((l: { code: string }) => l.code).slice(0, 2)).toEqual(["ANG26G16", "ANG26G18"]);
     expect((await call("qfs", "POST", "/trucks", { stream: "shell", date: "2026-07-21", truckNo: "X" })).statusCode).toBe(403);
+  });
+});
+
+describe("Colour sort (Phase 5)", () => {
+  // ANG26G16's day record: wholes 5,000, pieces 200, rejection + oil 460, black rejection 120.
+  const sample = (stream: string, decision?: string) => ({ kind: decision ? "qc7_after" : "qc7_before", date: "2026-07-22", values: { stream, sizes: "BC to E", sampleG: "1000", wholesG: "916", brokensG: "20", buttsG: "10", knifeMarkG: "36", rejectionG: "12", oilDirtG: "6" }, ...(decision ? { decision } : {}) });
+
+  it("only a shelled Lot can be sampled at the sorter", async () => {
+    await readyLot("ANG26G19");
+    expect((await entry("qfs", "ANG26G19", sample("Wholes"))).json().error).toMatch(/no shelling day record yet/);
+  });
+
+  it("a stream that failed is held until a newer check passes it; the Lot is Colour sorted once every stream has", async () => {
+    expect((await entry("qfs", "ANG26G16", sample("Wholes"))).statusCode).toBe(201);
+    const no = await entry("qfs", "ANG26G16", sample("Wholes", "no"));
+    expect(no.json().sortChecks.Wholes).toBe("waiting");
+    const e = no.json().entries.at(-1);
+    expect((await call("wi", "POST", `/lot-entries/${e.id}/approve`)).json()).toMatchObject({ status: "shelled", sortChecks: { Wholes: "resort", Pieces: "not_checked" } });
+    await entry("wi", "ANG26G16", sample("Wholes", "ok"));
+    await entry("wi", "ANG26G16", sample("Pieces", "ok"));
+    expect((await lot("ANG26G16")).status).toBe("shelled");
+    const sorted = await entry("wi", "ANG26G16", sample("Rejection + oil", "ok"));
+    expect(sorted.json()).toMatchObject({ status: "colour_sorted", sorterStreams: ["Wholes", "Pieces", "Rejection + oil"], sorterKg: { Wholes: 5000, Pieces: 200, "Rejection + oil": 460 } });
+    const history = (await call("wi", "GET", `/batches/${BATCH}`)).json().history.map((h: { text: string }) => h.text);
+    expect(history).toContain("Lot ANG26G16 QC-7, Wholes: No · sort again: submitted for approval");
+  });
+
+  it("a stream shelling gave none of can't be checked after the sorter", async () => {
+    const lotWithout = await call("wi", "POST", "/factory-lots/ANG26G19/shelling-days", { date: "2026-07-22", inputKg: "1000", wholesKg: "200" });
+    expect(lotWithout.json().sorterStreams).toEqual(["Wholes"]);
+    expect((await entry("wi", "ANG26G19", sample("Pieces", "ok"))).json().error).toMatch(/Shelling gave ANG26G19 no Pieces to sort/);
+  });
+
+  it("black rejection is its own store, from the day records, sold by truck within it", async () => {
+    // ANG26G16 120 + ANG26G18 120 + ANG26G19 0.
+    expect(await store("black_rejection")).toBe(240);
+    const over = await call("wi", "POST", "/trucks", { stream: "black_rejection", date: "2026-07-23", truckNo: "BR-1", documentsChecked: true, tareKg: "1000", grossKg: "1241", buyer: "Buyer", gatePassNo: "BR-GP-1" });
+    expect(over.json().error).toMatch(/black rejection store holds 240 kg; a truck of 241 kg/);
+    expect((await call("wi", "POST", "/trucks", { stream: "black_rejection", date: "2026-07-23", truckNo: "BR-1", documentsChecked: true, tareKg: "1000", grossKg: "1200", buyer: "Buyer", gatePassNo: "BR-GP-1" })).statusCode).toBe(201);
+    expect(await store("black_rejection")).toBe(40);
   });
 });
 

@@ -9,12 +9,13 @@ import type { User } from "@prisma/client";
 import { isRole, type Role } from "@anagroci/contract/data/roles";
 import { ForbiddenError, UnauthorizedError } from "../domain/validation.js";
 import { isAllowed } from "./policy.js";
+import { assertProductionAccess, isProductionPath } from "./productionAccess.js";
 import { redactForRole } from "./redact.js";
-import { SESSION_COOKIE, userForToken } from "./session.js";
+import { SESSION_COOKIE, userForToken, type SessionUser } from "./session.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    user?: User;
+    user?: SessionUser;
   }
 }
 
@@ -35,7 +36,9 @@ export function registerAuth(app: FastifyInstance) {
     const user = token ? await userForToken(token) : null;
     if (!user) throw new UnauthorizedError();
     req.user = user;
-    if (isRole(user.role) && !isAllowed(user.role, req.method, path)) throw new ForbiddenError();
+    if (!isRole(user.role)) return;
+    if (!isAllowed(user.role, req.method, path)) throw new ForbiddenError();
+    if (isProductionPath(path)) await assertProductionAccess(user as User & { role: Role });
   });
   // What a role may not see never leaves the server (price and amount for the Warehouse Incharge): one hook over every JSON response.
   app.addHook("preSerialization", async (req, _reply, payload) => {
@@ -44,9 +47,15 @@ export function registerAuth(app: FastifyInstance) {
   });
 }
 
-export function currentUser(req: FastifyRequest): User & { role: Role } {
+export function currentUser(req: FastifyRequest): SessionUser & { role: Role } {
   if (!req.user || !isRole(req.user.role)) throw new UnauthorizedError();
-  return req.user as User & { role: Role };
+  return req.user as SessionUser & { role: Role };
+}
+
+/** The site of the caller's warehouse: their store's site, or the warehouse itself when they are assigned a whole site. */
+export function currentSite(req: FastifyRequest): string | null {
+  const user = currentUser(req);
+  return user.warehouseRef?.site ?? user.warehouse;
 }
 
 export function requireRole(...roles: Role[]) {

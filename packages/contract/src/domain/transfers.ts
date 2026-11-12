@@ -11,6 +11,7 @@
  * 48,290 dispatched, 48,820 − 574 bags = 48,246 at arrival, weight variance −44 kg.
  */
 import { BAG_WEIGHT_KG } from "./receiptMath.js";
+import { isUsableSite } from "./siteType.js";
 import type { ReceiptRecord, TransferRequest, TransferStatus, WarehouseMaster } from "../types/receipt.js";
 
 /**
@@ -38,17 +39,33 @@ export const canTransferBetween = (fromType: string | null, toType: string | nul
 export const TRANSFER_DIRECTION_MESSAGE = "RCN can only be transferred from a Unit warehouse to a Central warehouse.";
 
 /**
- * Where a BKT can go, from the warehouse master: the stores of every Central site, or the site itself
- * until it has stores. A site with no type (BKE-04) can't have users assigned to it, so nobody there
- * could record the truck arriving.
+ * Where a BKT can go: the Central sites of the master (isUsableSite). The site decides who receives the truck; the
+ * sender may also name one of its stores (transferDestinationGroups), and each Lot's bin is recorded on arrival.
+ * A row with no type or no ID code (BKE-04) can't have anyone working there, so nobody could record the truck arriving.
  */
 export function transferDestinations(warehouses: WarehouseMaster[], from: string): string[] {
   return warehouses
-    .filter((w) => !w.site && w.type === "CENTRAL" && w.name !== from)
-    .flatMap((site) => {
-      const stores = warehouses.filter((w) => w.site === site.name).map((w) => w.name);
-      return stores.length ? stores : [site.name];
-    });
+    .filter((w) => isUsableSite(w) && w.type === "CENTRAL" && w.name !== from)
+    .map((w) => w.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/** A Central site a BKT may go to, with the stores (the actual warehouses: ANAGROCI-01, YAKRO…) a truck can be sent to. */
+export interface TransferDestination {
+  site: string;
+  stores: string[];
+}
+
+/**
+ * transferDestinations(), each with its stores, for the sender to pick the warehouse the truck goes to. Naming a store
+ * files the BKT at its site with that store kept (backend createTransfer), so the site's people still see and receive
+ * it, and only that store's people among them (backend domain/site.ts resolveScope).
+ */
+export function transferDestinationGroups(warehouses: WarehouseMaster[], from: string): TransferDestination[] {
+  return transferDestinations(warehouses, from).map((site) => ({
+    site,
+    stores: warehouses.filter((w) => w.site === site).map((w) => w.name).sort((a, b) => a.localeCompare(b)),
+  }));
 }
 
 /** How a BKT's destination reads: the site, plus the store when one was chosen. */

@@ -3,6 +3,11 @@ export type StageKind = "entry" | "decision" | "system" | "gap";
 export interface StageField {
   /** Field/column name as it should appear on the form, and as the key inside ReceiptRecord.stageData. */
   n: string;
+  /**
+   * What the form shows instead of `n`, when the client wants a different on-screen name. `n` stays the data key, the
+   * workbook column header and the name rules refer to, so an existing upload file keeps working.
+   */
+  label?: string;
   /** Sample value if a real workbook already captures this field today; "" if it's a new field */
   v: string;
   /**

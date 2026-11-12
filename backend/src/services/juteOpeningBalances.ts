@@ -6,7 +6,7 @@ import type { User } from "@prisma/client";
 import { JUTE_OPENING_ACTIVITY, openingBalanceProblems, type OpeningBalanceInput } from "@anagroci/contract/domain/juteOpeningBalance";
 import { parseBags } from "@anagroci/contract/domain/juteVendorReceipt";
 import { prisma } from "../db.js";
-import { ForbiddenError, ValidationError } from "../domain/validation.js";
+import { ValidationError } from "../domain/validation.js";
 import { categoriseActivity } from "./imports.js";
 
 const INCLUDE = {
@@ -38,8 +38,9 @@ export async function listOpeningBalances(site?: string[]) {
 }
 
 /**
- * Sets the warehouse's opening balance. Changing one rewrites every running balance after it, so once it is set only an
- * admin can change it, and the change records who did it.
+ * Sets the warehouse's opening balance. The Warehouse Incharge (for their own warehouse) and an admin can both set and change
+ * it; the route's policy and scopedWarehouse already keep everyone else out. Changing one rewrites every running balance
+ * after it, so a change records who made it.
  */
 export async function setOpeningBalance(input: OpeningBalanceInput, warehouse: string, actor: Pick<User, "id" | "role">) {
   const problems = openingBalanceProblems(input);
@@ -56,7 +57,6 @@ export async function setOpeningBalance(input: OpeningBalanceInput, warehouse: s
     }
     const existing = await tx.juteOpeningBalance.findFirst({ where: { movement: { whLocation: warehouse } }, select: { id: true, movementId: true } });
     if (existing) {
-      if (actor.role !== "admin") throw new ForbiddenError(`The opening stock for ${warehouse} is already set. Only an Admin can change it.`);
       await tx.juteWarehouseMovement.update({ where: { id: existing.movementId }, data: movementFields });
       await tx.juteOpeningBalance.update({ where: { id: existing.id }, data: { remarks, updatedById: actor.id } });
       return existing.id;

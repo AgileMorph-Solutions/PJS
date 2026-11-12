@@ -5,7 +5,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { currentUser } from "../auth/plugin.js";
-import { scopedWarehouse } from "../auth/scope.js";
+import { scopedSite, scopedWarehouse } from "../auth/scope.js";
 import { ValidationError } from "../domain/validation.js";
 import { parseDateRange } from "../domain/workbook/dateFilter.js";
 import { sheetsFor } from "../domain/workbook/sheets.js";
@@ -17,7 +17,8 @@ async function sectionOf(req: FastifyRequest, warehouse?: string) {
   const wh = scopedWarehouse(req, warehouse) ?? warehouse;
   // An admin has no warehouse of their own, so they say which section the workbook is for.
   if (!wh) throw new ValidationError("Choose a warehouse — an admin's workbook is for one warehouse at a time.");
-  return sectionFor(wh);
+  // A user's workbook carries only their own rows (a store-bound user: their store, never its siblings).
+  return sectionFor(wh, currentUser(req).role === "admin" ? undefined : await scopedSite(req, warehouse));
 }
 
 export async function workbookRoutes(app: FastifyInstance) {

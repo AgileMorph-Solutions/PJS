@@ -23,13 +23,16 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 /** A section is one warehouse SITE that has a Unit/Central type — the type decides which sheets the
  * workbook carries, so a warehouse without one can't have a workbook until an admin sets it. */
-export async function sectionFor(warehouse: string): Promise<Section> {
-  const wh = await prisma.warehouse.findUnique({ where: { name: warehouse } });
+export async function sectionFor(warehouse: string, scope?: string[]): Promise<Section> {
+  const named = await prisma.warehouse.findUnique({ where: { name: warehouse } });
+  // A store-bound user's workbook is their site's section (Unit/Central), with rows limited to `scope`.
+  const wh = named?.site ? await prisma.warehouse.findUnique({ where: { name: named.site } }) : named;
   if (!wh || wh.site !== null) throw new ValidationError(`"${warehouse}" isn't a warehouse site.`);
+  warehouse = wh.name;
   if (wh.type !== "UNIT" && wh.type !== "CENTRAL") {
     throw new ValidationError(`"${warehouse}" has no Unit/Central type yet — an admin sets it under Masters › Warehouses.`);
   }
-  return { warehouse, type: wh.type, site: await resolveSite(warehouse) };
+  return { warehouse, type: wh.type, site: scope ?? await resolveSite(warehouse) };
 }
 
 export async function downloadWorkbook(section: Section, range: DateRange, blank: boolean, role?: Role) {

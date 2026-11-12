@@ -10,8 +10,9 @@
  */
 import { COOLING_HOURS, hoursBetween, isTime } from "./cooking.js";
 import { SILO_SIZES, siloFromWord, siloLabel, type SiloSize } from "./calibration.js";
+import { SORTER_SIZE_GROUPS, SORTER_STREAMS, sorterFigures } from "./colourSort.js";
 
-export const ENTRY_KINDS = ["cooker_log", "qc3", "qc4", "waste_water", "line_run", "qc5_frequency", "qc5_capacity", "qty1", "qc6"] as const;
+export const ENTRY_KINDS = ["cooker_log", "qc3", "qc4", "waste_water", "line_run", "qc5_frequency", "qc5_capacity", "qty1", "qc6", "qc7_before", "qc7_after"] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
 /** The 14 cutting lines, as the sheets name them; the doc: "14 cutting lines open the shells". */
@@ -125,6 +126,43 @@ export function shellSampleFigures(v: Values) {
   const kernelPct = sample > 0 ? ((n0(v.wholeG) + n0(v.brokensG) + 0.4 * n0(v.unscoopG) + 0.28 * n0(v.uncutG)) / sample) * 100 : 0;
   return { kernelPct, kernelLbs: (kernelPct / 100) * LBS_PER_BAG, errorG: sample - sum(v, ["wholeG", "brokensG", "rejectionG", "unscoopG", "uncutG", "shellG"]) };
 }
+
+/** QC-7's sample, the same on both sides of the sorter: the sheet's columns, with the doc's stream and size group. */
+const SORTER_FIELDS: EntryField[] = [
+  { key: "stream", label: "Stream", type: "select", options: [...SORTER_STREAMS], required: true, keep: true },
+  { key: "sizes", label: "Size group", type: "select", options: SORTER_SIZE_GROUPS, keep: true },
+  { key: "shift", label: "Shift", type: "select", options: ["A", "B"], keep: true },
+  { key: "sampleG", label: "Sample (g)", type: "number", required: true, keep: true },
+  { key: "nutCount", label: "Nut count", type: "number" },
+  { key: "moisture", label: "Moisture (%)", type: "number" },
+  { key: "wholesG", label: "Wholes (g)", type: "number" },
+  { key: "brokensG", label: "Brokens (g)", type: "number" },
+  { key: "buttsG", label: "Butts (g)", type: "number" },
+  { key: "knifeMarkG", label: "Knife mark (g)", type: "number", hint: "The sheet's Backcut." },
+  { key: "rejectionG", label: "Rejection (g)", type: "number" },
+  { key: "oilDirtG", label: "Oil / dirt (g)", type: "number" },
+  { key: "edgeCutG", label: "Edge cut (g)", type: "number" },
+  { key: "uncutG", label: "Uncut (g)", type: "number" },
+  { key: "unscoopG", label: "Unscoop (g)", type: "number" },
+  { key: "shellG", label: "Shell (g)", type: "number" },
+];
+
+const sorterFigureList = (v: Values): EntryFigure[] => {
+  const f = sorterFigures(v);
+  return [
+    { label: "Wholes %", value: pct(f.wholesPct) },
+    { label: "Brokens %", value: pct(f.brokensPct) },
+    { label: "Rejection %", value: pct(f.rejectionPct) },
+    { label: "Knife mark %", value: pct(f.knifeMarkPct) },
+    { label: "Shell %", value: pct(f.shellPct) },
+  ];
+};
+
+/** "Parts must add up to the sample": a note, as the sheet has a real row off by grams. */
+const sorterNotes = (v: Values): string[] => {
+  const f = sorterFigures(v);
+  return n0(v.sampleG) > 0 && Math.abs(f.errorG) > 0.0001 ? [`The parts add up to ${fmt(n0(v.sampleG) - f.errorG)} g, not the ${fmt(n0(v.sampleG))} g sample.`] : [];
+};
 
 export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
   cooker_log: {
@@ -269,7 +307,21 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
       return out;
     },
   },
+  qc7_before: {
+    kind: "qc7_before", sheet: "Sorter Before", title: "Sample before the sorter", check: "QC-7", who: "qfs",
+    help: "A 1,000 g sample of the shelled kernels going into the colour sorter, weighed into its parts.",
+    fields: SORTER_FIELDS, figures: sorterFigureList, notes: sorterNotes,
+  },
+  qc7_after: {
+    kind: "qc7_after", sheet: "Sorter After", title: "Sample after the sorter", check: "QC-7", who: "qfs",
+    decision: { ok: "OK", okHint: "The stream goes on to the Borma ovens.", no: "No · sort again", noHint: "The stream goes through the sorter again before Borma.", noValue: "no" },
+    help: "A 1,000 g sample of one stream coming out of the sorter. One check for each stream: wholes, pieces, and rejection + oil.",
+    fields: SORTER_FIELDS, figures: sorterFigureList, notes: sorterNotes,
+  },
 };
+
+/** Recorded on a Lot only once it is shelled: the sorter works on what shelling gave. */
+export const AFTER_SHELLING: EntryKind[] = ["qc7_before", "qc7_after"];
 
 /** Recorded on a Lot only once QC-4 has passed it. */
 export const AFTER_COOLING: EntryKind[] = ["line_run", "qc5_frequency", "qc5_capacity", "qty1", "qc6"];

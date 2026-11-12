@@ -269,7 +269,7 @@ export const BATCH_CODE_PATTERN = /^[A-Z0-9][A-Z0-9._-]*$/;
  */
 export type BatchStatus = "open" | "in_process";
 
-export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = { open: "Open", in_process: "In process" };
+export const BATCH_STATUS_LABELS: Record<BatchStatus, string> = { open: "Waiting for first load", in_process: "In production" };
 
 export function batchStatus(rcnReceiptCount: number): BatchStatus {
   return rcnReceiptCount > 0 ? "in_process" : "open";

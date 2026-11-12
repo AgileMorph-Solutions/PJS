@@ -27,11 +27,11 @@ export function MySubmissionsPage() {
 
   return (
     <div className="space-y-5">
-      <PageHeader kicker={`${site.label} · ${site.sublabel}`} title="My submissions" lede="A rejected submission is final - ask the Warehouse Incharge to correct the receipt." />
+      <PageHeader kicker={site ? `${site.label} · ${site.sublabel}` : "Approvals"} title="My submissions" lede="A rejected submission is final - ask the Warehouse Incharge to correct the receipt." />
       <FilterBar>
         <input placeholder="Search receipt, form or reason…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
       </FilterBar>
-      <DataTable columns={columns} rows={search.filtered} keyFn={(s) => s.id} rowHref={(s) => `/${site.slug}/receipts/${s.receiptId}`} emptyTitle={subs.loading ? "Loading…" : "Nothing submitted yet"} />
+      <DataTable columns={columns} rows={search.filtered} keyFn={(s) => s.id} rowHref={site ? (s) => `/${site.slug}/receipts/${s.receiptId}` : undefined} emptyTitle={subs.loading ? "Loading…" : "Nothing submitted yet"} />
     </div>
   );
 }

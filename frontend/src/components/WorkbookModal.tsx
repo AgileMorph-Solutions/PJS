@@ -34,7 +34,7 @@ export const productionWorkbookClient: WorkbookClient = {
   preview: (f) => api.previewProductionWorkbook(f),
   commit: (t) => api.commitProductionWorkbook(t),
   text: {
-    newRow: "A new Batch Name creates a batch; leave RCN Receipt ID, Check ID or Pallet ID empty to add a new one. A check, pallet or final weight names its load by RCN Receipt ID or BTM No. Nothing is ever deleted.",
+    newRow: "A new Batch Name starts a production run; leave RCN Receipt ID, Check ID or Pallet ID empty to add a new one. A check, pallet or final weight names its load by RCN Receipt ID or BTM No. Nothing is ever deleted.",
     exportNote: "Checks, pallets and final weights are filtered on their load's date.",
     warnings: "the upload still goes through",
   },

@@ -13,9 +13,11 @@ export interface CalibrationRun {
 
 /** A load's calibration: its into-silo kg from Intake, what its runs have sized so far, and what is left. */
 export interface RcnCalibration {
-  toSilosKg: number;
+  /** Null until the final weight is saved: steps are recorded in any order, and only the final weight says the total. */
+  toSilosKg: number | null;
   sizedKg: number;
-  leftKg: number;
+  /** Null while toSilosKg is. */
+  leftKg: number | null;
   /** Oldest first. */
   runs: CalibrationRun[];
 }

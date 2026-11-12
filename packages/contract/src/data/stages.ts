@@ -85,7 +85,8 @@ export const stages: Stage[] = [
       { n: "Final moisture (%)", v: "10.2" , col: "finalMoisture"},
       { n: "Sample nut count", v: "" , col: "sampleNutCount"},
       { n: "Final nut count", v: "172" , col: "finalNutCount"},
-      { n: "KOR", v: "47.69" , col: "kor"},
+      // Nov 2026 client request: shown as "Sample KOR", beside the Sample moisture and nut count it is cut from.
+      { n: "KOR", label: "Sample KOR", v: "47.69" , col: "kor"},
       { n: "FINAL KOR", v: "48.4" , col: "finalKor"},
       { n: "Sample – Good Kernel (g)", v: "" , col: "sampleGoodKernelG"},
       { n: "Sample – Immature (g)", v: "" , col: "sampleImmatureG"},

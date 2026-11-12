@@ -86,11 +86,11 @@ afterAll(async () => {
 });
 
 describe("the sample", () => {
-  it("is one file with a tab per step of Phases 1 to 4, headers only", async () => {
+  it("is one file with a tab per step of Phases 1 to 5, headers only", async () => {
     const built = await downloadProductionWorkbook(SITE, {}, true);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(built.buffer as ArrayBuffer);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(["Batches", "RCN Receipts", "Moisture Checks", "Pallets", "Final Weight", "Calibration Runs", "Silo Checks", "Silo Moves", "Cooking", "Cooker Log", "Cooking Checks", "Waste Water", "Cooling", "Cooling Checks", "Shelling Days", "Line Runs", "Machine Frequency", "Machine Samples", "Uncut Checks", "Shell Samples", "Boiler", "Trucks"]);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Batches", "RCN Receipts", "Moisture Checks", "Pallets", "Final Weight", "Calibration Runs", "Silo Checks", "Silo Moves", "Cooking", "Cooker Log", "Cooking Checks", "Waste Water", "Cooling", "Cooling Checks", "Shelling Days", "Line Runs", "Machine Frequency", "Machine Samples", "Uncut Checks", "Shell Samples", "Sorter Before", "Sorter After", "Boiler", "Trucks"]);
     expect(wb.worksheets.every((w) => w.actualRowCount === 1)).toBe(true);
     expect(built.filename).toBe("ANAGROCI - Production - Sample.xlsx");
   });
@@ -128,7 +128,7 @@ describe("one file, the whole of Intake", () => {
     const done = await commitProductionWorkbook(wi, p.token);
     expect(done.totalCreated).toBe(7);
     const [load] = await listRcnReceipts(SITE);
-    expect(load).toMatchObject({ batchCode: "PWB-ANA-03B", btmNo: "109", binCode: "PWB-03B", status: "intake_done" });
+    expect(load).toMatchObject({ batchCode: expect.stringMatching(/^PR-PWB-2026-\d{3}$/), btmNo: "109", binCode: "PWB-03B", status: "intake_done" });
     expect(load!.moistureChecks.map((c) => [c.decision, c.status])).toEqual([["hold", "approved"], ["ok", "approved"]]);
     expect(load!.pallets.map((p) => p.grossKg)).toEqual(["2335", "2445.4"]);
     expect(load!.finalWeight).toMatchObject({ emptyPallets: [{ weightKg: "120", count: "1" }, { weightKg: "80", count: "1" }], dustKg: "2.5", voidsKg: "" });
@@ -155,21 +155,20 @@ describe("what the file can't do — the screens' own refusals, row by row", () 
       Batches: [BATCHES, ["PWB-NEW", "2026-08-01", "PWB-03B", ""], ["PWB-ANA-03B", "2026-07-25", "PWB-03B / PWB-10", "Warehouse team"]],
     }));
     expect(byName(p, "Batches").errors.map((e) => [e.row, e.message])).toEqual([
-      [2, expect.stringMatching(/PWB-03B is already in batch PWB-ANA-03B/)],
-      [3, expect.stringMatching(/Batch PWB-ANA-03B is already saved.*Start Date/)],
+      [2, expect.stringMatching(/PWB-03B is already in production run PR-PWB-2026-\d{3} \(PWB-ANA-03B\)/)],
+      [3, expect.stringMatching(/Production run PR-PWB-2026-\d{3} \(PWB-ANA-03B\) is already saved.*Start Date/)],
     ]);
   });
 
-  it("refuses a check for a load that isn't due one, and pallets before moisture is OK", async () => {
+  it("takes a load's steps in any order, as the screens do: pallets before the moisture check, a re-check of a weighed load", async () => {
     const p = await preview(await xlsx({
       "RCN Receipts": [LOADS, [null, "PWB-ANA-03B", "2026-07-21", "110", "PWB-10"]],
       Pallets: [PALLETS, [null, null, "110", 2000, 30, "ANA-03B"]],
       "Moisture Checks": [CHECKS, [null, null, "109", 9.5, 180, null, null, null, null, "OK"]],
     }));
-    expect(byName(p, "RCN Receipts").created).toBe(1);
-    expect(byName(p, "Moisture Checks").errors[0]!.message).toMatch(/Intake done; no moisture check is due/);
-    expect(byName(p, "Pallets").errors[0]!.message).toMatch(/Waiting for moisture; it can't be weighed now/);
-    await expect(commitProductionWorkbook(wi, p.token)).rejects.toThrow(/nothing was written/);
+    expect(p.sheets.flatMap((s) => s.errors)).toEqual([]);
+    expect(p.sheets.map((s) => [s.name, s.created])).toEqual([["RCN Receipts", 1], ["Moisture Checks", 1], ["Pallets", 1]]);
+    // Previewed only: the tests below go on from the one load.
     expect(await prisma.rcnReceipt.count({ where: { batch: { warehouse: SITE } } })).toBe(1);
   });
 
@@ -182,14 +181,13 @@ describe("what the file can't do — the screens' own refusals, row by row", () 
     expect(byName(p, "Moisture Checks").errors[0]!.message).toMatch(/BTM 109 is on 2 loads .* Give the RCN Receipt ID/);
   });
 
-  it("won't change a closed load's pallets, and reports an unknown ID rather than creating a row", async () => {
+  it("corrects a weighed load's pallet (any order), and reports an unknown ID rather than creating a row", async () => {
     const [load] = await listRcnReceipts(SITE);
     const p = await preview(await xlsx({
       Pallets: [PALLETS, [load!.pallets[0]!.id, null, null, 9999, 30, "ANA-03B"], [999999, null, null, 1, 1, "X"]],
     }));
-    const errors = byName(p, "Pallets").errors.map((e) => e.message);
-    expect(errors[0]).toMatch(/Intake done; it can't be weighed now/);
-    expect(errors[1]).toMatch(/Pallet 999999 doesn't exist/);
+    expect(byName(p, "Pallets").changed).toBe(1);
+    expect(byName(p, "Pallets").errors.map((e) => e.message)).toEqual([expect.stringMatching(/Pallet 999999 doesn't exist/)]);
   });
 
   it("a column the tab needs must be there", async () => {
@@ -259,8 +257,8 @@ describe("Calibration in the same file", () => {
       "Silo Checks": [CHECKS2, [null, "PWB-ANA-03B", "2026-07-24", "Z", null, null, 1000, 1000, null, null, null, null, "OK"], [null, "PWB-ANA-03B", "2026-07-24", "A", "BIN-NOPE", null, 1000, null, 1000, null, null, null, "OK"]],
       "Silo Moves": [MOVES, [null, "2026-07-24", "E", "A", 1], [null, "2026-07-24", "A", "AB", 999999]],
     }));
-    expect(byName(p, "Calibration Runs").errors.map((e) => e.message)).toEqual([expect.stringMatching(/is Calibrated; it can't be calibrated now/), expect.stringMatching(/run 999999 doesn't exist/)]);
-    expect(byName(p, "Silo Checks").errors.map((e) => e.message)).toEqual([expect.stringMatching(/Choose the silo the sample was taken from/), expect.stringMatching(/BIN-NOPE is not in batch/)]);
+    expect(byName(p, "Calibration Runs").errors.map((e) => e.message)).toEqual([expect.stringMatching(/already fully calibrated/), expect.stringMatching(/run 999999 doesn't exist/)]);
+    expect(byName(p, "Silo Checks").errors.map((e) => e.message)).toEqual([expect.stringMatching(/Choose the silo the sample was taken from/), expect.stringMatching(/BIN-NOPE is not in production run/)]);
     expect(byName(p, "Silo Moves").errors.map((e) => e.message)).toEqual([expect.stringMatching(/E \(18 mm\) has no failed check/), expect.stringMatching(/can't be moved out of it/)]);
   });
 });

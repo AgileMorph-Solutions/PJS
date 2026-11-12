@@ -16,9 +16,16 @@ export async function createSession(userId: string): Promise<{ token: string; ex
   return { token, expiresAt };
 }
 
-/** The active user behind a token, or null (unknown, expired, or a deactivated account). */
-export async function userForToken(token: string): Promise<User | null> {
-  const session = await prisma.session.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
+/** A signed-in user plus the site their warehouse belongs to (null when it IS a site, or they have none). */
+export type SessionUser = User & { warehouseRef: { site: string | null } | null };
+
+/** The active user behind a token, or null (unknown, expired, or a deactivated account). Loads the warehouse's site in
+ * the same query, so scoping a request to "my store or my site" costs no extra lookup. */
+export async function userForToken(token: string): Promise<SessionUser | null> {
+  const session = await prisma.session.findUnique({
+    where: { tokenHash: sha256(token) },
+    include: { user: { include: { warehouseRef: { select: { site: true } } } } },
+  });
   if (!session || session.expiresAt.getTime() < Date.now() || !session.user.active) return null;
   return session.user;
 }

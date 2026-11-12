@@ -10,7 +10,9 @@
     "test": "vitest run",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "demo:production": "tsx prisma/demoProduction.ts",
+    "demo:production:remove": "tsx prisma/demoProduction.ts --remove"
   },
   "dependencies": {
     "@anagroci/contract": "*",

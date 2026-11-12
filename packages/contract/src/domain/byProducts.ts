@@ -1,6 +1,6 @@
 /**
  * What leaves the floor by truck: the document's "By-products & dispatch", one form with the stream picked from a list.
- * The streams of Phases 1–4 for now; later phases add theirs to this list. Stores are calculated from what produced
+ * The streams of Phases 1–5 for now; later phases add theirs to this list. Stores are calculated from what produced
  * them and what left, never stored. Source: the doc's page 15, and the client's "15. Waste Management Dispatch
  * Tracker" and "16. Shell Dispatch Tracker", whose net = gross − tare holds on all 1,653 rows.
  */
@@ -10,6 +10,8 @@ export const STREAMS = [
   { key: "waste_water", label: "Cooking waste water", register: "Waste Management Dispatch Tracker", producedIn: "Cooking" },
   { key: "shell", label: "Shell", register: "16. Shell Dispatch Tracker", producedIn: "Shelling" },
   { key: "shell_dust", label: "Shell dust", register: "Waste Management Dispatch Tracker", producedIn: "Shelling" },
+  // The doc: "black rejection → storage → sale". Its kg come from the shelling day record.
+  { key: "black_rejection", label: "Black rejection", register: "Gate Pass / Sortie", producedIn: "Colour sort" },
 ] as const;
 
 export type Stream = (typeof STREAMS)[number]["key"];

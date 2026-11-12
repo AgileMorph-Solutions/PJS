@@ -37,7 +37,7 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
     <div>
       <div className="flex items-center justify-between gap-2 mb-1.5">
         <label htmlFor={id} className="text-[12.5px] font-semibold text-warmstone-700">
-          {field.n}
+          {field.label ?? field.n}
         </label>
         {system && (
           <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold bg-warmstone-200 text-warmstone-700">

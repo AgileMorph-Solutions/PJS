@@ -9,6 +9,8 @@
  *   Transfer     BKT-2027-001        issued on a transfer request; continues their 2026 BKT001 / BKT-029 numbering
  *   Delivery     DP-BKE-2027-001     issued when a delivery plan is created
  *   RCN Receipt  RR-YAK-2027-0001    issued when a load arrives at production (Phase 1 doc: RR-YAK-2026-0001…)
+ *   Production   PR-YAK-2027-001     issued when a production run is started from warehouse bins (a system ID, so nobody
+ *   run                              has to invent a name; runs named in an uploaded workbook keep that name)
  * Receipts and Lots are four digits because one site already passes 900 receipts a year; plans and
  * transfers stay at three, as in the client's file.
  *
@@ -17,10 +19,10 @@
  * arrival date (or the plan's / transfer's own date), not the year the record happened to be typed.
  */
 
-export type SiteIdKind = "REC" | "LOT" | "DP" | "RR";
+export type SiteIdKind = "REC" | "LOT" | "DP" | "RR" | "PR";
 
 /** Padding per kind, as in the client's own workbook; past the width the number simply grows. */
-const SEQ_PAD: Record<SiteIdKind | "BKT", number> = { REC: 4, LOT: 4, DP: 3, RR: 4, BKT: 3 };
+const SEQ_PAD: Record<SiteIdKind | "BKT", number> = { REC: 4, LOT: 4, DP: 3, RR: 4, PR: 3, BKT: 3 };
 
 const pad = (kind: SiteIdKind | "BKT", seq: number) => String(seq).padStart(SEQ_PAD[kind], "0");
 
@@ -61,6 +63,7 @@ export const formatReceiptId = (code: string, year: number, seq: number) => form
 export const formatLotNumber = (code: string, year: number, seq: number) => formatSiteId("LOT", code, year, seq);
 export const formatDeliveryPlanId = (code: string, year: number, seq: number) => formatSiteId("DP", code, year, seq);
 export const formatRcnReceiptId = (code: string, year: number, seq: number) => formatSiteId("RR", code, year, seq);
+export const formatProductionRunId = (code: string, year: number, seq: number) => formatSiteId("PR", code, year, seq);
 
 export function transferIdPrefix(year: number): string {
   if (!Number.isInteger(year) || year < 1000 || year > 9999) throw new RangeError(`Invalid year ${year}`);
@@ -79,7 +82,7 @@ export interface ParsedSiteId {
   seq: number;
 }
 
-const SITE_ID_RE = /^(REC|LOT|DP|RR)-([A-Z0-9]{2,12})-(\d{4})-(\d+)$/;
+const SITE_ID_RE = /^(REC|LOT|DP|RR|PR)-([A-Z0-9]{2,12})-(\d{4})-(\d+)$/;
 
 export function parseSiteId(value: string | null | undefined): ParsedSiteId | undefined {
   const m = SITE_ID_RE.exec((value ?? "").trim());

@@ -160,6 +160,9 @@ Use these before writing markup. All are in `frontend/src/components/ui/` unless
 | Date entry and filtering | `DateInput`, `DateRangeInputs`, `useDateRangeFilter` |
 | Route tabs | `Tabs` |
 | Nothing to show | `EmptyState` |
+| Icon-only button (remove, edit) | `IconButton` |
+| Steps / stages to pick from | `StepNav` (vertical or horizontal) |
+| A production table's columns | `components/production/columns.tsx` (`dateCol`, `kgCol`, `numCol`, `pctCol`, `textCol`, `statusCol`): the filter comes with the column |
 | Progress and people | `ProgressBar`, `Avatar` |
 | Stage-driven forms | `components/StageForm`, `components/FieldInput` |
 
@@ -188,8 +191,8 @@ How to build it:
 
 These have no shared primitive yet, so copies have drifted apart:
 
-- **Buttons and inputs.** `btnPrimary`, `inputCls` and similar are redefined across many files, and
-  `production/batchUi.tsx` exports its own. Don't add another copy. `ui/Button` and `ui/Input` (`Input`,
+- **Buttons and inputs.** `btnPrimary`, `inputCls` and similar are redefined across many files outside
+  Production (Production now uses `ui/Button` and `ui/Input` throughout). Don't add another copy. `ui/Button` and `ui/Input` (`Input`,
   `Select`, `Field`) now exist: use them for the lines you touch.
 - **Card shell.** The card classes are pasted inline in older files. Use `ui/Card` the next time you write one.
 - **Headings.** Section and card titles are hand-written and vary in size. `ui/CardTitle` exists; create

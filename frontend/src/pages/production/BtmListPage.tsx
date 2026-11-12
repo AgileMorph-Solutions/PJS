@@ -8,6 +8,7 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { useBtmIntakes } from "../../state/TrackingContext";
 import { api, type BtmIntake } from "../../repository/api";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { PRODUCTION_PAGE_SIZE } from "../../components/production/columns";
 
 /** BTM register — the intake spine's list page. A BTM is auto-created the moment its first
  * receipt line is written (see backend/src/services/production/btm.ts), so "create a BTM" here is
@@ -98,7 +99,7 @@ export function BtmListPage() {
             />
             <DateRangeInputs value={dateFilter.range} onChange={dateFilter.setRange} />
           </FilterBar>
-          <DataTable
+          <DataTable pageSize={PRODUCTION_PAGE_SIZE}
             columns={columns}
             rows={search.filtered}
             keyFn={(r) => r.btmNo}
