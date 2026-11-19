@@ -111,21 +111,24 @@ describe("values that must agree", () => {
   });
 
   it("refraction: more than 1 % of net warns (net is taken as the system calculates it)", () => {
-    const base = { "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } };
+    const base = { "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } };
     expect(ids({ ...base, "n-unload": { ...base["n-unload"], Refraction: "60" } })).not.toContain("Refraction");
     expect(ids({ ...base, "n-unload": { ...base["n-unload"], Refraction: "600" } })).toContain("Refraction");
     expect(ids({ ...base, "n-unload": { ...base["n-unload"], Refraction: "50000" } })).toContain("Refraction");
   });
 
   it("kg per bag far from 80 warns; the real first truck (41,300 kg, 478 bags = 86 kg) does not", () => {
-    const sd = (bags: string) => ({ "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "BON SACS (good bags)": bags, "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } });
-    expect(ids(sd("463"))).not.toContain("GROSS WT KGS");
-    expect(ids(sd("35"))).toContain("GROSS WT KGS");
+    const sd = (bags: string) => ({ "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "SACS (bags)": bags, "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } });
+    expect(ids(sd("478"))).not.toContain("GROSS WT KGS");
+    expect(ids(sd("50"))).toContain("GROSS WT KGS");
   });
 
-  it("tally clerk count and total bags; damp + torn over 10 %; pallets too few", () => {
-    const sd = { "n-unload": { "BON SACS (good bags)": "400", "HUMID SACS (damp bags)": "30", "Sacs déchirés (torn bags)": "48", "Tally Clerk bag count": "470", "Pallets used (30 bags/pallet)": "10" } };
-    expect(ids(sd)).toEqual(expect.arrayContaining(["Tally Clerk bag count", "HUMID SACS (damp bags)", "Pallets used (30 bags/pallet)"]));
+  it("more reconditioned than torn, or more torn than received; damp + torn over 10 %; pallets too few", () => {
+    const sd = { "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "30", "Sacs déchirés (torn bags)": "48", "Reconditioning of torn bags": "50", "Pallets used (30 bags/pallet)": "10" } };
+    expect(ids(sd)).toEqual(expect.arrayContaining(["Reconditioning of torn bags", "HUMID SACS (damp bags)", "Pallets used (30 bags/pallet)"]));
+    expect(ids({ "n-unload": { "SACS (bags)": "10", "Sacs déchirés (torn bags)": "15" } })).toContain("Sacs déchirés (torn bags)");
+    // The tally is calculated now, so it is no longer checked against the total.
+    expect(ids({ "n-unload": { "SACS (bags)": "478", "Tally Clerk bag count": "473" } })).not.toContain("Tally Clerk bag count");
   });
 
   it("GRN quantity above net weight warns", () => {
@@ -168,10 +171,14 @@ describe("phase order: a phase opens only when the one before is complete", () =
 
   it("Pass needs the sample moisture, nut count and KOR; Fail doesn't", () => {
     const weighed = { ...arrival, "n-gross": { "GROSS WT KGS": "41300" } };
-    expect(passBlocked(weighed)).toMatch(/Sample moisture/);
+    expect(passBlocked(weighed)).toMatch(/Truck sampling moisture/);
+    // KOR isn't typed in the app: what is missing is the cut-test grams it is calculated from.
+    expect(passBlocked(weighed)).toMatch(/Truck sampling – Good Kernel \(g\), Truck sampling – Immature \(g\)/);
+    expect(passBlocked(weighed)).not.toMatch(/KOR/);
     expect(decisionGate({ stageData: weighed, branches: {} }, "n-qfs", "pass").open).toBe(false);
     expect(decisionGate({ stageData: weighed, branches: {} }, "n-qfs", "fail").open).toBe(true);
-    const sampled = { ...weighed, "n-qfs": { "Sample moisture (%)": "9", "Sample nut count": "170", KOR: "47" } };
+    // The grams give KOR; with them and the two readings, Pass may be chosen.
+    const sampled = { ...weighed, "n-qfs": { "Sample moisture (%)": "9", "Sample nut count": "170", "Sample – Good Kernel (g)": "270", "Sample – Immature (g)": "30", "Sample – Spotted (g)": "20" } };
     expect(decisionGate({ stageData: sampled, branches: {} }, "n-qfs", "pass").open).toBe(true);
   });
 
@@ -182,7 +189,8 @@ describe("phase order: a phase opens only when the one before is complete", () =
     expect(stageGate({ stageData: passed, branches: { "n-qfs": "pass" } }, "n-bin").waitingFor).toBe("Unloading");
     const unloaded = {
       ...passed,
-      "n-unload": { "DATE OF OFFLOADING": "2026-11-14", "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60", "Tally Clerk bag count": "478" },
+      // Good bags and the tally are filled in from the count, the torn and the reconditioned bags.
+      "n-unload": { "DATE OF OFFLOADING": "2026-11-14", "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "15", Refraction: "60" },
     };
     expect(stageGate({ stageData: unloaded, branches: { "n-qfs": "pass" } }, "n-bin").open).toBe(true);
     const binned = { ...unloaded, "n-bin": { "Bin Number": "BKE-002-BIN-003", "Basis for allocation (moisture / quality / KOR / space)": "Moisture" } };

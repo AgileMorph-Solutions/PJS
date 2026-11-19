@@ -109,10 +109,11 @@ export const ROLE_FORMS: RoleForm[] = [
           "FINAL KOR",
         ],
       },
-      // SACS (total) is not here: it is calculated as good + damp + torn (domain/receiptMath.ts).
+      // Nov 2026: the total on the truck is counted; good bags are filled in from it (and can be changed), and the tally
+      // is calculated from good + reconditioned (domain/receiptMath.ts), so it is not here.
       {
         stageId: "n-unload",
-        labels: ["BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"],
+        labels: ["SACS (bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)", "Reconditioning of torn bags", "BON SACS (good bags)"],
       },
     ],
   },

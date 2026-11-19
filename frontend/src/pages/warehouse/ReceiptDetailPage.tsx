@@ -42,6 +42,7 @@ import { useFieldRules } from "../../components/receipt/useFieldRules";
 import { arrivalFieldChoices } from "../../components/receipt/arrivalPickers";
 import { Pill } from "../../components/ui/Pill";
 import { useOpenPanels } from "../../components/ui/useOpenPanels";
+import { FINALISED_WHEN_LABEL } from "@anagroci/contract/domain/binFinalise";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -444,17 +445,23 @@ export function ReceiptDetailPage() {
                     {stage.id === "n-bin" && canEdit && !binFinalised && !receipt.lockedAt && pendingBin === undefined && Boolean(receipt.lotNo && receipt.stageData["n-bin"]?.["Bin Number"]) && (
                       <div className="mt-4 flex items-center gap-3">
                         <button
-                          type="button" disabled={lockBusy}
+                          type="button" disabled={lockBusy || !(receipt.stageData["n-bin"]?.[FINALISED_WHEN_LABEL] ?? "").trim()}
                           onClick={() => {
                             setLockBusy(true); setLockError(null);
-                            flushStage(receipt.id, stage.id);
-                            api.finaliseBin(receipt.id).then(() => refresh()).catch((e) => setLockError(e instanceof Error ? e.message : String(e))).finally(() => setLockBusy(false));
+                            // The step's own edits (the Same day / Next day just picked) reach the server before Finalise reads them.
+                            flushStage(receipt.id, stage.id)
+                              .then(() => api.finaliseBin(receipt.id)).then(() => refresh())
+                              .catch((e) => setLockError(e instanceof Error ? e.message : String(e))).finally(() => setLockBusy(false));
                           }}
                           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50"
                         >
                           <span className="material-symbols-outlined text-[17px]">task_alt</span>Finalise bin allocation
                         </button>
-                        <span className="text-[12px] text-warmstone-500">Stamps today's date and your name. After this the bin step is closed until an Admin reopens it.</span>
+                        <span className="text-[12px] text-warmstone-500">
+                          {(receipt.stageData["n-bin"]?.[FINALISED_WHEN_LABEL] ?? "").trim()
+                            ? "Stamps today's date and your name. After this the bin step is closed until an Admin reopens it."
+                            : "Choose Same day or Next day above first."}
+                        </span>
                       </div>
                     )}
                     {branchOptions && stage.id !== "n-drying" && (

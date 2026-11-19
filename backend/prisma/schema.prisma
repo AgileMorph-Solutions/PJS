@@ -603,6 +603,7 @@ model StageUnload {
   bonSacs             String? /// BON SACS (good bags)
   humidSacs           String? /// HUMID SACS (damp bags)
   sacsDechires        String? /// Sacs déchirés (torn bags)
+  reconditionedTornBags String? /// Reconditioning of torn bags
   refraction          String? /// Refraction
   manpowerContractor  String? /// Manpower contractor / team
   tallyClerkBagCount  String? /// Tally Clerk bag count

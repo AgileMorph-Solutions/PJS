@@ -96,14 +96,17 @@ describe("dates that fill themselves", () => {
 });
 
 describe("bin finalised", () => {
-  it("needs a Lot and a Bin first; then stamps today's date and who, once", async () => {
+  it("needs a Lot, a Bin and the person's Same day / Next day first; then stamps today's date and who, once", async () => {
     const id = await truckToGrn();
     expect((await call("wi", "POST", `/api/receipts/${id}/bin/finalise`)).json().error).toMatch(/Bin first/);
     await setStageFields(id, "n-bin", { "Bin Number": "LOCK-BIN-1" });
+    // Picked by the person (Nov 2026), and needed first: after Finalise the bin step can't change.
+    expect((await call("wi", "POST", `/api/receipts/${id}/bin/finalise`)).json().error).toMatch(/same day or the next day/);
+    await setStageFields(id, "n-bin", { "Finalised (same day / next day)": "Next day" });
     const res = await call("wi", "POST", `/api/receipts/${id}/bin/finalise`);
     expect(res.statusCode).toBe(200);
-    // Row 4: the Lot was issued today (on the quality pass) and the bin is finalised today, so it's the same day.
-    expect(res.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": today(), "Finalised by": "wi", "Finalised (same day / next day)": "Same day" });
+    // Finalise keeps the person's answer as they gave it; it only stamps the date and who.
+    expect(res.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": today(), "Finalised by": "wi", "Finalised (same day / next day)": "Next day" });
     const again = await call("wi", "POST", `/api/receipts/${id}/bin/finalise`);
     expect(again.statusCode).toBe(422);
     expect(again.json().error).toMatch(/already finalised/);
@@ -113,12 +116,14 @@ describe("bin finalised", () => {
     const [{ id }] = await prisma.receipt.findMany({ where: { warehouse: A, bin: { allocationDate: { not: null } } }, select: { id: true } });
     await expect(setStageFields(id, "n-bin", { "Bin Number": "LOCK-BIN-1", "Basis for allocation (moisture / quality / KOR / space)": "Space" })).rejects.toThrow(/finalised/);
     await expect(setStageFields(id, "n-bin", { "Bin allocation date": "2026-01-01" })).rejects.toThrow(/stamped when the allocation is finalised/);
-    await expect(setStageFields(id, "n-bin", { "Finalised (same day / next day)": "Next day" })).rejects.toThrow(/stamped when the allocation is finalised/);
+    // The person's answer is part of the bin step: closed with it.
+    await expect(setStageFields(id, "n-bin", { "Finalised (same day / next day)": "Same day" })).rejects.toThrow(/finalised/);
 
     expect((await call("wi", "POST", `/api/receipts/${id}/reopen`, { reason: "x" })).statusCode).toBe(403);
     expect((await call("admin", "POST", `/api/receipts/${id}/reopen`, {})).statusCode).toBe(422);
     const ok = await call("admin", "POST", `/api/receipts/${id}/reopen`, { reason: "Wrong bin chosen" });
-    expect(ok.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": "", "Finalised (same day / next day)": "" });
+    // Reopen clears what Finalise stamped; the person's own answer stays for them to change.
+    expect(ok.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": "", "Finalised by": "", "Finalised (same day / next day)": "Next day" });
     expect(ok.json().timeline.at(-1).note).toMatch(/Reopened by admin: Wrong bin chosen/);
     await setStageFields(id, "n-bin", { "Basis for allocation (moisture / quality / KOR / space)": "Space" });
   });

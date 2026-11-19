@@ -49,7 +49,8 @@ interface TrackingApi {
   addWarehouse: (name: string, classification?: { kind?: string; type?: string }) => void;
 
   /** Flush any buffered edits for a stage immediately — call on blur / before navigating away. */
-  flushStage: (id: string, stageId: string) => void;
+  /** Sends a step's unsaved edits now; resolves once the server has them (callers that don't need to wait ignore it). */
+  flushStage: (id: string, stageId: string) => Promise<void>;
   loading: boolean;
   error: string | null;
   /** Data-quality warnings from the most recent write, if any. */
@@ -234,7 +235,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         api.addWarehouse(name, classification).catch((e) => { fail(e); void refresh(); });
       },
 
-      flushStage: (id, stageId) => void flushKey(`${id}\u0000${stageId}`),
+      flushStage: (id, stageId) => flushKey(`${id}\u0000${stageId}`),
       loading,
       error,
       warnings,

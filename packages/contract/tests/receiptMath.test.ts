@@ -36,14 +36,14 @@ describe("derived fields", () => {
   });
 
   it("reproduces the real sample receipt (Truck Reception row 1)", () => {
-    // 463 good + 0 damp + 15 torn = 478 bags; 41300 − 478 = 40822 net; − 60 refraction = 40762 paid;
+    // 478 bags on the truck − 15 torn = 463 good; 41300 − 478 = 40822 net; − 60 refraction = 40762 paid;
     // × 470 CFA = 19,158,140 — every figure as the workbook records it.
     const out = computeDerivedFields({
       "n-gross": { "GROSS WT KGS": "41300" },
-      "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
+      "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
       "n-grn": { PRICE: "470" },
     });
-    expect(out["n-unload"]!["SACS (bags)"]).toBe("478");
+    expect(out["n-unload"]!["BON SACS (good bags)"]).toBe("463");
     expect(out["n-netwt"]).toEqual({ "NET WT KGS": "40822", "PAID WT": "40762" });
     expect(out["n-grn"]!.AMOUNT).toBe("19158140");
   });
@@ -51,7 +51,7 @@ describe("derived fields", () => {
   it("flows a new weighbridge reading through gross, net, paid and amount", () => {
     const out = computeDerivedFields({
       "n-gross": { "Loaded truck weight (kg)": "56300", "Tare / empty truck weight (kg)": "15000" },
-      "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
+      "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
       "n-grn": { PRICE: "470" },
     });
     expect(out["n-gross"]!["GROSS WT KGS"]).toBe("41300");
@@ -69,14 +69,42 @@ describe("derived fields", () => {
   });
 
   it("skips a rule whose inputs are incomplete", () => {
-    const out = computeDerivedFields({ "n-unload": { "BON SACS (good bags)": "463", "Sacs déchirés (torn bags)": "15" } });
+    const out = computeDerivedFields({ "n-unload": { "SACS (bags)": "478" } });
     expect(out).toEqual({});
   });
 
-  it("knows which fields nobody may type", () => {
+  it("knows which fields are calculated, and that the total on the truck is typed (Nov 2026)", () => {
     expect(isDerivedField("n-netwt", "NET WT KGS")).toBe(true);
-    expect(isDerivedField("n-unload", "SACS (bags)")).toBe(true);
-    expect(isDerivedField("n-unload", "BON SACS (good bags)")).toBe(false);
+    expect(isDerivedField("n-unload", "SACS (bags)")).toBe(false);
+    expect(isDerivedField("n-unload", "Tally Clerk bag count")).toBe(true);
+  });
+});
+
+// Nov 2026: good bags = total − torn, filled in but changeable; tally = good + reconditioned torn bags, calculated.
+describe("bags at unloading", () => {
+  const unload = (v: Record<string, string>) => ({ "n-unload": v });
+
+  it("fills in good bags and the tally from the count and the torn bags", () => {
+    const out = computeDerivedFields(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "10" }));
+    expect(out["n-unload"]).toEqual({ "BON SACS (good bags)": "463", "Tally Clerk bag count": "473" }); // 463 + 10
+  });
+
+  it("keeps good bags a person typed, and the tally follows what they typed", () => {
+    const out = computeDerivedFields(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "BON SACS (good bags)": "460", "Reconditioning of torn bags": "10" }));
+    expect(out["n-unload"]).toEqual({ "Tally Clerk bag count": "470" });
+  });
+
+  it("good bags follow a corrected count while they still hold the filled-in value, but never once a person changed them", () => {
+    const saved = unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "BON SACS (good bags)": "463" });
+    const recounted = unload({ ...saved["n-unload"], "SACS (bags)": "480" });
+    expect(computeDerivedFields(recounted, saved)["n-unload"]!["BON SACS (good bags)"]).toBe("465");
+    const typed = unload({ ...saved["n-unload"], "BON SACS (good bags)": "450" });
+    expect(computeDerivedFields(unload({ ...typed["n-unload"], "SACS (bags)": "480" }), typed)["n-unload"]?.["BON SACS (good bags)"]).toBeUndefined();
+  });
+
+  it("never locks good bags, and never reports a typed one as a formula mismatch", () => {
+    expect(derivedRuleInForce(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15" }), "n-unload", "BON SACS (good bags)")).toBeUndefined();
+    expect(storedFormulaMismatches(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "BON SACS (good bags)": "450" }))).toEqual([]);
   });
 });
 
@@ -106,13 +134,17 @@ describe("KOR from the cut test", () => {
     expect(computeDerivedFields(sample("270", "0", "0"))["n-qfs"]).toEqual({ KOR: "47.62" });
   });
 
-  it("is typed until the grams exist, then calculated — and never locks a truck that only has the final KOR", () => {
+  it("is never typed in the app; an upload keeps its sheet's KOR until the grams exist — so a truck with only the final KOR still uploads", () => {
     const typedOnly = { "n-qfs": { KOR: "47.69", "FINAL KOR": "48.4" } };
-    expect(derivedRuleInForce(typedOnly, "n-qfs", "KOR")).toBeUndefined();
-    expect(derivedRuleInForce(sample("270", "30", ""), "n-qfs", "KOR")).toBeUndefined();
-    expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "KOR")?.formula).toMatch(/0\.17637/);
-    // Final panel is separate: sample grams don't lock FINAL KOR.
-    expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "FINAL KOR")).toBeUndefined();
+    // In the app (Nov 2026): KOR is only ever the cut test's result, grams or not.
+    expect(derivedRuleInForce(typedOnly, "n-qfs", "KOR")?.formula).toMatch(/0\.17637/);
+    expect(derivedRuleInForce({}, "n-qfs", "FINAL KOR")).toBeDefined();
+    // From an upload: the client's sheets hold KOR without the grams, so it is typed until they exist.
+    expect(derivedRuleInForce(typedOnly, "n-qfs", "KOR", "upload")).toBeUndefined();
+    expect(derivedRuleInForce(sample("270", "30", ""), "n-qfs", "KOR", "upload")).toBeUndefined();
+    expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "KOR", "upload")?.formula).toMatch(/0\.17637/);
+    // Final panel is separate: sample grams don't lock FINAL KOR in an upload.
+    expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "FINAL KOR", "upload")).toBeUndefined();
     // A rule with no fallback is locked regardless of its inputs.
     expect(derivedRuleInForce({}, "n-netwt", "NET WT KGS")).toBeDefined();
   });

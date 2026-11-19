@@ -39,7 +39,8 @@ interface Props {
 /**
  * A "Sample X" field and its "Final X" twin (QFS moisture, nut count and cut test), plus KOR and FINAL KOR, go on one row, sample
  * on the left and final on the right, so the two readings of the same thing are read across under one Sample / Final header. Layout
- * only: the stage's field order stays the spec's (stages.ts). A field without its twin stays in the ordinary grid.
+ * only: the stage's field order stays the spec's (stages.ts), except that KOR's row goes last, under the grams it is calculated
+ * from. A field without its twin stays in the ordinary grid.
  */
 function pairSampleFinal<F extends { n: string }>(fields: F[]) {
   // KOR is the sample's reading but its label doesn't say so, so it can't be matched by prefix.
@@ -52,8 +53,17 @@ function pairSampleFinal<F extends { n: string }>(fields: F[]) {
     const twin = twinName ? byName.get(twinName) : undefined;
     if (twin) { pairs.push([f, twin]); paired.add(f.n).add(twin.n); }
   }
-  return { single: fields.filter((f) => !paired.has(f.n)), pairs };
+  // KOR comes out of the cut-test grams, so it reads last, under the grams it is calculated from (Nov 2026).
+  const korLast = [...pairs.filter(([a]) => a.n !== "KOR"), ...pairs.filter(([a]) => a.n === "KOR")];
+  return { single: fields.filter((f) => !paired.has(f.n)), pairs: korLast };
 }
+
+/**
+ * A field nobody types on this form: a calculation (Gross, Net, Paid, Amount, SACS, KOR…) or a value the Finalise action
+ * stamps. Placement only; whether a calculation locks the field right now is decided per render below.
+ */
+const isSystemField = (stageId: string, label: string): boolean =>
+  Boolean(derivedRuleFor(stageId, label)) || (stageId === "n-bin" && (BIN_FINALISE_FIELDS as readonly string[]).includes(label));
 
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
@@ -61,12 +71,17 @@ function pairSampleFinal<F extends { n: string }>(fields: F[]) {
 export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly: readOnlyProp, only, hidden, suggestions, options, warnings, choices, issues, lockedMessage }: Props) {
   const readOnly = readOnlyProp || Boolean(lockedMessage);
   const shown = stage.fields.filter((f) => (!only || only.includes(f.n)) && !hidden?.includes(f.n));
-  const { single, pairs } = pairSampleFinal(shown);
+  const { single: spec, pairs } = pairSampleFinal(shown);
+  // What the system fills or calculates comes after everything a person types (Nov 2026: a read-only field in the middle of
+  // the form confused people). A stable sort: the rest keep the spec's order (stages.ts), which the workbook columns follow.
+  const single = [...spec].sort((a, b) => Number(isSystemField(stage.id, a.n)) - Number(isSystemField(stage.id, b.n)));
   const render = (f: Stage["fields"][number]) => {
-    // A calculation with a typed fallback (KOR) locks the field only once it has a value to show:
-    // `derived` holds a value for it exactly when every input is recorded.
+    // A calculation with a typed fallback locks the field only once it has a value to show (`derived` holds one
+    // exactly when every input is recorded); one calculated only in the app (KOR) is never typed here at all.
     const rule = derivedRuleFor(stage.id, f.n);
-    const inForce = rule && (!rule.fallbackToTyped || derived?.[f.n] !== undefined);
+    // A filled-in value the person may change (good bags) never locks: it shows the formula's value while blank.
+    const byDefault = rule?.defaultOnly ? rule : undefined;
+    const inForce = rule && !byDefault && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived?.[f.n] !== undefined);
     // The whole Lot stage is the system's (the server refuses any write to it), and calculated
     // fields follow their formula. Nobody types either.
     const system = rule && inForce
@@ -77,16 +92,18 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
             hint: f.n === "Lot Number" ? "Issued by the system when the truck passes quality" : "Filled in when the Lot is issued",
           }
         : stage.id === "n-bin" && (BIN_FINALISE_FIELDS as readonly string[]).includes(f.n)
-          ? { kind: "issued" as const, hint: f.n === "Finalised (same day / next day)" ? "Worked out when the bin allocation is finalised: the Lot's date against the allocation date" : "Stamped when the bin allocation is finalised" }
+          ? { kind: "issued" as const, hint: "Stamped when the bin allocation is finalised" }
           : undefined;
     // A field that fills itself: say so while it is still blank, so nobody wonders why it appears after saving.
     const auto = autoFieldFor(stage.id, f.n);
-    const note = auto &&!(values[f.n] ?? "").trim() && !readOnly ? `${AUTO_FIELD_NOTES[auto.from]} You can change it until the record is locked.` : undefined;
+    const note = byDefault && !readOnly
+      ? `Filled in as ${byDefault.formula.toLowerCase()}. You can change it.`
+      : auto && !(values[f.n] ?? "").trim() && !readOnly ? `${AUTO_FIELD_NOTES[auto.from]} You can change it until the record is locked.` : undefined;
     return (
       <FieldInput
         key={f.n}
         field={f}
-        value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
+        value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : byDefault && !(values[f.n] ?? "").trim() ? (derived?.[f.n] ?? "") : (values[f.n] ?? "")}
         suggestion={suggestions?.[f.n]}
         options={options?.[f.n]}
         choices={choices?.[f.n] ?? fieldChoices(stage.id, f.n)}
@@ -120,8 +137,8 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
       )}
       {pairs.length > 0 && (
         <div className="grid sm:grid-cols-2 gap-x-4 gap-y-4">
-          <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wide text-warmstone-500">Sample</p>
-          <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wide text-warmstone-500">Final</p>
+          <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wide text-warmstone-500">Truck sampling</p>
+          <p className="hidden sm:block text-[11px] font-bold uppercase tracking-wide text-warmstone-500">Final unloading</p>
           {pairs.flatMap(([a, b]) => [render(a), render(b)])}
         </div>
       )}

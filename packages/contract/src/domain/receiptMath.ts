@@ -56,6 +56,17 @@ export interface DerivedRule {
    * it would make every truck without grams impossible to record.
    */
   fallbackToTyped?: boolean;
+  /**
+   * Never typed in the app, even before its inputs exist (team decision, Nov 2026: KOR is only ever the cut test's
+   * result). The typed fallback is then for uploads alone, whose sheet may hold the result without its inputs.
+   */
+  calculatedOnlyInApp?: boolean;
+  /**
+   * Filled in from its formula but the person may change it (Nov 2026: good bags = total − torn "by default"). It is
+   * worked out while blank, and follows its inputs while it still holds the value they gave; once a person types a
+   * different value it is theirs and is left alone. Never locks the field.
+   */
+  defaultOnly?: boolean;
 }
 
 /** 80 lb of kernels per 1000 g sample, as a factor — the client's own constant in their Warehouse Receiving sheet. */
@@ -65,11 +76,11 @@ const LOADED: FieldRef = ["n-gross", "Loaded truck weight (kg)"];
 const TARE: FieldRef = ["n-gross", "Tare / empty truck weight (kg)"];
 const GROSS: FieldRef = ["n-gross", "GROSS WT KGS"];
 const GOOD: FieldRef = ["n-unload", "BON SACS (good bags)"];
-const DAMP: FieldRef = ["n-unload", "HUMID SACS (damp bags)"];
 const TORN: FieldRef = ["n-unload", "Sacs déchirés (torn bags)"];
 const SACS: FieldRef = ["n-unload", "SACS (bags)"];
 const REFRACTION: FieldRef = ["n-unload", "Refraction"];
 const TALLY_CLERK_BAGS: FieldRef = ["n-unload", "Tally Clerk bag count"];
+const RECONDITIONED: FieldRef = ["n-unload", "Reconditioning of torn bags"];
 const PALLETS: FieldRef = ["n-unload", "Pallets used (30 bags/pallet)"];
 const NET: FieldRef = ["n-netwt", "NET WT KGS"];
 const PAID: FieldRef = ["n-netwt", "PAID WT"];
@@ -88,11 +99,14 @@ const korRule = (target: FieldRef, name: "Sample" | "Final"): DerivedRule => ({
   compute: ([good, immature, spotted]) => korFromGrams(good!, immature!, spotted!),
   formula: `(Good kernel + ½ × (immature + spotted)) × ${KOR_FACTOR} — ${name.toLowerCase()} cut test`,
   fallbackToTyped: true,
+  calculatedOnlyInApp: true,
 });
 
 /** In dependency order: each rule may read the targets of the rules above it. */
 export const DERIVED_RULES: readonly DerivedRule[] = [
-  { target: SACS, inputs: [GOOD, DAMP, TORN], compute: ([g, d, t]) => g! + d! + t!, formula: "Good + damp + torn bags" },
+  // Nov 2026: the total on the truck (SACS) is counted and typed; good bags follow from it, and the tally from them.
+  { target: GOOD, inputs: [SACS, TORN], compute: ([s, t]) => s! - t!, formula: "Total bags received − torn bags", defaultOnly: true },
+  { target: TALLY_CLERK_BAGS, inputs: [GOOD, RECONDITIONED], compute: ([g, r]) => g! + r!, formula: "Good bags + reconditioned torn bags" },
   { target: GROSS, inputs: [LOADED, TARE], compute: ([l, t]) => l! - t!, formula: "Loaded truck − empty truck" },
   { target: NET, inputs: [GROSS, SACS], compute: ([g, b]) => g! - b! * BAG_WEIGHT_KG, formula: "Gross − 1 kg per bag" },
   { target: PAID, inputs: [NET, REFRACTION], compute: ([n, r]) => n! - r!, formula: "Net − refraction" },
@@ -118,9 +132,6 @@ export interface PrefillRule {
 }
 export const PREFILL_RULES: readonly PrefillRule[] = [
   { target: GRN_WEIGHT, sources: [NET], from: "net weight" },
-  // docs/Procurement Auto Populate Fields.xlsx row 3 (a Suggestion, not an Auto-fill): the tally clerk counts the bags
-  // physically, so the good + torn bags already recorded are proposed for them to confirm, never written for them.
-  { target: TALLY_CLERK_BAGS, sources: [GOOD, TORN], from: "good + torn bags" },
   // 30 bags to a pallet (the label's own rule), so the pallets needed for the bags unloaded, rounded up.
   { target: PALLETS, sources: [SACS], from: "bags ÷ 30", compute: (bags) => Math.ceil(bags / 30) },
 ];
@@ -152,12 +163,16 @@ export function isDerivedField(stageId: string, label: string): boolean {
 
 /**
  * The rule that is locking this field RIGHT NOW: any rule without a typed fallback, and a
- * fallback rule only once every one of its inputs is recorded in `stageData`. This — not
+ * fallback rule only once every one of its inputs is recorded in `stageData` — except in the app
+ * for a rule calculated only there (KOR), which is locked from the start. This — not
  * derivedRuleFor — is what decides whether a person may type the field.
  */
-export function derivedRuleInForce(stageData: StageData, stageId: string, label: string): DerivedRule | undefined {
+/** `from`: "app" for a person typing in the app; "upload" for a sheet or script writing what its source recorded. */
+export function derivedRuleInForce(stageData: StageData, stageId: string, label: string, from: "app" | "upload" = "app"): DerivedRule | undefined {
   const rule = derivedRuleFor(stageId, label);
+  if (rule?.defaultOnly) return undefined; // filled in, never locked
   if (!rule || !rule.fallbackToTyped) return rule;
+  if (rule.calculatedOnlyInApp && from === "app") return rule;
   return rule.inputs.every(([s, l]) => parseQty(stageData[s]?.[l]) !== undefined) ? rule : undefined;
 }
 
@@ -166,12 +181,13 @@ export function derivedRuleInForce(stageData: StageData, stageId: string, label:
  * results of earlier rules, so a new loaded/tare reading flows through Gross → Net → Paid → Amount
  * in one call. Rules whose inputs are incomplete are simply absent from the result.
  */
-export function computeDerivedFields(stageData: StageData): Record<string, Record<string, string>> {
+export function computeDerivedFields(stageData: StageData, before?: StageData): Record<string, Record<string, string>> {
   const working: Record<string, Record<string, string>> = {};
   for (const [stageId, fields] of Object.entries(stageData)) working[stageId] = { ...fields };
   const out: Record<string, Record<string, string>> = {};
 
   for (const rule of DERIVED_RULES) {
+    if (rule.defaultOnly && !followsDefault(rule, stageData, before)) continue;
     const values = rule.inputs.map(([s, l]) => parseQty(working[s]?.[l]));
     if (values.some((v) => v === undefined)) continue;
     const [stageId, label] = rule.target;
@@ -180,6 +196,21 @@ export function computeDerivedFields(stageData: StageData): Record<string, Recor
     (out[stageId] ??= {})[label] = value;
   }
   return out;
+}
+
+/**
+ * Whether a default-only field (good bags) is still the formula's to fill: blank, or — when `before` (the record as it was
+ * saved) is given — untouched by this change and still holding the value the formula gave from the inputs then.
+ */
+function followsDefault(rule: DerivedRule, stageData: StageData, before?: StageData): boolean {
+  const [s, l] = rule.target;
+  const now = (stageData[s]?.[l] ?? "").trim();
+  if (!now) return true;
+  if (!before) return false;
+  const was = (before[s]?.[l] ?? "").trim();
+  if (now !== was) return false; // typed in this change: the person's
+  const inputsThen = rule.inputs.map(([is, il]) => parseQty(before[is]?.[il]));
+  return !inputsThen.some((v) => v === undefined) && formatQty(rule.compute(inputsThen as number[])) === was;
 }
 
 export interface FormulaMismatch {
@@ -197,6 +228,7 @@ export interface FormulaMismatch {
 export function storedFormulaMismatches(stageData: StageData): FormulaMismatch[] {
   const out: FormulaMismatch[] = [];
   for (const rule of DERIVED_RULES) {
+    if (rule.defaultOnly) continue; // a person may set it to something else on purpose
     const values = rule.inputs.map(([s, l]) => parseQty(stageData[s]?.[l]));
     const [stageId, label] = rule.target;
     const stored = parseQty(stageData[stageId]?.[label]);

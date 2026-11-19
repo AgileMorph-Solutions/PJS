@@ -12,8 +12,7 @@
  * record locks (domain/recordLock.ts). One list, read by the backend (which fills it, so every route — form, batch grid,
  * approval — behaves the same) and by the forms (which say so beside the field).
  *
- * Not here: the bin allocation date and "Finalised (same day / next day)", which the Finalise action stamps
- * (domain/binFinalise.ts); the Tally Clerk bag count, which the sheet marks a Suggestion, not an Auto-fill
+ * Not here: the bin allocation date and who finalised it, which the Finalise action stamps (domain/binFinalise.ts); the Tally Clerk bag count, which the sheet marks a Suggestion, not an Auto-fill
  * (receiptMath.ts's PREFILL_RULES); and the dates on dispatch, receiving and drying, which their own forms fill.
  */
 export type AutoSource =

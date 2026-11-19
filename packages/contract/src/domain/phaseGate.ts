@@ -11,7 +11,7 @@
  */
 import type { ReceiptRecord } from "../types/receipt.js";
 import { stages } from "../data/stages.js";
-import { computeDerivedFields } from "./receiptMath.js";
+import { computeDerivedFields, derivedRuleFor } from "./receiptMath.js";
 import { isGrnComplete } from "./recordLock.js";
 
 type StageData = ReceiptRecord["stageData"];
@@ -69,6 +69,8 @@ const UNLOADING: Phase = {
   title: "Unloading",
   required: [
     ["n-unload", "DATE OF OFFLOADING"],
+    // Nov 2026: the total on the truck is counted; good bags follow from it (and can be changed), the tally from them.
+    ["n-unload", "SACS (bags)"],
     ["n-unload", "BON SACS (good bags)"],
     ["n-unload", "HUMID SACS (damp bags)"],
     ["n-unload", "Sacs déchirés (torn bags)"],
@@ -137,9 +139,15 @@ const label = ([stageId, n]: Ref) => {
 /** The empty fields of a phase. Calculated fields count when the system can calculate them (Gross from the two weights). */
 export function missingFields(stageData: StageData, phase: Phase): string[] {
   const derived = computeDerivedFields(stageData);
-  return phase.required
-    .filter(([s, l]) => !(derived[s]?.[l] ?? stageData[s]?.[l] ?? "").trim())
-    .map(label);
+  const blank = ([s, l]: Ref) => !(derived[s]?.[l] ?? stageData[s]?.[l] ?? "").trim();
+  return phase.required.filter(blank).flatMap((ref) => {
+    // A value nobody types (KOR in the app, the tally) is missing because its inputs are: name those, the fields a person
+    // can fill. One a person may type (a fallback outside the app, good bags' default) is named itself.
+    const rule = derivedRuleFor(ref[0], ref[1]);
+    const locked = rule && !rule.defaultOnly && (!rule.fallbackToTyped || rule.calculatedOnlyInApp);
+    const inputs = locked ? rule.inputs.filter(blank) : [];
+    return inputs.length ? inputs.map(label) : [label(ref)];
+  });
 }
 
 const TITLES: Record<string, string> = {

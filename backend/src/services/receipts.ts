@@ -18,7 +18,7 @@ import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
 import { splitBinNumber } from "@anagroci/contract/domain/binNumber";
 import { AUTO_FIELDS, autoFill, type AutoFillContext } from "@anagroci/contract/data/autoFields";
 import { WAREHOUSE_KIND_LABEL, WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
-import { BIN_FINALISE_FIELDS, finalisedWhen } from "@anagroci/contract/domain/binFinalise";
+import { BIN_FINALISE_FIELDS, FINALISED_WHEN_LABEL } from "@anagroci/contract/domain/binFinalise";
 import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES, isGrnComplete } from "@anagroci/contract/domain/recordLock";
 import { decisionBranchesFor } from "@anagroci/contract/domain/decisions";
 import { productionReadinessGaps } from "@anagroci/contract/domain/productionBatch";
@@ -205,8 +205,15 @@ export async function applyStageFields(
   fields: Record<string, string>,
   opts: WriteOpts = {}
 ) {
+  // The record as it was before this write: a filled-in value (good bags) follows its inputs only while it still holds
+  // what the formula gave from them (refreshDerivedFields).
+  let before: Record<string, Record<string, string>> | undefined;
   if (!opts.bypassValidation) {
-    const current = await assertCallerMayWrite(tx, id, stageId, fields, opts.actor?.role);
+    // A person typing in the app (a direct edit, or an approved form) may never type KOR; an upload or a script writes
+    // what its source recorded, as the client's sheets do (KOR without the grams).
+    const inApp = opts.actor?.via === "direct" || opts.actor?.via === "approval";
+    const current = await assertCallerMayWrite(tx, id, stageId, fields, opts.actor?.role, inApp ? "app" : "upload");
+    before = current;
     const meta = await tx.receipt.findUnique({ where: { id }, select: { arrivalDate: true, lockedAt: true, warehouse: true, source: true } });
     if (meta?.lockedAt && LOCKED_STAGES.has(stageId)) throw new ValidationError(LOCKED_MESSAGE);
     if (stageId === "n-bin" && (current["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError(BIN_FINALISED_MESSAGE);
@@ -219,7 +226,7 @@ export async function applyStageFields(
   }
   await writeStageFields(tx, id, stageId, fields, opts);
   if (!opts.bypassValidation) await syncReceiptColumns(tx, id, stageId, fields);
-  if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts);
+  if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts, before);
   if (!opts.bypassValidation && stageId === "n-grn") await lockIfGrnComplete(tx, id, opts);
 }
 
@@ -349,12 +356,12 @@ async function syncReceiptColumns(tx: Tx, id: string, stageId: string, fields: R
 }
 
 export const SYSTEM_BIN_DATE_MESSAGE =
-  "The bin allocation date, who finalised it and whether it was the same day or the next are stamped when the allocation is finalised — they can't be typed. Use Finalise.";
+  "The bin allocation date and who finalised it are stamped when the allocation is finalised — they can't be typed. Use Finalise.";
 
 export const SYSTEM_LOT_MESSAGE =
   "The Lot Number is issued by the system when the truck passes quality — it can't be typed or changed.";
 
-async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>, role?: Role) {
+async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>, role?: Role, from: "app" | "upload" = "app") {
   if (stageId === "n-lot") throw new ValidationError(SYSTEM_LOT_MESSAGE);
   // A field hidden from the writer's role is not theirs to write either (price and amount, for the Warehouse Incharge).
   if (role) for (const label of Object.keys(fields)) if (!canSeeField(role, stageId, label)) throw new ForbiddenError(PRICE_NOT_YOURS_MESSAGE);
@@ -365,7 +372,7 @@ async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields:
   const current = assembleStageData((await loadReceiptRow(id, tx)) as Record<string, unknown>);
   const after = { ...current, [stageId]: { ...current[stageId], ...fields } };
   for (const label of Object.keys(fields)) {
-    const rule = derivedRuleInForce(after, stageId, label);
+    const rule = derivedRuleInForce(after, stageId, label, from);
     if (rule) throw new ValidationError(`${label} is calculated (${rule.formula}) — change the values it is calculated from instead.`);
   }
   return current;
@@ -377,12 +384,13 @@ const DERIVED_INPUT_STAGES = new Set(DERIVED_RULES.flatMap((r) => r.inputs.map((
 /**
  * Rewrites every calculated field whose inputs are all present and whose stored value differs.
  * Calculated values are audited like any other change (same actor, same channel), so the history
- * shows why a net weight moved.
+ * shows why a net weight moved. A filled-in field a person may change (good bags) is rewritten only while
+ * blank or still holding the formula's value from `before` — never over what someone typed.
  */
-async function refreshDerivedFields(tx: Tx, id: string, opts: WriteOpts) {
+async function refreshDerivedFields(tx: Tx, id: string, opts: WriteOpts, before?: Record<string, Record<string, string>>) {
   const row = await loadReceiptRow(id, tx);
   const current = assembleStageData(row as Record<string, unknown>);
-  for (const [stageId, values] of Object.entries(computeDerivedFields(current))) {
+  for (const [stageId, values] of Object.entries(computeDerivedFields(current, before))) {
     const changed = Object.fromEntries(Object.entries(values).filter(([label, v]) => current[stageId]?.[label] !== v));
     if (Object.keys(changed).length) await writeStageFields(tx, id, stageId, changed, opts);
   }
@@ -642,7 +650,8 @@ export async function setBranch(
 
 /**
  * Closes the bin allocation: stamps today's date and who finalised it (the stage's "Bin allocation date" and "Finalised by").
- * Needs a Lot and a Bin first, and can only be done once; after it the bin step can't change until an Admin reopens it.
+ * Needs a Lot, a Bin and the person's "Same day / Next day" first — after it the bin step can't change until an Admin
+ * reopens it, so an unanswered one could never be answered. Can only be done once.
  */
 export async function finaliseBin(id: string, actor: { id: string; displayName: string }) {
   await prisma.$transaction(async (tx) => {
@@ -652,6 +661,7 @@ export async function finaliseBin(id: string, actor: { id: string; displayName: 
     const stages = assembleStageData(row as Record<string, unknown>);
     if (!(stages["n-lot"]?.["Lot Number"] ?? "").trim()) throw new ValidationError("A Bin can only be finalised once the truck has a Lot.");
     if (!(stages["n-bin"]?.["Bin Number"] ?? "").trim()) throw new ValidationError("Choose the Bin first, then finalise.");
+    if (!(stages["n-bin"]?.[FINALISED_WHEN_LABEL] ?? "").trim()) throw new ValidationError("Choose whether the Bin is finalised the same day or the next day, then finalise.");
     if ((stages["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError("The bin allocation is already finalised.");
     const allocationDate = new Date().toISOString().slice(0, 10);
     await writeStageFields(
@@ -659,8 +669,6 @@ export async function finaliseBin(id: string, actor: { id: string; displayName: 
       {
         "Bin allocation date": allocationDate,
         "Finalised by": actor.displayName,
-        // The Lot's date against today's: same day / next day. Blank when the Lot has no assigned date (an imported Lot).
-        "Finalised (same day / next day)": finalisedWhen(stages["n-lot"]?.["Date/time assigned"], allocationDate) ?? "",
       },
       { actor: { id: actor.id, via: "direct" } },
     );

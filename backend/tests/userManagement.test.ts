@@ -324,7 +324,8 @@ describe("QFS Officer submission and terminal rejection", () => {
 describe("QFS Officer quality analysis", () => {
   let receiptId: string;
   let submissionId: string;
-  const quality = { "Final moisture (%)": "10.3", "Final nut count": "165", KOR: "40.03599", "FINAL KOR": "40.1" };
+  // KOR isn't among them: in the app it is only ever the cut test's result (Nov 2026), so nobody submits it.
+  const quality = { "Final moisture (%)": "10.3", "Final nut count": "165" };
 
   beforeAll(async () => {
     receiptId = (await createReceipt("BOUAKE")).id;
@@ -334,7 +335,7 @@ describe("QFS Officer quality analysis", () => {
     await setStageFields(receiptId, "n-verify", { "LBA CODE": SUPPLIER });
   });
 
-  it("takes the four measurements together with the bag counts in one submission", async () => {
+  it("takes the measurements together with the bag counts in one submission", async () => {
     const res = await as(P + "qfs", "POST", `/api/receipts/${receiptId}/submissions`, {
       values: { "n-qfs": quality, "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } },
     });
@@ -380,11 +381,11 @@ describe("QFS Officer quality analysis", () => {
     await setStageFields(id, "n-qfs", grams);
     const alone = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { KOR: "40" } } });
     expect(alone.statusCode).toBe(422);
-    // …and without grams a typed KOR is exactly what a 2026 truck has, and is accepted.
+    // …and without grams too: in the app KOR is never typed (Nov 2026); only an upload keeps a sheet's own KOR.
     const bare = (await createReceipt("BOUAKE")).id;
     createdReceipts.push(bare);
     await setStageFields(bare, "n-verify", { "LBA CODE": SUPPLIER });
-    expect((await as(P + "qfs", "POST", `/api/receipts/${bare}/submissions`, { values: { "n-qfs": { KOR: "47.69" } } })).statusCode).toBe(201);
+    expect((await as(P + "qfs", "POST", `/api/receipts/${bare}/submissions`, { values: { "n-qfs": { KOR: "47.69" } } })).statusCode).toBe(422);
   });
 
   it("still refuses QFS a field outside its form, and the Pass/Fail decision itself", async () => {

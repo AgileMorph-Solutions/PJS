@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { AUTO_FIELDS, autoFill, isAutoField } from "../src/data/autoFields";
-import { finalisedWhen, BIN_FINALISE_FIELDS } from "../src/domain/binFinalise";
+import { BIN_FINALISE_FIELDS, FINALISED_WHEN_LABEL } from "../src/domain/binFinalise";
 import { prefillSuggestions } from "../src/domain/receiptMath";
 import { fieldChoices } from "../src/data/fieldChoices";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap";
@@ -43,41 +43,26 @@ describe("auto-fill (sheet rows 1, 2, 5-8)", () => {
   });
 });
 
-describe("row 3: Tally Clerk bag count is a suggestion, good + torn bags", () => {
-  const unload = (v: Record<string, string>) => ({ "n-unload": v });
-
-  it("offers 463 + 15 = 478 while the count is blank", () => {
-    expect(prefillSuggestions(unload({ "BON SACS (good bags)": "463", "Sacs déchirés (torn bags)": "15" }), "n-unload")).toEqual({
-      "Tally Clerk bag count": { value: "478", from: "good + torn bags" },
-    });
-  });
-
-  it("offers nothing until both are recorded (0 torn counts), or once the clerk has entered a count", () => {
-    expect(prefillSuggestions(unload({ "BON SACS (good bags)": "463" }), "n-unload")).toEqual({});
-    expect(prefillSuggestions(unload({ "BON SACS (good bags)": "463", "Sacs déchirés (torn bags)": "0" }), "n-unload")).toEqual({
-      "Tally Clerk bag count": { value: "463", from: "good + torn bags" },
-    });
-    expect(prefillSuggestions(unload({ "BON SACS (good bags)": "463", "Sacs déchirés (torn bags)": "15", "Tally Clerk bag count": "470" }), "n-unload")).toEqual({});
-  });
-
-  it("still suggests the GRN weight from the net weight", () => {
-    expect(prefillSuggestions({ "n-netwt": { "NET WT KGS": "40822" } }, "n-grn")).toEqual({ "GRN Weight (kept separate from Gross/Net/Paid)": { value: "40822", from: "net weight" } });
+// The sheet's row 3 made the tally a suggestion of good + torn; the team changed it (Nov 2026): it is calculated, good bags
+// + the torn bags reconditioned (receiptMath.ts), so nothing is suggested for it any more.
+describe("row 3: Tally Clerk bag count, calculated now — not a suggestion", () => {
+  it("offers no suggestion for the tally", () => {
+    const unload = { "n-unload": { "BON SACS (good bags)": "463", "Sacs déchirés (torn bags)": "15" } };
+    expect(prefillSuggestions(unload, "n-unload")["Tally Clerk bag count"]).toBeUndefined();
   });
 });
 
-describe("row 4: Finalised (same day / next day), from the Lot date and the Bin allocation date", () => {
-  it("is the sheet's example: Lot 16/02/2026, Bin 17/02/2026 = Next day", () => {
-    expect(finalisedWhen("2026-02-16T09:30:00.000Z", "2026-02-17")).toBe("Next day");
-    expect(finalisedWhen("2026-02-16T09:30:00.000Z", "2026-02-16")).toBe("Same day");
+// The sheet's row 4 had the system work this out from the Lot and allocation dates; the team changed it (Nov 2026): the
+// person picks it from a dropdown before finalising.
+describe("row 4: Finalised (same day / next day), picked by the person", () => {
+  it("is a dropdown of the two answers, not something Finalise stamps", () => {
+    expect(fieldChoices("n-bin", FINALISED_WHEN_LABEL)).toEqual(["Same day", "Next day"]);
+    expect(BIN_FINALISE_FIELDS).not.toContain(FINALISED_WHEN_LABEL);
+    expect(isAutoField("n-bin", FINALISED_WHEN_LABEL)).toBe(false);
   });
 
-  it("says how late a later one was, and nothing when a date is missing or the order is impossible", () => {
-    expect(finalisedWhen("2026-02-16", "2026-02-19")).toBe("3 days later");
-    expect(finalisedWhen(undefined, "2026-02-19")).toBeUndefined();
-    expect(finalisedWhen("2026-02-16", "2026-02-15")).toBeUndefined();
-  });
-
-  it("is one of the fields Finalise stamps, all of them in the spec", () => {
+  it("Finalise stamps the allocation date and who, all of them in the spec", () => {
+    expect([...BIN_FINALISE_FIELDS]).toEqual(["Bin allocation date", "Finalised by"]);
     for (const label of BIN_FINALISE_FIELDS) expect(STAGE_FIELD_MAP["n-bin"]!.fields.some((f) => f.label === label), label).toBe(true);
   });
 });

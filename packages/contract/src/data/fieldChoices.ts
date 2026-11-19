@@ -1,4 +1,5 @@
 import { WAREHOUSE_KINDS } from "./warehouseKinds";
+import { FINALISED_NEXT_DAY, FINALISED_SAME_DAY, FINALISED_WHEN_LABEL } from "../domain/binFinalise";
 
 /**
  * Stage fields whose answer is one of a fixed list, picked from a dropdown instead of typed (client, Nov 2026: "if required
@@ -17,6 +18,8 @@ export const STAGE_FIELD_CHOICES: Record<string, Record<string, readonly string[
   "n-bin": {
     // The four bases the label itself names (Sept 2026 clarification: "moisture, quality, KOR, available space").
     "Basis for allocation (moisture / quality / KOR / space)": ["Moisture", "Quality", "KOR", "Space"],
+    // The two answers the label and the client's process notes name; picked by the person before finalising (Nov 2026).
+    [FINALISED_WHEN_LABEL]: [FINALISED_SAME_DAY, FINALISED_NEXT_DAY],
   },
   "n-xferdec": {
     // The label names space; production need and other cover a Central warehouse sending to the factory floor.

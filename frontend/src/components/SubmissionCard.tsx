@@ -52,10 +52,11 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
 
   if (!form) return null;
 
-  /** The calculation locking this field right now (KOR only once its grams are in) — the value shows, and isn't submitted. */
+  /** The calculation locking this field right now (KOR always, in the app) — the value shows, and isn't submitted. */
   const inForce = (stageId: string, label: string) => {
     const rule = derivedRuleFor(stageId, label);
-    return rule && (!rule.fallbackToTyped || derived[stageId]?.[label] !== undefined) ? rule : undefined;
+    // A filled-in value the person may change (good bags) is never locked; the server fills it while left blank.
+    return rule && !rule.defaultOnly && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived[stageId]?.[label] !== undefined) ? rule : undefined;
   };
 
   const valueOf = (stageId: string, label: string) =>
@@ -105,7 +106,8 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
               <h3 className="text-[11px] font-bold uppercase tracking-wider text-warmstone-500">{g.title}</h3>
             )}
             <div className="grid sm:grid-cols-2 gap-4">
-              {g.fields.map((field) => (
+              {/* What the app calculates comes after everything typed (Nov 2026); a stable sort keeps the rest in the spec's order. */}
+              {[...g.fields].sort((a, b) => Number(Boolean(derivedRuleFor(g.stageId, a.n))) - Number(Boolean(derivedRuleFor(g.stageId, b.n)))).map((field) => (
                 <FieldInput
                   key={`${g.stageId}/${field.n}`}
                   field={field}

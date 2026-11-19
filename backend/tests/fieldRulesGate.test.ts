@@ -53,7 +53,8 @@ describe("phase order", () => {
     const id = await arrived();
     await setStageFields(id, "n-gross", { "Loaded truck weight (kg)": "56000", "Tare / empty truck weight (kg)": "14700" }, { actor: person });
     await expect(setBranch(id, "n-qfs", "pass", undefined, { actor: person })).rejects.toThrow(/Can't pass this truck yet/);
-    await setStageFields(id, "n-qfs", { "Sample moisture (%)": "9.5", "Sample nut count": "172", KOR: "47.7" }, { actor: person });
+    // KOR isn't typed in the app (Nov 2026): the sample cut-test grams give it.
+    await setStageFields(id, "n-qfs", { "Sample moisture (%)": "9.5", "Sample nut count": "172", "Sample – Good Kernel (g)": "270", "Sample – Immature (g)": "30", "Sample – Spotted (g)": "20" }, { actor: person });
     await expect(setStageFields(id, "n-unload", { "BON SACS (good bags)": "463" }, { actor: person })).rejects.toThrow(/must pass Quality first/);
     await setBranch(id, "n-qfs", "pass", undefined, { actor: person });
     await setStageFields(id, "n-unload", { "BON SACS (good bags)": "463" }, { actor: person });

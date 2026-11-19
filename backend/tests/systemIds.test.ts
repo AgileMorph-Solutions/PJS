@@ -150,9 +150,10 @@ describe("calculated weights, bags and amount", () => {
 
   it("fill themselves from the readings, in order, as each one arrives", async () => {
     await setStageFields(id, "n-gross", { "Loaded truck weight (kg)": "56300" });
-    await setStageFields(id, "n-unload", { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
+    // Nov 2026: the bags on the truck are counted and typed; good bags are filled in as total − torn.
+    await setStageFields(id, "n-unload", { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
     let r = (await getReceipt(id))!;
-    expect(r.stageData["n-unload"]["SACS (bags)"]).toBe("478");
+    expect(r.stageData["n-unload"]["BON SACS (good bags)"]).toBe("463");
     expect(r.stageData["n-netwt"]).toBeUndefined(); // no empty-truck weight yet — nothing to subtract
 
     await setStageFields(id, "n-gross", { "Tare / empty truck weight (kg)": "15000" });
@@ -172,7 +173,7 @@ describe("calculated weights, bags and amount", () => {
 
   it("can't be typed", async () => {
     await expect(setStageFields(id, "n-netwt", { "NET WT KGS": "1" })).rejects.toThrow(/is calculated/);
-    await expect(setStageFields(id, "n-unload", { "SACS (bags)": "1" })).rejects.toThrow(/Good \+ damp \+ torn/);
+    await expect(setStageFields(id, "n-unload", { "Tally Clerk bag count": "1" })).rejects.toThrow(/Good bags \+ reconditioned/);
     await expect(setStageFields(id, "n-grn", { AMOUNT: "1" })).rejects.toThrow(/Price × paid weight/);
   });
 

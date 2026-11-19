@@ -90,6 +90,7 @@ export const FIELD_RULES: Record<string, Record<string, Rule>> = {
     "BON SACS (good bags)": { number: { integer: true, min: 0, warnAbove: [750, "more than a full truck (60,000 kg ÷ 80 kg bags)"] } },
     "HUMID SACS (damp bags)": BAGS,
     "Sacs déchirés (torn bags)": BAGS,
+    "Reconditioning of torn bags": BAGS,
     "SACS (bags)": BAGS,
     Refraction: KG,
     "Tally Clerk bag count": BAGS,
@@ -174,7 +175,7 @@ const DAMP: Ref = ["n-unload", "HUMID SACS (damp bags)"];
 const TORN: Ref = ["n-unload", "Sacs déchirés (torn bags)"];
 const SACS: Ref = ["n-unload", "SACS (bags)"];
 const REFRACTION: Ref = ["n-unload", "Refraction"];
-const TALLY: Ref = ["n-unload", "Tally Clerk bag count"];
+const RECONDITIONED: Ref = ["n-unload", "Reconditioning of torn bags"];
 const PALLETS: Ref = ["n-unload", "Pallets used (30 bags/pallet)"];
 const OFFLOADED: Ref = ["n-unload", "DATE OF OFFLOADING"];
 const ARRIVED: Ref = ["n-gate", "DATE OF ARRIVAL"];
@@ -241,10 +242,18 @@ export const CROSS_CHECKS: readonly Check[] = [
     if (damp === undefined || torn === undefined || !total) return undefined;
     return damp + torn > total * 0.1 ? issue(DAMP, `${fmt(damp + torn)} of the ${fmt(total)} bags are damp or torn. That is a lot (more than 1 in 10). Please check.`, TORN) : undefined;
   },
+  // Nov 2026: the tally is calculated now (good + reconditioned), so it is no longer checked against the total. What a person
+  // types can still disagree: only torn bags can be reconditioned, and none can be torn that weren't on the truck.
   (get) => {
-    const tally = get(TALLY), total = get(SACS);
-    return tally !== undefined && total !== undefined && tally !== total
-      ? issue(TALLY, `The tally clerk counted ${fmt(tally)} bags, but the bags entered above add up to ${fmt(total)}. The two should match.`, SACS, GOOD, DAMP, TORN)
+    const recon = get(RECONDITIONED), torn = get(TORN);
+    return recon !== undefined && torn !== undefined && recon > torn
+      ? issue(RECONDITIONED, `${fmt(recon)} bags reconditioned, but only ${fmt(torn)} were torn. Please check.`, TORN)
+      : undefined;
+  },
+  (get) => {
+    const torn = get(TORN), total = get(SACS);
+    return torn !== undefined && total !== undefined && torn > total
+      ? issue(TORN, `${fmt(torn)} torn bags, but only ${fmt(total)} bags were received on the truck. Please check.`, SACS)
       : undefined;
   },
   (get) => {
