@@ -58,15 +58,16 @@ function PalletTable({ receipt, editable, onChanged }: { receipt: RcnReceipt; ed
 
   return (
     <div className="rounded-xl border border-warmstone-200 bg-white overflow-x-auto">
-      {/* The tally sheet's Online columns, in its order: Pallet No, Gross Weight, No of Bags, Bags Weight, Bin No. */}
+      {/* The tally sheet's Online columns, with its calculated Bags Weight moved last (Nov 2026: what the app works out comes after
+          what a person types): Pallet No, Gross Weight, No of Bags, Bin No, Bags Weight. */}
       <table className="w-full text-[13px]">
         <thead className="bg-warmstone-50 text-[12px] text-warmstone-600">
           <tr>
             <th className={`${TH} w-20`}>Pallet No</th>
             <th className={TH}>Gross Weight (kg)</th>
             <th className={TH}>No of Bags</th>
-            <th className={TH}>Bags Weight (kg)</th>
             <th className={TH}>Bin No</th>
+            <th className={TH}>Bags Weight (kg)</th>
             {editable && <th className="px-3 py-2" />}
           </tr>
         </thead>
@@ -79,8 +80,8 @@ function PalletTable({ receipt, editable, onChanged }: { receipt: RcnReceipt; ed
                 <td className="px-3 py-2 text-warmstone-500 tabular-nums">{p.no}</td>
                 <td className="px-3 py-2 tabular-nums">{p.grossKg}</td>
                 <td className="px-3 py-2 tabular-nums">{p.bags}</td>
-                <td className="px-3 py-2 tabular-nums text-warmstone-500">{kg2((Number(p.bags) || 0) * JUTE_BAG_KG)}</td>
                 <td className="px-3 py-2 font-mono">{p.factoryBin}</td>
+                <td className="px-3 py-2 tabular-nums text-warmstone-500">{kg2((Number(p.bags) || 0) * JUTE_BAG_KG)}</td>
                 {editable && (
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <button type="button" className="text-brand-700 font-semibold hover:underline mr-3" onClick={() => setEditingId(p.id)}>Edit</button>
@@ -149,8 +150,8 @@ function PalletRow({ label, initial, submitLabel, autoFocus, save, onSaved, onCa
         </td>
         <td className="px-3 py-2"><input form={formId} autoFocus={autoFocus} inputMode="decimal" className={cellInput} value={v.grossKg ?? ""} onChange={set("grossKg")} placeholder="e.g. 2308.9" aria-label="Gross Weight (kg)" /></td>
         <td className="px-3 py-2"><input form={formId} inputMode="numeric" className={cellInput} value={v.bags ?? ""} onChange={set("bags")} aria-label="No of Bags" /></td>
-        <td className="px-3 py-2 tabular-nums text-warmstone-500">{kg2((Number(v.bags) || 0) * JUTE_BAG_KG)}</td>
         <td className="px-3 py-2"><input form={formId} className={cellInput} value={v.factoryBin ?? ""} onChange={set("factoryBin")} placeholder="e.g. ANA-10" aria-label="Bin No" /></td>
+        <td className="px-3 py-2 tabular-nums text-warmstone-500">{kg2((Number(v.bags) || 0) * JUTE_BAG_KG)}</td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
           {onCancel && <span className="mr-2"><Button variant="secondary" onClick={onCancel}>Cancel</Button></span>}
           <Button type="submit" form={formId} disabled={saving}>{submitLabel}</Button>

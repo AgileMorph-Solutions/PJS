@@ -192,15 +192,16 @@ function CookForm({ batchCode, data, calibration, onSaved }: { batchCode: string
         </div>
         <p className="text-[12px] text-warmstone-500 mt-2">This run has {formatKg(stock)} in the silos. Leave a silo blank if nothing came from it.</p>
       </fieldset>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Damaged or spoiled (kg)" hint="Lost in the cooker, after a power cut or a breakdown. It is part of the total below, but never goes to shelling. Leave blank if none.">
+          <Input numeric value={damagedKg} onChange={(e) => setDamagedKg(e.target.value)} />
+        </Field>
+      </div>
+      {/* Worked out from the silos above, so it comes after everything typed (Nov 2026). */}
       <p className={`text-[13px] tabular-nums ${over ? "text-danger-700" : "text-warmstone-800"}`}>
         Total <b>{formatKg(total)}</b> · {lotBags(total).toLocaleString("en-US", { maximumFractionDigits: 1 })} bags of 80 kg
         {over && <> · This run has only {formatKg(stock)} in the silos.</>}
       </p>
-      <div className="grid sm:grid-cols-2 gap-3">
-        <Field label="Damaged or spoiled (kg)" hint="Lost in the cooker, after a power cut or a breakdown. It is part of the total above, but never goes to shelling. Leave blank if none.">
-          <Input numeric value={damagedKg} onChange={(e) => setDamagedKg(e.target.value)} />
-        </Field>
-      </div>
       {failed.length > 0 && <p className="text-[12px] text-ambernut-800">Silo {failed.map((s) => s.code).join(", ")} failed its sizing check and its nuts have not been moved yet.</p>}
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       <div className="flex justify-end">

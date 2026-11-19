@@ -53,15 +53,20 @@ export function VendorReceiptForm({ warehouse, warehouses, fixed, onWarehouseCha
   return (
     <form onSubmit={(e) => void save(e)} className="space-y-4 pt-3">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
+        {/* A choice when the person has no warehouse of their own; filled in for them otherwise, and then shown last (below). */}
+        {!fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
         {field("Vendor name *", <input value={v.vendorName} onChange={(e) => set("vendorName", e.target.value)} className={inputCls} />)}
         {field("Delivery note no. *", <input value={v.deliveryNoteNo} onChange={(e) => set("deliveryNoteNo", e.target.value)} className={inputCls} />)}
         {field("Date *", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />)}
         {field("Invoiced quantity (bags) *", <input inputMode="numeric" value={v.invoicedQty} onChange={(e) => set("invoicedQty", e.target.value)} className={inputCls} />)}
         {field("Received quantity (bags) *", <input inputMode="numeric" value={v.receivedQty} onChange={(e) => set("receivedQty", e.target.value)} className={inputCls} />)}
-        {field("Short quantity", <input readOnly tabIndex={-1} value={short} placeholder="Worked out from the two quantities" className={`${inputCls} bg-warmstone-50`} />)}
       </div>
       {field("Remarks", <input value={v.remarks} onChange={(e) => set("remarks", e.target.value)} className={inputCls} />)}
+      {/* What the app fills in or works out comes after everything typed (Nov 2026). */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {field("Short quantity", <input readOnly tabIndex={-1} value={short} placeholder="Worked out from the two quantities" className={`${inputCls} bg-warmstone-50`} />)}
+        {fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
+      </div>
       {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
       {notice && <p className="text-[13px] text-success-700">{notice}</p>}
       <button

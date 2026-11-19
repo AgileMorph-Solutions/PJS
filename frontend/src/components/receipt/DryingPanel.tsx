@@ -42,21 +42,24 @@ function QualityInputs({ prefix, values, onChange }: { prefix: "input" | "output
       <div className="grid sm:grid-cols-3 gap-4">
         {field(`Moisture ${when} (%) *`, <input required inputMode="decimal" value={values[k("Moisture")] ?? ""} onChange={(e) => onChange(k("Moisture"), e.target.value)} className={inputCls} />)}
         {field("Nut count", <input inputMode="numeric" value={values[k("NutCount")] ?? ""} onChange={(e) => onChange(k("NutCount"), e.target.value)} className={inputCls} />)}
-        {field("KOR", calculated
-          ? <input readOnly value={kor ?? ""} className={`${inputCls} bg-warmstone-100 cursor-default`} />
-          : <input inputMode="decimal" value={values[k("Kor")] ?? ""} onChange={(e) => onChange(k("Kor"), e.target.value)} className={inputCls} />,
-          calculated ? "Calculated from the cut test" : "Calculated once good kernel, immature and spotted are entered")}
       </div>
       <div>
-        <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Cut test (grams of a 1000 g sample)</span>
+        <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">Cut test (grams of a 1000 g sample)</span>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
           {GRAM_FIELDS.map(([key, label]) => (
             <label key={key} className="block">
-              <span className="block text-[11.5px] text-warmstone-500 mb-1">{label}</span>
+              <span className="block text-[11px] text-warmstone-500 mb-1">{label}</span>
               <input inputMode="decimal" value={values[k(key)] ?? ""} onChange={(e) => onChange(k(key), e.target.value)} className={inputCls} />
             </label>
           ))}
         </div>
+      </div>
+      {/* KOR comes out of the grams above, so it reads last, under them (Nov 2026). */}
+      <div className="grid sm:grid-cols-3 gap-4">
+        {field("KOR", calculated
+          ? <input readOnly value={kor ?? ""} className={`${inputCls} bg-warmstone-100 cursor-default`} />
+          : <input inputMode="decimal" value={values[k("Kor")] ?? ""} onChange={(e) => onChange(k("Kor"), e.target.value)} className={inputCls} />,
+          calculated ? "Calculated from the cut test" : "Calculated once good kernel, immature and spotted are entered")}
       </div>
     </fieldset>
   );
