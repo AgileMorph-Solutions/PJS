@@ -31,6 +31,8 @@ const as = (u: string, method: "GET" | "POST", url: string, payload?: unknown) =
 async function cleanup() {
   await prisma.transferRequest.deleteMany({ where: { OR: [{ fromWarehouse: { in: [A, B, C] } }, { toWarehouse: { in: [A, B, C] } }] } });
   await prisma.receipt.deleteMany({ where: { warehouse: { in: [A, B, C] } } });
+  // The change log keeps what these test users did over HTTP; it goes with them, or it would read as a deleted user's.
+  await prisma.changeLog.deleteMany({ where: { user: { username: { startsWith: "bkttest-" } } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "bkttest-" } } });
   await prisma.bin.deleteMany({ where: { code: { in: [BIN1, BIN2, B_BIN] } } });
   await prisma.warehouse.deleteMany({ where: { site: { in: [A, B, C] } } });

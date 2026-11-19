@@ -40,16 +40,17 @@ export async function setBranchManagerSuppliers(actor: User, bmId: string, codes
   const missing = unique.filter((c) => !known.some((k) => k.code === c));
   if (missing.length) throw new ValidationError(`Unknown supplier code(s): ${missing.join(", ")}.`);
 
-  await prisma.$transaction([
-    prisma.branchManagerSupplier.deleteMany({ where: { userId: bmId, supplierCode: { notIn: unique } } }),
-    ...unique.map((supplierCode) =>
-      prisma.branchManagerSupplier.upsert({
+  // A callback transaction, not a list of queries: the change log (db.ts) reads and writes inside each save.
+  await prisma.$transaction(async (tx) => {
+    await tx.branchManagerSupplier.deleteMany({ where: { userId: bmId, supplierCode: { notIn: unique } } });
+    for (const supplierCode of unique) {
+      await tx.branchManagerSupplier.upsert({
         where: { userId_supplierCode: { userId: bmId, supplierCode } },
         update: {},
         create: { userId: bmId, supplierCode, assignedById: actor.id },
-      })
-    ),
-  ]);
+      });
+    }
+  });
 }
 
 export async function mySuppliers(user: User) {
@@ -97,17 +98,17 @@ export async function approveSupplierRequest(actor: User, id: string, code: stri
   if (!finalCode) throw new ValidationError("A supplier (LBA) code is required to approve.");
 
   await addSupplier(finalCode, req.name);
-  await prisma.$transaction([
-    prisma.branchManagerSupplier.upsert({
+  await prisma.$transaction(async (tx) => {
+    await tx.branchManagerSupplier.upsert({
       where: { userId_supplierCode: { userId: req.requestedById, supplierCode: finalCode } },
       update: {},
       create: { userId: req.requestedById, supplierCode: finalCode, assignedById: actor.id },
-    }),
-    prisma.supplierRequest.update({
+    });
+    await tx.supplierRequest.update({
       where: { id },
       data: { status: "approved", code: finalCode, reviewedById: actor.id, reviewedAt: new Date() },
-    }),
-  ]);
+    });
+  });
 }
 
 export async function rejectSupplierRequest(actor: User, id: string, reason: string | undefined) {

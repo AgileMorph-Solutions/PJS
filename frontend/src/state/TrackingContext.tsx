@@ -528,6 +528,15 @@ export function useSiteFieldChanges(warehouse: string | undefined, from: string,
   return { changes, loading, error };
 }
 
+/** The rest of the Logs page: every other saved change at the warehouse (transfers, masters, production…). */
+export function useSiteChangeLog(warehouse: string | undefined, from: string, to: string) {
+  const { savedRevision } = useTracking();
+  const { rows: changes, loading, error } = useLoaded(
+    () => api.listChangeLog(warehouse, from || undefined, to || undefined), [warehouse, from, to], { reloadOn: savedRevision },
+  );
+  return { changes, loading, error };
+}
+
 /**
  * A receipt's cross-references to drying jobs / transfer receipts about the same physical batch
  * (joined server-side on Lot Number — see backend/src/services/receiptLinks.ts for the accuracy

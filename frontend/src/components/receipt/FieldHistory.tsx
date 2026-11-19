@@ -14,14 +14,16 @@ import { useTableSearch } from "../ui/useTableSearch";
 const STAGES = new Map([...stages, rejectStage].map((s) => [s.id, s]));
 const fieldOf = (c: FieldChangeRecord): StageField | undefined => STAGES.get(c.stageId)?.fields.find((f) => f.n === c.label);
 
-const VIA: Record<FieldChangeRecord["via"], { label: string; tone: string }> = {
+/** How a change was saved, as a pill. Shared with the Logs page's other changes (components/logs), which add "System". */
+export const VIA: Record<FieldChangeRecord["via"] | "system", { label: string; tone: string }> = {
   direct: { label: "Edited", tone: "system" },
   approval: { label: "Approved form", tone: "decision" },
   import: { label: "Upload", tone: "term" },
+  system: { label: "System", tone: "system" },
 };
 
 /** Dates are stored ISO; show them the one way the app shows dates. Empty means the field was blank. */
-function Value({ value, format, strike }: { value: string | null; format?: StageField["format"]; strike?: boolean }) {
+export function Value({ value, format, strike }: { value: string | null; format?: StageField["format"]; strike?: boolean }) {
   if (value === null || value === "") return <span className="italic text-warmstone-400">empty</span>;
   const shown = format === "date" ? formatDate(value) : format === "datetime" ? formatDateTime(value) : value;
   return <span className={strike ? "text-warmstone-500 line-through decoration-warmstone-300" : "font-semibold text-warmstone-900"}>{shown}</span>;

@@ -11,6 +11,7 @@ import { ForbiddenError, UnauthorizedError } from "../domain/validation.js";
 import { isAllowed } from "./policy.js";
 import { assertProductionAccess, isProductionPath } from "./productionAccess.js";
 import { redactForRole } from "./redact.js";
+import { auditStore } from "../audit/context.js";
 import { SESSION_COOKIE, userForToken, type SessionUser } from "./session.js";
 
 declare module "fastify" {
@@ -36,6 +37,9 @@ export function registerAuth(app: FastifyInstance) {
     const user = token ? await userForToken(token) : null;
     if (!user) throw new UnauthorizedError();
     req.user = user;
+    // The change log names whoever this request is for (audit/context.ts opened the store before this hook).
+    const audit = auditStore.getStore();
+    if (audit) audit.userId = user.id;
     if (!isRole(user.role)) return;
     if (!isAllowed(user.role, req.method, path)) throw new ForbiddenError();
     if (isProductionPath(path)) await assertProductionAccess(user as User & { role: Role });

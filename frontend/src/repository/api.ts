@@ -8,6 +8,7 @@ import type { TransferDestination } from "@anagroci/contract/domain/transfers";
 import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SiteFieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
+import type { ChangeLogRecord } from "@anagroci/contract/types/changeLog";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
 } from "@anagroci/contract/types/user";
@@ -224,6 +225,11 @@ export const api = {
   listSiteFieldChanges: (warehouse?: string, from?: string, to?: string) => {
     const q = new URLSearchParams(Object.entries({ warehouse, from, to }).filter((e): e is [string, string] => Boolean(e[1])));
     return request<SiteFieldChangeRecord[]>(`/field-changes${q.size ? `?${q}` : ""}`);
+  },
+  /** The Logs page: every other saved change at a warehouse — transfers, delivery plans, masters, production… Same scoping and dates. */
+  listChangeLog: (warehouse?: string, from?: string, to?: string) => {
+    const q = new URLSearchParams(Object.entries({ warehouse, from, to }).filter((e): e is [string, string] => Boolean(e[1])));
+    return request<ChangeLogRecord[]>(`/change-log${q.size ? `?${q}` : ""}`);
   },
   listUploadIssues: (receiptId: string) => request<UploadIssueRecord[]>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues`),
   reviewUploadIssue: (receiptId: string, issueId: string) =>
