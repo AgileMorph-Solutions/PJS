@@ -263,6 +263,11 @@ export interface TransferLine {
    * reach of a production batch. Null until received, and on BKTs received before it was asked.
    */
   receivedBinCode: string | null;
+  /**
+   * Bags of this Lot counted off the truck at the receiving site. The truck is weighed once, so these
+   * counts are what its net at arrival is shared by. Null until received, and on BKTs received before it was asked.
+   */
+  bagsReceived: number | null;
 }
 
 /**

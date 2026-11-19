@@ -271,7 +271,7 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
     textCol("Bin", (l) => l.binCode, { mono: true }),
     textCol("Supplier", (l) => l.supplierName, { wrap: true }),
     dateCol("Arrived", (l) => l.arrivalDate),
-    { ...kgCol<LotRow>("GRN kg", (l) => l.kg), render: (l) => (l.kg !== undefined ? l.kg.toLocaleString("en-US") : <span className="text-ambernut-800">{LOT_NOTE[l.state]}</span>) },
+    { ...kgCol<LotRow>("GRN kg", (l) => l.kg), render: (l) => (l.kg !== undefined ? <>{l.kg.toLocaleString("en-US")}{l.kgShared && <span className="block text-[11px] text-warmstone-500">share of its truck, by bags</span>}</> : <span className="text-ambernut-800">{LOT_NOTE[l.state]}</span>) },
   ];
 
   return (

@@ -180,8 +180,8 @@ export interface ReceiptLinks {
   warehouseReceiving: LinkedWarehouseReceiving[];
   dryingBatches: LinkedDryingBatchRow[];
   issuedToProduction: LinkedIssuedToProduction[];
-  /** The BKT this Lot is on, as recorded in the app (a Lot is on at most one). `transfers` above is the imported sheet. */
-  bkt: LinkedBkt | null;
+  /** The BKTs this Lot is on, oldest first, as recorded in the app: a Lot bigger than one truck goes on several. `transfers` above is the imported sheet. */
+  bkts: LinkedBkt[];
   /** The production batch holding the bin this Lot is in now, as created in the app. */
   batchCode: string | null;
 }
@@ -193,13 +193,14 @@ export interface LinkedBkt {
 }
 
 /**
- * The app's own records of where a Lot went: its BKT and the batch holding its bin. A Lot on a BKT is
- * only in the bin it was unloaded into at the destination; until then it is in no bin a batch could take.
+ * The app's own records of where a Lot went: its BKTs and the batch holding its bin. A Lot on a BKT is
+ * only in the bins it was unloaded into at the destination; until then it is in no bin a batch could take.
  */
-async function appRecords(id: string): Promise<{ bkt: LinkedBkt | null; batchCode: string | null }> {
-  const [line, receipt] = await Promise.all([
-    prisma.transferRequestLine.findFirst({
+async function appRecords(id: string): Promise<{ bkts: LinkedBkt[]; batchCode: string | null }> {
+  const [lines, receipt] = await Promise.all([
+    prisma.transferRequestLine.findMany({
       where: { receiptId: id },
+      orderBy: { id: "asc" },
       select: { receivedBinCode: true, transfer: { select: { id: true, dispatchedAt: true, receivedAt: true } } },
     }),
     prisma.receipt.findUnique({
@@ -218,10 +219,10 @@ async function appRecords(id: string): Promise<{ bkt: LinkedBkt | null; batchCod
       "n-drying": { "Dried quantity returned to warehouse": receipt?.drying?.driedQtyReturned ?? "", 'New/assigned Bin (marked "dried stock")': receipt?.drying?.driedStockBin ?? "" },
     },
   }, rounds);
-  const bins = line ? (line.receivedBinCode ? [line.receivedBinCode.trim().toUpperCase()] : []) : ownBins;
+  const bins = lines.length ? lines.flatMap((l) => (l.receivedBinCode ? [l.receivedBinCode.trim().toUpperCase()] : [])) : ownBins;
   const inBatch = bins.length ? await prisma.productionBatchBin.findFirst({ where: { binCode: { in: bins } }, select: { batchCode: true } }) : null;
   return {
-    bkt: line ? { id: line.transfer.id, dispatchedAt: line.transfer.dispatchedAt?.toISOString() ?? null, receivedAt: line.transfer.receivedAt?.toISOString() ?? null } : null,
+    bkts: lines.map((l) => ({ id: l.transfer.id, dispatchedAt: l.transfer.dispatchedAt?.toISOString() ?? null, receivedAt: l.transfer.receivedAt?.toISOString() ?? null })),
     batchCode: inBatch?.batchCode ?? null,
   };
 }

@@ -136,12 +136,12 @@ describe("a Lot dried in the app is back once its last round passed", () => {
 });
 
 describe("Lots that arrived on a BKT", () => {
-  const line = (receiptId: string, receivedBinCode: string | null) => ({
+  const line = (receiptId: string, receivedBinCode: string | null, bagsReceived: number | null = null) => ({
     receiptId, lotNumber: `LOT-BKE-2026-${receiptId}`, supplierName: "S", vehicleNo: "V", fiche: null, bags: 100, netWeightKg: null,
-    moisture: null, kor: null, nutCount: null, binCode: "BKE-002-BIN-01", receivedBinCode,
+    moisture: null, kor: null, nutCount: null, binCode: "BKE-002-BIN-01", receivedBinCode, bagsReceived,
   });
   const bkt = (id: string, status: TransferRequest["status"], lines: TransferRequest["lines"]): TransferRequest => ({
-    id, transferDate: "2026-07-01", fromWarehouse: "BOUAKE", toWarehouse: "YAKRO FACTORY", status, remarks: null, lines,
+    id, transferDate: "2026-07-01", fromWarehouse: "BOUAKE", toWarehouse: "YAKRO FACTORY", toStore: null, status, remarks: null, lines,
     dispatchWhReceiptNo: "D", receiveWhReceiptNo: "R", truckNo: "T", transporter: null, driver: null, driverPhone: null,
     dispatchedGrossKg: 10100 * lines.length, dispatchedAt: null, dispatchedBy: null,
     bagsReceived: 100 * lines.length, damagedBags: null, receivedGrossKg: 10050 * lines.length, korReceived: null, moistureReceived: null,
@@ -161,7 +161,7 @@ describe("Lots that arrived on a BKT", () => {
     expect(stock.get("BIN-03B")!.lots[1]).toMatchObject({ receiptId: "0001", transferId: "BKT-2026-001", state: "in_bin", kg: 9950, warehouse: "YAKRO FACTORY", fromWarehouse: "BOUAKE" });
   });
 
-  it("doesn't split one truck's weight between several Lots, and ignores trucks not yet received or Lots with no bin", () => {
+  it("on a BKT received before bags were counted per Lot, doesn't split the truck's weight, and ignores trucks not yet received or Lots with no bin", () => {
     const arrivals = arrivedLots([
       bkt("BKT-2026-002", "received", [line("0002", "BIN-03C"), line("0003", "BIN-03C")]),
       bkt("BKT-2026-003", "dispatched", [line("0004", "BIN-03C")]),
@@ -171,5 +171,27 @@ describe("Lots that arrived on a BKT", () => {
     const lots = warehouseBinStock([], arrivals).get("BIN-03C")!;
     expect(lots.kg).toBe(0);
     expect(lots.lots.map((l) => l.state)).toEqual(["weighed_with_other_lots", "weighed_with_other_lots"]);
+  });
+
+  // Truck: 2 Lots, 200 bags, 20,100 kg gross → 19,900 kg net at arrival, shared 150 : 50 by the bags counted off.
+  it("shares a multi-Lot truck's net between its Lots by the bags counted off each, and says it is a share", () => {
+    const arrivals = arrivedLots([bkt("BKT-2026-005", "received", [line("0006", "BIN-03D", 150), line("0007", "BIN-03E", 50)])]);
+    expect(arrivals.map((a) => [a.receiptId, a.kg, a.kgShared])).toEqual([["0006", 14925, true], ["0007", 4975, true]]);
+    const stock = warehouseBinStock([], arrivals);
+    expect(stock.get("BIN-03D")!.lots[0]).toMatchObject({ state: "in_bin", kg: 14925, kgShared: true });
+    // The shares add back up to what the truck weighed: nothing is invented or lost.
+    expect(stock.get("BIN-03D")!.kg + stock.get("BIN-03E")!.kg).toBe(19900);
+  });
+
+  it("a Lot split across two trucks arrives once per BKT, each piece with its own weight", () => {
+    const arrivals = arrivedLots([
+      bkt("BKT-2026-006", "received", [line("0008", "BIN-03F")]),
+      bkt("BKT-2026-007", "received", [line("0008", "BIN-03G", 40), line("0009", "BIN-03G", 160)]),
+    ]);
+    expect(arrivals.map((a) => [a.transferId, a.receiptId, a.binCode, a.kg])).toEqual([
+      ["BKT-2026-006", "0008", "BIN-03F", 9950],
+      ["BKT-2026-007", "0008", "BIN-03G", 3980],
+      ["BKT-2026-007", "0009", "BIN-03G", 15920],
+    ]);
   });
 });

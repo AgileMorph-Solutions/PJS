@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { readyForTransfer, transferDestinationLabel, TRANSFER_STATE_LABELS, type TransferDestination } from "@anagroci/contract/domain/transfers";
+import { lotPieceProblem, lotTransferProgress, pieceChanged, readyForTransfer, suggestedPiece, transferDestinationLabel, TRANSFER_STATE_LABELS, type LotOnBkt, type LotTransferProgress, type TransferDestination } from "@anagroci/contract/domain/transfers";
+import { parseQty } from "@anagroci/contract/domain/receiptMath";
+import { formatKg } from "../../components/production/batchUi";
 import { WAREHOUSE_TYPE_LABEL } from "../../data/warehouseTypes";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
@@ -9,13 +11,14 @@ import { FilterBar } from "../../components/ui/FilterBar";
 import { MultiSelect } from "../../components/ui/MultiSelect";
 import { Pill } from "../../components/ui/Pill";
 import { Field, inputClass, n, TRANSFER_TONE, TransferLotLink } from "../../components/transfers/TransferPanel";
+import { TransferLotLine } from "../../components/transfers/TransferLotLine";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { useTracking, useTransfers } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { api } from "../../repository/api";
-import type { TransferRequest } from "../../types/receipt";
+import type { ReceiptRecord, TransferRequest } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
@@ -24,10 +27,65 @@ const today = todayIso;
 
 interface Pick { bags: string; net: string }
 
+/** The Lot's size as its receipt recorded it: bags unloaded and net weight. */
+const lotSize = (r: ReceiptRecord) => ({
+  bags: parseQty(r.stageData["n-unload"]?.["SACS (bags)"]) ?? null,
+  netKg: parseQty(r.stageData["n-netwt"]?.["NET WT KGS"]) ?? null,
+});
+
+/** "5,000 kg left of 40,000 kg" for a Lot already partly on a BKT; nothing for one not on any yet. */
+function leftLabel(p: LotTransferProgress | undefined, r: ReceiptRecord): string | undefined {
+  if (!p || p.sentBags + p.sentKg === 0) return undefined;
+  const size = lotSize(r);
+  if (p.leftKg !== null && size.netKg !== null) return `${formatKg(p.leftKg)} left of ${formatKg(size.netKg)}`;
+  if (p.leftBags !== null && size.bags !== null) return `${p.leftBags} bags left of ${size.bags}`;
+  return undefined;
+}
+
+const qty = (v: string) => parseQty(v) ?? null;
+const asText = (x: number | null) => (x === null ? "" : String(x));
+
+/** "40 bags (1,960 kg)" — one amount, read at a glance; either half is left out when unknown. */
+function amount(p: { bags: number | null; netWeightKg: number | null }): string {
+  const bags = p.bags !== null ? `${p.bags.toLocaleString("en-US")} bags` : null;
+  const kg = p.netWeightKg !== null ? formatKg(p.netWeightKg) : null;
+  return bags && kg ? `${bags} (${kg})` : bags ?? kg ?? "-";
+}
+
+/**
+ * What a picked Lot's line says beside its boxes: how much of the Lot there is (or is left), and a short warning when
+ * the figures typed differ from that. A change is allowed — it is how a Lot is split — and the server keeps it on the
+ * Lot's history; only sending more than the Lot holds is refused, and the warning says so before it is tried.
+ */
+function lineInfo(r: ReceiptRecord, pieces: readonly LotOnBkt[], pick: Pick): { sizeLabel?: string; warning?: string[] } {
+  const size = lotSize(r);
+  const whole = { bags: size.bags, netWeightKg: size.netKg };
+  const known = size.bags !== null || size.netKg !== null;
+  const suggested = suggestedPiece(size, pieces);
+  const sizeLabel = pieces.length
+    ? `Left to send: ${amount(suggested)}${known ? ` of ${amount(whole)}` : ""}`
+    : known ? `Whole Lot: ${amount(whole)}` : undefined;
+  const piece = { bags: qty(pick.bags), netWeightKg: qty(pick.net) };
+  if (lotPieceProblem(r.lotNo ?? r.id, size, pieces, piece)) {
+    return { sizeLabel, warning: [`Too much. This Lot has only ${amount(suggested)} to send.`, "Lower it to create the transfer."] };
+  }
+  if (!pieceChanged(suggested, piece)) return { sizeLabel };
+  const after = lotTransferProgress(size, [...pieces, { transferId: "", ...piece }]);
+  const left = { bags: after.leftBags && after.leftBags > 0 ? after.leftBags : null, netWeightKg: after.leftKg && after.leftKg > 0 ? after.leftKg : null };
+  return {
+    sizeLabel,
+    warning: [
+      `On this truck: ${amount(piece)}`,
+      left.bags !== null || left.netWeightKg !== null ? `Left for another truck: ${amount(left)}` : `The Lot has ${amount(suggested)}`,
+    ],
+  };
+}
+
 /**
  * Transfers — moving Lots to another warehouse on ONE truck, numbered BKT-<year>-NNN. A line is a Lot:
  * its supplier, fiche and Lot number come from the receipt, and the bags and net weight start as what
- * that receipt recorded, so nothing is typed twice. A Lot is offered here once its receipt says
+ * that receipt recorded, so nothing is typed twice. A Lot bigger than one truck goes on several BKTs: it
+ * stays on offer, starting from what is left of it, until all of it is on a truck. A Lot is offered here once its receipt says
  * "Yes — transfers out"; "No — stays" keeps it off this page. RCN only moves from Unit to Central, so a
  * Central warehouse has no new transfer here: this page is where it records what arrives.
  *
@@ -62,22 +120,30 @@ export function TransfersPage() {
   }, [canSend, site.warehouseName]);
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
-  // Marked "Yes" on the receipt says it is ready; only the BKTs themselves say it has already gone on one.
-  // Nothing is offered until they have loaded, or a Lot already on a BKT would show for a moment.
+  // Marked "Yes" on the receipt says it is ready; only the BKTs themselves say how much of it is already on one.
+  // Nothing is offered until they have loaded, or a Lot already sent in full would show for a moment.
+  const pieces = useMemo(() => {
+    const out = new Map<string, LotOnBkt[]>();
+    for (const t of transfers) for (const l of t.lines) (out.get(l.receiptId) ?? out.set(l.receiptId, []).get(l.receiptId)!).push({ transferId: t.id, bags: l.bags, netWeightKg: l.netWeightKg });
+    return out;
+  }, [transfers]);
+  const progress = useMemo(
+    () => new Map(receipts.filter((r) => pieces.has(r.id)).map((r) => [r.id, lotTransferProgress(lotSize(r), pieces.get(r.id)!)])),
+    [receipts, pieces]
+  );
   const candidates = useMemo(() => {
     if (loading) return [];
-    const onABkt = new Set(transfers.flatMap((t) => t.lines.map((l) => l.receiptId)));
     return receipts
-      .filter((r) => r.warehouse === site.warehouseName && readyForTransfer(r) && !onABkt.has(r.id))
+      .filter((r) => r.warehouse === site.warehouseName && readyForTransfer(r) && !progress.get(r.id)?.fullySent)
       .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1));
-  }, [receipts, transfers, loading, site.warehouseName]);
+  }, [receipts, progress, loading, site.warehouseName]);
   const lotOptions = useMemo(
     () => candidates.map((r) => ({
       value: r.id,
       label: r.lotNo!,
-      detail: [normalizeSupplierName(r.supplierName) || "-", r.binNo || "no bin", r.vehicleNo].filter(Boolean).join(" · "),
+      detail: [normalizeSupplierName(r.supplierName) || "-", r.binNo || "no bin", r.vehicleNo, leftLabel(progress.get(r.id), r)].filter(Boolean).join(" · "),
     })),
-    [candidates]
+    [candidates, progress]
   );
   // Read back through the candidates, so a Lot that stopped being ready after it was ticked can't be sent unseen.
   const pickedLots = candidates.filter((r) => picked[r.id]);
@@ -88,7 +154,11 @@ export function TransfersPage() {
     setPicked((prev) => {
       const next = { ...prev };
       if (next[r.id]) delete next[r.id];
-      else next[r.id] = { bags: r.stageData["n-unload"]?.["SACS (bags)"] ?? "", net: r.stageData["n-netwt"]?.["NET WT KGS"] ?? "" };
+      else {
+        // What is left of the Lot when part of it is already on a BKT, otherwise the whole Lot as its receipt recorded it.
+        const s = suggestedPiece(lotSize(r), pieces.get(r.id) ?? []);
+        next[r.id] = { bags: asText(s.bags), net: asText(s.netWeightKg) };
+      }
       return next;
     });
   }
@@ -174,20 +244,20 @@ export function TransfersPage() {
               <div className="border border-warmstone-200 rounded-xl divide-y divide-warmstone-100">
                 {pickedLots.map((r) => {
                   const p = picked[r.id]!;
+                  const info = lineInfo(r, pieces.get(r.id) ?? [], p);
                   return (
-                    <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-[13px]">
-                      <span className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span className="font-medium text-warmstone-800">{r.lotNo}</span>
-                        <span className="text-warmstone-500 truncate">{normalizeSupplierName(r.supplierName) || "-"} · {r.binNo || "no bin"}</span>
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <input aria-label={`Bags for ${r.lotNo}`} inputMode="numeric" value={p.bags} onChange={(e) => setPicked((prev) => ({ ...prev, [r.id]: { ...p, bags: e.target.value } }))} placeholder="Bags" className={`${inputClass} w-24`} />
-                        <input aria-label={`Net kg for ${r.lotNo}`} inputMode="decimal" value={p.net} onChange={(e) => setPicked((prev) => ({ ...prev, [r.id]: { ...p, net: e.target.value } }))} placeholder="Net kg" className={`${inputClass} w-28`} />
-                        <button type="button" aria-label={`Remove ${r.lotNo}`} onClick={() => toggle(r.id)} className="p-1.5 rounded-lg text-warmstone-400 hover:bg-warmstone-100 hover:text-warmstone-700 transition-colors">
-                          <span aria-hidden="true" className="material-symbols-outlined text-[20px] block">close</span>
-                        </button>
-                      </span>
-                    </div>
+                    <TransferLotLine
+                      key={r.id}
+                      lotNo={r.lotNo!}
+                      detail={[normalizeSupplierName(r.supplierName) || "-", r.binNo || "no bin"].join(" · ")}
+                      sizeLabel={info.sizeLabel}
+                      warning={info.warning}
+                      bags={p.bags}
+                      net={p.net}
+                      onBags={(bags) => setPicked((prev) => ({ ...prev, [r.id]: { ...prev[r.id]!, bags } }))}
+                      onNet={(net) => setPicked((prev) => ({ ...prev, [r.id]: { ...prev[r.id]!, net } }))}
+                      onRemove={() => toggle(r.id)}
+                    />
                   );
                 })}
               </div>

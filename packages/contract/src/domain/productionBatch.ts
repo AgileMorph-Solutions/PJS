@@ -9,7 +9,7 @@ import type { ReceiptRecord, TransferRequest } from "../types/receipt.js";
 import { GRN_QUANTITY_LABEL } from "./receiptStatus.js";
 import { isGrnComplete } from "./recordLock.js";
 import { parseQty } from "./receiptMath.js";
-import { transferVariance } from "./transfers.js";
+import { lineNetAtArrival } from "./transfers.js";
 import { dryingPhase, isOpenRound } from "./sunDrying.js";
 
 /** The client's settings: about 150 t a day, so a month is 3,700–4,500 t (150 t × ~26 working days). */
@@ -26,7 +26,7 @@ export type LotBinState =
   | "weight_not_recorded"
   /** The n-bin step names several bins ("BIN-01/BIN-02"): which share went where was never recorded, so no kg is attributed. */
   | "split_across_bins"
-  /** Came on a BKT carrying several Lots: the arrival was weighed per truck, not per Lot, so no kg is attributed. */
+  /** Came on a BKT carrying several Lots, received before bags were counted per Lot: the truck was weighed as one, so no kg is attributed. */
   | "weighed_with_other_lots";
 
 export interface LotInBin {
@@ -39,6 +39,8 @@ export interface LotInBin {
   state: LotBinState;
   /** True when the Lot came back from sun drying into this bin (its dried quantity is what counts). */
   dried: boolean;
+  /** True when kg is this Lot's share of a truck carrying several Lots, by the bags counted off per Lot — not weighed alone. */
+  kgShared?: boolean;
   /** Set when the Lot reached this site on a transfer (BKT): its receipt belongs to the sending site. */
   transferId?: string;
   /** The warehouse the Lot is in now: its truck's own warehouse, or the BKT's receiving one. */
@@ -60,32 +62,35 @@ export interface ArrivedLot {
   /** The day it arrived HERE (the BKT's receipt), not the supplier truck's arrival at the sending site. */
   arrivalDate: string;
   binCode: string;
-  /** Net at arrival, from this site's scale. Undefined when the truck carried several Lots. */
+  /** Net at arrival, from this site's scale; with several Lots on the truck, this Lot's share by bags (kgShared). */
   kg?: number;
+  kgShared?: boolean;
   fromWarehouse: string;
   toWarehouse: string;
 }
 
 /**
- * The Lots received into a bin on these transfers. The net at arrival is weighed per truck, so it is a
- * Lot's own weight only when the Lot was alone on the truck; splitting it between Lots would invent a
- * figure nobody weighed.
+ * The Lots received into a bin on these transfers. The net at arrival is weighed per truck: a Lot alone on it
+ * gets all of it, and Lots sharing a truck get their share by the bags counted off per Lot (lineNetAtArrival).
+ * A Lot split across trucks arrives once per BKT, each piece with its own figure.
  */
 export function arrivedLots(transfers: TransferRequest[]): ArrivedLot[] {
   return transfers
     .filter((t) => t.status === "received")
     .flatMap((t) => {
-      const net = transferVariance(t).netAtArrivalKg;
+      const net = lineNetAtArrival(t);
       return t.lines
-        .filter((l) => l.receivedBinCode)
-        .map((l) => ({
+        .map((l, i) => ({ l, share: net[i] }))
+        .filter(({ l }) => l.receivedBinCode)
+        .map(({ l, share }) => ({
           transferId: t.id,
           receiptId: l.receiptId,
           lotNo: l.lotNumber ?? "",
           supplierName: l.supplierName,
           arrivalDate: (t.receivedAt ?? "").slice(0, 10),
           binCode: l.receivedBinCode!.trim().toUpperCase(),
-          kg: t.lines.length === 1 && net !== null ? net : undefined,
+          kg: share?.kg,
+          ...(share?.shared ? { kgShared: true } : {}),
           fromWarehouse: t.fromWarehouse,
           toWarehouse: t.toWarehouse,
         }));
@@ -282,7 +287,7 @@ export function warehouseBinStock(
   // a Lot is in one site's bins or the other's, never both.
   for (const a of arrivals) {
     const lot = { receiptId: a.receiptId, lotNo: a.lotNo, supplierName: a.supplierName, arrivalDate: a.arrivalDate, dried: false, transferId: a.transferId, warehouse: a.toWarehouse, fromWarehouse: a.fromWarehouse };
-    add(a.binCode, a.kg === undefined ? { ...lot, state: "weighed_with_other_lots" } : { ...lot, kg: a.kg, state: "in_bin" });
+    add(a.binCode, a.kg === undefined ? { ...lot, state: "weighed_with_other_lots" } : { ...lot, kg: a.kg, state: "in_bin", ...(a.kgShared ? { kgShared: true } : {}) });
   }
   for (const load of issued) {
     const bin = binOf(load.binCode);

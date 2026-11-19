@@ -9,7 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
-import { createTransfer, dispatchTransfer, receiveTransfer as receiveInto, getTransfer, addTransferLines, type ReceiveInput } from "../src/services/transfers.js";
+import { createTransfer, dispatchTransfer as dispatchInto, receiveTransfer as receiveInto, getTransfer, addTransferLines, type DispatchInput, type ReceiveInput } from "../src/services/transfers.js";
 import { listAvailableBins, procurementBinStock } from "../src/services/production/batches.js";
 import { getReceiptLinks } from "../src/services/receiptLinks.js";
 
@@ -35,6 +35,19 @@ async function cleanup() {
   await prisma.bin.deleteMany({ where: { code: { in: [BIN1, BIN2, B_BIN] } } });
   await prisma.warehouse.deleteMany({ where: { site: { in: [A, B, C] } } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [A, B, C] } } });
+}
+
+/** Who drives it: required to dispatch, and the same on every test truck. */
+const CREW = { transporter: "KONE & FILS", driver: "Kone", driverPhone: "0102030405" };
+
+/**
+ * Dispatch with the crew filled in, and — unless the test gives one — a loaded weight of 1 kg per bag (0 kg of RCN), which
+ * the tests' "N bags, N kg" arrivals match. The required-fields rule has its own test below.
+ */
+async function dispatchTransfer(id: string, input: DispatchInput) {
+  if ("dispatchedGrossKg" in input) return dispatchInto(id, { ...CREW, ...input });
+  const bags = ((await getTransfer(id))?.lines ?? []).reduce((a, l) => a + (l.bags ?? 0), 0);
+  return dispatchInto(id, { ...CREW, dispatchedGrossKg: bags, ...input });
 }
 
 /** Receive with every Lot unloaded into one bin — the bin rule has its own tests below. */
@@ -234,13 +247,13 @@ describe("RCN moves one way: Unit to Central", () => {
 
   it("the receipt's links report its real BKT, and a batch only through the bin it reached", async () => {
     const id = await lot(BIN1);
-    expect(await getReceiptLinks(id)).toMatchObject({ bkt: null, batchCode: null });
+    expect(await getReceiptLinks(id)).toMatchObject({ bkts: [], batchCode: null });
     const t = await createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: id, bags: 5 }] });
-    expect((await getReceiptLinks(id)).bkt).toMatchObject({ id: t.id, dispatchedAt: null, receivedAt: null }); // "Yes" and a BKT aren't a dispatch
+    expect((await getReceiptLinks(id)).bkts).toEqual([{ id: t.id, dispatchedAt: null, receivedAt: null }]); // "Yes" and a BKT aren't a dispatch
     await dispatchTransfer(t.id, { whReceiptNo: "WR-D", truckNo: `LINK-RIG-${t.id}` });
-    expect((await getReceiptLinks(id)).bkt!.dispatchedAt).not.toBeNull();
+    expect((await getReceiptLinks(id)).bkts[0]!.dispatchedAt).not.toBeNull();
     await receiveTransfer(t.id, { whReceiptNo: "WR-R", bagsReceived: 5, receivedGrossKg: 5 });
-    expect((await getReceiptLinks(id)).bkt!.receivedAt).not.toBeNull();
+    expect((await getReceiptLinks(id)).bkts[0]!.receivedAt).not.toBeNull();
   });
 });
 
@@ -253,7 +266,7 @@ describe("each warehouse writes only its own half", () => {
   });
 
   it("only the sending warehouse dispatches", async () => {
-    const body = { whReceiptNo: "WR-D", truckNo: "HTTP-RIG", dispatchedGrossKg: 48880 };
+    const body = { whReceiptNo: "WR-D", truckNo: "HTTP-RIG", dispatchedGrossKg: 48880, ...CREW };
     expect((await as("receiver", "POST", `/api/transfers/${id}/dispatch`, body)).statusCode).toBe(403);
     expect((await as("stranger", "POST", `/api/transfers/${id}/dispatch`, body)).statusCode).toBe(403);
     expect((await as("sender", "POST", `/api/transfers/${id}/dispatch`, body)).statusCode).toBe(200);
@@ -286,7 +299,7 @@ describe("each warehouse writes only its own half", () => {
   it("an admin can do either half, and a Branch Manager can't touch transfers at all", async () => {
     const r = await as("admin", "POST", "/api/transfers", { transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: await lot(), bags: 5 }] });
     const t = r.json().id;
-    expect((await as("admin", "POST", `/api/transfers/${t}/dispatch`, { whReceiptNo: "WR-D", truckNo: "ADMIN-RIG" })).statusCode).toBe(200);
+    expect((await as("admin", "POST", `/api/transfers/${t}/dispatch`, { whReceiptNo: "WR-D", truckNo: "ADMIN-RIG", dispatchedGrossKg: 5, ...CREW })).statusCode).toBe(200);
     expect((await as("admin", "POST", `/api/transfers/${t}/receive`, { whReceiptNo: "WR-R", bagsReceived: 5, receivedGrossKg: 5, lines: await bins(t) })).statusCode).toBe(200);
     expect((await as("bm", "GET", "/api/transfers")).statusCode).toBe(403);
     expect((await as("bm", "POST", `/api/transfers/${t}/dispatch`, { whReceiptNo: "WR-D", truckNo: "X" })).statusCode).toBe(403);
@@ -360,6 +373,14 @@ describe("dispatch carries quality and the warehouse receipt number; receiving e
     expect(sent.lines[0]).toMatchObject({ moisture: 9.4, kor: 48.1, nutCount: 170 }); // what wasn't re-measured still comes from the check
   });
 
+  it("needs every dispatch field: the crew and the loaded weight", async () => {
+    const t = await send([{ receiptId: await lot(), bags: 100 }]);
+    await expect(dispatchInto(t.id, { whReceiptNo: "WR-F", truckNo: "FULL-RIG" })).rejects.toThrow(/Fill in the transporter, driver, driver phone, loaded weight to dispatch/);
+    await expect(dispatchInto(t.id, { whReceiptNo: "WR-F", truckNo: "FULL-RIG", ...CREW, driver: "  " })).rejects.toThrow(/Fill in the driver, loaded weight/);
+    expect((await getTransfer(t.id))!.status).toBe("requested");
+    expect((await dispatchInto(t.id, { whReceiptNo: "WR-F", truckNo: "FULL-RIG", ...CREW, dispatchedGrossKg: 10100 })).status).toBe("dispatched");
+  });
+
   it("refuses a Lot with no quality on record unless it is entered, and an impossible value", async () => {
     const bare = (await createReceipt(A, D)).id; // passed quality with no readings
     await setBranch(bare, "n-qfs", "pass");
@@ -367,9 +388,10 @@ describe("dispatch carries quality and the warehouse receipt number; receiving e
     const t = await send([{ receiptId: bare, bags: 100 }]);
     await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4" })).rejects.toThrow(/no moisture on record/);
     await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 10 }] })).rejects.toThrow(/no KOR on record/);
-    await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 140, kor: 47 }] })).rejects.toThrow(/moisture must be between 0 and 100/);
-    const ok = await dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 10, kor: 47 }] });
-    expect(ok.lines[0]).toMatchObject({ moisture: 10, kor: 47, nutCount: null });
+    await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 140, kor: 47, nutCount: 165 }] })).rejects.toThrow(/moisture must be between 0 and 100/);
+    await expect(dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 10, kor: 47 }] })).rejects.toThrow(/no nut count on record/);
+    const ok = await dispatchTransfer(t.id, { whReceiptNo: "WR-1", truckNo: "WR-RIG-4", lines: [{ receiptId: bare, moisture: 10, kor: 47, nutCount: 165 }] });
+    expect(ok.lines[0]).toMatchObject({ moisture: 10, kor: 47, nutCount: 165 });
     expect((await getTransfer(t.id))!.status).toBe("dispatched");
   });
 
@@ -427,16 +449,89 @@ describe("receiving puts each Lot in a bin here, which is what production draws 
     expect([...(await procurementBinStock(A)).values()].flatMap((b) => b.lots).some((l) => l.receiptId === t.lines[0]!.receiptId)).toBe(false);
   });
 
-  it("doesn't split a truck's arrival weight between the Lots on it — nobody weighed them apart", async () => {
+  it("needs the bags of each Lot when the truck carries several: its weight is shared by them", async () => {
     const t = await send(2);
-    await receiveInto(t.id, { whReceiptNo: "Y-BIN", bagsReceived: 200, receivedGrossKg: 20200, lines: await bins(t.id) });
+    await expect(receiveInto(t.id, { whReceiptNo: "Y-BIN", bagsReceived: 200, receivedGrossKg: 20200, lines: await bins(t.id) })).rejects.toThrow(/Enter the bags of each Lot .*missing: LOT-/);
+    const [a, b] = t.lines;
+    const counted = (x: number, y: number) => [{ receiptId: a!.receiptId, binCode: B_BIN, bagsReceived: x }, { receiptId: b!.receiptId, binCode: B_BIN, bagsReceived: y }];
+    // A total typed next to the counts has to agree with them.
+    await expect(receiveInto(t.id, { whReceiptNo: "Y-BIN", bagsReceived: 201, receivedGrossKg: 20200, lines: counted(150, 50) })).rejects.toThrow(/add up to 200, but 201/);
+    expect((await getTransfer(t.id))!.status).toBe("dispatched");
+
+    const got = await receiveInto(t.id, { whReceiptNo: "Y-BIN", receivedGrossKg: 20200, lines: counted(150, 50) });
+    expect(got).toMatchObject({ bagsReceived: 200, state: "closed" }); // the truck's total is the sum, typed once
+    expect(got.lines.map((l) => l.bagsReceived)).toEqual([150, 50]);
     const lots = (await procurementBinStock(B)).get(B_BIN)!.lots.filter((l) => l.transferId === t.id);
-    expect(lots).toHaveLength(2);
-    expect(lots.every((l) => l.kg === undefined && l.state === "weighed_with_other_lots")).toBe(true);
+    // 20,200 gross − 200 bags = 20,000 kg net, shared 150 : 50.
+    expect(lots.map((l) => [l.kg, l.state, l.kgShared])).toEqual([[15000, "in_bin", true], [5000, "in_bin", true]]);
   });
 
   it("a truck still on the road puts nothing in a bin", async () => {
     const t = await send();
     expect([...(await procurementBinStock(B)).values()].flatMap((b) => b.lots).some((l) => l.transferId === t.id)).toBe(false);
+  });
+});
+
+// The user's case (Nov 2026): a 40 t Lot on a 35 t truck; the other 5 t go on the next truck with another Lot.
+describe("a Lot bigger than one truck goes on several BKTs", () => {
+  /** A Lot ready to send whose receipt recorded its size: 800 bags, 40,000 kg net. */
+  async function bigLot(bags = "800", net = "40000"): Promise<string> {
+    const id = (await createReceipt(A, D)).id;
+    await setStageFields(id, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5", "Final nut count": "170" });
+    await setBranch(id, "n-qfs", "pass");
+    await setStageFields(id, "n-unload", { "SACS (bags)": bags }, { bypassValidation: true });
+    await setStageFields(id, "n-netwt", { "NET WT KGS": net }, { bypassValidation: true });
+    await setBranch(id, "n-xferdec", "transfer");
+    return id;
+  }
+  const bkt = (lines: { receiptId: string; bags?: number; netWeightKg?: number }[]) => createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines });
+
+  it("sends the rest of the Lot on the next truck with another Lot, and arrives in two pieces", async () => {
+    const big = await bigLot();
+    const other = await bigLot("600", "30000");
+    const t1 = await bkt([{ receiptId: big, bags: 700, netWeightKg: 35000 }]);
+    const t2 = await bkt([{ receiptId: big, bags: 100, netWeightKg: 5000 }, { receiptId: other, bags: 600, netWeightKg: 30000 }]);
+    expect(t2.lines.map((l) => [l.receiptId, l.netWeightKg])).toEqual([[big, 5000], [other, 30000]]);
+
+    // Nothing of the big Lot is left now.
+    await expect(bkt([{ receiptId: big, bags: 1, netWeightKg: 1 }])).rejects.toThrow(new RegExp(`already on ${t1.id}, ${t2.id} in full`));
+
+    // Each truck: 700 bags, 35,000 kg net → 35,700 kg loaded.
+    for (const [t, rig] of [[t1, "SPLIT-RIG-1"], [t2, "SPLIT-RIG-2"]] as const) await dispatchTransfer(t.id, { whReceiptNo: "WR-S", truckNo: `${rig}-${t.id}`, dispatchedGrossKg: 35700 });
+    await receiveInto(t1.id, { whReceiptNo: "Y-S1", receivedGrossKg: 35700, lines: [{ receiptId: big, binCode: B_BIN, bagsReceived: 700 }] });
+    await receiveInto(t2.id, { whReceiptNo: "Y-S2", receivedGrossKg: 35700, lines: [{ receiptId: big, binCode: B_BIN, bagsReceived: 100 }, { receiptId: other, binCode: B_BIN, bagsReceived: 600 }] });
+
+    const pieces = (await procurementBinStock(B)).get(B_BIN)!.lots.filter((l) => l.receiptId === big);
+    expect(pieces.map((l) => [l.transferId, l.kg]).sort()).toEqual([[t1.id, 35000], [t2.id, 5000]]);
+    // The Lot's own page lists both trucks.
+    expect((await getReceiptLinks(big)).bkts.map((b) => b.id)).toEqual([t1.id, t2.id]);
+  });
+
+  it("refuses more than is left of the Lot, and a second piece with no figure", async () => {
+    const big = await bigLot();
+    const t1 = await bkt([{ receiptId: big, bags: 700, netWeightKg: 35000 }]);
+    await expect(bkt([{ receiptId: big, bags: 100, netWeightKg: 6000 }])).rejects.toThrow(/has 5,000 kg left to send \(of 40,000 kg\)/);
+    await expect(bkt([{ receiptId: big }])).rejects.toThrow(new RegExp(`Part of Lot .* is already on ${t1.id}\\. Enter how much`));
+    // Nothing half-written: still only on the first truck.
+    expect(await prisma.transferRequestLine.count({ where: { receiptId: big } })).toBe(1);
+  });
+
+  it("keeps a changed figure on the Lot's timeline, and says nothing when the Lot's own figures were sent", async () => {
+    const note = async (id: string) => (await prisma.timelineEntry.findFirst({ where: { receiptId: id }, orderBy: { id: "desc" } }))!.note;
+    const whole = await bigLot();
+    const t0 = await bkt([{ receiptId: whole, bags: 800, netWeightKg: 40000 }]);
+    expect(await note(whole)).toBe(`Added to transfer ${t0.id}`);
+
+    const big = await bigLot();
+    const t1 = await bkt([{ receiptId: big, bags: 700, netWeightKg: 35000 }]);
+    expect(await note(big)).toBe(`Added to transfer ${t1.id}: 700 bags · 35,000 kg, changed from 800 bags · 40,000 kg (the whole Lot)`);
+    const t2 = await bkt([{ receiptId: big, bags: 100, netWeightKg: 4000 }]);
+    expect(await note(big)).toBe(`Added to transfer ${t2.id}: 100 bags · 4,000 kg, changed from 100 bags · 5,000 kg (what was left of the Lot)`);
+  });
+
+  it("a Lot whose size was never recorded still goes on one BKT only, as before", async () => {
+    const id = await lot();
+    const t = await bkt([{ receiptId: id, bags: 10 }]);
+    await expect(bkt([{ receiptId: id, bags: 10 }])).rejects.toThrow(new RegExp(`already on ${t.id} in full`));
   });
 });

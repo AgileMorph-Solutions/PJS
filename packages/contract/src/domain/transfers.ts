@@ -126,6 +126,112 @@ export function transferVariance(t: TransferFacts): TransferVariance {
   };
 }
 
+const round2 = (x: number) => Math.round(x * 100) / 100;
+
+/**
+ * Each Lot's share of the truck's net at arrival. The truck is weighed once, so a Lot alone on it gets the
+ * whole net; with several Lots the net is shared by the bags of each Lot counted off at arrival (team
+ * decision, Nov 2026). `shared` marks a figure worked out that way, so it is never shown as if it were weighed.
+ * Undefined while the truck hasn't arrived, and on a multi-Lot BKT received before bags per Lot were counted.
+ */
+export function lineNetAtArrival(
+  t: Omit<TransferFacts, "lines"> & { lines: (TransferFacts["lines"][number] & { bagsReceived?: number | null })[] },
+): ({ kg: number; shared: boolean } | undefined)[] {
+  const net = transferVariance(t).netAtArrivalKg;
+  if (net === null) return t.lines.map(() => undefined);
+  if (t.lines.length === 1) return [{ kg: net, shared: false }];
+  const counts = t.lines.map((l) => l.bagsReceived ?? null);
+  const total = counts.reduce<number>((a, b) => a + (b ?? 0), 0);
+  if (counts.some((c) => c === null) || total === 0) return t.lines.map(() => undefined);
+  return counts.map((c) => ({ kg: round2((net * c!) / total), shared: true }));
+}
+
+/** How big a Lot is, from its own receipt: bags unloaded and net weight. Null when the receipt never recorded it. */
+export interface LotSize {
+  bags: number | null;
+  netKg: number | null;
+}
+
+/** One piece of a Lot already put on a BKT. */
+export interface LotOnBkt {
+  transferId: string;
+  bags: number | null;
+  netWeightKg: number | null;
+}
+
+export interface LotTransferProgress {
+  sentBags: number;
+  sentKg: number;
+  /** What is still to go. Null when the Lot's own size isn't on record, or a BKT took a piece with no figure. */
+  leftBags: number | null;
+  leftKg: number | null;
+  /** Nothing more of this Lot can go on a BKT. */
+  fullySent: boolean;
+}
+
+/**
+ * How much of a Lot is on BKTs and how much is left. A Lot bigger than one truck goes on several (Nov 2026:
+ * 40 t on a 35 t truck, the other 5 t on the next one with another Lot). Kg is the measure when the Lot's net
+ * and every piece's net are known, otherwise bags. A piece with neither figure, or a Lot whose size was never
+ * recorded, can't be subtracted from, so once it is on a BKT it counts as sent in full (as every BKT before
+ * splitting existed did).
+ */
+export function lotTransferProgress(size: LotSize, pieces: readonly LotOnBkt[]): LotTransferProgress {
+  const sentKg = round2(pieces.reduce((a, p) => a + (p.netWeightKg ?? 0), 0));
+  const sentBags = pieces.reduce((a, p) => a + (p.bags ?? 0), 0);
+  const leftKg = size.netKg !== null && pieces.every((p) => p.netWeightKg !== null) ? round2(size.netKg - sentKg) : null;
+  const leftBags = size.bags !== null && pieces.every((p) => p.bags !== null) ? size.bags - sentBags : null;
+  const left = leftKg ?? leftBags;
+  return { sentBags, sentKg, leftBags, leftKg, fullySent: pieces.length > 0 && (left === null || left <= 0) };
+}
+
+const kg = (x: number) => `${x.toLocaleString("en-US")} kg`;
+
+/** "150 bags · 30,000 kg" — a piece of a Lot as a person reads it; either half is left out when unknown. */
+export function formatLotPiece(p: { bags: number | null; netWeightKg: number | null }): string {
+  return [p.bags !== null ? `${p.bags.toLocaleString("en-US")} bags` : null, p.netWeightKg !== null ? kg(p.netWeightKg) : null].filter(Boolean).join(" · ");
+}
+
+/**
+ * What a BKT line starts from for this Lot: what is left of it when part is already on a BKT, otherwise the whole Lot
+ * as its receipt recorded it. Typing something else is allowed — that is how a Lot is split — and pieceChanged says so.
+ */
+export function suggestedPiece(size: LotSize, onBkts: readonly LotOnBkt[]): { bags: number | null; netWeightKg: number | null } {
+  if (!onBkts.length) return { bags: size.bags, netWeightKg: size.netKg };
+  const p = lotTransferProgress(size, onBkts);
+  return { bags: p.leftBags, netWeightKg: p.leftKg };
+}
+
+/**
+ * Whether the person sent something other than what the line started from (suggestedPiece). Compared only where both
+ * figures exist: a box left blank isn't a change. The page warns on it and the Lot's timeline records it.
+ */
+export function pieceChanged(suggested: { bags: number | null; netWeightKg: number | null }, piece: { bags: number | null; netWeightKg: number | null }): boolean {
+  const differs = (a: number | null, b: number | null) => a !== null && b !== null && Math.abs(a - b) > 1e-9;
+  return differs(suggested.bags, piece.bags) || differs(suggested.netWeightKg, piece.netWeightKg);
+}
+
+/**
+ * Why `piece` can't go on a BKT next to `onBkts` (the Lot's pieces already on other BKTs), or null when it can.
+ * Putting more of a Lot on trucks than it holds would show stock that doesn't exist, so it is refused, not warned.
+ */
+export function lotPieceProblem(lotNo: string, size: LotSize, onBkts: readonly LotOnBkt[], piece: Omit<LotOnBkt, "transferId">): string | null {
+  const before = lotTransferProgress(size, onBkts);
+  const where = [...new Set(onBkts.map((p) => p.transferId))].join(", ");
+  if (before.fullySent) return `Lot ${lotNo} is already on ${where} in full — nothing of it is left to send.`;
+  if (onBkts.length && piece.netWeightKg === null && piece.bags === null) {
+    return `Part of Lot ${lotNo} is already on ${where}. Enter how much of it goes on this truck.`;
+  }
+  const after = lotTransferProgress(size, [...onBkts, { transferId: "", ...piece }]);
+  if (after.leftKg !== null && after.leftKg < 0) {
+    return `Lot ${lotNo} has ${kg(before.leftKg ?? size.netKg!)} left to send (of ${kg(size.netKg!)}); this truck can take at most that much of it.`;
+  }
+  if (after.leftKg === null && after.leftBags !== null && after.leftBags < 0) {
+    return `Lot ${lotNo} has ${before.leftBags ?? size.bags} bags left to send (of ${size.bags}); this truck can take at most that many.`;
+  }
+  return null;
+}
+
 /**
  * Requested until it leaves, in transit until the destination records the arrival, then closed when
  * what arrived matches what left and a discrepancy when it doesn't. A difference is judged only on

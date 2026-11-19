@@ -754,8 +754,8 @@ export interface ReceiptLinks {
   warehouseReceiving: LinkedWarehouseReceiving[];
   dryingBatches: LinkedDryingBatchRow[];
   issuedToProduction: LinkedIssuedToProduction[];
-  /** The BKT this Lot is on, as recorded in the app. `transfers` above is the imported sheet. */
-  bkt: { id: string; dispatchedAt: string | null; receivedAt: string | null } | null;
+  /** The BKTs this Lot is on, oldest first: a Lot bigger than one truck goes on several. `transfers` above is the imported sheet. */
+  bkts: { id: string; dispatchedAt: string | null; receivedAt: string | null }[];
   /** The production batch holding the bin this Lot is in now. */
   batchCode: string | null;
 }
@@ -770,11 +770,12 @@ export interface DispatchPayload {
 export interface ReceivePayload {
   /** The receiving warehouse's own receipt number for this arrival (required). */
   whReceiptNo: string;
-  bagsReceived: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
+  /** The truck's total. Left out when counted per Lot: the server adds up `lines[].bagsReceived`. */
+  bagsReceived?: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
   korReceived?: number | string | null; moistureReceived?: number | string | null; nutCountReceived?: number | string | null;
   receivedComment?: string | null; receivedLotNoRaw?: string | null;
-  /** The bin each Lot was unloaded into at this site (required, one per Lot). */
-  lines: { receiptId: string; binCode: string }[];
+  /** Per Lot: the bin it was unloaded into at this site, and the bags of it counted off the truck (both required). */
+  lines: { receiptId: string; binCode: string; bagsReceived: string }[];
 }
 
 /** What a plan can be created or corrected with — the writable subset of DeliveryPlan; everything else is derived. */

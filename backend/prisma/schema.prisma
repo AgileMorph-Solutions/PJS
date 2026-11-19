@@ -373,7 +373,9 @@ model TransferRequest {
 }
 
 /// One Lot on a transfer. The Lot, supplier and fiche are read from the receipt, not retyped; bags
-/// and weight are what is actually sent, which can be less than the whole Lot.
+/// and weight are what is actually sent, which can be less than the whole Lot. A Lot bigger than one
+/// truck goes on several BKTs, one line each (Nov 2026: 40 t on a 35 t truck, the other 5 t on the next
+/// truck with another Lot); what is left of it is derived from these lines, never stored.
 model TransferRequestLine {
   id          Int             @id @default(autoincrement())
   transferId  String
@@ -393,6 +395,9 @@ model TransferRequestLine {
   /// The RECEIVING site's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN Receiving at
   /// Factory sheet). Entered on arrival only; it is what puts the Lot in that site's bin stock for production.
   receivedBinCode String?
+  /// Bags of this Lot counted off the truck at the receiving site. The truck is weighed once, so this is what its
+  /// net at arrival is shared by between the Lots on it. Null on BKTs received before it was asked.
+  bagsReceived    Int?
 
   @@unique([transferId, receiptId])
   @@index([receiptId])

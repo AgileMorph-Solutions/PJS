@@ -368,9 +368,11 @@ describe("Transfer Request", () => {
     expect(r.timeline[r.timeline.length - 1].note).toBe(`Added to transfer ${t.id}`);
   });
 
-  it("a Lot leaves a warehouse once", async () => {
+  // A Lot can go on several BKTs only while some of it is left; with no size on its receipt nothing can be subtracted,
+  // so once it is on a truck it is sent in full (the split rules have their own tests in transfers.test.ts).
+  it("a Lot already sent in full can't go on another BKT", async () => {
     await expect(createTransfer({ transferDate: `${YEAR}-08-06`, fromWarehouse: SITE, toWarehouse: "YAKRO FACTORY", lines: [{ receiptId: lotted }] }))
-      .rejects.toThrow(/already on transfer/);
+      .rejects.toThrow(/already on BKT-.* in full/);
     expect(await prisma.transferRequest.count({ where: { id: `BKT-${YEAR}-002` } })).toBe(0); // all-or-nothing
   });
 
@@ -388,7 +390,9 @@ describe("Transfer Request", () => {
   it("steps requested → dispatched → received, never skipping or going back", async () => {
     const id = `BKT-${YEAR}-001`;
     await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
-    expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300 })).status).toBe("dispatched");
+    // Nut count is required at dispatch; this truck's quality check didn't record one.
+    const nuts = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, nutCount: 170 }));
+    expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0", lines: nuts })).status).toBe("dispatched");
     await expect(dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
     await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test" }, update: {} });
     try {
