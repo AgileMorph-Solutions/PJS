@@ -122,8 +122,8 @@ export function IntakeWizardPage() {
           stage={stage}
           values={values}
           derived={derived}
-          {...originFieldProps(stageId, values, masters.origins)}
-          choices={{ ...warehouseFieldChoices(stageId, masters.warehouses), ...arrivalFieldChoices(stageId, values, masters) }}
+          warnings={originFieldProps(stageId, values, masters.origins).warnings}
+          choices={{ ...warehouseFieldChoices(stageId, masters.warehouses), ...arrivalFieldChoices(stageId, values, masters), ...originFieldProps(stageId, values, masters.origins).choices }}
           issues={rules.issuesOf(stageId)}
           lockedMessage={gate.open ? undefined : gate.message}
           onFieldChange={(fieldName, value) => rules.change(stageId, fieldName, value)}

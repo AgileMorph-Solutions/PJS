@@ -419,8 +419,8 @@ export function ReceiptDetailPage() {
                         values={stage.id === "n-bin" && pendingBin !== undefined ? { ...values, "Bin Number": pendingBin } : values}
                         derived={derived[stage.id]}
                         suggestions={suggestionsFor(stage.id, values)}
-                        options={stage.id === "n-bin" ? { "Bin Number": binOptions } : originFieldProps(stage.id, values, masters.origins).options}
-                        choices={{ ...warehouseFieldChoices(stage.id, masters.warehouses), ...arrivalFieldChoices(stage.id, values, masters) }}
+                        options={stage.id === "n-bin" ? { "Bin Number": binOptions } : undefined}
+                        choices={{ ...warehouseFieldChoices(stage.id, masters.warehouses), ...arrivalFieldChoices(stage.id, values, masters), ...originFieldProps(stage.id, values, masters.origins).choices }}
                         issues={rules.issuesOf(stage.id)}
                         lockedMessage={lockedMessage}
                         warnings={stage.id === "n-bin" ? (binWarning ? { "Bin Number": binWarning } : undefined) : originFieldProps(stage.id, values, masters.origins).warnings}

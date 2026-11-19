@@ -186,6 +186,19 @@ export async function createBin(input: { code?: string; warehouseName?: string }
 }
 
 /**
+ * An origin typed in the app must be one of Masters › Origins (Nov 2026: picked from a dropdown, never free text — a new
+ * town is added in Masters first). Blank is allowed: origin is optional. Uploads don't come here: a sheet's own town is
+ * added to the master as it is (domain/workbook/receiptSheet.ts), since an upload is never refused.
+ */
+export async function assertKnownOrigin(db: { origin: { findUnique: (a: { where: { name: string } }) => Promise<unknown> } }, value: string | null | undefined, what = "Origin") {
+  const name = normalizeOriginName(value);
+  if (!name) return;
+  if (!(await db.origin.findUnique({ where: { name } }))) {
+    throw new ValidationError(`${what} "${(value ?? "").trim()}" isn't in Masters › Origins. Pick one from the list, or add the town in Masters › Origins first.`);
+  }
+}
+
+/**
  * A new Origin from Masters › Origins. Stored in capitals like the rest of the master, and refused — never quietly merged —
  * when the town is already there, either exactly or under another spelling (M BAHIAKRO for M'BAHIAKRO, SAKKASSOU for SAKASSOU):
  * a second spelling would make a truck's origin look different from its plan's (deliveryPlan.ts's origin_mismatch).

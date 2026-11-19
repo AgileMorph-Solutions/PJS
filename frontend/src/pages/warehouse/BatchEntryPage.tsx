@@ -220,7 +220,6 @@ export function BatchEntryPage() {
       />
 
       <datalist id="batch-credit-cash"><option value="CASH" /><option value="CREDIT" /></datalist>
-      <datalist id="batch-origins">{masters.origins.map((o) => <option key={o} value={o} />)}</datalist>
 
       <div className="overflow-x-auto bg-white border border-warmstone-200 rounded-2xl shadow-xs">
         <table ref={tableRef} className="w-full text-[13px] border-collapse">
@@ -258,6 +257,19 @@ export function BatchEntryPage() {
                           <span className="block mt-1 text-[11px] font-semibold text-ambernut-700">Supplier is suspended</span>
                         )}
                         </>
+                      ) : c.key === "ORIGIN" ? (
+                        // Picked from Masters › Origins, never typed (Nov 2026); a plan's town the master lacks stays listed first.
+                        <select
+                          aria-label={`Origin, row ${i + 1}`} data-row={i} data-col={c.key}
+                          value={r.v[c.key] ?? ""} onChange={(e) => setValue(r.key, c.key, e.target.value)}
+                          onKeyDown={(e) => onEnter(e, i, c.key)}
+                          title={isUnlistedOrigin(r.v[c.key], masters.origins) ? UNLISTED_ORIGIN : undefined}
+                          className={isUnlistedOrigin(r.v[c.key], masters.origins) ? `${cellCls} border-ambernut-500! bg-ambernut-50!` : cellCls}
+                        >
+                          <option value="">-</option>
+                          {isUnlistedOrigin(r.v[c.key], masters.origins) && <option value={r.v[c.key]}>{r.v[c.key]}</option>}
+                          {masters.origins.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
                       ) : c.key === PLAN ? (
                         <PlanCell
                           row={i} supplierCode={r.v["LBA CODE"] ?? ""} value={r.v[PLAN] ?? ""} openPlans={openPlans}
@@ -276,12 +288,10 @@ export function BatchEntryPage() {
                         <input
                           aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
                           type={c.type ?? "text"} value={r.v[c.key] ?? ""}
-                          list={c.key === "CREDIT/CASH" ? "batch-credit-cash" : c.key === "ORIGIN" ? "batch-origins" : undefined}
+                          list={c.key === "CREDIT/CASH" ? "batch-credit-cash" : undefined}
                           onChange={(e) => setValue(r.key, c.key, e.target.value)}
                           onKeyDown={(e) => onEnter(e, i, c.key)}
-                          // A town the master doesn't have is marked, not refused (see originPicker.ts).
-                          title={c.key === "ORIGIN" && isUnlistedOrigin(r.v[c.key], masters.origins) ? UNLISTED_ORIGIN : undefined}
-                          className={c.key === "ORIGIN" && isUnlistedOrigin(r.v[c.key], masters.origins) ? `${cellCls} border-ambernut-500! bg-ambernut-50!` : cellCls}
+                          className={cellCls}
                         />
                         )
                       )}

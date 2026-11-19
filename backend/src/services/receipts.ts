@@ -32,6 +32,7 @@ import { assertLotBeforeBin, assertRejectionHasReason, ForbiddenError, Validatio
 import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
 import { planFitProblem } from "./receiptPlanInfo.js";
+import { assertKnownOrigin } from "./masters.js";
 
 type Tx = Prisma.TransactionClient;
 export interface WriteOpts {
@@ -366,6 +367,8 @@ async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields:
   // A field hidden from the writer's role is not theirs to write either (price and amount, for the Warehouse Incharge).
   if (role) for (const label of Object.keys(fields)) if (!canSeeField(role, stageId, label)) throw new ForbiddenError(PRICE_NOT_YOURS_MESSAGE);
   if (stageId === "n-bin" && BIN_FINALISE_FIELDS.some((label) => label in fields)) throw new ValidationError(SYSTEM_BIN_DATE_MESSAGE);
+  // Typed in the app, the truck's origin is one of the master's towns; an upload adds its sheet's own (receiptSheet.ts).
+  if (from === "app" && stageId === "n-verify" && "ORIGIN" in fields) await assertKnownOrigin(tx, fields["ORIGIN"]);
   // A value that is typed until its inputs exist (KOR, before the cut-test grams) is the system's only
   // once they do — judged on the stage as it will stand after this write, so grams and KOR sent
   // together are refused rather than leaving a typed number the next recalculation would overwrite.
