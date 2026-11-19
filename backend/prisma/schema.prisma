@@ -373,7 +373,9 @@ model TransferRequest {
 }
 
 /// One Lot on a transfer. The Lot, supplier and fiche are read from the receipt, not retyped; bags
-/// and weight are what is actually sent, which can be less than the whole Lot.
+/// and weight are what is actually sent, which can be less than the whole Lot. A Lot bigger than one
+/// truck goes on several BKTs, one line each (Nov 2026: 40 t on a 35 t truck, the other 5 t on the next
+/// truck with another Lot); what is left of it is derived from these lines, never stored.
 model TransferRequestLine {
   id          Int             @id @default(autoincrement())
   transferId  String
@@ -393,6 +395,9 @@ model TransferRequestLine {
   /// The RECEIVING site's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN Receiving at
   /// Factory sheet). Entered on arrival only; it is what puts the Lot in that site's bin stock for production.
   receivedBinCode String?
+  /// Bags of this Lot counted off the truck at the receiving site. The truck is weighed once, so this is what its
+  /// net at arrival is shared by between the Lots on it. Null on BKTs received before it was asked.
+  bagsReceived    Int?
 
   @@unique([transferId, receiptId])
   @@index([receiptId])
@@ -598,6 +603,7 @@ model StageUnload {
   bonSacs             String? /// BON SACS (good bags)
   humidSacs           String? /// HUMID SACS (damp bags)
   sacsDechires        String? /// Sacs déchirés (torn bags)
+  reconditionedTornBags String? /// Reconditioning of torn bags
   refraction          String? /// Refraction
   manpowerContractor  String? /// Manpower contractor / team
   tallyClerkBagCount  String? /// Tally Clerk bag count
@@ -2405,6 +2411,8 @@ model RcnReceipt {
   batchBin    ProductionBatchBin @relation(fields: [batchCode, binCode], references: [batchCode, binCode])
   batch       ProductionBatch    @relation(fields: [batchCode], references: [code])
   date        String
+  /// The crop year as typed ("2026"), as the client's register and quality report carry it. Null until given.
+  cropYear    String?
   btmNo       String
   createdById String
   createdBy   User               @relation("RcnReceiptCreator", fields: [createdById], references: [id])
@@ -2419,7 +2427,12 @@ model RcnReceipt {
   finalisedById String?
   finalisedBy   User?     @relation("RcnReceiptFinaliser", fields: [finalisedById], references: [id], onDelete: SetNull)
   finalisedAt   DateTime?
-  calibrationRuns RcnCalibrationRun[]
+  /// Production's acceptance of the warehouse's load (Lokesh, 16 Nov 2026, "Option 1"): from then its net is out of the
+  /// warehouse bin and net − dust − voids is in the silos. A load finalised before acceptance existed was counted as
+  /// accepted at its finalisedAt, with no acceptedById: nobody accepted it in the app, and none is invented.
+  acceptedById  String?
+  acceptedBy    User?     @relation("RcnReceiptAccepter", fields: [acceptedById], references: [id], onDelete: SetNull)
+  acceptedAt    DateTime?
 
   @@index([batchCode])
   @@index([batchCode, binCode, btmNo])
@@ -2492,31 +2505,9 @@ model RcnMoistureCheck {
 
 // ── Production Phase 2: Calibration ──────────────────────────────────────────────────────────────
 // From the client's "Production module" document (Oct 2026), Phase 2, and its workbooks 4. Calibration Process
-// report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual Calibration (Sheet2). Silo stock is
-// calculated from these rows (contract domain/calibration.ts siloStock), never stored.
-
-/// One run of a load through the sizing machine: the kg that went into each of the 9 silos (A++ … E, the silo
-/// report's own columns). A load can take several runs over several days; their total can't pass its into-silo kg.
-model RcnCalibrationRun {
-  id           Int        @id @default(autoincrement())
-  rcnReceiptId String
-  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
-  date         String
-  kgApp        String?
-  kgAp         String?
-  kgA          String?
-  kgAB         String?
-  kgB          String?
-  kgBC         String?
-  kgC          String?
-  kgD          String?
-  kgE          String?
-  createdById  String
-  createdBy    User       @relation("CalibrationRunAuthor", fields: [createdById], references: [id])
-  createdAt    DateTime   @default(now())
-
-  @@index([rcnReceiptId])
-}
+// report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual Calibration (Sheet2). No kg per silo is recorded
+// (decision, Nov 2026): a load goes into the silos as one total, net − dust − voids, when its final weight is saved.
+// Silo stock is calculated from the loads and cooking rows (contract domain/calibration.ts siloPool), never stored.
 
 /// QC-2: one sample from a silo (or of the RCN as received), sorted into grams per size — a row of the
 /// "24. Wholes Manual Calibration" Sheet2. Submitted / approved / rejected exactly like a moisture check.
@@ -2613,6 +2604,8 @@ model LotCookRun {
   kgC         String?
   kgD         String?
   kgE         String?
+  /// Damaged or spoiled in the cooker (power cuts, breakdowns): out of the silos, but never shelled.
+  damagedKg   String?
   createdById String
   createdBy   User       @relation("LotCookRunAuthor", fields: [createdById], references: [id])
   createdAt   DateTime   @default(now())
@@ -2620,7 +2613,7 @@ model LotCookRun {
   @@index([lotCode])
 }
 
-/// A Lot's small records: cooker log, QC-3, QC-4, waste water, line runs, QC-5, QTY-1, QC-6. One table because they
+/// A Lot's small records: cooker log, QC-4, waste water, line runs, QC-5, QTY-1, QC-6. One table because they
 /// differ only in their fields, which the contract's domain/lotEntries.ts defines; values are kept as typed.
 model LotEntry {
   id            Int        @id @default(autoincrement())
@@ -2747,6 +2740,7 @@ model User {
   submissions         FormSubmission[]        @relation("SubmissionAuthor")
   reviewedSubmissions FormSubmission[]        @relation("SubmissionReviewer")
   fieldChanges        StageFieldChange[]
+  changeLogs          ChangeLog[]
   timeline            TimelineEntry[]
   createdBatches      ProductionBatch[]       @relation("BatchCreator")
   createdRcnReceipts  RcnReceipt[]            @relation("RcnReceiptCreator")
@@ -2754,7 +2748,7 @@ model User {
   reviewedMoisture    RcnMoistureCheck[]      @relation("MoistureCheckReviewer")
   weighedPallets      RcnPallet[]             @relation("RcnPalletWeigher")
   finalisedRcnReceipts RcnReceipt[]           @relation("RcnReceiptFinaliser")
-  calibrationRuns     RcnCalibrationRun[]     @relation("CalibrationRunAuthor")
+  acceptedRcnReceipts  RcnReceipt[]           @relation("RcnReceiptAccepter")
   sizingChecks        SizingCheck[]           @relation("SizingCheckAuthor")
   reviewedSizingChecks SizingCheck[]          @relation("SizingCheckReviewer")
   manualCalibrations  ManualCalibration[]     @relation("ManualCalibrationAuthor")
@@ -2765,6 +2759,7 @@ model User {
   shellingDays        ShellingDay[]           @relation("ShellingDayAuthor")
   truckMovements      TruckMovement[]         @relation("TruckMovementAuthor")
   boilerReadings      BoilerReading[]         @relation("BoilerReadingAuthor")
+  workbookUploads     ProductionWorkbookUpload[] @relation("WorkbookUploader")
 
   @@index([role])
   @@index([warehouse])
@@ -2860,6 +2855,37 @@ model StageFieldChange {
   @@index([receiptId])
 }
 
+/// Every saved change to any record outside a truck's steps (those are StageFieldChange): transfers, delivery plans,
+/// masters, production, drying, jute, users… Written by db.ts's change-log hook in the same transaction as the save, so a
+/// save that fails leaves no row. One row per changed field on an edit; a create typed in the app gets one row per value
+/// entered, an upload's create one row for the record, and a delete one row. Nobody edits or deletes these rows.
+model ChangeLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime @default(now())
+  /// Who saved it. Only a signed-in person's changes are logged; null only once their account is deleted.
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// "direct" | "approval" | "import" | "system" — the same words as StageFieldChange.via, plus "system".
+  via        String
+  /// "create" | "update" | "delete"
+  action     String
+  /// The Prisma model name (TransferRequestLine, DeliveryPlan…); the page shows a person's name for it.
+  entity     String
+  /// The record's own key, its parts joined by " · " when the key has several. Null for a bulk create's summary row.
+  recordId   String?
+  /// The column that changed. Null on a whole-record row (an upload's create, a delete, a bulk create's summary).
+  field      String?
+  oldValue   String?
+  newValue   String?
+  /// The warehouses the record belongs to (a BKT: both ends), found from the record or its parents. Who may read the row
+  /// follows from these; empty means only an admin sees it.
+  warehouses String[]
+
+  @@index([at])
+  @@index([entity, recordId])
+  @@index([warehouses], type: Gin)
+}
+
 /// A soft problem found in a row of an uploaded workbook (contract domain/uploadChecks.ts). The upload
 /// went through anyway: these are reported against the truck, never used to refuse or to fix the row.
 /// `row` and `sheet` point back at the file the person uploaded; `reviewedAt` is someone saying "seen".
@@ -2883,4 +2909,23 @@ model UploadIssue {
 
   @@index([receiptId])
   @@index([reviewedAt])
+}
+
+/// One applied upload of the production workbook (team, 18 Nov 2026: "save logs like who uploads it"). Written when the
+/// file is applied, never on a preview; an upload refused whole leaves no row, as it changed nothing.
+model ProductionWorkbookUpload {
+  id           Int      @id @default(autoincrement())
+  /// The factory site the file was uploaded to.
+  warehouse    String
+  filename     String
+  uploadedAt   DateTime @default(now())
+  uploadedById String
+  uploadedBy   User     @relation("WorkbookUploader", fields: [uploadedById], references: [id])
+  /// Rows added and changed, across every tab.
+  created      Int
+  updated      Int
+  /// Per tab: [{ name, created, updated }], the tabs the upload added to or changed.
+  tabs         Json
+
+  @@index([warehouse, uploadedAt])
 }

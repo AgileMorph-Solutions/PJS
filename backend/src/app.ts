@@ -2,11 +2,13 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { registerAuth } from "./auth/plugin.js";
+import { registerAuditContext } from "./audit/context.js";
 import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/users.js";
 import { submissionRoutes } from "./routes/submissions.js";
 import { supplierAccessRoutes } from "./routes/supplierAccess.js";
 import { receiptRoutes } from "./routes/receipts.js";
+import { logRoutes } from "./routes/logs.js";
 import { ledgerRoutes } from "./routes/ledgers.js";
 import { masterRoutes } from "./routes/masters.js";
 import { supplierRoutes } from "./routes/suppliers.js";
@@ -19,6 +21,7 @@ import { productionRoutes } from "./routes/production.js";
 import { productionBatchRoutes } from "./routes/productionBatches.js";
 import { productionWorkbookRoutes } from "./routes/productionWorkbook.js";
 import { rcnReceiptRoutes } from "./routes/rcnReceipts.js";
+import { productionApprovalRoutes } from "./routes/productionApprovals.js";
 import { calibrationRoutes } from "./routes/calibration.js";
 import { factoryLotRoutes } from "./routes/factoryLots.js";
 import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
@@ -83,7 +86,9 @@ export function buildApp() {
 
   app.get("/api/health", async () => ({ ok: true }));
 
-  // Must come before the route registrations below: its hook only covers routes added after it.
+  // Both must come before the route registrations below: their hooks only cover routes added after them. The change
+  // log's context opens first, so auth can fill in who the request is for.
+  registerAuditContext(app);
   registerAuth(app);
   app.register(authRoutes);
   app.register(userRoutes);
@@ -91,6 +96,7 @@ export function buildApp() {
   app.register(supplierAccessRoutes);
 
   app.register(receiptRoutes);
+  app.register(logRoutes);
   app.register(deliveryPlanRoutes);
   app.register(transferRoutes);
   app.register(ledgerRoutes);
@@ -105,6 +111,7 @@ export function buildApp() {
   app.register(productionBatchRoutes);
   app.register(productionWorkbookRoutes);
   app.register(rcnReceiptRoutes);
+  app.register(productionApprovalRoutes);
   app.register(calibrationRoutes);
   app.register(factoryLotRoutes);
   app.register(warehouseDispatchRoutes);

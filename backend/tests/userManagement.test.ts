@@ -143,6 +143,26 @@ describe("user administration", () => {
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ warehouse: "BOUAKE", site: "BOUAKE", warehouseType: "UNIT" });
   });
+
+  // The factory roles work at a Central warehouse only; a Unit one is refused on create and on a later move.
+  it("puts a Production Incharge or Factory Manager on a Central warehouse only", async () => {
+    for (const role of ["production_incharge", "factory_manager"]) {
+      const unit = await as(P + "admin", "POST", "/api/users", { username: P + role, password: PW, role, warehouse: "BOUAKE" });
+      expect(unit.statusCode).toBe(422);
+      expect(unit.json().error).toMatch(/Central warehouse/);
+      const central = await as(P + "admin", "POST", "/api/users", { username: P + role, password: PW, role, warehouse: "YAKRO FACTORY" });
+      expect(central.statusCode).toBe(201);
+      expect(central.json()).toMatchObject({ role, warehouse: "YAKRO FACTORY", warehouseType: "CENTRAL" });
+      expect((await as(P + "admin", "PATCH", `/api/users/${central.json().id}`, { warehouse: "BOUAKE" })).statusCode).toBe(422);
+    }
+  });
+
+  it("lets a factory role into Production, and keeps it off procurement's trucks", async () => {
+    await login(P + "production_incharge");
+    expect((await as(P + "production_incharge", "GET", "/api/auth/me")).statusCode).toBe(200);
+    expect((await as(P + "production_incharge", "GET", "/api/receipts")).statusCode).toBe(403);
+    expect((await as(P + "production_incharge", "GET", "/api/production/batches")).statusCode).toBe(200);
+  });
 });
 
 describe("Branch Manager submission → Warehouse Incharge approval", () => {
@@ -304,7 +324,8 @@ describe("QFS Officer submission and terminal rejection", () => {
 describe("QFS Officer quality analysis", () => {
   let receiptId: string;
   let submissionId: string;
-  const quality = { "Final moisture (%)": "10.3", "Final nut count": "165", KOR: "40.03599", "FINAL KOR": "40.1" };
+  // KOR isn't among them: in the app it is only ever the cut test's result (Nov 2026), so nobody submits it.
+  const quality = { "Final moisture (%)": "10.3", "Final nut count": "165" };
 
   beforeAll(async () => {
     receiptId = (await createReceipt("BOUAKE")).id;
@@ -314,7 +335,7 @@ describe("QFS Officer quality analysis", () => {
     await setStageFields(receiptId, "n-verify", { "LBA CODE": SUPPLIER });
   });
 
-  it("takes the four measurements together with the bag counts in one submission", async () => {
+  it("takes the measurements together with the bag counts in one submission", async () => {
     const res = await as(P + "qfs", "POST", `/api/receipts/${receiptId}/submissions`, {
       values: { "n-qfs": quality, "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } },
     });
@@ -360,11 +381,11 @@ describe("QFS Officer quality analysis", () => {
     await setStageFields(id, "n-qfs", grams);
     const alone = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { KOR: "40" } } });
     expect(alone.statusCode).toBe(422);
-    // …and without grams a typed KOR is exactly what a 2026 truck has, and is accepted.
+    // …and without grams too: in the app KOR is never typed (Nov 2026); only an upload keeps a sheet's own KOR.
     const bare = (await createReceipt("BOUAKE")).id;
     createdReceipts.push(bare);
     await setStageFields(bare, "n-verify", { "LBA CODE": SUPPLIER });
-    expect((await as(P + "qfs", "POST", `/api/receipts/${bare}/submissions`, { values: { "n-qfs": { KOR: "47.69" } } })).statusCode).toBe(201);
+    expect((await as(P + "qfs", "POST", `/api/receipts/${bare}/submissions`, { values: { "n-qfs": { KOR: "47.69" } } })).statusCode).toBe(422);
   });
 
   it("still refuses QFS a field outside its form, and the Pass/Fail decision itself", async () => {

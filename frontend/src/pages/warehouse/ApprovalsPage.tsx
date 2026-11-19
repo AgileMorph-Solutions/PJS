@@ -4,6 +4,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Pill } from "../../components/ui/Pill";
 import { SubmissionReview } from "../../components/SubmissionReview";
+import { ProductionApprovalCard } from "../../components/production/ProductionApprovalCard";
 import { useTracking } from "../../state/TrackingContext";
 import { usePendingApprovals } from "../../state/PendingApprovals";
 import { api } from "../../repository/api";
@@ -12,18 +13,38 @@ import { useSites } from "../../state/SiteContext";
 import type { SupplierRequestView } from "../../types/user";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
-/** Warehouse Incharge's queue: Branch Manager / QFS submissions and supplier requests waiting on a
- * decision. Approving a submission applies its values to the receipt (atomically, server-side). The
- * rows come from PendingApprovalsProvider — the same copy the sidebar badge counts. */
+/** Everything waiting for this person's decision, each step sent up to the role above it: in production, the warehouse's
+ * weighed loads and the QFS Officer's checks; in procurement, Branch Manager / QFS submissions and supplier requests.
+ * Approving applies it (atomically, server-side); nothing here has touched a record before that. The rows come from
+ * PendingApprovalsProvider — the same copy the sidebar badge counts. */
 export function ApprovalsPage() {
+  const { reviews, production, refresh } = usePendingApprovals();
+
+  return (
+    <div className="space-y-6">
+      <PageHeader kicker="Approvals" title="Waiting for your decision" lede="Nothing here counts until you decide: approving applies it, rejecting closes it for good." />
+
+      {reviews.production && (
+        <section className="space-y-3">
+          <h2 className="text-[11px] font-bold text-warmstone-500 uppercase tracking-wider px-1">Production · {production.rows.length}</h2>
+          {production.rows.length === 0 && <EmptyState title={production.loading ? "Loading…" : "Nothing waiting in production"} />}
+          {production.rows.map((item) => <ProductionApprovalCard key={`${item.kind}-${item.id}`} item={item} onDone={refresh} />)}
+        </section>
+      )}
+
+      {reviews.procurement && <ProcurementApprovals />}
+    </div>
+  );
+}
+
+/** Procurement's two queues: Branch Manager / QFS submissions on a truck, and requests for a new supplier. */
+function ProcurementApprovals() {
   const { receipts, masters } = useTracking();
   const sites = useSites();
   const { submissions: pending, supplierRequests: requests } = usePendingApprovals();
 
   return (
-    <div className="space-y-6">
-      <PageHeader kicker="Approvals" title="Waiting for your decision" lede="Nothing here has touched the receipts yet - approving applies it, rejecting closes it for good." />
-
+    <>
       <section className="space-y-3">
         <h2 className="text-[11px] font-bold text-warmstone-400 uppercase tracking-wider px-1">Form submissions · {pending.rows.length}</h2>
         {pending.rows.length === 0 && <EmptyState title={pending.loading ? "Loading…" : "No submissions waiting"} />}
@@ -46,7 +67,7 @@ export function ApprovalsPage() {
         {requests.rows.length === 0 && <EmptyState title={requests.loading ? "Loading…" : "No supplier requests waiting"} />}
         {requests.rows.map((r) => <SupplierRequestRow key={r.id} request={r} />)}
       </section>
-    </div>
+    </>
   );
 }
 

@@ -36,6 +36,8 @@ services:
       # deployed, and change DEMO_PASSWORD if you keep them.
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-demo-pass-123}
+      # A save on a Windows/macOS host sends no file-change event into the container: poll, so `tsx watch` sees it.
+      CHOKIDAR_USEPOLLING: "true"
     # DEV: same startup as the image (migrate, seed, serve), but the last step is `tsx watch`, so the
     # API restarts by itself whenever a source file under ./backend or ./packages/contract is saved.
     # (A new migration or a changed prisma/schema.prisma still needs `docker compose restart backend`
@@ -74,6 +76,8 @@ services:
     environment:
       # Vite proxies /api to the backend (vite.config.ts), same as nginx does in the production image.
       VITE_API_TARGET: http://backend:3000
+      # A save on a Windows/macOS host sends no file-change event into the container: poll (vite.config.ts).
+      CHOKIDAR_USEPOLLING: "true"
     volumes:
       - ./frontend:/app/frontend
       - ./packages/contract:/app/packages/contract

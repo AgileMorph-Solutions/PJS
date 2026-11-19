@@ -1,8 +1,8 @@
 /**
- * Which requests each role may make, decided by method + path — default-deny for the two narrow
- * roles. Written as a pure function so it can be tested without a database, and so a new route is
- * closed to Branch Managers / QFS Officers until someone deliberately lists it here, rather than
- * open until someone remembers to close it.
+ * Which requests each role may make, decided by method + path — default-deny for every listed role.
+ * Written as a pure function so it can be tested without a database, and so a new route is closed to
+ * the narrower roles until someone deliberately lists it here, rather than open until someone
+ * remembers to close it.
  *
  * admin / warehouse_incharge: everything (warehouse scoping is enforced separately, in scope.ts;
  * admin-only routes use requireRole).
@@ -19,9 +19,17 @@ const READ_RECEIPTS: Rule[] = [
   { method: "GET", path: /^\/api\/masters$/ },
 ];
 
-const COMMON: Rule[] = [
+const SIGN_IN: Rule[] = [
   { method: "GET", path: /^\/api\/auth\/me$/ },
   { method: "POST", path: /^\/api\/auth\/logout$/ },
+];
+
+const MASTERS: Rule = { method: "GET", path: /^\/api\/masters$/ };
+const PRODUCTION_PATH = /^\/api\/production(\/.*)?$/;
+const PRODUCTION_READ: Rule = { method: "GET", path: PRODUCTION_PATH };
+
+const COMMON: Rule[] = [
+  ...SIGN_IN,
   // A submitter sees their own submissions (filtered by author in the service).
   { method: "GET", path: /^\/api\/submissions$/ },
   { method: "POST", path: /^\/api\/receipts\/[^/]+\/submissions$/ },
@@ -40,23 +48,23 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
   qfs_officer: [
     ...COMMON,
     ...READ_RECEIPTS,
-    // Production Phase 1, step 2: the QFS Officer does each load's moisture check, so reads its batch and
-    // receipts and submits the check; the Incharge approves it.
+    // The QFS Officer is on the warehouse team (18 Nov 2026): each load's moisture check, which the Warehouse Incharge
+    // approves. They read the run and its loads for it, and nothing after the intake.
     { method: "GET", path: /^\/api\/production\/batches(\/[^/]+)?$/ },
     { method: "GET", path: /^\/api\/production\/rcn-receipts$/ },
     { method: "POST", path: /^\/api\/production\/rcn-receipts\/[^/]+\/moisture-checks$/ },
-    // Phase 2, step 3: QC-2 sizing checks, the same way.
-    { method: "GET", path: /^\/api\/production\/batches\/[^/]+\/calibration$/ },
-    { method: "POST", path: /^\/api\/production\/sizing-checks$/ },
-    // Phases 3–4: a QFS Officer reads a batch's Lots and submits their checks. The service refuses them the floor's
-    // own records (cooker log, line runs), which share this route.
-    { method: "GET", path: /^\/api\/production\/batches\/[^/]+\/lots$/ },
-    { method: "POST", path: /^\/api\/production\/factory-lots\/[^/]+\/entries$/ },
   ],
+  // The factory's two roles (Nov 2026) see Production, not procurement: no receipts (and so no prices), no ledgers. They
+  // must stay listed — an unlisted role falls through to "everything" below.
+  // The Production Incharge reaches every production route; each route's own requireRole keeps the warehouse's side
+  // (recording and weighing a load, starting a run) to the Warehouse Incharge.
+  production_incharge: [...SIGN_IN, MASTERS, PRODUCTION_READ, { method: "*", path: PRODUCTION_PATH }],
+  // The Factory Manager watches: every production page, nothing written.
+  factory_manager: [...SIGN_IN, MASTERS, PRODUCTION_READ],
 };
 
 export function isAllowed(role: Role, method: string, path: string): boolean {
   const rules = ALLOWED[role];
   if (!rules) return true; // admin and warehouse_incharge
-  return rules.some((r) => r.method === method && r.path.test(path));
+  return rules.some((r) => (r.method === "*" || r.method === method) && r.path.test(path));
 }

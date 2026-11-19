@@ -57,12 +57,18 @@ export function buildJourney(r: ReceiptRecord, links: ReceiptLinks | null, siteT
     );
   } else {
     // The BKT is the app's own record; the dispatch lines and sheet rows are the imported history of the same thing.
-    const dispatched = Boolean(links?.bkt?.dispatchedAt) || (links?.dispatches.length ?? 0) > 0 || (links?.transfers.length ?? 0) > 0;
-    const received = Boolean(links?.bkt?.receivedAt) || (links?.warehouseReceiving ?? []).some((w) => !/bouak/i.test(w.warehouseSite));
-    const dispatchDate = links?.bkt?.dispatchedAt ?? links?.dispatches[0]?.chargeDate;
+    // A Lot bigger than one truck is on several BKTs: dispatched from its first truck, at the factory once its last arrives.
+    const bkts = links?.bkts ?? [];
+    const firstOut = bkts.find((b) => b.dispatchedAt)?.dispatchedAt;
+    const allIn = bkts.length > 0 && bkts.every((b) => b.receivedAt);
+    const lastIn = allIn ? bkts.map((b) => b.receivedAt!).sort().at(-1) : undefined;
+    const trucks = bkts.length > 1 ? ` · ${bkts.length} trucks` : "";
+    const dispatched = Boolean(firstOut) || (links?.dispatches.length ?? 0) > 0 || (links?.transfers.length ?? 0) > 0;
+    const received = allIn || (links?.warehouseReceiving ?? []).some((w) => !/bouak/i.test(w.warehouseSite));
+    const dispatchDate = firstOut ?? links?.dispatches[0]?.chargeDate;
     steps.push(
-      { id: "transfer", label: "Dispatch", icon: "swap_horiz", state: dispatched ? "done" : "todo", detail: dispatchDate ? formatDate(dispatchDate) : undefined },
-      { id: "received", label: "At factory", icon: "factory", state: received ? "done" : "todo", detail: links?.bkt?.receivedAt ? formatDate(links.bkt.receivedAt) : received ? "Received" : undefined },
+      { id: "transfer", label: "Dispatch", icon: "swap_horiz", state: dispatched ? "done" : "todo", detail: dispatchDate ? `${formatDate(dispatchDate)}${trucks}` : undefined },
+      { id: "received", label: "At factory", icon: "factory", state: received ? "done" : "todo", detail: lastIn ? formatDate(lastIn) : received ? "Received" : undefined },
       { id: "production", label: "Production", icon: "precision_manufacturing", state: links?.batchCode || issued ? "done" : "todo", detail: productionDetail },
     );
   }

@@ -56,7 +56,22 @@ describe("KOR from the cut test", () => {
     expect((await getReceipt(id))!.stageData["n-qfs"]).toMatchObject({ KOR: "52.03", "FINAL KOR": "51.15" });
   });
 
-  it("stays typeable until the grams exist — a truck with only the final KOR (every 2026 truck) can still be recorded", async () => {
+  it("a person in the app can't type KOR at all, grams or not: it is only ever the cut test's result (Nov 2026)", async () => {
+    const user = await prisma.user.create({ data: { username: `rcpflow-kor-${Date.now()}`, displayName: "kor", role: "admin", passwordHash: "x" } });
+    try {
+      const id = (await createReceipt(SITE, D)).id;
+      const asPerson = { actor: { id: user.id, via: "direct" as const } };
+      await expect(setStageFields(id, "n-qfs", { KOR: "47.69" }, asPerson)).rejects.toThrow(/KOR is calculated/);
+      await expect(setStageFields(id, "n-qfs", { "FINAL KOR": "48.4" }, asPerson)).rejects.toThrow(/FINAL KOR is calculated/);
+      // Nothing was written: KOR comes only from the grams (the test above follows them to KOR).
+      expect((await getReceipt(id))!.stageData["n-qfs"]?.["KOR"] ?? "").toBe("");
+    } finally {
+      await prisma.stageFieldChange.deleteMany({ where: { userId: user.id } });
+      await prisma.user.delete({ where: { id: user.id } });
+    }
+  });
+
+  it("an upload or script keeps the KOR its source recorded until the grams exist — a truck with only the final KOR (every 2026 truck) can still be recorded", async () => {
     const id = (await createReceipt(SITE, D)).id;
     await setStageFields(id, "n-qfs", { KOR: "47.69", "FINAL KOR": "48.4" });
     expect((await getReceipt(id))!.stageData["n-qfs"]).toMatchObject({ KOR: "47.69", "FINAL KOR": "48.4" });

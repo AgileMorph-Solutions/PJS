@@ -46,7 +46,8 @@ const warn = (column: string | undefined, message: string): UploadWarning => ({ 
 const NUMERIC: [stage: string, label: string][] = [
   ["n-gross", "Loaded truck weight (kg)"], ["n-gross", "Tare / empty truck weight (kg)"],
   ["n-qfs", "Final moisture (%)"], ["n-qfs", "KOR"], ["n-qfs", "FINAL KOR"],
-  ["n-unload", "BON SACS (good bags)"], ["n-unload", "HUMID SACS (damp bags)"], ["n-unload", "Sacs déchirés (torn bags)"], ["n-unload", "Refraction"],
+  ["n-unload", "SACS (bags)"], ["n-unload", "BON SACS (good bags)"], ["n-unload", "HUMID SACS (damp bags)"], ["n-unload", "Sacs déchirés (torn bags)"],
+  ["n-unload", "Reconditioning of torn bags"], ["n-unload", "Refraction"],
   ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"], ["n-grn", "PRICE"],
 ];
 

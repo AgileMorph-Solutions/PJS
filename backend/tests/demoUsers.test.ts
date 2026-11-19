@@ -11,13 +11,17 @@ afterAll(() => prisma.$disconnect());
 // Demo accounts follow the Warehouses master: no site is named in code, and a non-admin only ever lands on a typed
 // site (the same rule the users API enforces), or they'd have no section to land in.
 describe("demo users", () => {
-  it("gives every site one of each non-admin role, plus one admin", () => {
-    const users = demoUsersFor(["NORTH HUB", "MAIN PLANT"]);
+  it("gives every site one of each warehouse role, every Central one the two factory roles too, plus one admin", () => {
+    const users = demoUsersFor([{ name: "NORTH HUB", type: "UNIT" }, { name: "MAIN PLANT", type: "CENTRAL" }]);
     expect(users.filter((u) => u.role === "admin")).toHaveLength(1);
     for (const role of ["branch_manager", "qfs_officer", "warehouse_incharge"]) {
       expect(users.filter((u) => u.role === role).map((u) => u.warehouse).sort(), role).toEqual(["MAIN PLANT", "NORTH HUB"]);
     }
-    expect(users.map((u) => u.username)).toContain("incharge.north-hub");
+    // The factory roles work only at a Central warehouse (services/users.ts refuses any other).
+    for (const role of ["production_incharge", "factory_manager"]) {
+      expect(users.filter((u) => u.role === role).map((u) => u.warehouse), role).toEqual(["MAIN PLANT"]);
+    }
+    expect(users.map((u) => u.username)).toEqual(expect.arrayContaining(["incharge.north-hub", "production.main-plant", "factory.main-plant"]));
     expect(users.every((u) => isRole(u.role))).toBe(true);
     expect(demoUsersFor([]).map((u) => u.role)).toEqual(["admin"]);
   });

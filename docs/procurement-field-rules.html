@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Field rules</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:2000px;font-family:Calibri,"Segoe UI",Arial,sans-serif;font-size:19px;color:#000;background:#fff;padding:0}
+table{width:100%;border-collapse:collapse;margin-bottom:28px}
+td,th{border:1px solid #9a9a9a;padding:7px 10px;vertical-align:top;line-height:1.35}
+th{font-weight:700;text-align:center;background:#fff;font-size:20px}
+.date{border:none;padding:10px;font-size:19px}
+.title{background:#fbdcc6;font-weight:700;font-style:italic;font-size:22px;padding:10px}
+.note{background:#fbdcc6;font-weight:700;padding:9px 10px}
+.c{text-align:center;vertical-align:middle;font-weight:700}
+.s{font-weight:700;vertical-align:middle}
+b{font-weight:700}
+</style></head><body>
+
+<table>
+<tr><td class="date" colspan="6">Dated :- 16-11-2026.</td></tr>
+<tr><td class="title" colspan="6">ANAGROCI PROCUREMENT - FIELD RULES: HOW EACH FIELD IS FILLED, WHAT IS MANDATORY, ALLOWED LIMITS.</td></tr>
+<tr><td class="note" colspan="6" style="font-weight:400">
+<b>How it is filled:</b> Text = user types it. Drop-down = user picks from a list. Auto = fills itself. Suggested = portal proposes, user confirms. Calculated = portal works it out, user cannot type it.
+<br><b>"A → B"</b> = today it is A, we will change it to B. &nbsp; <b>Warn</b> = user can still save after confirming. &nbsp; <b>Stop</b> = cannot be saved (only a few checks against the masters and the drying ledger; a typed value on its own is never stopped, only warned about).</td></tr>
+<tr><th style="width:4%">Sl No</th><th style="width:11%">Step</th><th style="width:22%">Field</th><th style="width:22%">How it is filled</th><th style="width:10%">Mandatory?</th><th>Allowed values / limit</th></tr>
+
+<tr><td class="c" rowspan="13">1</td><td class="s" rowspan="13">Arrival</td>
+<td>Date of arrival</td><td>Auto (today)</td><td class="c">Yes</td><td>Warn if the date is in the future.</td></tr>
+<tr><td>Credit / Cash</td><td>Text → Drop-down</td><td class="c">Yes</td><td>CREDIT or CASH.</td></tr>
+<tr><td>WH Location</td><td>Drop-down, Auto</td><td class="c">Yes</td><td>BOUAKE / YAKRO FACTORY.</td></tr>
+<tr><td>WH No.</td><td>Text → Drop-down</td><td class="c">Yes</td><td>Only the codes of the chosen location (BKE-001, BKE-002, BKE-003).</td></tr>
+<tr><td>Vehicle No.</td><td>Text, with suggestions</td><td class="c">Yes</td><td>Like 827KT01. Two plates joined with "/". Warn if the same plate already arrived today.</td></tr>
+<tr><td>Supplier name</td><td>Text → Drop-down</td><td class="c">Yes</td><td>From the Supplier master. Warn if the supplier is suspended.</td></tr>
+<tr><td>LBA code</td><td>Text → Auto (from supplier)</td><td class="c">Yes</td><td>Always matches the supplier name.</td></tr>
+<tr><td>Delivery plan</td><td>Drop-down</td><td class="c">Yes</td><td>The supplier's open plan, or "Unplanned".</td></tr>
+<tr><td>Fiche code</td><td>Text</td><td class="c">Yes</td><td>Format 0401-0007.</td></tr>
+<tr><td>Fiche No.</td><td>Text (numbers only)</td><td class="c">Yes</td><td>Warn if this number was already used on another truck.</td></tr>
+<tr><td>Origin</td><td>Suggestions → Drop-down</td><td class="c">Yes</td><td>From the Origin master. Warn if different from the delivery plan's origin.</td></tr>
+<tr><td>S N, Week</td><td>Text → Auto</td><td class="c">No</td><td>Next number; week from the arrival date (W-8 Feb).</td></tr>
+<tr><td>RM/FG, Ref., Remarks</td><td>Text (RM/FG → Drop-down)</td><td class="c">No</td><td>-</td></tr>
+
+<tr><td class="c" rowspan="3">2</td><td class="s" rowspan="3">Weight</td>
+<td>Loaded truck weight (kg)</td><td>Text (number)</td><td class="c" rowspan="2">Yes, or type Gross from ticket</td><td>Warn if not more than the empty truck weight.</td></tr>
+<tr><td>Empty truck weight (kg)</td><td>Text (number)</td><td>No real data yet: <b>please give us the normal range.</b></td></tr>
+<tr><td>Gross weight (kg)</td><td>Calculated (loaded − empty)</td><td class="c">Yes</td><td>Warn if 0. Warn above 60,000 kg (more than one full truck).</td></tr>
+
+<tr><td class="c" rowspan="7">3</td><td class="s" rowspan="7">Quality (QFS)</td>
+<td>Sample moisture (%)</td><td>Text (number)</td><td class="c">Yes</td><td>Allowed 0 - 100 %. Above 10 % = too wet, needs drying (trade standard is 10 % max).</td></tr>
+<tr><td>Sample nut count</td><td>Text (number)</td><td class="c">Yes</td><td>Allowed 100 - 300 nuts per kg. Above 230 = poor quality (trade limit).</td></tr>
+<tr><td>Cut-test grams: Good kernel, Immature, Spotted, Rejection, Void, Oil, Shell</td><td>Text (number)</td><td class="c">Yes (first 3)</td><td>0 - 1000 g each. Warn if the total is more than the 1000 g sample.</td></tr>
+<tr><td>Sample KOR</td><td>Calculated from grams</td><td class="c">Yes</td><td>Allowed 30 - 60 lbs. Below 43 = poor quality (43 - 48 good, 48 - 55 excellent).</td></tr>
+<tr><td>Final moisture, Final nut count, Final KOR</td><td>Same as sample</td><td class="c">Yes, before GRN</td><td>Same limits as sample. Warn if final moisture is more than 3 points away from the sample.</td></tr>
+<tr><td>Pass / Fail</td><td>Drop-down</td><td class="c">Yes</td><td>Pass only after Sample moisture, Sample nut count and Sample KOR are filled.</td></tr>
+<tr><td>Reason for rejection</td><td>Text → Drop-down + note</td><td class="c">Yes, if Fail</td><td>High moisture / Low KOR / Nut count / Foreign matter / Other. <b>Please confirm this list.</b></td></tr>
+
+<tr><td class="c" rowspan="8">4</td><td class="s" rowspan="8">Unloading</td>
+<td>Date of offloading</td><td>Auto (today)</td><td class="c">Yes</td><td>Warn if before the arrival date.</td></tr>
+<tr><td>Good bags</td><td>Text (whole number)</td><td class="c">Yes</td><td>Warn above 750 bags (60,000 kg ÷ 80 kg bags).</td></tr>
+<tr><td>Damp bags, Torn bags</td><td>Text (whole number)</td><td class="c">Yes (0 allowed)</td><td>Warn if more than 10 % of all bags.</td></tr>
+<tr><td>Total bags</td><td>Calculated (good + damp + torn)</td><td class="c">-</td><td>-</td></tr>
+<tr><td>Refraction (kg)</td><td>Text (number)</td><td class="c">Yes (0 allowed)</td><td>Warn above 1 % of net weight, and above net weight.</td></tr>
+<tr><td>Tally Clerk bag count</td><td>Suggested (good + torn)</td><td class="c">Yes</td><td>Warn if different from total bags.</td></tr>
+<tr><td>Pallets used, Manpower contractor</td><td>Text → Suggested (bags ÷ 30) / Drop-down</td><td class="c">No</td><td>-</td></tr>
+<tr><td>Net weight, Paid weight</td><td>Calculated</td><td class="c">-</td><td>Net = Gross − 1 kg per bag. Paid = Net − Refraction.</td></tr>
+
+<tr><td class="c" rowspan="2">5</td><td class="s" rowspan="2">Lot</td>
+<td>Lot number</td><td>Auto (when Quality = Pass)</td><td class="c">-</td><td>Never typed, never changed.</td></tr>
+<tr><td>Truck reference, Assigned by, Date/time</td><td>Text → Auto</td><td class="c">-</td><td>-</td></tr>
+
+<tr><td class="c" rowspan="3">6</td><td class="s" rowspan="3">Bin</td>
+<td>Bin number</td><td>Suggestions → Drop-down</td><td class="c">Yes</td><td>Only bins of this warehouse. Needs the Lot first.</td></tr>
+<tr><td>Basis for allocation</td><td>Text → Drop-down</td><td class="c">Yes</td><td>Moisture / Quality / KOR / Space.</td></tr>
+<tr><td>Linked Lot, Allocation date, Finalised by</td><td>Auto</td><td class="c">-</td><td>-</td></tr>
+
+<tr><td class="c" rowspan="3">7</td><td class="s" rowspan="3">GRN</td>
+<td>GRN quantity (kg)</td><td>Suggested (net weight)</td><td class="c">Yes</td><td>Warn if more than net weight.</td></tr>
+<tr><td>Price (CFA/kg)</td><td>Text (Branch Manager only)</td><td class="c">Yes</td><td>Warn if 0. Warn if below the season's official farm-gate price (Admin sets it each season).</td></tr>
+<tr><td>Amount (CFA)</td><td>Calculated (price × paid weight)</td><td class="c">-</td><td>-</td></tr>
+
+<tr><td class="c" rowspan="5">8</td><td class="s" rowspan="5">Drying</td>
+<td>Decision</td><td>Drop-down</td><td class="c">Yes</td><td>Warn "No drying" when final moisture is above 10%.</td></tr>
+<tr><td>Moisture before drying</td><td>Text → Suggested (final moisture)</td><td class="c">Yes</td><td>Same as sample moisture: 0 - 100 %.</td></tr>
+<tr><td>Lot / quantity issued</td><td>Text → Drop-down + kg</td><td class="c">Yes</td><td>A Lot, never a whole Bin. Stop if more kg than the Lot holds.</td></tr>
+<tr><td>Moisture after drying</td><td>Text (number)</td><td class="c">Yes</td><td>Warn if not lower than before.</td></tr>
+<tr><td>Dried quantity returned, New bin</td><td>Text (number) / Text → Drop-down</td><td class="c">Yes</td><td>Stop if more than issued. Warn if weight lost is more than the moisture drop (12 % → 9 % = about 3 % weight lost).</td></tr>
+
+<tr><td class="c" rowspan="4">9</td><td class="s" rowspan="4">Other activities, Ledger, Transfer</td>
+<td>Activity type, Linked lot, Location</td><td>Text → Drop-down</td><td class="c">Yes</td><td>Lots and bins of this warehouse.</td></tr>
+<tr><td>Date, Location, Lot/Bin, Done by</td><td>Auto</td><td class="c">-</td><td>-</td></tr>
+<tr><td>Quantity</td><td>Text (number)</td><td class="c">Yes</td><td>Warn if 0 or less.</td></tr>
+<tr><td>Transfer: Driven by / Bags and weight sent and received</td><td>Text → Drop-down / Text (number)</td><td class="c">Yes</td><td>Space / Production need / Other. Warn if received differs from sent by more than 1%.</td></tr>
+
+<tr><td class="c" rowspan="3">10</td><td class="s" rowspan="3">Jute bags</td>
+<td>Activity type, Supplier code, WH location</td><td>Text → Drop-down</td><td class="c">Yes</td><td>From Masters.</td></tr>
+<tr><td>Bags issued / Bags received</td><td>Text (whole number)</td><td class="c">Yes (one of them)</td><td>Warn if both are filled on one line.</td></tr>
+<tr><td>Balance</td><td>Calculated</td><td class="c">-</td><td>Warn if it goes below 0.</td></tr>
+<tr><td class="note" colspan="6">Note:- Moisture, nut count and KOR limits follow the RCN trade standard. Bag and weight limits come from 80 kg bags and a 60 tonne truck. Please confirm, and give us the empty truck weight range.</td></tr>
+</table>
+
+<table>
+<tr><td class="title">PHASE ORDER - A PHASE OPENS ONLY WHEN THE PHASE BEFORE IT IS COMPLETE.</td></tr>
+</table>
+
+<table>
+<tr><td class="title" colspan="4">MISMATCH CHECKS - VALUES THAT MUST AGREE WITH EACH OTHER.</td></tr>
+<tr><th style="width:4%">Sl No</th><th style="width:38%">Check</th><th style="width:44%">Example</th><th>Action</th></tr>
+<tr><td class="c">1</td><td>Net weight more than gross / truck weight</td><td>Truck 41,300 kg, net 48,000 kg</td><td class="c">Stop</td></tr>
+<tr><td class="c">2</td><td>Empty truck weight same or more than loaded</td><td>Loaded 15,000 kg, empty 16,000 kg</td><td class="c">Warn</td></tr>
+<tr><td class="c">3</td><td>Refraction or paid weight more than net weight</td><td>Net 40,822 kg, refraction 41,000 kg</td><td class="c">Warn</td></tr>
+<tr><td class="c">4</td><td>Offloading date before arrival date</td><td>Arrived 16 Feb, offloaded 14 Feb</td><td class="c">Warn</td></tr>
+<tr><td class="c">5</td><td>Dried quantity returned more than issued</td><td>Issued 43,149 kg, returned 45,000 kg</td><td class="c">Stop</td></tr>
+<tr><td class="c">6</td><td>Supplier name and LBA code don't match</td><td>SCOOP IMANE with LBA-007-CAS</td><td class="c">Stop</td></tr>
+<tr><td class="c">7</td><td>Weight per bag far from 80 kg (warn outside 70 - 90 kg)</td><td>41,300 kg ÷ 50 bags = 826 kg per bag</td><td class="c">Warn</td></tr>
+<tr><td class="c">8</td><td>Tally Clerk count different from total bags</td><td>Tally 470, total bags 478</td><td class="c">Warn</td></tr>
+<tr><td class="c">9</td><td>GRN quantity more than net weight</td><td>Net 40,822 kg, GRN 42,000 kg</td><td class="c">Warn</td></tr>
+<tr><td class="c">10</td><td>Typed KOR different from KOR worked out from grams</td><td>Grams give 47.7, typed 54</td><td class="c">Warn</td></tr>
+<tr><td class="c">11</td><td>Final reading far from sample reading</td><td>Sample moisture 9%, final 15%</td><td class="c">Warn</td></tr>
+<tr><td class="c">12</td><td>Moisture did not drop after drying</td><td>Before 11.8%, after 12.1%</td><td class="c">Warn</td></tr>
+<tr><td class="c">13</td><td>Truck more than the delivery plan's remaining quantity</td><td>Plan has 20,000 kg left, truck brings 45,000 kg</td><td class="c">Warn</td></tr>
+<tr><td class="c">14</td><td>Same truck plate or fiche number entered twice</td><td>827KT01 arrived twice on 16 Feb</td><td class="c">Warn</td></tr>
+<tr><td class="c">15</td><td>Transfer: received different from sent</td><td>590 bags sent, 618 received</td><td class="c">Warn</td></tr>
+<tr><td class="note" colspan="4" style="font-weight:400"><b>Note:-</b> Excel uploads are never stopped. Old data with mistakes is saved as it is and shown in Data Quality, never changed.</td></tr>
+</table>
+
+<table>
+<tr><td class="title" colspan="3">LOGS - WHO DID WHAT, AND WHEN.</td></tr>
+<tr><th style="width:4%">Sl No</th><th style="width:40%">What is logged</th><th>What is saved</th></tr>
+<tr><td class="c">1</td><td>Field changed</td><td>Truck, field, old → new value, who, when</td></tr>
+<tr><td class="c">2</td><td>Status, Pass / Fail, Lot issued, Bin finalised</td><td>What happened, who, when</td></tr>
+<tr><td class="c">3</td><td>Record reopened by Admin</td><td>Who, when, reason</td></tr>
+<tr><td class="c">4</td><td>Form sent and approved</td><td>Who typed it, who approved it</td></tr>
+<tr><td class="c">5</td><td>Warning confirmed</td><td>Warning, value, who confirmed it</td></tr>
+<tr><td class="c">6</td><td>Source of the change</td><td>Form / batch entry / Excel upload / approval</td></tr>
+<tr><td class="note" colspan="3" style="font-weight:400"><b>Who can see logs:-</b> Warehouse Incharge: own warehouse. Admin: all warehouses, can download to Excel. Nobody can edit or delete a log.</td></tr>
+</table>
+
+</body></html>

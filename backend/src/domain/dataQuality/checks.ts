@@ -8,7 +8,7 @@ import { missingRequired, type SupplierProfileValues } from "@anagroci/contract/
 import type { Check } from "./types.js";
 import { negativeBalanceRows, transferFlagRows } from "../juteBalance.js";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
-import { storedFormulaMismatches } from "@anagroci/contract/domain/receiptMath";
+import { parseQty, storedFormulaMismatches } from "@anagroci/contract/domain/receiptMath";
 import { legacyLotSeq, parseSiteId } from "@anagroci/contract/domain/ids";
 
 /** The number inside a lot, whether system-format (LOT-BKE-2026-0017) or still the workbook's bare 17. */
@@ -898,6 +898,32 @@ export const CHECKS: Check[] = [
           [...byField].map(([label, l]) => `${label}: ${l.length}`).join("; ") +
           ". These values came from the workbook and are kept exactly as recorded. New entries are " +
           "calculated, so a mismatch here is a question for whoever filled the original sheet.",
+      };
+    },
+  },
+  {
+    // Until Nov 2026 SACS was calculated as good + damp + torn, and stored_value_disagrees_with_formula above reported the
+    // rows that disagreed. SACS is now the count typed for the truck (good bags follow from it), so the formula is gone —
+    // but the real sheet's rows still disagree with their own parts, and that stays reported, never corrected.
+    // Measured: 44 Truck Reception rows.
+    id: "bag_total_disagrees_with_parts",
+    async run({ prisma }) {
+      const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
+      const affected: string[] = [];
+      for (const row of rows) {
+        const u = assembleStageData(row as Record<string, unknown>)["n-unload"] ?? {};
+        const [total, good, damp, torn] = ["SACS (bags)", "BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"].map((l) => parseQty(u[l]));
+        if ([total, good, damp, torn].some((v) => v === undefined)) continue;
+        if (good! + damp! + torn! !== total) affected.push(`${row.id} (${total} vs ${good} + ${damp} + ${torn})`);
+      }
+      if (!affected.length) return null;
+      return {
+        id: "bag_total_disagrees_with_parts", severity: "warning",
+        title: "Bag totals that don't match good + damp + torn",
+        entity: "Receipt", affectedCount: affected.length, sampleIds: affected.slice(0, 5),
+        evidence:
+          "SACS (the bags on the truck) differs from good + damp + torn bags as recorded. The values are kept exactly as " +
+          "the workbook holds them; a mismatch is a question for whoever filled the original sheet.",
       };
     },
   },

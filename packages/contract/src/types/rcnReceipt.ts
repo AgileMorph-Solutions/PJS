@@ -1,4 +1,3 @@
-import type { RcnCalibration } from "./calibration.js";
 import type { CutTestGram, MoistureCheckStatus, MoistureDecision, RcnReceiptStatus } from "../domain/rcnReceipt.js";
 
 /** One moisture check of a load (Phase 1, step 2). Numbers are kept as typed; KOR is calculated. */
@@ -47,6 +46,8 @@ export interface RcnReceipt {
   batchCode: string;
   /** ISO date the load arrived. */
   date: string;
+  /** The crop year, as typed ("2026"); null until given. The client's register and quality report both carry it. */
+  cropYear: string | null;
   /** The number on the transfer slip that came with the load. */
   btmNo: string;
   /** The warehouse bin of the batch the load came from. */
@@ -58,10 +59,16 @@ export interface RcnReceipt {
   pallets: RcnPallet[];
   /** Null until the final weight is saved. */
   finalWeight: RcnFinalWeight | null;
-  /** Phase 2. Null until the final weight is saved (there is no into-silo kg before it). */
-  calibration: RcnCalibration | null;
+  /** Production's acceptance of the warehouse's load; null until it is accepted. */
+  acceptance: RcnAcceptance | null;
   createdBy: string | null;
   createdAt: string;
+}
+
+export interface RcnAcceptance {
+  /** Null for a load already in the silos before production accepted loads (Nov 2026): nobody accepted it in the app. */
+  acceptedBy: string | null;
+  acceptedAt: string;
 }
 
 export interface RcnPalletInput {
@@ -79,6 +86,8 @@ export interface RcnFinalWeightInput {
 export interface RcnReceiptInput {
   batchCode?: string;
   date?: string;
+  /** "2026", as the client's register and quality report have it. Optional: blank until someone gives it. */
+  cropYear?: string;
   btmNo?: string;
   binCode?: string;
 }

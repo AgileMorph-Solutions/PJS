@@ -20,6 +20,7 @@ import { nextDeliveryPlanId, siteOf } from "./ids.js";
 import { PLAN_FACTS_SELECT, toFacts, toTerms } from "./planFacts.js";
 import { getReceiptPlanInfo } from "./receiptPlanInfo.js";
 import { loadReceiptRow } from "./receipts.js";
+import { assertKnownOrigin } from "./masters.js";
 import { toReceiptRecord } from "../serialize.js";
 
 export interface DeliveryPlanInput {
@@ -177,6 +178,7 @@ export async function createDeliveryPlan(input: DeliveryPlanInput) {
     const store = text(input.destinationStore) ?? named;
     if (named && store !== named) throw new ValidationError(`This plan is for ${named}; it can't be sent to ${store}.`);
     await checkStore(tx, site, store);
+    await assertKnownOrigin(tx, input.expectedOrigin, "Expected origin");
     const id = await nextDeliveryPlanId(tx, site, expectedArrivalDate);
     await tx.deliveryPlan.create({
       data: {
@@ -231,7 +233,11 @@ export async function updateDeliveryPlan(id: string, patch: DeliveryPlanInput, a
   if (patch.expectedQuantityKg !== undefined) data.expectedQuantityKg = quantity(patch.expectedQuantityKg);
   if (patch.expectedTruckType !== undefined) data.expectedTruckType = text(patch.expectedTruckType);
   if (patch.expectedTrucks !== undefined) data.expectedTrucks = trucks(patch.expectedTrucks);
-  if (patch.expectedOrigin !== undefined) data.expectedOrigin = text(patch.expectedOrigin);
+  if (patch.expectedOrigin !== undefined) {
+    // Only a changed origin is checked: an older plan's town (an import's) can stay while the rest of the plan is edited.
+    if (text(patch.expectedOrigin) !== existing.expectedOrigin) await assertKnownOrigin(prisma, patch.expectedOrigin, "Expected origin");
+    data.expectedOrigin = text(patch.expectedOrigin);
+  }
   if (patch.fundingReference !== undefined) data.fundingReference = text(patch.fundingReference);
   if (patch.planningBasis !== undefined) data.planningBasis = text(patch.planningBasis);
   if (patch.remarks !== undefined) data.remarks = text(patch.remarks);

@@ -150,9 +150,10 @@ describe("calculated weights, bags and amount", () => {
 
   it("fill themselves from the readings, in order, as each one arrives", async () => {
     await setStageFields(id, "n-gross", { "Loaded truck weight (kg)": "56300" });
-    await setStageFields(id, "n-unload", { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
+    // Nov 2026: the bags on the truck are counted and typed; good bags are filled in as total − torn.
+    await setStageFields(id, "n-unload", { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
     let r = (await getReceipt(id))!;
-    expect(r.stageData["n-unload"]["SACS (bags)"]).toBe("478");
+    expect(r.stageData["n-unload"]["BON SACS (good bags)"]).toBe("463");
     expect(r.stageData["n-netwt"]).toBeUndefined(); // no empty-truck weight yet — nothing to subtract
 
     await setStageFields(id, "n-gross", { "Tare / empty truck weight (kg)": "15000" });
@@ -172,7 +173,7 @@ describe("calculated weights, bags and amount", () => {
 
   it("can't be typed", async () => {
     await expect(setStageFields(id, "n-netwt", { "NET WT KGS": "1" })).rejects.toThrow(/is calculated/);
-    await expect(setStageFields(id, "n-unload", { "SACS (bags)": "1" })).rejects.toThrow(/Good \+ damp \+ torn/);
+    await expect(setStageFields(id, "n-unload", { "Tally Clerk bag count": "1" })).rejects.toThrow(/Good bags \+ reconditioned/);
     await expect(setStageFields(id, "n-grn", { AMOUNT: "1" })).rejects.toThrow(/Price × paid weight/);
   });
 
@@ -368,9 +369,11 @@ describe("Transfer Request", () => {
     expect(r.timeline[r.timeline.length - 1].note).toBe(`Added to transfer ${t.id}`);
   });
 
-  it("a Lot leaves a warehouse once", async () => {
+  // A Lot can go on several BKTs only while some of it is left; with no size on its receipt nothing can be subtracted,
+  // so once it is on a truck it is sent in full (the split rules have their own tests in transfers.test.ts).
+  it("a Lot already sent in full can't go on another BKT", async () => {
     await expect(createTransfer({ transferDate: `${YEAR}-08-06`, fromWarehouse: SITE, toWarehouse: "YAKRO FACTORY", lines: [{ receiptId: lotted }] }))
-      .rejects.toThrow(/already on transfer/);
+      .rejects.toThrow(/already on BKT-.* in full/);
     expect(await prisma.transferRequest.count({ where: { id: `BKT-${YEAR}-002` } })).toBe(0); // all-or-nothing
   });
 
@@ -388,7 +391,9 @@ describe("Transfer Request", () => {
   it("steps requested → dispatched → received, never skipping or going back", async () => {
     const id = `BKT-${YEAR}-001`;
     await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
-    expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300 })).status).toBe("dispatched");
+    // Nut count is required at dispatch; this truck's quality check didn't record one.
+    const nuts = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, nutCount: 170 }));
+    expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0", lines: nuts })).status).toBe("dispatched");
     await expect(dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
     await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test" }, update: {} });
     try {

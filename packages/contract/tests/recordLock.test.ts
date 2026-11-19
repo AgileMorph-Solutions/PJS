@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isGrnComplete, LOCKED_STAGES, LOCKED_DECISIONS } from "../src/domain/recordLock";
-import { autoDateFill, isAutoDateField } from "../src/data/autoFields";
+import { autoFill, isAutoField } from "../src/data/autoFields";
 import { MODULE_STAGES, MODULE_STATUSES, moduleOfStage, RECEPTION_STAGES, OFFLOADING_STAGES } from "../src/data/modules";
 import { ALL_STATUSES } from "../src/domain/receiptStatus";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap";
@@ -47,19 +47,19 @@ describe("dates that fill themselves", () => {
   const ctx = { today: "2026-10-16", arrivalDate: "2026-10-14" };
 
   it("fills a blank arrival date from the receipt's own arrival date, and a blank offloading date with today", () => {
-    expect(autoDateFill("n-gate", { "VEHICLE NO.": "1KT" }, undefined, ctx)).toEqual({ "DATE OF ARRIVAL": "2026-10-14" });
-    expect(autoDateFill("n-unload", { "BON SACS (good bags)": "100" }, {}, ctx)).toEqual({ "DATE OF OFFLOADING": "2026-10-16" });
+    expect(autoFill("n-gate", { "VEHICLE NO.": "1KT" }, undefined, ctx)).toMatchObject({ "DATE OF ARRIVAL": "2026-10-14" });
+    expect(autoFill("n-unload", { "BON SACS (good bags)": "100" }, {}, ctx)).toEqual({ "DATE OF OFFLOADING": "2026-10-16" });
   });
 
   it("never overrides what the person gave, what is already stored, or a deliberate clear", () => {
-    expect(autoDateFill("n-gate", { "DATE OF ARRIVAL": "2026-09-01" }, undefined, ctx)).toEqual({});
-    expect(autoDateFill("n-gate", { "VEHICLE NO.": "1KT" }, { "DATE OF ARRIVAL": "2026-09-01" }, ctx)).toEqual({});
-    expect(autoDateFill("n-gate", { "DATE OF ARRIVAL": "" }, undefined, ctx)).toEqual({});
+    expect(autoFill("n-gate", { "DATE OF ARRIVAL": "2026-09-01" }, undefined, ctx)).not.toHaveProperty("DATE OF ARRIVAL");
+    expect(autoFill("n-gate", { "VEHICLE NO.": "1KT" }, { "DATE OF ARRIVAL": "2026-09-01" }, ctx)).not.toHaveProperty("DATE OF ARRIVAL");
+    expect(autoFill("n-gate", { "DATE OF ARRIVAL": "" }, undefined, ctx)).not.toHaveProperty("DATE OF ARRIVAL");
   });
 
   it("touches nothing on a stage that has no auto date", () => {
-    expect(autoDateFill("n-qfs", { KOR: "47" }, undefined, ctx)).toEqual({});
-    expect(isAutoDateField("n-gate", "DATE OF ARRIVAL")).toBe(true);
-    expect(isAutoDateField("n-gate", "VEHICLE NO.")).toBe(false);
+    expect(autoFill("n-qfs", { KOR: "47" }, undefined, ctx)).toEqual({});
+    expect(isAutoField("n-gate", "DATE OF ARRIVAL")).toBe(true);
+    expect(isAutoField("n-gate", "VEHICLE NO.")).toBe(false);
   });
 });

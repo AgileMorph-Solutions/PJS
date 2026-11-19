@@ -6,11 +6,14 @@ import { DecisionBranch } from "../../../components/DecisionBranch";
 import { decisionBranchesFor, stageForSite } from "../../../domain/decisions";
 import { productionReadinessGaps, productionReadinessNotice } from "@anagroci/contract/domain/productionBatch";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { useTracking } from "../../../state/TrackingContext";
+import { useReceiptLinks, useTracking } from "../../../state/TrackingContext";
 import { useSite } from "../../../state/SiteContext";
 import { useMe } from "../../../state/AuthContext";
 import { canSeeField } from "@anagroci/contract/data/roles";
 import { originFieldProps } from "../../../components/receipt/originPicker";
+import { warehouseFieldChoices } from "../../../components/receipt/warehousePicker";
+import { arrivalFieldChoices } from "../../../components/receipt/arrivalPickers";
+import { useFieldRules } from "../../../components/receipt/useFieldRules";
 
 const btnPrimary =
   "inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-40 disabled:pointer-events-none";
@@ -31,6 +34,9 @@ export function IntakeWizardPage() {
   const me = useMe();
   const { getReceipt, setStageField, setBranch, flushStage, masters } = useTracking();
   const receipt = getReceipt(id);
+  const rules = useFieldRules(receipt, (s, label, value) => setStageField(id, s, label, value));
+  // The Lot's drying rounds: "Ready for production" waits for what came back from drying, which the rounds record.
+  const { links } = useReceiptLinks(stageId === "n-xferdec" ? id : undefined);
 
   const base = `/${site.slug}/receipts`;
 
@@ -72,14 +78,17 @@ export function IntakeWizardPage() {
   const rawStage = stageById[stageId];
   if (!rawStage) return <Navigate to={`${base}/new/${id}/${stages[0].id}`} replace />;
   const stage = stageForSite(rawStage, siteType);
-  const readinessGaps = stageId === "n-xferdec" && siteType === "CENTRAL" ? productionReadinessGaps(receipt) : [];
+  const readinessGaps = stageId === "n-xferdec" && siteType === "CENTRAL" ? productionReadinessGaps(receipt, links?.dryingBatches) : [];
 
   const idx = stages.findIndex((s) => s.id === stageId);
   const prev = idx > 0 ? stages[idx - 1] : null;
   const next = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null;
   const branchOptions = decisionBranchesFor(stageId, siteType);
   const chosen = receipt.branches[stageId];
-  const values = receipt.stageData[stageId] ?? {};
+  const values = rules.valuesOf(stageId);
+  const gate = rules.gateOf(stageId);
+  // The next step opens only once this one is complete; the button says what is missing instead of opening a locked page.
+  const nextGate = next && !(stageId === "n-qfs" && chosen === "fail") && stageId !== "n-xferdec" ? rules.gateOf(next.id) : undefined;
   // Calculated fields show what the readings so far add up to, before the server has saved them.
   const derived = computeDerivedFields(receipt.stageData)[stageId];
   const stepIndex = RECEPTION_STEPS.findIndex((st) => st.stageIds.includes(stageId));
@@ -97,7 +106,7 @@ export function IntakeWizardPage() {
     if (next) navigate(`${base}/new/${id}/${next.id}`);
   }
 
-  const nextDisabled = Boolean(branchOptions) && !chosen;
+  const nextDisabled = (Boolean(branchOptions) && !chosen) || (nextGate !== undefined && !nextGate.open);
 
   return (
     <div className="space-y-5">
@@ -113,8 +122,11 @@ export function IntakeWizardPage() {
           stage={stage}
           values={values}
           derived={derived}
-          {...originFieldProps(stageId, values, masters.origins)}
-          onFieldChange={(fieldName, value) => setStageField(id, stageId, fieldName, value)}
+          warnings={originFieldProps(stageId, values, masters.origins).warnings}
+          choices={{ ...warehouseFieldChoices(stageId, masters.warehouses), ...arrivalFieldChoices(stageId, values, masters), ...originFieldProps(stageId, values, masters.origins).choices }}
+          issues={rules.issuesOf(stageId)}
+          lockedMessage={gate.open ? undefined : gate.message}
+          onFieldChange={(fieldName, value) => rules.change(stageId, fieldName, value)}
           onFieldBlur={() => flushStage(id, stageId)}
           hidden={stage.fields.filter((f) => !canSeeField(me.role, stageId, f.n)).map((f) => f.n)}
         />
@@ -122,11 +134,20 @@ export function IntakeWizardPage() {
           <div className="mt-4">
             <DecisionBranch
               branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(id, stageId, b)}
-              unavailable={readinessGaps.length ? ["production"] : undefined} notice={productionReadinessNotice(readinessGaps)}
+              readOnly={!gate.open}
+              unavailable={readinessGaps.length ? ["production"] : stageId === "n-qfs" && rules.passBlocked ? ["pass"] : undefined}
+              notice={readinessGaps.length ? productionReadinessNotice(readinessGaps) : stageId === "n-qfs" && gate.open ? rules.passBlocked : undefined}
             />
           </div>
         )}
       </div>
+
+      {nextGate && !nextGate.open && (
+        <p role="status" className="flex items-start gap-2 rounded-xl border border-ambernut-200 bg-ambernut-50 px-3 py-2 text-[13px] text-ambernut-900">
+          <span className="material-symbols-outlined text-[18px]">lock</span>
+          {nextGate.message}
+        </p>
+      )}
 
       <div className="flex items-center justify-between">
         {prev ? (

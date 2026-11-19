@@ -3,13 +3,12 @@
  * Machine Quality Reports", "11. Shell Waste Sample Report" and the document's worked examples.
  */
 import { describe, expect, it } from "vitest";
-import { boilerError, storeBalance, truckError, truckNetKg, truckStatus } from "../src/domain/byProducts.js";
-import { siloDailyStock, siloStock } from "../src/domain/calibration.js";
-import { coolingCheck, cookChecks, cookRunError, hoursBetween, lotBags, lotSizes, lotStatus, nextCookingStep, nextLotCode, sizesToRecook } from "../src/domain/cooking.js";
+import { boilerError, storeBalance, streamFromCategory, truckCategory, truckError, truckNetKg, truckStatus } from "../src/domain/byProducts.js";
+import { siloDailyStock, siloPool } from "../src/domain/calibration.js";
+import { coolingCheck, cookRunError, hoursBetween, lotBags, lotSizes, lotStatus, nextCookingStep, nextLotCode } from "../src/domain/cooking.js";
 import { ENTRY_DEFS, ENTRY_KINDS, durationHours, entryError, entryFigures, entryNotes, machineSampleFigures, normalizeEntryValues, shellSampleFigures } from "../src/domain/lotEntries.js";
 import { nextShellingStep, shellingDayError, shellingDayNotes, shellingFigures } from "../src/domain/shelling.js";
 
-const noStock = Object.fromEntries(["App", "Ap", "A", "AB", "B", "BC", "C", "D", "E"].map((k) => [k, 0])) as Record<"App" | "Ap" | "A" | "AB" | "B" | "BC" | "C" | "D" | "E", number>;
 
 describe("Cooking", () => {
   it("suggests the client's own Lot number: ANG · year · month letter · next of the month", () => {
@@ -26,34 +25,22 @@ describe("Cooking", () => {
     expect(lotBags(20_017)).toBeCloseTo(250.2125, 4);
   });
 
-  it("can't cook more than a silo holds, or nothing at all", () => {
-    expect(cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: { A: "101" } }, { ...noStock, A: 100 })).toMatch(/holds 100 kg; 101 kg can't be cooked/);
-    expect(cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: { A: "100" } }, { ...noStock, A: 100 })).toBeNull();
-    expect(cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: {} }, noStock)).toMatch(/at least one silo/);
-    expect(cookRunError({ date: "2026-07-20", code: "", sizes: { A: "1" } }, { ...noStock, A: 1 })).toMatch(/Lot its number/);
+  it("can't cook more than the silos hold in total, or nothing at all", () => {
+    expect(cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: { A: "101" } }, 100)).toMatch(/has 100 kg in the silos; 101 kg can.t be cooked/);
+    expect(cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: { A: "60", B: "40" } }, 100)).toBeNull();
+    expect(cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: {} }, 0)).toMatch(/at least one silo/);
+    expect(cookRunError({ date: "2026-07-20", code: "", sizes: { A: "1" } }, 1)).toMatch(/Lot its number/);
   });
 
   it("takes cooked kg out of the silos and out of the day's closing", () => {
-    const runs = [{ date: "2026-07-19", sizes: { A: "1000", B: "500" } }];
-    const moves = [{ date: "2026-07-19", fromSize: "A", toSize: "B", kg: "100" }];
+    const loads = [{ date: "2026-07-19", kg: 1500 }];
+    const moves = [{ date: "2026-07-19", kg: "100" }];
     const cooks = [{ date: "2026-07-20", sizes: { A: "900" } }];
-    const stock = siloStock(runs, moves, cooks);
-    expect(stock.find((s) => s.size === "A")).toMatchObject({ cookedKg: 900, stockKg: 0 });
-    expect(stock.find((s) => s.size === "B")).toMatchObject({ cookedKg: 0, stockKg: 600 });
-    const days = siloDailyStock(runs, moves, cooks);
-    expect(days.map((d) => [d.date, d.openingKg, d.sizedKg, d.cookedKg, d.closingKg])).toEqual([["2026-07-19", 0, 1500, 0, 1500], ["2026-07-20", 1500, 0, 900, 600]]);
-    expect(days[1]!.sizes.A).toBe(-900);
-    expect(days.at(-1)!.closingKg).toBe(stock.reduce((n, s) => n + s.stockKg, 0));
-  });
-
-  it("QC-3 holds a size on No until a newer check passes it; a waiting one changes nothing yet; a rejected one is ignored", () => {
-    const check = (id: number, status: string, decision: string, size = "A") => ({ id, status, decision, values: { size } });
-    expect(cookChecks(["A"], []).A).toBe("not_checked");
-    expect(cookChecks(["A"], [check(1, "submitted", "ok")]).A).toBe("waiting");
-    expect(cookChecks(["A"], [check(1, "approved", "no")]).A).toBe("recook");
-    expect(cookChecks(["A"], [check(1, "approved", "no"), check(2, "approved", "ok")]).A).toBe("ok");
-    expect(cookChecks(["A"], [check(1, "approved", "ok"), check(2, "rejected", "no")]).A).toBe("ok");
-    expect(cookChecks(["A", "B"], [check(1, "approved", "ok", "B")])).toEqual({ A: "not_checked", B: "ok" });
+    const pool = siloPool(loads, cooks);
+    expect(pool).toEqual({ inKg: 1500, cookedKg: 900, stockKg: 600 });
+    const days = siloDailyStock(loads, moves, cooks);
+    expect(days.map((d) => [d.date, d.openingKg, d.inKg, d.cookedKg, d.closingKg])).toEqual([["2026-07-19", 0, 1500, 0, 1500], ["2026-07-20", 1500, 0, 900, 600]]);
+    expect(days.at(-1)!.closingKg).toBe(pool.stockKg);
   });
 
   it("QC-4 decides by the newest approved check, and the Lot's status follows", () => {
@@ -66,16 +53,6 @@ describe("Cooking", () => {
     expect(lotStatus({ inCooling: true, cooling: "ok", shellingDays: 1 })).toBe("shelled");
   });
 
-  it("a held size needs a new cooker run after the check that held it, and then only its check", () => {
-    const e = (id: number, kind: string, decision: string | null = null, status = "approved") => ({ id, kind, status, decision, values: { size: "A" } });
-    expect(sizesToRecook(["A"], [e(1, "cooker_log")])).toEqual([]);
-    expect(sizesToRecook(["A"], [e(1, "cooker_log"), e(2, "qc3", "no")])).toEqual(["A"]);
-    expect(sizesToRecook(["A"], [e(1, "cooker_log"), e(2, "qc3", "no"), e(3, "cooker_log")])).toEqual([]);
-    expect(sizesToRecook(["A"], [e(1, "cooker_log"), e(2, "qc3", "no"), e(3, "cooker_log"), e(4, "qc3", "no")])).toEqual(["A"]);
-    expect(sizesToRecook(["A"], [e(1, "cooker_log"), e(2, "qc3", "no"), e(3, "qc3", "ok")])).toEqual([]);
-    expect(sizesToRecook(["A"], [e(1, "cooker_log"), e(2, "qc3", "no", "submitted")])).toEqual([]);
-  });
-
   it("warns, never refuses, when QC-4 comes under 24 hours", () => {
     expect(hoursBetween("2026-07-20T06:00", "2026-07-21T06:00")).toBe(24);
     const notes = (time: string) => entryNotes("qc4", { time, moisture: "9", tempC: "30" }, { date: "2026-07-21", coolingAt: "2026-07-20T10:00" });
@@ -83,24 +60,28 @@ describe("Cooking", () => {
     expect(notes("10:00")).toEqual([]);
   });
 
-  it("points each person at their own next job", () => {
-    const base = { sizes: ["A"] as "A"[], loggedSizes: ["A"] as "A"[], toRecook: [] as "A"[], checks: { A: "not_checked" as const }, inCooling: false, cooling: "not_checked" as const };
+  it("points each person at their own next job: there is no check after the cooker", () => {
+    const base = { sizes: ["A"] as "A"[], loggedSizes: ["A"] as "A"[], inCooling: false, cooling: "not_checked" as const };
     const wi = { canFloor: true, canCheck: true, canReview: true };
     const qfs = { canFloor: false, canCheck: true, canReview: false };
     expect(nextCookingStep({ ...wi, ...base, loggedSizes: [] })).toBe("cooker_log");
-    expect(nextCookingStep({ ...qfs, ...base, loggedSizes: [] })).toBe("qc3");
-    expect(nextCookingStep({ ...wi, ...base, checks: { A: "ok" } })).toBe("cooling");
-    expect(nextCookingStep({ ...qfs, ...base, checks: { A: "ok" } })).toBe("none");
-    expect(nextCookingStep({ ...wi, ...base, checks: { A: "recook" }, toRecook: ["A"] })).toBe("cooker_log");
-    expect(nextCookingStep({ ...qfs, ...base, checks: { A: "recook" }, toRecook: ["A"] })).toBe("none");
-    // The new run is logged: the job passes to whoever checks, and nobody is left with nothing to do.
-    expect(nextCookingStep({ ...wi, ...base, checks: { A: "recook" } })).toBe("qc3");
-    expect(nextCookingStep({ ...qfs, ...base, checks: { A: "recook" } })).toBe("qc3");
-    expect(nextCookingStep({ ...wi, ...base, checks: { A: "waiting" } })).toBe("qc3");
-    expect(nextCookingStep({ ...qfs, ...base, checks: { A: "ok" }, inCooling: true })).toBe("qc4");
-    expect(nextCookingStep({ ...wi, ...base, checks: { A: "ok" }, inCooling: true, cooling: "waiting" })).toBe("qc4");
-    expect(nextCookingStep({ ...wi, ...base, checks: { A: "ok" }, inCooling: true, cooling: "ok" })).toBe("none");
+    expect(nextCookingStep({ ...qfs, ...base, loggedSizes: [] })).toBe("none");
+    expect(nextCookingStep({ ...wi, ...base })).toBe("cooling");
+    expect(nextCookingStep({ ...qfs, ...base })).toBe("none");
+    expect(nextCookingStep({ ...qfs, ...base, inCooling: true })).toBe("qc4");
+    expect(nextCookingStep({ ...wi, ...base, inCooling: true, cooling: "waiting" })).toBe("qc4");
+    expect(nextCookingStep({ ...wi, ...base, inCooling: true, cooling: "ok" })).toBe("none");
   });
+
+  it("a cooking row's damaged or spoiled kg is 0 or more, and never more than was cooked", () => {
+    const row = (damagedKg: string) => cookRunError({ date: "2026-07-20", code: "ANG26G16", sizes: { A: "1000" }, damagedKg }, 5000);
+    expect(row("")).toBeNull();
+    expect(row("120")).toBeNull();
+    expect(row("-1")).toMatch(/0 or more/);
+    expect(row("abc")).toMatch(/0 or more/);
+    expect(row("1200")).toMatch(/more than the 1,000 kg cooked/);
+  });
+
 });
 
 describe("Shelling's day record", () => {
@@ -190,9 +171,13 @@ describe("the checks on the line", () => {
   });
 
   it("every kind's form refuses what it must, in words a person can follow", () => {
-    expect(entryError("cooker_log", { date: "2026-07-20", values: { size: "A", start: "06:00", stop: "aa", tempC: "90", pressureBar: "2" } })).toMatch(/Stop must be a time/);
-    expect(entryError("qc3", { date: "2026-07-20", values: { size: "A" } })).toMatch(/Choose OK or No/);
-    expect(entryError("qc3", { date: "2026-07-20", values: { size: "B" }, decision: "ok" }, ["A"])).toMatch(/cooked no size B/);
+    expect(entryError("cooker_log", { date: "2026-07-20", values: { size: "A", cookerNo: "1", siloName: "S1", gateNo: "1", start: "06:00", stop: "aa", tempC: "90", pressureBar: "2" } })).toMatch(/Stop must be a time/);
+    const log = { size: "A", start: "06:00", stop: "07:00", tempC: "90", pressureBar: "2", cookerNo: "1", siloName: "S1", gateNo: "2" };
+    expect(entryError("cooker_log", { date: "2026-07-20", values: log }, ["A"])).toBeNull();
+    expect(entryError("cooker_log", { date: "2026-07-20", values: { ...log, cookerNo: "" } }, ["A"])).toMatch(/cooker no/i);
+    expect(entryError("cooker_log", { date: "2026-07-20", values: { ...log, siloName: "" } }, ["A"])).toMatch(/target cooling silo/i);
+    expect(entryError("cooker_log", { date: "2026-07-20", values: { ...log, gateNo: "4" } }, ["A"])).toMatch(/Gate must be one of 1, 2, 3/);
+    expect(entryError("cooker_log", { date: "2026-07-20", values: { ...log, size: "B" } }, ["A"])).toMatch(/cooked no size B/);
     expect(entryError("qc4", { date: "2026-07-21", values: { time: "10:00", moisture: "25", tempC: "30" }, decision: "ok" })).toMatch(/between 0 and 20/);
     expect(entryError("qc4", { date: "2026-07-21", values: { time: "10:00", moisture: "9", tempC: "30" }, decision: "no" })).toMatch(/Choose OK or Wait/);
     expect(entryError("line_run", { date: "2026-07-21", values: { line: "Z9", size: "A", inputKg: "1", start: "06:00", end: "07:00" } })).toMatch(/not one of the 14 lines/);
@@ -201,17 +186,25 @@ describe("the checks on the line", () => {
   });
 
   it("reads a size as a sheet writes it, and keeps only the kind's own fields", () => {
-    expect(normalizeEntryValues("qc3", { size: "DE", remarks: " fine ", junk: "x" })).toEqual({ size: "E", remarks: "fine" });
-    expect(normalizeEntryValues("qc3", { size: "App" })).toEqual({ size: "App" });
+    expect(normalizeEntryValues("cooker_log", { size: "DE", cookerNo: " 2 ", junk: "x" })).toEqual({ size: "E", cookerNo: "2" });
+    expect(normalizeEntryValues("cooker_log", { size: "App" })).toEqual({ size: "App" });
   });
 
-  it("every kind names its workbook sheet, and only a check with a decision asks for one", () => {
-    expect(new Set(ENTRY_KINDS.map((k) => ENTRY_DEFS[k].sheet)).size).toBe(ENTRY_KINDS.length);
-    expect(ENTRY_KINDS.filter((k) => ENTRY_DEFS[k].decision)).toEqual(["qc3", "qc4", "qc7_after"]);
+  it("every kind names its workbook sheet — the sorter's two on the client's one file 12 — and only a check with a decision asks for one", () => {
+    expect(new Set(ENTRY_KINDS.map((k) => ENTRY_DEFS[k].sheet)).size).toBe(ENTRY_KINDS.length - 1);
+    expect(ENTRY_DEFS.qc7_before.sheet).toBe(ENTRY_DEFS.qc7_after.sheet);
+    expect(ENTRY_KINDS.filter((k) => ENTRY_DEFS[k].decision)).toEqual(["qc4", "qc7_after"]);
   });
 });
 
 describe("by-products", () => {
+  it("file 15's Category says the waste; one the app doesn't follow is none, and shell is file 16's", () => {
+    expect(["Calibration Dust", "cooking waste water", "Shell Dust", "Black Rejection", "Dust & voids"].map(streamFromCategory)).toEqual(["dust_voids", "waste_water", "shell_dust", "black_rejection", "dust_voids"]);
+    expect([streamFromCategory("Factory Waste"), streamFromCategory("Shell"), streamFromCategory("")]).toEqual([null, null, null]);
+    // A category typed before that names another waste (or none) reads back as the truck's own stream word.
+    expect([truckCategory("dust_voids", "Processing"), truckCategory("dust_voids", ""), truckCategory("waste_water", "Cooking Waste Water")]).toEqual(["Calibration Dust", "Calibration Dust", "Cooking Waste Water"]);
+  });
+
   it("store = produced − dispatched − burned", () => {
     expect(storeBalance("shell", 109_567.3, 26_720, 7000)).toMatchObject({ stockKg: 75_847.3 });
     expect(storeBalance("shell_dust", 2270.5, 0)).toMatchObject({ stockKg: 2270.5, burnedKg: 0 });

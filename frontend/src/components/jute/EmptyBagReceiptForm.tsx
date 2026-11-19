@@ -85,12 +85,14 @@ export function EmptyBagReceiptForm({ warehouse, warehouses, sources, fixed, onW
             {fromOptions.map((w) => <option key={w} value={w}>{w}</option>)}
           </select>
         ))}
-        {receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
+        {/* A choice when the person has no warehouse of their own; filled in for them otherwise, and then shown last. */}
+        {!fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
         {field("Date received *", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />)}
         {field("Bags received *", <input inputMode="numeric" value={v.bagsReceived} onChange={(e) => set("bagsReceived", e.target.value)} className={inputCls} />)}
         {field("Truck number", <input value={v.truckNumber} onChange={(e) => set("truckNumber", e.target.value)} className={inputCls} />)}
         {field("Warehouse receipt no.", <input value={v.warehouseReceiptNo} onChange={(e) => set("warehouseReceiptNo", e.target.value)} className={inputCls} />)}
         {field("Responsible person/team *", <input value={v.responsibleParty} onChange={(e) => set("responsibleParty", e.target.value)} className={inputCls} />)}
+        {fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
       </div>
       {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
       {notice && <p className="text-[13px] text-success-700">{notice}</p>}

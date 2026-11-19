@@ -3,7 +3,7 @@ import { decisionBranchesFor, stageForSite } from "../src/domain/decisions.js";
 import { deriveStatus } from "../src/domain/receiptStatus.js";
 import { siteTypeOf } from "../src/domain/siteType.js";
 import { stageById } from "../src/data/stages.js";
-import { canTransferBetween, readyForTransfer, transferDestinationLabel, transferDestinations, transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+import { canTransferBetween, formatLotPiece, lineNetAtArrival, lotPieceProblem, lotTransferProgress, pieceChanged, suggestedPiece, readyForTransfer, transferDestinationLabel, transferDestinations, transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
 
 describe("the last decision depends on the site", () => {
   const ids = (type: string | null) => decisionBranchesFor("n-xferdec", type)!.map((b) => b.id);
@@ -170,5 +170,81 @@ describe("BKT status", () => {
 
   it("a missing weight never turns a matching transfer into a discrepancy by itself", () => {
     expect(transferState(t({ bagsReceived: 590, receivedGrossKg: null }))).toBe("closed");
+  });
+});
+
+// The user's case (Nov 2026): a 40 t Lot on a 35 t truck, the other 5 t on the next truck with another Lot.
+describe("a Lot bigger than one truck goes on several BKTs", () => {
+  const lot = { bags: 800, netKg: 40000 };
+  const first = { transferId: "BKT-2026-010", bags: 700, netWeightKg: 35000 };
+
+  it("works out what is left of the Lot from its pieces", () => {
+    expect(lotTransferProgress(lot, [])).toMatchObject({ leftKg: 40000, leftBags: 800, fullySent: false });
+    expect(lotTransferProgress(lot, [first])).toMatchObject({ sentKg: 35000, leftKg: 5000, leftBags: 100, fullySent: false });
+    expect(lotTransferProgress(lot, [first, { transferId: "BKT-2026-011", bags: 100, netWeightKg: 5000 }])).toMatchObject({ leftKg: 0, fullySent: true });
+  });
+
+  it("lets the rest go on the next truck, but never more than is left", () => {
+    expect(lotPieceProblem("LOT-1", lot, [first], { bags: 100, netWeightKg: 5000 })).toBeNull();
+    expect(lotPieceProblem("LOT-1", lot, [first], { bags: 100, netWeightKg: 5000.5 })).toMatch(/has 5,000 kg left to send \(of 40,000 kg\)/);
+    expect(lotPieceProblem("LOT-1", lot, [first, { transferId: "BKT-2026-011", bags: 100, netWeightKg: 5000 }], { bags: 1, netWeightKg: 1 }))
+      .toMatch(/already on BKT-2026-010, BKT-2026-011 in full/);
+  });
+
+  it("a second piece needs a figure, or nothing could be subtracted", () => {
+    expect(lotPieceProblem("LOT-1", lot, [first], { bags: null, netWeightKg: null })).toMatch(/Enter how much of it goes on this truck/);
+  });
+
+  it("falls back to bags when the Lot's net weight was never recorded", () => {
+    const bagsOnly = { bags: 800, netKg: null };
+    expect(lotTransferProgress(bagsOnly, [first])).toMatchObject({ leftKg: null, leftBags: 100, fullySent: false });
+    expect(lotPieceProblem("LOT-1", bagsOnly, [first], { bags: 101, netWeightKg: null })).toMatch(/100 bags left to send/);
+  });
+
+  it("a Lot whose size was never recorded, or a piece with no figure, counts as sent in full — as every BKT before splitting did", () => {
+    expect(lotTransferProgress({ bags: null, netKg: null }, [first]).fullySent).toBe(true);
+    expect(lotTransferProgress(lot, [{ transferId: "BKT-2026-001", bags: null, netWeightKg: null }]).fullySent).toBe(true);
+  });
+});
+
+describe("a truck's net at arrival, per Lot", () => {
+  const facts = (lines: { bags: number; bagsReceived: number | null }[]) => ({
+    status: "received" as const, lines: lines.map((l) => ({ ...l, netWeightKg: null })),
+    dispatchedGrossKg: null, bagsReceived: lines.reduce((a, l) => a + (l.bagsReceived ?? 0), 0), receivedGrossKg: 40800,
+  });
+
+  it("a Lot alone on the truck gets all of it, weighed", () => {
+    expect(lineNetAtArrival(facts([{ bags: 800, bagsReceived: null }]))).toEqual([{ kg: 40800, shared: false }]);
+  });
+
+  it("several Lots share it by the bags counted off each, and the shares add up to the truck", () => {
+    const got = lineNetAtArrival(facts([{ bags: 100, bagsReceived: 100 }, { bags: 700, bagsReceived: 700 }]));
+    expect(got).toEqual([{ kg: 5000, shared: true }, { kg: 35000, shared: true }]);
+  });
+
+  it("without a count for every Lot, nothing is attributed", () => {
+    expect(lineNetAtArrival(facts([{ bags: 100, bagsReceived: 100 }, { bags: 700, bagsReceived: null }]))).toEqual([undefined, undefined]);
+  });
+});
+
+describe("a BKT line starts from the Lot's own figures, and a change is noticed", () => {
+  const lot = { bags: 200, netKg: 39800 };
+  const first = { transferId: "BKT-2026-015", bags: 150, netWeightKg: 30000 };
+
+  it("starts from the whole Lot, then from what is left of it", () => {
+    expect(suggestedPiece(lot, [])).toEqual({ bags: 200, netWeightKg: 39800 });
+    expect(suggestedPiece(lot, [first])).toEqual({ bags: 50, netWeightKg: 9800 });
+  });
+
+  it("calls any different figure a change, but not a box left blank", () => {
+    expect(pieceChanged({ bags: 200, netWeightKg: 39800 }, { bags: 200, netWeightKg: 39800 })).toBe(false);
+    expect(pieceChanged({ bags: 200, netWeightKg: 39800 }, { bags: 150, netWeightKg: 39800 })).toBe(true);
+    expect(pieceChanged({ bags: 200, netWeightKg: 39800 }, { bags: 200, netWeightKg: 30000 })).toBe(true);
+    expect(pieceChanged({ bags: 200, netWeightKg: 39800 }, { bags: 200, netWeightKg: null })).toBe(false);
+  });
+
+  it("reads a piece the way the page and the timeline write it", () => {
+    expect(formatLotPiece({ bags: 150, netWeightKg: 30000 })).toBe("150 bags · 30,000 kg");
+    expect(formatLotPiece({ bags: null, netWeightKg: 9800 })).toBe("9,800 kg");
   });
 });

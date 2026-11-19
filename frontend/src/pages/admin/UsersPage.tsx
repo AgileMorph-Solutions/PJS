@@ -6,7 +6,7 @@ import { Pill } from "../../components/ui/Pill";
 import { useTracking } from "../../state/TrackingContext";
 import { useUsers } from "../../state/userManagement";
 import { api } from "../../repository/api";
-import { ROLES, ROLE_LABEL, type Role } from "../../data/roles";
+import { ROLES, ROLE_LABEL, roleFitsWarehouseType, type Role } from "../../data/roles";
 import { WAREHOUSE_TYPES, WAREHOUSE_TYPE_LABEL, type WarehouseType } from "../../data/warehouseTypes";
 import type { WarehouseMaster } from "../../types/receipt";
 import { Field, Select } from "../../components/ui/Input";
@@ -21,11 +21,12 @@ const inputCls =
 type SiteRow = ReturnType<typeof listSites<WarehouseMaster>>[number];
 
 /** The warehouses a person can work at (BOUAKE, YAKRO FACTORY), grouped under their category, Unit or Central. Only
- * ready ones (a category and an ID code) — the API refuses anything else (services/users.ts). */
-function WarehouseOptions({ warehouses }: { warehouses: SiteRow[] }) {
+ * ready ones (a category and an ID code), and only the categories the role fits (a Production Incharge or Factory Manager
+ * works at a Central one) — the API refuses anything else (services/users.ts). */
+function WarehouseOptions({ warehouses, role }: { warehouses: SiteRow[]; role: Role }) {
   return (
     <>
-      {WAREHOUSE_TYPES.map((t) => {
+      {WAREHOUSE_TYPES.filter((t) => roleFitsWarehouseType(role, t.value)).map((t) => {
         const inCategory = warehouses.filter((w) => w.type === t.value);
         return inCategory.length ? (
           <optgroup key={t.value} label={t.label}>
@@ -92,7 +93,7 @@ export function UsersPage() {
               onChange={(e) => e.target.value && void patch(u, { warehouse: e.target.value })}
               className="px-2.5 py-1 rounded-lg border border-warmstone-200 bg-warmstone-50 text-[12px] font-semibold text-warmstone-800 outline-none focus:border-brand-700">
               <option value="">{u.warehouse && !onWarehouse ? `${u.warehouse}: choose a warehouse…` : "Choose a warehouse…"}</option>
-              <WarehouseOptions warehouses={ready} />
+              <WarehouseOptions warehouses={ready} role={u.role} />
             </select>
             {onWarehouse
               ? <span className="text-[11px] text-warmstone-500">{u.warehouseType ? WAREHOUSE_TYPE_LABEL[u.warehouseType as WarehouseType] : "No category"}</span>
@@ -131,13 +132,18 @@ export function UsersPage() {
           <div><label className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5" htmlFor="u-pw">Password (min 8)</label>
             <input id="u-pw" type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={inputCls} /></div>
           <div><label className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5" htmlFor="u-role">Role</label>
-            <select id="u-role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className={inputCls}>
+            <select id="u-role" value={form.role} onChange={(e) => {
+              // A warehouse picked for the previous role may not fit this one (a Unit warehouse for a Production Incharge).
+              const role = e.target.value as Role;
+              const fits = ready.some((w) => w.name === form.warehouse && roleFitsWarehouseType(role, w.type));
+              setForm({ ...form, role, warehouse: fits ? form.warehouse : "" });
+            }} className={inputCls}>
               {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select></div>
           <Field label="Warehouse" hint={needsWarehouse && !ready.length ? "No warehouse is ready yet: add one in Masters › Warehouses, with its category and ID code." : undefined}>
             <Select required={needsWarehouse} disabled={!needsWarehouse} value={needsWarehouse ? form.warehouse : ""} onChange={(e) => setForm({ ...form, warehouse: e.target.value })}>
               <option value="">{needsWarehouse ? "Select a warehouse…" : "All (admin)"}</option>
-              <WarehouseOptions warehouses={ready} />
+              <WarehouseOptions warehouses={ready} role={form.role} />
             </Select>
           </Field>
           <button type="submit" disabled={busy}

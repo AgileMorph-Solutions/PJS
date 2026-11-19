@@ -5,12 +5,13 @@
  */
 
 /**
- * The doc's receipt statuses, moisture check then weighing; Intake done once the final weight is saved. Phase 2
- * (calibration.ts) carries it on: sized into the silos in one or more runs, then Calibrated.
+ * The doc's receipt statuses, moisture check then weighing, then the factory's acceptance (Lokesh, 16 Nov 2026: the
+ * warehouse enters quantity and quality, "then operations will accept"). Intake and Calibration are one stage (decision,
+ * Nov 2026: the 9 silos' kg per size are never known, only the total), so a load is Calibrated the moment production
+ * accepts it: net − dust − voids is what went into the silos.
  */
 export type RcnReceiptStatus =
-  | "waiting_for_moisture" | "moisture_pending" | "on_hold" | "waiting_for_weighing" | "weighing" | "intake_done"
-  | "calibrating" | "calibrated";
+  | "waiting_for_moisture" | "moisture_pending" | "on_hold" | "waiting_for_weighing" | "weighing" | "waiting_for_acceptance" | "calibrated";
 
 export const RCN_RECEIPT_STATUS_LABELS: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "Waiting for moisture",
@@ -18,8 +19,7 @@ export const RCN_RECEIPT_STATUS_LABELS: Record<RcnReceiptStatus, string> = {
   on_hold: "On hold",
   waiting_for_weighing: "Waiting for weighing",
   weighing: "Weighing in progress",
-  intake_done: "Intake done",
-  calibrating: "Calibration in progress",
+  waiting_for_acceptance: "Weighed · waiting for production",
   calibrated: "Calibrated",
 };
 
@@ -35,23 +35,37 @@ export type MoistureCheckStatus = "submitted" | "approved" | "rejected";
  * Derived from the receipt's checks, never stored. A check waiting for approval wins (the doc: "Saved as
  * PENDING — receipt does NOT change yet", so the screen says who is next); otherwise the newest approved
  * check decides; a rejected one changes nothing. Past moisture, the weighing decides: a pallet weighed
- * means Weighing in progress, a saved final weight means Intake done. Past Intake, the calibration runs decide:
- * some kg sized means Calibration in progress, all of the into-silo kg sized means Calibrated.
+ * means Weighing in progress, a saved final weight means it waits for production, and production's acceptance means
+ * Calibrated (its total is in the silos).
  */
 export function rcnReceiptStatus(
   checks: { status: MoistureCheckStatus; decision: MoistureDecision }[],
-  weighing: { pallets: number; finalised: boolean; calibration?: { sizedKg: number; leftKg: number | null } } = { pallets: 0, finalised: false },
+  weighing: { pallets: number; finalised: boolean; accepted?: boolean } = { pallets: 0, finalised: false },
 ): RcnReceiptStatus {
   if (checks.some((c) => c.status === "submitted")) return "moisture_pending";
   const approved = checks.filter((c) => c.status === "approved").at(-1); // checks are oldest first
   if (!approved) return "waiting_for_moisture";
   if (approved.decision !== "ok") return "on_hold";
-  if (weighing.finalised) {
-    const c = weighing.calibration;
-    if (!c || c.sizedKg <= 0) return "intake_done";
-    return c.leftKg !== null && c.leftKg <= 0 ? "calibrated" : "calibrating";
-  }
+  if (weighing.accepted) return "calibrated";
+  if (weighing.finalised) return "waiting_for_acceptance";
   return weighing.pallets > 0 ? "weighing" : "waiting_for_weighing";
+}
+
+/**
+ * Why production can't accept the load yet, or null when it can. Production accepts what the warehouse finished: an OK
+ * moisture check approved, nothing waiting for approval, and the final weight saved — the net it accepts out of the
+ * warehouse bin is only known then.
+ */
+export function acceptanceProblem(status: RcnReceiptStatus): string | null {
+  switch (status) {
+    case "waiting_for_acceptance": return null;
+    case "calibrated": return "Production already accepted this load.";
+    case "waiting_for_moisture": return "The warehouse hasn't checked its moisture yet.";
+    case "moisture_pending": return "Its moisture check is waiting for the Warehouse Incharge's approval.";
+    case "on_hold": return "Its moisture check failed: it is on hold until it is checked again.";
+    case "waiting_for_weighing":
+    case "weighing": return "The warehouse hasn't saved its final weight yet.";
+  }
 }
 
 /**
@@ -61,11 +75,8 @@ export function rcnReceiptStatus(
  */
 export const canTakeMoistureCheck = (status: RcnReceiptStatus): boolean => status !== "moisture_pending";
 
-/** Phase 2: a load is sized into the silos once its Intake is done, run by run, until all of it is. */
-export const canCalibrate = (status: RcnReceiptStatus): boolean => status === "intake_done" || status === "calibrating";
-
-/** Intake is over for the load: weighed and closed, whatever Phase 2 has done with it since. */
-export const isIntakeDone = (status: RcnReceiptStatus): boolean => status === "intake_done" || canCalibrate(status) || status === "calibrated";
+/** Intake & Calibration is over for the load: weighed, accepted by production, and its total in the silos. */
+export const isIntakeDone = (status: RcnReceiptStatus): boolean => status === "calibrated";
 
 /** The cut-test parts, as in the client's "2. Input RCN Quality report" columns. */
 export const CUT_TEST_GRAMS = [
@@ -110,6 +121,50 @@ export function moistureKor(v: GramValues): number | null {
   return (gk + 0.5 * (spot + imm)) * PRODUCTION_KOR_FACTOR;
 }
 
+/**
+ * The rest of the client's "2. Input RCN Quality report" formula columns, with its own factor (80 kg × 2.2046 lb, per
+ * 1000 g) and its own sums: SHOT = GK + Spot + Immature; FOT = GK + Spot + Immature + Oil + Rejection; Fruit Waste % of
+ * the sample; GK-Yield and Total Yield as a share of the sample. Real check, BTM 1001 (GK 230, spot 12, immature 13,
+ * oil 5, rejection 32, fruit waste 19, sample 1000): SHOT 44.97384, FOT 51.499456, Fruit Waste 1.9 %, GK-Yield 25.5 %,
+ * Total Yield 29.2 %. A figure is null until every part it needs is there.
+ */
+export interface QualityFigures {
+  kor: number | null;
+  shot: number | null;
+  fot: number | null;
+  fruitWastePct: number | null;
+  gkYieldPct: number | null;
+  totalYieldPct: number | null;
+}
+
+export function qualityFigures(v: GramValues): QualityFigures {
+  const n = (k: CutTestGram | "sampleG") => {
+    const x = num(v[k]);
+    return x === null || Number.isNaN(x) ? null : x;
+  };
+  const sum = (...xs: (number | null)[]) => (xs.some((x) => x === null) ? null : (xs as number[]).reduce((a, b) => a + b, 0));
+  const sample = n("sampleG");
+  const kernels = sum(n("gkG"), n("spotG"), n("immatureG"));
+  const total = sum(kernels, n("oilG"), n("rejectionG"));
+  const fw = n("fruitWasteG");
+  const share = (x: number | null) => (x === null || !sample ? null : (x / sample) * 100);
+  return {
+    kor: moistureKor(v),
+    shot: kernels === null ? null : kernels * PRODUCTION_KOR_FACTOR,
+    fot: total === null ? null : total * PRODUCTION_KOR_FACTOR,
+    fruitWastePct: share(fw),
+    gkYieldPct: share(kernels),
+    totalYieldPct: share(total),
+  };
+}
+
+/** A crop year as the client writes it: four digits ("2026"). Blank is allowed — it is filled in later. */
+export function cropYearError(v: string | undefined): string | null {
+  const t = (v ?? "").trim();
+  if (t === "") return null;
+  return /^\d{4}$/.test(t) && Number(t) >= 2000 && Number(t) <= 2100 ? null : `Crop year "${t}" should be a year, like 2026.`;
+}
+
 export interface MoistureFormValues extends GramValues {
   moisture?: string;
   nutCount?: string;
@@ -151,10 +206,11 @@ export function sameBtmAndBin<T extends { btmNo: string; binCode: string }>(exis
 /**
  * The stages one RCN receipt (one load) walks through on the production floor, as the client's sheets record them:
  * "1. RCN Receipts" (the load and its BTM slip), "2. Input RCN Quality report" (moisture and cut test), "19. RCN
- * Receipts Tally Sheet" (each pallet on the scale, then empty pallets, dust and voids), "4. Calibration Process
- * report" (sized into the silos). One stage, one form — the receipt page shows them as separate steps, like a truck's.
+ * Receipts Tally Sheet" (each pallet on the scale, then empty pallets, dust and voids, which also closes the "4.
+ * Calibration Process report" row: no kg per silo is recorded, only the total). One stage, one form — the receipt
+ * page shows them as separate steps, like a truck's.
  */
-export type RcnStageId = "receipt" | "moisture" | "pallets" | "final_weight" | "calibration";
+export type RcnStageId = "receipt" | "moisture" | "pallets" | "final_weight" | "acceptance";
 
 /** done · current (the next job) · waiting (done here, waiting for the Incharge's approval) · todo (not reached yet). */
 export type RcnStageState = "done" | "current" | "waiting" | "todo";
@@ -163,21 +219,21 @@ export const RCN_STAGES: { id: RcnStageId; label: string; hint: string }[] = [
   { id: "receipt", label: "RCN receipt", hint: "The load and the BTM slip that came with it." },
   { id: "moisture", label: "Moisture check", hint: "Sample moisture, nut count and cut test. OK lets the load be weighed." },
   { id: "pallets", label: "Pallet weighing", hint: "Each pallet on the scale: gross weight and bags." },
-  { id: "final_weight", label: "Final weight", hint: "Empty pallets, dust and voids, to close the weighing." },
-  { id: "calibration", label: "Calibration", hint: "How many kg of the load went into each size silo." },
+  { id: "final_weight", label: "Final weight", hint: "Empty pallets, dust and voids. Net − dust − voids is what goes into the silos." },
+  { id: "acceptance", label: "Accepted by production", hint: "Production accepts the warehouse's load: its net leaves the warehouse bin, net − dust − voids goes into the silos." },
 ];
 
 /**
  * Each step of a load stands on its own — steps are recorded in any order — so each is done by what it holds: an OK
- * moisture check approved, a pallet weighed, the final weight saved, all of the load sorted into the silos. A check
- * waiting for approval is "waiting". The first step not done yet is "current": what to do next, not a lock.
+ * moisture check approved, a pallet weighed, the final weight saved, production's acceptance (which puts the load into the
+ * silos). A check waiting for approval is "waiting". The first step not done yet is "current": what to do next, not a lock.
  */
 export function rcnReceiptStages(r: {
   status: RcnReceiptStatus;
   moistureChecks: { status: MoistureCheckStatus; decision: MoistureDecision }[];
   pallets: unknown[];
   finalWeight: unknown | null;
-  calibration: { sizedKg: number; leftKg: number | null } | null;
+  acceptance: unknown | null;
 }): Record<RcnStageId, RcnStageState> {
   const approved = r.moistureChecks.filter((c) => c.status === "approved").at(-1);
   const done: Record<RcnStageId, boolean> = {
@@ -185,7 +241,7 @@ export function rcnReceiptStages(r: {
     moisture: approved?.decision === "ok",
     pallets: r.pallets.length > 0,
     final_weight: Boolean(r.finalWeight),
-    calibration: Boolean(r.calibration && r.calibration.sizedKg > 0 && r.calibration.leftKg !== null && r.calibration.leftKg <= 0),
+    acceptance: Boolean(r.acceptance),
   };
   const waiting = r.moistureChecks.some((c) => c.status === "submitted");
   const states = Object.fromEntries(RCN_STAGES.map((s) => [s.id, done[s.id] ? "done" : s.id === "moisture" && waiting ? "waiting" : "todo"])) as Record<RcnStageId, RcnStageState>;
@@ -196,5 +252,5 @@ export function rcnReceiptStages(r: {
 
 /** The stage to open first: the next job, or the one waiting for approval, or the last one once all are done. */
 export function openStage(stages: Record<RcnStageId, RcnStageState>): RcnStageId {
-  return RCN_STAGES.find((s) => stages[s.id] === "current" || stages[s.id] === "waiting")?.id ?? "calibration";
+  return RCN_STAGES.find((s) => stages[s.id] === "current" || stages[s.id] === "waiting")?.id ?? "acceptance";
 }

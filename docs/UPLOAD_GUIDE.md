@@ -53,41 +53,92 @@ in the file (a new origin town typed on Truck Reception is simply added).
 - **Scope.** A Warehouse Incharge works on their own warehouse; an admin picks one. A row must belong to
   that warehouse — before and after the change. Rows with no warehouse set aren't in a section's file.
 
-## The production workbook (Production → Batches → Upload / Export)
+## The production workbook (Production runs → Upload / Export)
 
-The same idea for **Production Phase 1, Batch & Intake**: one `.xlsx`, the same dialog, the same preview →
-apply. Warehouse Incharge / admin only. A QFS Officer keeps entering moisture checks on screen, where the
-Incharge approves them.
+The same idea for **Production Phases 1 to 5**: one `.xlsx`, the same dialog, the same preview → apply.
 
-| Tab | One row is | Names an existing row by | What a new row does |
-|---|---|---|---|
-| **Batches** | a batch | Batch Name (typed, like ANA-03B) | creates the batch from its Bins (`BIN-03B / BIN-03C`) |
-| **RCN Receipts** | a load from one bin | RCN Receipt ID (blank = new) | receives the load (issues its RR- ID) |
-| **Moisture Checks** | one check | Check ID (blank = new) | records the check, approved as it is saved (OK, or Hold then a re-check row) |
-| **Pallets** | one pallet on the scale | Pallet ID (blank = new) | weighs the pallet; an existing pallet's values are corrected until the final weight is saved |
-| **Final Weight** | a load's closing weighing | its load | saves empty pallets (stacks as `374.3 / 211.2`), dust, voids, and closes the load |
-| **Calibration Runs** | one run of a load through the sizing machine | Run ID (blank = new) | puts the kg of each size into the silos; the same load, date and kg again is not added twice |
-| **Silo Checks** | one QC-2 sample | Check ID (blank = new) | records the check, approved as it is saved. Sampling Point is the silo (`A++` … `D`, `DE`) or `Received RCN`; Result is `OK` or `Fail` |
-| **Silo Moves** | kg moved by hand after a failed check | Move ID (blank = new) | moves the kg out of From Silo, which must stand on a failed check, into To Silo |
-| **Cooking** | a Lot's kg per size | Cooking ID (blank = new) | takes the kg out of the silos; a new Lot No makes the Lot |
-| **Cooker Log, Cooking Checks, Waste Water** | a cooker run, a QC-3, a tank quantity | Entry ID (blank = new) | recorded on the Lot; a check is approved as it is saved |
-| **Cooling** | a Lot into its cooling silo | its Lot No | starts the 24 h clock, only after every cooked size has passed QC-3 |
-| **Cooling Checks** | a QC-4 | Entry ID (blank = new) | Result is `OK` or `Wait`; shelling opens on OK |
-| **Shelling Days** | a day's outputs | Day ID (blank = new) | the app works out good and final kernels, shell dust, shell and every % |
-| **Line Runs, Machine Frequency, Machine Samples, Uncut Checks, Shell Samples** | one row of each sheet | Entry ID (blank = new) | recorded on a Lot past QC-4 |
-| **Sorter Before, Sorter After** | a QC-7 sample either side of the colour sorter | Entry ID (blank = new) | recorded on a shelled Lot; an after-sorter row's Result is `OK` or `No` |
-| **Boiler** | a day's shell burned | Reading ID (blank = new) | takes the kg out of the shell silo |
-| **Trucks** | one truck at the gate (dust & voids, waste water, shell, shell dust or black rejection) | Truck ID (blank = new) | filled in as the truck moves; a Gate Pass No closes it and takes its net out of the store |
+**Who uploads.** Only **Admin** and the **Production Incharge** upload this workbook (Nov 2026), every tab, the RCN
+ones included. Nothing an upload brings waits for an approval: its quality checks are saved approved, and the loads it
+finishes (weighed, moisture OK) are accepted by production, so the same file can go on to cook from them. The Warehouse
+Incharge records loads on screen; the Factory Manager can download the file but not upload it; a QFS Officer keeps
+entering checks on screen.
 
-- **Checks, pallets and the final weight name their load** by RCN Receipt ID or by BTM No. The BTM No is
-  enough when one load has it, which is what lets a new load and its checks come in the same file. When two
-  loads share a BTM (the client's own file has repeats), the upload asks for the RCN Receipt ID.
-- **The tabs run in order, through the screens' own rules.** A batch row is checked exactly as the New batch
-  screen checks it, a check as the moisture form does, and so on, so a row may rely on the rows above it: a
-  batch made on Batches is there for its loads, an OK check makes its pallets weighable.
-- **Saved records aren't rewritten** except where the screens edit them (a pallet, until the load is
-  closed). A saved batch, load, check or final weight that differs in the file is reported, not changed.
+**The upload log.** Every applied upload is logged: who uploaded it, when, the file's name, and the rows it added and
+changed per tab (a preview logs nothing). Production runs → **Upload log** shows it to Admin, the Production Incharge
+and the Factory Manager.
+
+**The tabs follow the floor, step by step** (Nov 2026): numbered in the order the work happens, one colour per stage
+on the tab strip, and nothing else. There's no Read me tab and nothing is marked "New". Each tab uses the client's own
+words for its name and columns, with the columns in their file's order; the app's columns (IDs, Result, Approval, a
+truck's gate fields) come after them. Hover a header for how to fill it in. Tabs from an older download (`1. RCN
+Tally Sheet`, `2. RCN Receipts`, `19. RCN Receipts Tally Sheet`, `New · Cooling`, `Moisture Checks`, …) still upload
+under their old names; the old `Trucks` and
+`Sorter Before/After` tabs are ignored with a note saying where their rows go now.
+
+| Stage | Tab | Client file | One row is | What a new row does |
+|---|---|---|---|---|
+| Intake | **1. RCN Receipts** | 19. RCN Receipts Tally Sheet (Online) | one pallet on the scale, with none of the app's IDs | see below |
+| Intake | **2. RCN Receipts summary** | 1. RCN Receipts | a load from one bin | only needed for a load that arrived and isn't weighed yet; a BTM + bin already saved is that load. Its kg are worked out from the tally sheet |
+| Intake | **3. Input RCN Quality** | 2. Input RCN Quality report | one moisture check, naming its load by BTM NO (+ BIN No, the source bin) | approved as it is saved (Result OK, or Hold then a re-check row) |
+| Calibration | **4. Wholes Manual Calibration** | 24. Wholes Manual Calibration (Sheet2) | one QC-2 sample | approved as it is saved. Sampling Point is the silo (`A++` … `D`, `DE`) or `Received RCN`; Result `OK` or `Fail` |
+| Calibration | **5. Silo Moves** | — | kg moved by hand after a failed check | recorded; the silos' total doesn't change |
+| Cooking | **6. Cooking Process** | 6. Cooking Process Report | a Lot's kg per size, and the kg damaged or spoiled in the cooker | takes the kg out of the silos' total (never more than they hold); a new Lot No makes the Lot; damaged kg are never left to shell |
+| Cooking | **7. Cooking Cycles Monitoring** | 17. Cooking Cycles Monitoring report (Online) | a cooker run | recorded on the Lot; Cooker No, Size, Silo Name (the target cooling silo) and Gate No (1, 2 or 3) are required |
+| Cooking | **8. Cooking Waste Water** | — | a tank quantity | recorded on the Lot |
+| Cooking | **9. Cooling** | — | a Lot into its cooling silo | starts the 24 h clock |
+| Cooking | **10. Cooling Checks** | — | a QC-4 | Result `OK` or `Wait`; shelling opens on OK |
+| Shelling | **11. Shelling Process** | 7. Shelling process Report | a day's outputs | the app works out good and final kernels, shell dust, shell and every % |
+| Shelling | **12. Shelling Line wise Data** | 23. Shelling Line wise Processing Data | a line's run, with its uncut re-run and breakdown | recorded on a Lot past QC-4; durations, Uncut % and Cutting Hrs worked out |
+| Shelling | **13. Shelling Machine Frequency**, **14. Shelling Machine Quality** | 21, 13 | one row of each sheet | recorded on a Lot past QC-4 |
+| Shelling | **15. Uncut Checks** | — | a QTY-1 | recorded on a Lot past QC-4 |
+| Shelling | **16. Shell Waste Sample** | 11. Shell Waste Sample Report | a QC-6 sample | recorded on a Lot past QC-4 |
+| Colour sorting | **17. Shelled Kernels Quality** | 12. Shelled Kernels Quality Report | a QC-7 sample; Sampling Point `Before CS` or `After CS` | recorded on a shelled Lot; an After CS row's Result is `OK` or `No`. Borma rows wait for Borma |
+| By-products | **18. Boiler Consumption** | 21. Boiler Consumption | a day's shell burned | takes the kg out of the shell silo |
+| By-products | **19. Waste Management Dispatch** | 15. Waste Management Dispatch Tracker | a waste truck; Category `Calibration Dust`, `Cooking Waste Water`, `Shell Dust` or `Black Rejection` | filled in as the truck moves; a Gate Pass No closes it and takes its net out of that store. Factory, toilet and pouch waste aren't production by-products and are refused |
+| By-products | **20. Shell Dispatch Tracker** | 16. Shell Dispatch Tracker | a shell truck | as above, from the shell silo |
+
+A blank ID column (Entry ID, Truck ID, …) means "add a new row"; a row identical to a saved one is that record, so the
+client's own file can be uploaded without any ID column at all.
+
+**Client columns not in the workbook yet:** Lot No (2), Material, Time and Sample Time (13), Cost Type (15), Gap Time
+(23), Adjusted Quantity and BIN No (6), the Error and % columns of 12. Client files with no tab: 3, 4 and 5 (the app
+works them out as reports), 8, 18 and 20 (Borma, not built), 14 (Final Output Analysis), Manual Peeling.
+
+- **There is no calibration tab.** Intake and Calibration are one stage (agreed with the client, Nov 2026): nobody
+  weighs what goes into each of the 9 silos, so a load goes into the silos as one total, net − dust − voids, as
+  soon as its final weight is in. An older file's **Calibration Runs** tab is ignored, and the preview says why.
+- **There is no cooking check (QC-3) any more** (Nov 2026). A Lot goes to its cooling silo straight after cooking;
+  the cooker log is the record of each cook. An older file's **Cooking Checks (QC-3)** tab is ignored, and the preview says why.
+- **The RCN Receipts tab (the tally sheet) takes the floor's own sheet as it is.** Its Online tab can be pasted in (or the
+  client's file uploaded: a sheet named `Online` is read as this tab, a one-cell title row above the headers
+  is skipped, and so are its empty formula rows and totals row). Every row of one **BTM No from one Source BIN**
+  is one load, made when the app doesn't have it yet — so BTM 122, from three bins, is three loads, as the
+  client's register has it. The load's date is its first row's. Each row is a pallet (gross, bags, Bin No =
+  the factory bin); the **Pallet Weight** cells, on whichever rows they sit, are the empty-pallet weighings;
+  **Dust** and **Voids** are added up over the load's rows, as the sheet's own SUMIF does. The sheet's
+  formula columns (SL.NO, Week, Month, Pallet No, Bags Weight, Net Weight) are read past. The preview lists
+  each load's pallets, bags, gross, net and to-silos kg, to check against the paper form.
+- **No production run in the file — the upload starts it.** A load finds its run by its source bin, which is in
+  exactly one run. The file's bins that are in no run yet all go into ONE new run, started on their earliest
+  date, under the New run screen's own rules; the preview says so. A bin those rules refuse (not in Masters ›
+  Bins, no procurement stock, already in another site's run) starts nothing, and its loads say why.
+- **The first tab is the only one to fill in for a load.** RCN Receipts is the register the export works
+  out from it; the user doesn't type there.
+- **The same file uploaded again creates nothing twice.** On the tally sheet, pallets that match a load's
+  saved ones are unchanged and different ones are refused; a pallet is corrected on its load's screen, since
+  the tally carries no Pallet ID (the IDs only confuse the floor, so only the app shows them). A moisture
+  check identical to a saved one is that check.
+- **Checks name their load** by RCN Receipt ID, or by BTM No (plus Source Bin when one
+  BTM came from several bins). When two loads still share it (the client's register has a repeat), the upload
+  asks for the RCN Receipt ID.
+- **The tabs run in order, through the screens' own rules.** A check is checked as the moisture form does, a
+  pallet as the weighing form does, and so on, so a row may rely on the rows above it: a load made from the
+  tally sheet is there for its checks.
+- **Saved records aren't rewritten** except where the screens edit them (a pallet, a load's final weight).
+  A saved load or check that differs in the file is reported, not changed.
 - Status, KOR, pallet no., net weight and "to silos" are shown and worked out; an upload never reads them.
+- **Not yet:** loads from before the tally form (April – 19 July 2026, BTM 1001–1055 and 101–108) have no
+  pallet rows, only the register's totals, so they can't be uploaded with their kg.
 
 ---
 

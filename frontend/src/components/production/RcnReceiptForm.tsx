@@ -21,8 +21,11 @@ const field = (label: string, el: ReactNode, hint?: string) => (
  * Record one load arriving from a warehouse bin of this production run (Intake, step 1). The run is the page's own,
  * so only the slip is typed — no weights. `existing` is the run's receipts, for the same-BTM-same-bin warning.
  */
-export function RcnReceiptForm({ run, existing, onSaved }: { run: BatchDetail; existing: RcnReceipt[]; onSaved: () => void }) {
+export function RcnReceiptForm({ run, existing, onSaved }: { run: BatchDetail; existing: RcnReceipt[]; onSaved: (saved: RcnReceipt) => void }) {
   const [date, setDate] = useState(todayIso());
+  // Offered as the load's year until the person types their own; they see it and confirm it by saving.
+  const [cropYear, setCropYear] = useState<string | null>(null);
+  const year = cropYear ?? date.slice(0, 4);
   const [btmNo, setBtmNo] = useState("");
   const [binCode, setBinCode] = useState("");
   const [saving, setSaving] = useState(false);
@@ -35,10 +38,10 @@ export function RcnReceiptForm({ run, existing, onSaved }: { run: BatchDetail; e
     setSaving(true);
     setError(null);
     try {
-      await api.createRcnReceipt({ batchCode: run.code, date, btmNo, binCode });
+      const saved = await api.createRcnReceipt({ batchCode: run.code, date, cropYear: year, btmNo, binCode });
       setBtmNo("");
       setBinCode("");
-      onSaved();
+      onSaved(saved);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
     } finally {
@@ -48,13 +51,15 @@ export function RcnReceiptForm({ run, existing, onSaved }: { run: BatchDetail; e
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid sm:grid-cols-2 gap-4">
+      {/* In the order of the client's "1. RCN Receipts" register: Date, Crop Year, BTM No, Source Bin No. */}
+      <div className="grid sm:grid-cols-3 gap-4">
         {field("Date", <DateInput value={date} onChange={setDate} className={inputClass} />)}
-        {field("BTM number", <input className={`${inputClass} tabular-nums`} value={btmNo} onChange={(e) => setBtmNo(e.target.value)} placeholder="e.g. 112" />, "The number on the transfer slip (BTM) that came with the load.")}
+        {field("Crop year", <input inputMode="numeric" className={`${inputClass} tabular-nums`} value={year} onChange={(e) => setCropYear(e.target.value)} placeholder="e.g. 2026" />)}
+        {field("BTM No", <input className={`${inputClass} tabular-nums`} value={btmNo} onChange={(e) => setBtmNo(e.target.value)} placeholder="e.g. 112" />, "The number on the BTM slip that came with the load.")}
       </div>
 
       <div>
-        <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">From which warehouse bin?</span>
+        <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">Source bin No</span>
         <div className="grid sm:grid-cols-2 gap-3">
           {run.bins.map((b) => {
             const on = binCode === b.binCode;

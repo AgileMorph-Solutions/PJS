@@ -14,9 +14,10 @@ import { blankToNull } from "./rcnReceipts.js";
 type Tx = Prisma.TransactionClient;
 const name = { select: { displayName: true } };
 
+/** A load's dust and voids are the factory's from production's acceptance, when the rest of it goes into the silos. */
 export async function storeBalances(tx: Tx | typeof prisma, site: string): Promise<StoreBalance[]> {
   const [loads, entries, days, trucks, boiler] = await Promise.all([
-    tx.rcnReceipt.findMany({ where: { batch: { warehouse: site }, finalisedAt: { not: null } }, select: { dustKg: true, voidsKg: true } }),
+    tx.rcnReceipt.findMany({ where: { batch: { warehouse: site }, acceptedAt: { not: null } }, select: { dustKg: true, voidsKg: true } }),
     tx.lotEntry.findMany({ where: { kind: "waste_water", lot: { batch: { warehouse: site } } }, select: { values: true } }),
     tx.shellingDay.findMany({ where: { lot: { batch: { warehouse: site } } }, select: { inputKg: true, wholesKg: true, piecesKg: true, rejectionKg: true, oilKg: true, blackRejectionKg: true } }),
     tx.truckMovement.findMany({ where: { warehouse: site, gatePassNo: { not: null } }, select: { stream: true, tareKg: true, grossKg: true } }),

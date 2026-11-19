@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { WorkbookModal, productionWorkbookClient } from "../../components/WorkbookModal";
+import { WorkbookUploadLog } from "../../components/production/WorkbookUploadLog";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { Button } from "../../components/ui/Button";
 import { DataTable, type Column } from "../../components/ui/DataTable";
@@ -8,7 +9,7 @@ import { FilterBar } from "../../components/ui/FilterBar";
 import { useTableSearch } from "../../components/ui/useTableSearch";
 import { BatchStatusPill, formatTonnes } from "../../components/production/batchUi";
 import { useBatches } from "../../state/productionBatches";
-import { useCanEditDirectly } from "../../state/AuthContext";
+import { useProductionPermissions } from "../../state/AuthContext";
 import { ProductionFactorySwitcher } from "../../state/productionFactory";
 import { BATCH_STATUS_LABELS } from "@anagroci/contract/domain/productionBatch";
 import type { BatchSummary } from "@anagroci/contract/types/productionBatch";
@@ -16,15 +17,20 @@ import { PRODUCTION_PAGE_SIZE, dateCol, numCol, statusCol, textCol } from "../..
 
 /**
  * Production's index: every production run at the factory, newest first. A run is the warehouse bins sent to
- * production together; opening one shows its stages (Intake, Calibration, Cooking, ...) and the forms for each.
+ * production together; opening one shows its stages (Intake & Calibration, Cooking, ...) and the forms for each.
  * (The data model and the client's documents call it a batch; the screens say "production run" throughout.)
  */
 export function ProductionRunsPage() {
   const navigate = useNavigate();
   const { rows, loading, error, refetch } = useBatches();
   const [dialogMode, setDialogMode] = useState<"upload" | "export" | null>(null);
-  // A QFS Officer opens runs for their quality checks; starting one is the Incharge's.
-  const canStart = useCanEditDirectly();
+  const [logOpen, setLogOpen] = useState(false);
+  // Starting a run is the warehouse's (the bins it sends). Only Admin and the Production Incharge upload the workbook
+  // (18 Nov 2026), with no approval after; the Factory Manager may export what they watch and read the upload log.
+  const perm = useProductionPermissions();
+  const canStart = perm.intake;
+  const canUpload = perm.factory;
+  const canSeeUploadLog = perm.seeFactory;
   const search = useTableSearch(rows, (r) => [r.code, r.name, ...r.binCodes]);
 
   const columns: Column<BatchSummary>[] = [
@@ -43,18 +49,17 @@ export function ProductionRunsPage() {
       <PageHeader
         kicker="Production"
         title="Production runs"
-        lede="A production run is the warehouse bins sent to the factory floor together. Open one to record its loads and every stage after: calibration, cooking, shelling and colour sorting."
+        lede={perm.seeFactory
+          ? "A production run is the warehouse bins sent to the factory floor together. Open one to accept its loads and work every stage after: cooking, shelling and colour sorting."
+          : "A production run is the warehouse bins sent to the factory floor together. Open one to record its loads: the moisture check and the weighing. Production accepts each load you finish."}
         actions={
           <div className="flex flex-wrap items-center gap-3">
             <ProductionFactorySwitcher />
-            {canStart && (
-              <>
-                {/* Upload / Export, as on Reception: the whole of production up to colour sorting as one workbook. */}
-                <Button variant="secondary" icon="upload" onClick={() => setDialogMode("upload")}>Upload</Button>
-                <Button variant="secondary" icon="download" onClick={() => setDialogMode("export")} title="Download every production record, one tab per record type">Export</Button>
-                <Button icon="add" onClick={() => navigate("/production/runs/new")}>Start a production run</Button>
-              </>
-            )}
+            {/* Upload / Export, as on Reception: the whole of production up to colour sorting as one workbook. */}
+            {canUpload && <Button variant="secondary" icon="upload" onClick={() => setDialogMode("upload")}>Upload</Button>}
+            {canSeeUploadLog && <Button variant="secondary" icon="history" onClick={() => setLogOpen(true)} title="Who uploaded which workbook, and when">Upload log</Button>}
+            {perm.exportWorkbook && <Button variant="secondary" icon="download" onClick={() => setDialogMode("export")} title="Download every production record, one tab per record type">Export</Button>}
+            {canStart && <Button icon="add" onClick={() => navigate("/production/runs/new")}>Start a production run</Button>}
           </div>
         }
       />
@@ -68,6 +73,7 @@ export function ProductionRunsPage() {
           onCommitted={() => void refetch()}
         />
       )}
+      {logOpen && <WorkbookUploadLog onClose={() => setLogOpen(false)} />}
       <FilterBar>
         <input placeholder="Search run ID, name or bin…" value={search.q} onChange={(e) => search.setQ(e.target.value)} className="w-full sm:w-72" />
       </FilterBar>

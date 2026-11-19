@@ -1,12 +1,20 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { TRANSFER_STATE_LABELS, transferDestinationLabel, transferState, type TransferFacts, type TransferState } from "@anagroci/contract/domain/transfers";
+import { lineNetAtArrival, TRANSFER_STATE_LABELS, transferDestinationLabel, transferState, type TransferFacts, type TransferState } from "@anagroci/contract/domain/transfers";
+import { formatKg } from "../production/batchUi";
 import { Pill } from "../ui/Pill";
 import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import type { api } from "../../repository/api";
 import type { TransferRequest } from "../../types/receipt";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+
+/** The quality each Lot leaves with: all three are required to dispatch. */
+const QUALITY = [
+  { key: "moisture", label: "Moisture (%)" },
+  { key: "kor", label: "KOR" },
+  { key: "nutCount", label: "Nut count" },
+] as const;
 
 export const TRANSFER_TONE: Record<TransferState, string> = { requested: "decision", in_transit: "term", closed: "entry", discrepancy: "gap" };
 
@@ -17,9 +25,9 @@ export const n = (x: number | null, signed = false) => (x === null ? "-" : `${si
 
 export const Field = ({ id, label, children, hint }: { id: string; label: string; children: ReactNode; hint?: string }) => (
   <div>
-    <label htmlFor={id} className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">{label}</label>
+    <label htmlFor={id} className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">{label}</label>
     {children}
-    {hint && <p className="mt-1 text-[11.5px] text-warmstone-500">{hint}</p>}
+    {hint && <p className="mt-1 text-[12px] text-warmstone-500">{hint}</p>}
   </div>
 );
 
@@ -53,14 +61,23 @@ export function TransferPanel({
   const receiving = canEdit && t.status === "dispatched" && t.toWarehouse === siteWarehouse;
   const [d, setD] = useState({ truckNo: "", transporter: "", driver: "", driverPhone: "", gross: "", wr: "" });
   const [quality, setQuality] = useState<Record<string, { moisture: string; kor: string; nutCount: string }>>(() => Object.fromEntries(t.lines.map((l) => [l.receiptId, qualityOf(l.receiptId)])));
-  const [r, setR] = useState({ bags: "", damaged: "", gross: "", kor: "", moisture: "", nuts: "", lot: "", comment: "", wr: "" });
+  // Every dispatch field is required (Nov 2026); the server refuses the same gaps.
+  const dispatchReady = [d.wr, d.truckNo, d.transporter, d.driver, d.driverPhone, d.gross].every((x) => x.trim() !== "")
+    && t.lines.every((l) => QUALITY.every(({ key }) => (quality[l.receiptId]?.[key] ?? "").trim() !== ""));
+  const [r, setR] = useState({ damaged: "", gross: "", kor: "", moisture: "", nuts: "", lot: "", comment: "", wr: "" });
   const [bins, setBins] = useState<Record<string, string>>({});
+  // Bags counted off per Lot: the truck is weighed once, and its net is shared between its Lots by these.
+  const [lotBags, setLotBags] = useState<Record<string, string>>({});
   const allBinned = t.lines.every((l) => (bins[l.receiptId] ?? "").trim() !== "");
+  const counted = t.lines.map((l) => (lotBags[l.receiptId] ?? "").trim());
+  const allCounted = counted.every((b) => b !== "" && Number.isInteger(Number(b)) && Number(b) >= 0);
+  const bagsTotal = allCounted ? counted.reduce((a, b) => a + Number(b), 0) : null;
   const v = t.variance;
+  const shares = lineNetAtArrival(t);
   // The same test the server applies: if what arrived differs from what was sent, the receiving warehouse has to say why.
   const arrival: TransferFacts = {
     status: "received", lines: t.lines.map((l) => ({ bags: l.bags, netWeightKg: l.netWeightKg })), dispatchedGrossKg: t.dispatchedGrossKg,
-    bagsReceived: r.bags.trim() === "" || Number.isNaN(Number(r.bags)) ? null : Number(r.bags),
+    bagsReceived: bagsTotal,
     receivedGrossKg: r.gross.trim() === "" || Number.isNaN(Number(r.gross)) ? null : Number(r.gross),
   };
   const differs = transferState(arrival) === "discrepancy";
@@ -94,10 +111,13 @@ export function TransferPanel({
       </InfoCard>
 
       <InfoCard icon="inventory" title={`Lots on the truck (${t.lines.length})`}>
-        {t.lines.map((l) => (
+        {t.lines.map((l, i) => (
           <div key={l.receiptId} className="flex items-baseline justify-between gap-3 text-[13px]">
             <span className="min-w-0">{lotLink(l)} <span className="text-warmstone-500">{normalizeSupplierName(l.supplierName)}</span></span>
-            <span className="text-right tabular-nums text-warmstone-700 shrink-0">{n(l.bags)} bags{(l.binCode || l.receivedBinCode) && <span className="block text-[11px] text-warmstone-400">{[l.binCode, l.receivedBinCode].filter(Boolean).join(" → ")}</span>}
+            <span className="text-right tabular-nums text-warmstone-700 shrink-0">
+              {n(l.bags)} bags{l.netWeightKg !== null ? ` · ${formatKg(l.netWeightKg)}` : ""}
+              {l.bagsReceived !== null && <span className="block text-[11px] text-warmstone-500">{n(l.bagsReceived)} bags received{shares[i] ? ` · ${formatKg(shares[i]!.kg)}${shares[i]!.shared ? " (share of the truck, by bags)" : ""}` : ""}</span>}
+              {(l.binCode || l.receivedBinCode) && <span className="block text-[11px] text-warmstone-400">{[l.binCode, l.receivedBinCode].filter(Boolean).join(" → ")}</span>}
               {(l.moisture !== null || l.kor !== null) && <span className="block text-[11px] text-warmstone-500">moisture {l.moisture ?? "-"}% · KOR {l.kor ?? "-"}{l.nutCount !== null ? ` · ${l.nutCount} nuts` : ""}</span>}</span>
           </div>
         ))}
@@ -108,30 +128,36 @@ export function TransferPanel({
           onSubmit={(e) => { e.preventDefault(); void onDispatch({ whReceiptNo: d.wr, lines: t.lines.map((l) => ({ receiptId: l.receiptId, ...quality[l.receiptId] })), truckNo: d.truckNo, transporter: d.transporter, driver: d.driver, driverPhone: d.driverPhone, dispatchedGrossKg: d.gross || null }); }}
           className="lg:col-span-3 bg-white border-2 border-brand-700 rounded-2xl p-5 grid sm:grid-cols-2 lg:grid-cols-5 gap-4 items-start"
         >
-          <Field id="dp-wr" label="Warehouse receipt no." hint="The receipt this dispatch is recorded against."><input id="dp-wr" required value={d.wr} onChange={(e) => setD({ ...d, wr: e.target.value })} className={inputClass} /></Field>
-          <Field id="dp-truck" label="Truck number" hint="One BKT is one truck."><input id="dp-truck" required value={d.truckNo} onChange={(e) => setD({ ...d, truckNo: e.target.value })} className={inputClass} placeholder="1796GC01/3922BB04" /></Field>
-          <Field id="dp-transporter" label="Transporter"><input id="dp-transporter" value={d.transporter} onChange={(e) => setD({ ...d, transporter: e.target.value })} className={inputClass} /></Field>
-          <Field id="dp-driver" label="Driver"><input id="dp-driver" value={d.driver} onChange={(e) => setD({ ...d, driver: e.target.value })} className={inputClass} /></Field>
-          <Field id="dp-phone" label="Driver phone"><input id="dp-phone" value={d.driverPhone} onChange={(e) => setD({ ...d, driverPhone: e.target.value })} className={inputClass} /></Field>
-          <Field id="dp-gross" label="Loaded weight (kg)" hint="From your scale: RCN plus bags."><input id="dp-gross" inputMode="decimal" value={d.gross} onChange={(e) => setD({ ...d, gross: e.target.value })} className={inputClass} /></Field>
+          <Field id="dp-wr" label="Warehouse receipt no. *" hint="The receipt this dispatch is recorded against."><input id="dp-wr" required value={d.wr} onChange={(e) => setD({ ...d, wr: e.target.value })} className={inputClass} /></Field>
+          <Field id="dp-truck" label="Truck number *" hint="One BKT is one truck."><input id="dp-truck" required value={d.truckNo} onChange={(e) => setD({ ...d, truckNo: e.target.value })} className={inputClass} placeholder="1796GC01/3922BB04" /></Field>
+          <Field id="dp-transporter" label="Transporter *"><input id="dp-transporter" required value={d.transporter} onChange={(e) => setD({ ...d, transporter: e.target.value })} className={inputClass} /></Field>
+          <Field id="dp-driver" label="Driver *"><input id="dp-driver" required value={d.driver} onChange={(e) => setD({ ...d, driver: e.target.value })} className={inputClass} /></Field>
+          <Field id="dp-phone" label="Driver phone *"><input id="dp-phone" required inputMode="tel" value={d.driverPhone} onChange={(e) => setD({ ...d, driverPhone: e.target.value })} className={inputClass} /></Field>
+          <Field id="dp-gross" label="Loaded weight (kg) *" hint="From your scale: RCN plus bags."><input id="dp-gross" required inputMode="decimal" value={d.gross} onChange={(e) => setD({ ...d, gross: e.target.value })} className={`${inputClass} tabular-nums`} /></Field>
           <div className="sm:col-span-2 lg:col-span-5 space-y-2">
-            <p className="text-[12.5px] font-semibold text-warmstone-700">Quality of each Lot on the truck <span className="font-normal text-warmstone-500">(from its own quality check; change a value only if it was measured again)</span></p>
+            <div>
+              <p className="text-[13px] font-bold text-warmstone-900">Quality of each Lot on the truck</p>
+              <p className="text-[12px] text-warmstone-500">Filled in from each Lot's own quality check. Change a value only if it was measured again.</p>
+            </div>
+            <div className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] gap-3 text-[12px] font-semibold text-warmstone-700">
+              <span>Lot</span><span>Moisture (%) *</span><span>KOR *</span><span>Nut count *</span>
+            </div>
             {t.lines.map((l) => (
               <div key={l.receiptId} className="grid grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] gap-3 items-center">
                 <span className="text-[13px] font-mono text-warmstone-800 truncate">{l.lotNumber ?? l.receiptId}</span>
-                {(["moisture", "kor", "nutCount"] as const).map((k) => (
+                {QUALITY.map(({ key, label }) => (
                   <input
-                    key={k} required={k !== "nutCount"} inputMode="decimal" aria-label={`${k === "nutCount" ? "Nut count" : k === "kor" ? "KOR" : "Moisture %"}, ${l.lotNumber ?? l.receiptId}`}
-                    placeholder={k === "nutCount" ? "Nut count" : k === "kor" ? "KOR" : "Moisture %"} value={quality[l.receiptId]?.[k] ?? ""}
-                    onChange={(e) => setQuality({ ...quality, [l.receiptId]: { ...quality[l.receiptId]!, [k]: e.target.value } })} className={inputClass}
+                    key={key} required inputMode="decimal" aria-label={`${label}, ${l.lotNumber ?? l.receiptId}`}
+                    value={quality[l.receiptId]?.[key] ?? ""}
+                    onChange={(e) => setQuality({ ...quality, [l.receiptId]: { ...quality[l.receiptId]!, [key]: e.target.value } })} className={`${inputClass} tabular-nums`}
                   />
                 ))}
               </div>
             ))}
           </div>
           <div className="sm:col-span-2 lg:col-span-5 flex items-center gap-3">
-            <button type="submit" disabled={saving || !d.truckNo.trim() || !d.wr.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
-              <span className="material-symbols-outlined text-[17px]">local_shipping</span>
+            <button type="submit" disabled={saving || !dispatchReady} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
+              <span className="material-symbols-outlined text-[18px]">local_shipping</span>
               Dispatch truck
             </button>
             <span className="text-[12px] text-warmstone-500">Nothing about arrival is filled in here - the receiving warehouse records that.</span>
@@ -141,11 +167,10 @@ export function TransferPanel({
 
       {receiving && (
         <form
-          onSubmit={(e) => { e.preventDefault(); void onReceive({ whReceiptNo: r.wr, bagsReceived: r.bags, receivedGrossKg: r.gross, damagedBags: r.damaged || null, korReceived: r.kor || null, moistureReceived: r.moisture || null, nutCountReceived: r.nuts || null, receivedLotNoRaw: r.lot || null, receivedComment: r.comment || null, lines: t.lines.map((l) => ({ receiptId: l.receiptId, binCode: bins[l.receiptId] ?? "" })) }); }}
+          onSubmit={(e) => { e.preventDefault(); void onReceive({ whReceiptNo: r.wr, receivedGrossKg: r.gross, damagedBags: r.damaged || null, korReceived: r.kor || null, moistureReceived: r.moisture || null, nutCountReceived: r.nuts || null, receivedLotNoRaw: r.lot || null, receivedComment: r.comment || null, lines: t.lines.map((l) => ({ receiptId: l.receiptId, binCode: bins[l.receiptId] ?? "", bagsReceived: lotBags[l.receiptId] ?? "" })) }); }}
           className="lg:col-span-3 bg-white border-2 border-brand-700 rounded-2xl p-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start"
         >
           <Field id="rc-wr" label="Warehouse receipt no." hint="Your own receipt for this arrival."><input id="rc-wr" required value={r.wr} onChange={(e) => setR({ ...r, wr: e.target.value })} className={inputClass} /></Field>
-          <Field id="rc-bags" label="Bags received" hint={`${n(v.bagsDispatched)} were sent.`}><input id="rc-bags" required inputMode="numeric" value={r.bags} onChange={(e) => setR({ ...r, bags: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-gross" label="Gross weight received (kg)" hint="From your scale: RCN plus bags."><input id="rc-gross" required inputMode="decimal" value={r.gross} onChange={(e) => setR({ ...r, gross: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-damaged" label="Damaged bags"><input id="rc-damaged" inputMode="numeric" value={r.damaged} onChange={(e) => setR({ ...r, damaged: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-lot" label="Your Lot number" hint="As you write it; kept exactly."><input id="rc-lot" value={r.lot} onChange={(e) => setR({ ...r, lot: e.target.value })} className={inputClass} /></Field>
@@ -154,10 +179,15 @@ export function TransferPanel({
           <Field id="rc-nuts" label="Nut count"><input id="rc-nuts" inputMode="numeric" value={r.nuts} onChange={(e) => setR({ ...r, nuts: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-comment" label={differs ? "Why it differs *" : "Comment"} hint={differs ? "What arrived is not what was sent: say why (damaged bags, a short load, a weighing difference…)." : undefined}><input id="rc-comment" required={differs} value={r.comment} onChange={(e) => setR({ ...r, comment: e.target.value })} className={`${inputClass} ${differs ? "border-ambernut-300 bg-ambernut-50" : ""}`} /></Field>
           <div className="sm:col-span-2 lg:col-span-4 space-y-2">
-            <p className="text-[12.5px] font-semibold text-warmstone-700">Bin each Lot was unloaded into <span className="font-normal text-warmstone-500">(this is what makes the Lot available to production)</span></p>
+            <p className="text-[12px] font-semibold text-warmstone-700">Each Lot: bags counted off the truck, and the bin it was unloaded into <span className="font-normal text-warmstone-500">(the truck is weighed once, so its weight is shared between the Lots by their bags; the bin is what makes the Lot available to production)</span></p>
             {t.lines.map((l) => (
-              <div key={l.receiptId} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,2fr)] gap-3 items-center">
+              <div key={l.receiptId} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] gap-3 items-center">
                 <span className="text-[13px] font-mono text-warmstone-800 truncate">{l.lotNumber ?? l.receiptId}</span>
+                <span className="text-[12px] text-warmstone-500 tabular-nums">{n(l.bags)} bags sent</span>
+                <input
+                  required inputMode="numeric" aria-label={`Bags received, ${l.lotNumber ?? l.receiptId}`} placeholder="Bags received" value={lotBags[l.receiptId] ?? ""}
+                  onChange={(e) => setLotBags({ ...lotBags, [l.receiptId]: e.target.value })} className={inputClass}
+                />
                 <select
                   required aria-label={`Bin, ${l.lotNumber ?? l.receiptId}`} value={bins[l.receiptId] ?? ""}
                   onChange={(e) => setBins({ ...bins, [l.receiptId]: e.target.value })} className={inputClass}
@@ -167,9 +197,14 @@ export function TransferPanel({
                 </select>
               </div>
             ))}
+            <p className="text-[12px] text-warmstone-500 tabular-nums">
+              {bagsTotal === null
+                ? `${n(v.bagsDispatched)} bags were sent.`
+                : <>Bags received on the truck: <span className="font-semibold text-warmstone-800">{n(bagsTotal)}</span> · {n(v.bagsDispatched)} were sent.</>}
+            </p>
           </div>
           <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-3">
-            <button type="submit" disabled={saving || !r.bags.trim() || !r.gross.trim() || !r.wr.trim() || !allBinned || (differs && !r.comment.trim())} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
+            <button type="submit" disabled={saving || !allCounted || !r.gross.trim() || !r.wr.trim() || !allBinned || (differs && !r.comment.trim())} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
               <span className="material-symbols-outlined text-[17px]">inventory_2</span>
               Record arrival
             </button>

@@ -1,5 +1,5 @@
 import type { SiloSize, SizeValues } from "../domain/calibration.js";
-import type { CookCheckState, CoolingCheckState, LotStatus } from "../domain/cooking.js";
+import type { CoolingCheckState, LotStatus } from "../domain/cooking.js";
 import type { EntryKind } from "../domain/lotEntries.js";
 import type { ShellingFigures, ShellingKgField } from "../domain/shelling.js";
 import type { StoreBalance, Stream, TruckStatus } from "../domain/byProducts.js";
@@ -12,6 +12,8 @@ export interface LotCookRunView {
   date: string;
   sizes: SizeValues;
   totalKg: number;
+  /** Damaged or spoiled in the cooker, as typed; blank when nothing was. */
+  damagedKg: string | null;
   createdBy: string | null;
   createdAt: string;
 }
@@ -58,12 +60,12 @@ export interface LotView {
   /** The sizes it actually cooked, largest first. */
   cookedSizes: SiloSize[];
   totalKg: number;
+  /** Of totalKg, damaged or spoiled in the cooker: it never reaches shelling. */
+  damagedKg: number;
   bags: number;
   coolingSilo: string | null;
   /** "YYYY-MM-DDTHH:MM", factory time as typed. */
   coolingAt: string | null;
-  /** QC-3, per cooked size. */
-  cookChecks: Record<string, CookCheckState>;
   /** QC-4. */
   coolingCheck: CoolingCheckState;
   entries: LotEntryView[];
@@ -121,6 +123,7 @@ export interface CookRunInput {
   code?: string;
   date?: string;
   sizes?: SizeValues;
+  damagedKg?: string;
 }
 
 export interface CoolingInput {

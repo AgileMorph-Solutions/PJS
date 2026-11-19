@@ -68,10 +68,12 @@ describe("New batch: bins and their stock come from procurement", () => {
   it("offers the factory's bins with the GRN weight of their completed Lots", async () => {
     const res = await call("wi", "GET", "/api/production/batch-bins");
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([
-      { binCode: "PBT-03B", store: null, kg: 2_950_400, lotCount: 2, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true },
-      { binCode: "PBT-10", store: null, kg: 878_200, lotCount: 1, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true },
+    // The Bin masters here have no warehouse (like the imported ones): the warehouse is where the Lots are, and each Lot names its truck.
+    expect(res.json().map(({ lots, ...b }: { lots: { receiptId: string }[] }) => ({ ...b, trucks: lots.length }))).toEqual([
+      { binCode: "PBT-03B", store: SITE, kg: 2_950_400, lotCount: 2, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true, trucks: 2 },
+      { binCode: "PBT-10", store: SITE, kg: 878_200, lotCount: 1, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true, trucks: 1 },
     ]);
+    expect(res.json()[0].lots[0].receiptId).toMatch(/^REC-PBT-/);
   });
 
   it("creates the batch as Open, with each bin's planned kg as it stood, and the plan worked out", async () => {
@@ -156,5 +158,22 @@ describe("New batch: bins and their stock come from procurement", () => {
     expect((await call("qfs", "GET", "/api/production/batches")).statusCode).toBe(200);
     expect((await call("qfs", "GET", "/api/production/batch-bins")).statusCode).toBe(403);
     expect((await call("qfs", "POST", "/api/production/batches", { code: "X", startDate: "2026-07-19", bins: ["PBT-03B"] })).statusCode).toBe(403);
+  });
+});
+
+describe("A bin whose Lots add no kg", () => {
+  // The bug this guards: a run planned at "0.0 t" because its bin's only Lot had no usable weight. Here the Lot names two bins,
+  // so no kg is attributed to either (warehouseBinStock never splits a weight nobody recorded).
+  it("can't go into a run: the refusal names the truck to fix, and the screen gets the truck to link to", async () => {
+    for (const code of ["PBT-SPLA", "PBT-SPLB"]) await prisma.bin.create({ data: { code } });
+    const truck = await lotInBin("PBT-SPLA/PBT-SPLB", "4000");
+
+    const offered = (await call("wi", "GET", "/api/production/batch-bins")).json().find((b: { binCode: string }) => b.binCode === "PBT-SPLA");
+    expect(offered).toMatchObject({ kg: 0, lotCount: 1, lotsWithoutKg: 1, inBatch: null, lots: [{ receiptId: truck, state: "split_across_bins" }] });
+
+    const res = await call("wi", "POST", "/api/production/batches", { startDate: "2026-07-19", bins: ["PBT-SPLA"] });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toContain(`PBT-SPLA has no net stock: record the weight on ${truck} first`);
+    expect(await prisma.productionBatchBin.count({ where: { binCode: "PBT-SPLA" } })).toBe(0);
   });
 });

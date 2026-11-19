@@ -162,8 +162,9 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
       } else if (STAGE_HEADER.has(h)) {
         const { stageId, label } = STAGE_HEADER.get(h)!;
         // Only a CHANGED cell gets here, so an exported file re-uploaded untouched still passes. A field
-        // that is typed until its inputs exist (KOR) is locked only when they are in the file or on the receipt.
-        const rule = derivedRuleInForce(inputsAfterRow, stageId, label);
+        // that is typed until its inputs exist (KOR) is locked only when they are in the file or on the receipt:
+        // the client's sheets hold KOR without the grams it comes from.
+        const rule = derivedRuleInForce(inputsAfterRow, stageId, label, "upload");
         if (stageId === "n-lot") err(SYSTEM_LOT_MESSAGE, h);
         else if (rule) err(`is calculated (${rule.formula}) — change the values it is calculated from instead`, h);
         else (stages[stageId] ??= {})[label] = next ?? "";

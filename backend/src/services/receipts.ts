@@ -16,10 +16,15 @@ import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce } from "@anagro
 import { RECEIPT_STAGE_MIRRORS, STAGE_TO_RECEIPT_COLUMNS } from "@anagroci/contract/domain/receiptMirror";
 import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
 import { splitBinNumber } from "@anagroci/contract/domain/binNumber";
-import { autoDateFill } from "@anagroci/contract/data/autoFields";
+import { AUTO_FIELDS, autoFill, type AutoFillContext } from "@anagroci/contract/data/autoFields";
+import { WAREHOUSE_KIND_LABEL, WAREHOUSE_KINDS, type WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
+import { BIN_FINALISE_FIELDS, FINALISED_WHEN_LABEL } from "@anagroci/contract/domain/binFinalise";
 import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES, isGrnComplete } from "@anagroci/contract/domain/recordLock";
 import { decisionBranchesFor } from "@anagroci/contract/domain/decisions";
 import { productionReadinessGaps } from "@anagroci/contract/domain/productionBatch";
+import { dryingRoundsByLot } from "./dryingRounds.js";
+import { decisionGate, stageGate } from "@anagroci/contract/domain/phaseGate";
+import { supplierNameKey } from "@anagroci/contract/domain/supplierCode";
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
@@ -27,6 +32,7 @@ import { assertLotBeforeBin, assertRejectionHasReason, ForbiddenError, Validatio
 import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
 import { planFitProblem } from "./receiptPlanInfo.js";
+import { assertKnownOrigin } from "./masters.js";
 
 type Tx = Prisma.TransactionClient;
 export interface WriteOpts {
@@ -200,18 +206,120 @@ export async function applyStageFields(
   fields: Record<string, string>,
   opts: WriteOpts = {}
 ) {
+  // The record as it was before this write: a filled-in value (good bags) follows its inputs only while it still holds
+  // what the formula gave from them (refreshDerivedFields).
+  let before: Record<string, Record<string, string>> | undefined;
   if (!opts.bypassValidation) {
-    const current = await assertCallerMayWrite(tx, id, stageId, fields, opts.actor?.role);
-    const meta = await tx.receipt.findUnique({ where: { id }, select: { arrivalDate: true, lockedAt: true } });
+    // A person typing in the app (a direct edit, or an approved form) may never type KOR; an upload or a script writes
+    // what its source recorded, as the client's sheets do (KOR without the grams).
+    const inApp = opts.actor?.via === "direct" || opts.actor?.via === "approval";
+    const current = await assertCallerMayWrite(tx, id, stageId, fields, opts.actor?.role, inApp ? "app" : "upload");
+    before = current;
+    const meta = await tx.receipt.findUnique({ where: { id }, select: { arrivalDate: true, lockedAt: true, warehouse: true, source: true } });
     if (meta?.lockedAt && LOCKED_STAGES.has(stageId)) throw new ValidationError(LOCKED_MESSAGE);
     if (stageId === "n-bin" && (current["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError(BIN_FINALISED_MESSAGE);
-    // A date the step carries but the person left blank fills itself (contract data/autoFields.ts), whatever route the write came by.
-    fields = { ...fields, ...autoDateFill(stageId, fields, current[stageId], { today: new Date().toISOString().slice(0, 10), arrivalDate: meta?.arrivalDate ?? "" }) };
+    const ruled = isPersonEdit(opts, meta?.source);
+    if (ruled) assertStageOpen(stageGate({ stageData: current, branches: await branchesOf(tx, id) }, stageId));
+    // A field the step carries but the person left blank fills itself (contract data/autoFields.ts), whatever route the write came by.
+    if (AUTO_FIELDS[stageId]) fields = { ...fields, ...autoFill(stageId, fields, current[stageId], await autoFillContext(tx, meta, current, opts)) };
+    if (stageId === "n-gate") fields = await withWarehouseType(tx, fields, current["n-gate"]);
+    if (stageId === "n-verify") fields = await withLbaCode(tx, fields, current["n-verify"]);
   }
   await writeStageFields(tx, id, stageId, fields, opts);
   if (!opts.bypassValidation) await syncReceiptColumns(tx, id, stageId, fields);
-  if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts);
+  if (!opts.bypassValidation && DERIVED_INPUT_STAGES.has(stageId)) await refreshDerivedFields(tx, id, opts, before);
   if (!opts.bypassValidation && stageId === "n-grn") await lockIfGrnComplete(tx, id, opts);
+}
+
+/**
+ * The phase order (contract domain/phaseGate.ts) holds for what a person enters in the app: a direct edit, an approved
+ * form, the batch grid. Field values themselves are never refused (contract domain/fieldRules.ts only warns, and the forms
+ * show it). Not for an Excel upload (via "import"), which is reported and never refused, nor for a record imported from the 2026 workbooks, which never had most of these fields. The seeder and
+ * importers pass bypassValidation and never get here.
+ */
+function isPersonEdit(opts: WriteOpts, source: string | undefined): boolean {
+  return Boolean(opts.actor) && opts.actor!.via !== "import" && source !== "imported";
+}
+
+async function branchesOf(tx: Tx, id: string): Promise<Record<string, string>> {
+  const rows = await tx.receiptBranch.findMany({ where: { receiptId: id }, select: { stageId: true, branchId: true } });
+  return Object.fromEntries(rows.map((r) => [r.stageId, r.branchId]));
+}
+
+function assertStageOpen(gate: { open: boolean; message?: string }) {
+  if (!gate.open) throw new ValidationError(gate.message ?? "This step isn't open yet.");
+}
+
+/**
+ * The LBA code belongs to the supplier, so picking a supplier fills it from the Supplier master, and a code that names a
+ * different supplier is refused rather than saved beside the wrong name. A name the master doesn't know is left as typed.
+ */
+async function withLbaCode(tx: Tx, fields: Record<string, string>, stored: Record<string, string> | undefined): Promise<Record<string, string>> {
+  const name = (fields["SUPPLIERS NAME"] ?? stored?.["SUPPLIERS NAME"] ?? "").trim();
+  if (!name || !("SUPPLIERS NAME" in fields || "LBA CODE" in fields)) return fields;
+  const key = supplierNameKey(name);
+  const match = (await tx.supplier.findMany({ select: { code: true, name: true } })).filter((s) => supplierNameKey(s.name) === key);
+  if (match.length !== 1) return fields; // unknown, or two suppliers share the name: nothing safe to fill
+  const code = (fields["LBA CODE"] ?? "").trim();
+  if (code && code !== match[0]!.code) throw new ValidationError(`LBA code ${code} isn't ${name}'s code (${match[0]!.code}). Pick the supplier from the list.`);
+  return "SUPPLIERS NAME" in fields && !code ? { ...fields, "LBA CODE": match[0]!.code } : fields;
+}
+
+const WH_LOCATION = "WH LOCATION";
+const WAREHOUSE_TYPE = "Warehouse type (Village/Regional/Factory)";
+
+const WAREHOUSE_TYPE_LABELS = WAREHOUSE_KINDS.map((k) => k.label);
+export const WAREHOUSE_TYPE_MESSAGE = `The warehouse type must be one of ${WAREHOUSE_TYPE_LABELS.join(", ")}.`;
+
+/** The Village / Regional Central / Factory label of a warehouse in the master; a store takes its site's. Undefined when unknown or unset. */
+async function warehouseKindOf(tx: Tx, name: string): Promise<string | undefined> {
+  const row = name ? await tx.warehouse.findUnique({ where: { name }, select: { kind: true, site: true } }) : null;
+  const kind = row?.site ? (await tx.warehouse.findUnique({ where: { name: row.site }, select: { kind: true } }))?.kind : row?.kind;
+  return kind ? WAREHOUSE_KIND_LABEL[kind as WarehouseKind] : undefined;
+}
+
+/**
+ * Arrival's WH LOCATION is picked from the Warehouses master, and its Warehouse type is filled from it — recomputed whenever
+ * the location changes, and filled when it is still blank. A person may override the type (Nov 2026) with one of the master's
+ * kinds; that pick stands until the location changes again. A location the master doesn't have is refused here, for new
+ * writes only: older and imported records keep what they recorded.
+ */
+async function withWarehouseType(tx: Tx, fields: Record<string, string>, stored: Record<string, string> | undefined): Promise<Record<string, string>> {
+  const given = WH_LOCATION in fields;
+  const location = (given ? fields[WH_LOCATION] : stored?.[WH_LOCATION])?.trim() ?? "";
+  if (given && location && !(await tx.warehouse.findUnique({ where: { name: location }, select: { name: true } }))) {
+    throw new ValidationError(`"${location}" isn't a warehouse in Masters › Warehouses. Choose the WH LOCATION from the list.`);
+  }
+  const typedGiven = WAREHOUSE_TYPE in fields;
+  const typed = (fields[WAREHOUSE_TYPE] ?? "").trim();
+  if (typed && !WAREHOUSE_TYPE_LABELS.includes(typed)) throw new ValidationError(WAREHOUSE_TYPE_MESSAGE);
+  // The person's own pick (or clearing it, with no new location) wins over the master's.
+  if (typedGiven && (typed || !given)) return fields;
+  if (!given && (stored?.[WAREHOUSE_TYPE] ?? "").trim()) return fields;
+  const kind = location ? await warehouseKindOf(tx, location) : undefined;
+  if (!given && !kind) return fields; // nothing to fill, and nothing changed: leave the stage as it is
+  return { ...fields, [WAREHOUSE_TYPE]: kind ?? "" };
+}
+
+/**
+ * What an auto field can be filled from: the receipt's own dates, warehouse, Lot and Bin, and who is writing. Anything
+ * the records don't hold (no Lot yet, an import with no actor) is left out, so the field stays blank.
+ */
+async function autoFillContext(
+  tx: Tx,
+  meta: { arrivalDate: string; warehouse: string } | null,
+  current: Record<string, Record<string, string>>,
+  opts: WriteOpts,
+): Promise<AutoFillContext> {
+  const actor = opts.actor?.id ? await tx.user.findUnique({ where: { id: opts.actor.id }, select: { displayName: true } }) : null;
+  return {
+    today: new Date().toISOString().slice(0, 10),
+    arrivalDate: meta?.arrivalDate ?? "",
+    site: meta?.warehouse ?? "",
+    lot: current["n-lot"]?.["Lot Number"],
+    bin: current["n-bin"]?.["Bin Number"],
+    actorName: actor?.displayName,
+  };
 }
 
 /** Refuses a change to a receipt whose GRN is complete (the lock), as one place for every route that edits its own columns. */
@@ -249,23 +357,25 @@ async function syncReceiptColumns(tx: Tx, id: string, stageId: string, fields: R
 }
 
 export const SYSTEM_BIN_DATE_MESSAGE =
-  "The bin allocation date is stamped when the allocation is finalised — it can't be typed. Use Finalise.";
+  "The bin allocation date and who finalised it are stamped when the allocation is finalised — they can't be typed. Use Finalise.";
 
 export const SYSTEM_LOT_MESSAGE =
   "The Lot Number is issued by the system when the truck passes quality — it can't be typed or changed.";
 
-async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>, role?: Role) {
+async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields: Record<string, string>, role?: Role, from: "app" | "upload" = "app") {
   if (stageId === "n-lot") throw new ValidationError(SYSTEM_LOT_MESSAGE);
   // A field hidden from the writer's role is not theirs to write either (price and amount, for the Warehouse Incharge).
   if (role) for (const label of Object.keys(fields)) if (!canSeeField(role, stageId, label)) throw new ForbiddenError(PRICE_NOT_YOURS_MESSAGE);
-  if (stageId === "n-bin" && ("Bin allocation date" in fields || "Finalised by" in fields)) throw new ValidationError(SYSTEM_BIN_DATE_MESSAGE);
+  if (stageId === "n-bin" && BIN_FINALISE_FIELDS.some((label) => label in fields)) throw new ValidationError(SYSTEM_BIN_DATE_MESSAGE);
+  // Typed in the app, the truck's origin is one of the master's towns; an upload adds its sheet's own (receiptSheet.ts).
+  if (from === "app" && stageId === "n-verify" && "ORIGIN" in fields) await assertKnownOrigin(tx, fields["ORIGIN"]);
   // A value that is typed until its inputs exist (KOR, before the cut-test grams) is the system's only
   // once they do — judged on the stage as it will stand after this write, so grams and KOR sent
   // together are refused rather than leaving a typed number the next recalculation would overwrite.
   const current = assembleStageData((await loadReceiptRow(id, tx)) as Record<string, unknown>);
   const after = { ...current, [stageId]: { ...current[stageId], ...fields } };
   for (const label of Object.keys(fields)) {
-    const rule = derivedRuleInForce(after, stageId, label);
+    const rule = derivedRuleInForce(after, stageId, label, from);
     if (rule) throw new ValidationError(`${label} is calculated (${rule.formula}) — change the values it is calculated from instead.`);
   }
   return current;
@@ -277,12 +387,13 @@ const DERIVED_INPUT_STAGES = new Set(DERIVED_RULES.flatMap((r) => r.inputs.map((
 /**
  * Rewrites every calculated field whose inputs are all present and whose stored value differs.
  * Calculated values are audited like any other change (same actor, same channel), so the history
- * shows why a net weight moved.
+ * shows why a net weight moved. A filled-in field a person may change (good bags) is rewritten only while
+ * blank or still holding the formula's value from `before` — never over what someone typed.
  */
-async function refreshDerivedFields(tx: Tx, id: string, opts: WriteOpts) {
+async function refreshDerivedFields(tx: Tx, id: string, opts: WriteOpts, before?: Record<string, Record<string, string>>) {
   const row = await loadReceiptRow(id, tx);
   const current = assembleStageData(row as Record<string, unknown>);
-  for (const [stageId, values] of Object.entries(computeDerivedFields(current))) {
+  for (const [stageId, values] of Object.entries(computeDerivedFields(current, before))) {
     const changed = Object.fromEntries(Object.entries(values).filter(([label, v]) => current[stageId]?.[label] !== v));
     if (Object.keys(changed).length) await writeStageFields(tx, id, stageId, changed, opts);
   }
@@ -416,7 +527,9 @@ async function assertLastDecisionAllowed(tx: Tx, id: string, branchId: string) {
     );
   }
   if (branchId === "production") {
-    const gaps = productionReadinessGaps(toReceiptRecord(row) as ReceiptRecord);
+    const record = toReceiptRecord(row) as ReceiptRecord;
+    const rounds = record.lotNo ? (await dryingRoundsByLot(tx, [record.lotNo])).get(record.lotNo) : undefined;
+    const gaps = productionReadinessGaps(record, rounds);
     if (gaps.length) throw new ValidationError(`This Lot can't be marked ready for production yet: ${gaps.join(", ")}.`);
   }
 }
@@ -430,6 +543,13 @@ export async function applyBranch(
   opts: WriteOpts = {}
 ) {
   if (!opts.bypassValidation && stageId === "n-qfs") assertRejectionHasReason(branchId, reason);
+  if (!opts.bypassValidation) {
+    const meta = await tx.receipt.findUnique({ where: { id }, select: { source: true } });
+    if (isPersonEdit(opts, meta?.source)) {
+      const stageData = assembleStageData((await loadReceiptRow(id, tx)) as Record<string, unknown>);
+      assertStageOpen(decisionGate({ stageData, branches: await branchesOf(tx, id) }, stageId, branchId));
+    }
+  }
   // The quality decision is part of the locked record; the drying and transfer decisions come after the GRN and stay open.
   if (!opts.bypassValidation && LOCKED_DECISIONS.has(stageId)) await assertRecordOpen(tx, id);
   if (!opts.bypassValidation && stageId === "n-xferdec") await assertLastDecisionAllowed(tx, id, branchId);
@@ -533,7 +653,8 @@ export async function setBranch(
 
 /**
  * Closes the bin allocation: stamps today's date and who finalised it (the stage's "Bin allocation date" and "Finalised by").
- * Needs a Lot and a Bin first, and can only be done once; after it the bin step can't change until an Admin reopens it.
+ * Needs a Lot, a Bin and the person's "Same day / Next day" first — after it the bin step can't change until an Admin
+ * reopens it, so an unanswered one could never be answered. Can only be done once.
  */
 export async function finaliseBin(id: string, actor: { id: string; displayName: string }) {
   await prisma.$transaction(async (tx) => {
@@ -543,10 +664,15 @@ export async function finaliseBin(id: string, actor: { id: string; displayName: 
     const stages = assembleStageData(row as Record<string, unknown>);
     if (!(stages["n-lot"]?.["Lot Number"] ?? "").trim()) throw new ValidationError("A Bin can only be finalised once the truck has a Lot.");
     if (!(stages["n-bin"]?.["Bin Number"] ?? "").trim()) throw new ValidationError("Choose the Bin first, then finalise.");
+    if (!(stages["n-bin"]?.[FINALISED_WHEN_LABEL] ?? "").trim()) throw new ValidationError("Choose whether the Bin is finalised the same day or the next day, then finalise.");
     if ((stages["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError("The bin allocation is already finalised.");
+    const allocationDate = new Date().toISOString().slice(0, 10);
     await writeStageFields(
       tx, id, "n-bin",
-      { "Bin allocation date": new Date().toISOString().slice(0, 10), "Finalised by": actor.displayName },
+      {
+        "Bin allocation date": allocationDate,
+        "Finalised by": actor.displayName,
+      },
       { actor: { id: actor.id, via: "direct" } },
     );
     await tx.timelineEntry.create({
@@ -570,7 +696,7 @@ export async function reopenRecord(id: string, actor: { id: string; displayName:
     const finalised = (stages["n-bin"]?.["Bin allocation date"] ?? "").trim() !== "";
     if (!row.lockedAt && !finalised) throw new ValidationError("This record isn't locked or finalised, so there is nothing to reopen.");
     if (row.lockedAt) await tx.receipt.update({ where: { id }, data: { lockedAt: null, lockedById: null } });
-    if (finalised) await writeStageFields(tx, id, "n-bin", { "Bin allocation date": "", "Finalised by": "" }, { actor: { id: actor.id, via: "direct" } });
+    if (finalised) await writeStageFields(tx, id, "n-bin", Object.fromEntries(BIN_FINALISE_FIELDS.map((label) => [label, ""])), { actor: { id: actor.id, via: "direct" } });
     await tx.timelineEntry.create({
       data: { receiptId: id, status: deriveStatus(toReceiptRecord(row) as ReceiptRecord), at: new Date().toISOString(), actorId: actor.id, note: `Reopened by ${actor.displayName}: ${reason.trim()}` },
     });

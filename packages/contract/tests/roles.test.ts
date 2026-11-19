@@ -75,3 +75,44 @@ describe("production access", () => {
     expect(canAccessProduction("qfs_officer", undefined)).toBe(false);
   });
 });
+
+import { roleFitsWarehouseType } from "../src/data/roles";
+describe("which warehouse category a role fits", () => {
+  it("puts Production Incharge and Factory Manager at a Central warehouse only", () => {
+    for (const role of ["production_incharge", "factory_manager"] as const) {
+      expect(roleFitsWarehouseType(role, "CENTRAL")).toBe(true);
+      expect(roleFitsWarehouseType(role, "UNIT")).toBe(false);
+      expect(roleFitsWarehouseType(role, null)).toBe(false);
+    }
+  });
+  it("leaves the warehouse roles free to work at either category", () => {
+    for (const role of ["warehouse_incharge", "branch_manager", "qfs_officer"] as const) {
+      expect(roleFitsWarehouseType(role, "UNIT")).toBe(true);
+      expect(roleFitsWarehouseType(role, "CENTRAL")).toBe(true);
+    }
+  });
+});
+
+import { canRecordIntake, canRunProduction } from "../src/data/roles";
+// Lokesh, 16 Nov 2026 ("Option 1"): the warehouse records and weighs a load, production accepts it and runs what follows.
+describe("the two sides of production", () => {
+  it("gives the load's intake to the warehouse and everything after its acceptance to production; Admin does both", () => {
+    expect(ROLES.filter((r) => canRecordIntake(r.value)).map((r) => r.value)).toEqual(["admin", "warehouse_incharge"]);
+    expect(ROLES.filter((r) => canRunProduction(r.value)).map((r) => r.value)).toEqual(["admin", "production_incharge"]);
+  });
+  it("opens Production to the factory roles at a Central warehouse, the Factory Manager to watch", () => {
+    for (const role of ["production_incharge", "factory_manager"] as const) {
+      expect(canAccessProduction(role, "CENTRAL")).toBe(true);
+      expect(canAccessProduction(role, "UNIT")).toBe(false);
+    }
+    expect(canRecordIntake("factory_manager") || canRunProduction("factory_manager")).toBe(false);
+  });
+});
+
+import { canSeeFactory } from "../src/data/roles";
+// 18 Nov 2026: "the warehouse guy will not see the entire production process" — the production team sees all of it.
+describe("who sees production past the intake", () => {
+  it("is the production team and Admin; the warehouse team (Incharge and QFS Officer) sees only its loads", () => {
+    expect(ROLES.filter((r) => canSeeFactory(r.value)).map((r) => r.value)).toEqual(["admin", "production_incharge", "factory_manager"]);
+  });
+});

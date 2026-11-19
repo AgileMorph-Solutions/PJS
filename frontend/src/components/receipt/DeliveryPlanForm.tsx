@@ -91,9 +91,13 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
       </>)}
       {field("dp-code", "Supplier / LBA code", <input id="dp-code" value={form.supplierCode} onChange={(e) => set("supplierCode", e.target.value)} className={inputClass} />)}
       {field("dp-origin", "Expected origin", <>
-        <input id="dp-origin" list="dp-origins" value={form.origin} onChange={(e) => set("origin", e.target.value)} className={inputClass} />
-        <datalist id="dp-origins">{masters.origins.map((o) => <option key={o} value={o} />)}</datalist>
-        {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
+        {/* Picked from Masters › Origins, never typed (Nov 2026). An older plan's town that the master lacks stays listed first. */}
+        <select id="dp-origin" value={form.origin} onChange={(e) => set("origin", e.target.value)} className={inputClass}>
+          <option value="">Choose an origin…</option>
+          {isUnlistedOrigin(form.origin, masters.origins) && <option value={form.origin}>{form.origin}</option>}
+          {masters.origins.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+        {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[12px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
       </>)}
       {/* Only where old store rows still exist under the warehouse (the workbook's WH NO.); otherwise the plan is simply
           for the warehouse itself and there is nothing to pick. */}

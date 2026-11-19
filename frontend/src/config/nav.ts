@@ -1,5 +1,8 @@
-import { canAccessProduction, type Role } from "../data/roles";
+import { CENTRAL_ONLY_ROLES, canAccessProduction, type Role } from "../data/roles";
 import type { UserView } from "../types/user";
+
+/** Everyone with an Approvals queue: procurement's reviewers, and the Production Incharge (state/PendingApprovals.tsx). */
+export const APPROVERS: Role[] = ["admin", "warehouse_incharge", "production_incharge"];
 
 export interface NavLeaf {
   label: string;
@@ -51,10 +54,13 @@ export const NAV: NavSection[] = [
     label: "Warehouse",
     items: [
       { label: "Delivery plans", sitePath: "delivery-plans", icon: "event_upcoming", roles: ["admin", "warehouse_incharge"] },
-      { label: "Reception", sitePath: "receipts", icon: "receipt_long" },
+      // Procurement's trucks: not the factory's roles, whom the API keeps off them (they carry prices).
+      { label: "Reception", sitePath: "receipts", icon: "receipt_long", allow: (me) => !CENTRAL_ONLY_ROLES.includes(me.role) },
       // Back in the menu (Oct 2026): the DESTINATION warehouse records what arrived on a BKT, and its
       // Lots' own pages are at the other site, so there is nowhere else for it to do that.
       { label: "Transfers", sitePath: "transfers", icon: "local_shipping", roles: ["admin", "warehouse_incharge"] },
+      // Who changed what on which truck (Nov 2026 field rules). The server keeps the narrow roles off it.
+      { label: "Logs", sitePath: "logs", icon: "history", roles: ["admin", "warehouse_incharge"] },
     ],
   },
   {
@@ -74,8 +80,8 @@ export const NAV: NavSection[] = [
     items: [{ label: "Jute Bag Management", to: "/jute", icon: "inventory_2", roles: ["admin", "warehouse_incharge"] }],
   },
   {
-    // One leaf: a production run is warehouse bins sent to production together; every stage after it (Intake's RCN
-    // receipts, Calibration, Cooking, ...) is entered on the run's own page, one stage at a time. (The client's documents
+    // One leaf: a production run is warehouse bins sent to production together; every stage after it (Intake & Calibration,
+    // Cooking, ...) is entered on the run's own page, one stage at a time. (The client's documents
     // call it a "batch"; the screens don't, to keep one plain name.) The older workbook-import pages (BTM/Bin/Lot under
     // pages/production/) still exist and still route; they are not linked here.
     label: "Production",
@@ -99,7 +105,8 @@ export const NAV: NavSection[] = [
     // suppliers; a Branch Manager sees their own suppliers and can request new ones.
     label: "Approvals",
     items: [
-      { label: "Approvals", to: "/approvals", icon: "approval", count: "pendingApprovals", roles: ["admin", "warehouse_incharge"] },
+      // Each step goes up to the role above it: the Production Incharge gets the loads to accept and the factory's checks.
+      { label: "Approvals", to: "/approvals", icon: "approval", count: "pendingApprovals", roles: APPROVERS },
       { label: "Supplier assignment", to: "/supplier-assignment", icon: "assignment_ind", roles: ["admin", "warehouse_incharge"] },
       { label: "My suppliers", to: "/my-suppliers", icon: "groups", roles: ["branch_manager"] },
       { label: "My submissions", to: "/my-submissions", icon: "outbox", roles: ["branch_manager", "qfs_officer"] },

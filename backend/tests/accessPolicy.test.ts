@@ -39,6 +39,28 @@ describe("role access policy", () => {
     }
   });
 
+  // An unlisted role falls through to "everything": the factory roles must be listed, and kept to Production.
+  it("keeps Production Incharge and Factory Manager to Production: no procurement trucks (prices), ledgers or users", () => {
+    for (const role of ["production_incharge", "factory_manager"] as const) {
+      expect(isAllowed(role, "GET", "/api/auth/me")).toBe(true);
+      expect(isAllowed(role, "GET", "/api/masters")).toBe(true);
+      expect(isAllowed(role, "GET", "/api/production/batches")).toBe(true);
+      expect(isAllowed(role, "GET", "/api/production/workbook")).toBe(true);
+      expect(isAllowed(role, "GET", "/api/receipts")).toBe(false);
+      expect(isAllowed(role, "GET", "/api/jute-ledgers")).toBe(false);
+      expect(isAllowed(role, "POST", "/api/users")).toBe(false);
+      expect(isAllowed(role, "POST", "/api/masters/suppliers")).toBe(false);
+    }
+  });
+
+  it("lets the Production Incharge write in Production, and the Factory Manager only read it", () => {
+    expect(isAllowed("production_incharge", "POST", "/api/production/rcn-receipts/RR-1/accept")).toBe(true);
+    expect(isAllowed("production_incharge", "DELETE", "/api/production/lot-cook-runs/3")).toBe(true);
+    for (const [method, path] of [["POST", "/api/production/rcn-receipts/RR-1/accept"], ["POST", "/api/production/factory-lots"], ["POST", "/api/production/workbook/preview"]] as const) {
+      expect(isAllowed("factory_manager", method, path)).toBe(false);
+    }
+  });
+
   it("only lets a Branch Manager use the supplier request routes", () => {
     expect(isAllowed("branch_manager", "POST", "/api/supplier-requests")).toBe(true);
     expect(isAllowed("branch_manager", "GET", "/api/my-suppliers")).toBe(true);

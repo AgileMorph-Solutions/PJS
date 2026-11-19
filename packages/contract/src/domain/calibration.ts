@@ -4,6 +4,12 @@
  * Calibration). Source: the client's "Production module" document (Oct 2026), Phase 2, and its workbooks
  * docs/Production/4. Calibration Process report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual
  * Calibration (Sheet2).
+ *
+ * Decision, Nov 2026 (both sides agreed): nobody weighs what goes into each of the 9 silos, only the total is known,
+ * and the total is enough. So Intake and Calibration are one stage: a load's net − dust − voids (rcnWeighing.ts's
+ * toSilosKg) goes into the silos as one total when production accepts it, and each production run's silo stock is
+ * tracked as its own total (Nov 2026: "each production run is different"), never one pool across runs.
+ * The sizes stay for QC-2 samples, moves by hand and the cooking sheet, which do name a silo.
  */
 
 /**
@@ -47,44 +53,9 @@ export type SizeValues = Partial<Record<SiloSize, string>>;
 /** Σ of the kg typed per size; blanks count as 0. */
 export const sizesTotal = (v: SizeValues): number => kg2(SILO_SIZE_KEYS.reduce((n, k) => n + (num(v[k]) || 0), 0));
 
-// ── Step 2 · Kg into each silo ──────────────────────────────────────────────────────────────────
-
-export interface CalibrationRunValues {
-  date?: string;
-  sizes?: SizeValues;
-}
-
-/**
- * One run of a load through the sizing machine. A load can take several runs over several days — in the client's
- * Calibration Process report BTM 1001's two receipts (48,699.15 kg each) went in as 17,966.1 + 30,733.05 and
- * 33,956.05 + 14,743.1 — so a run can't size more than what is still left of the load, and the load is
- * Calibrated once its runs add up to its into-silo kg.
- */
-/** `leftKg` null = the load's final weight isn't saved yet, so there is no total to keep the run within. */
-export function calibrationRunError(v: CalibrationRunValues, leftKg: number | null): string | null {
-  if (!(v.date ?? "").trim()) return "A date is required.";
-  for (const s of SILO_SIZES) {
-    const n = num(v.sizes?.[s.key]);
-    if (n !== null && (Number.isNaN(n) || n < 0)) return `Size ${s.code} must be a number of kg, 0 or more.`;
-  }
-  const total = sizesTotal(v.sizes ?? {});
-  if (total <= 0) return "Enter the kg that went into at least one silo.";
-  if (leftKg === null) return null;
-  if (leftKg <= 0) return "This load is already fully calibrated.";
-  if (total > kg2(leftKg)) return `The sizes add up to ${fmt(total)} kg, more than the ${fmt(leftKg)} kg of this load still to calibrate.`;
-  return null;
-}
-
 const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-/** Into-silo kg of the load, how much its runs have sized so far, and what is left. */
-/** `toSilosKg` is null until the final weight is saved (it is what says how much the load hands over); "left" is then unknown too. */
-export function calibrationProgress(toSilosKg: number | null, runs: { sizes: SizeValues }[]): { toSilosKg: number | null; sizedKg: number; leftKg: number | null } {
-  const sizedKg = kg2(runs.reduce((n, r) => n + sizesTotal(r.sizes), 0));
-  return { toSilosKg, sizedKg, leftKg: toSilosKg === null ? null : kg2(toSilosKg - sizedKg) };
-}
-
-// ── Step 3 · QC-2 sizing check ──────────────────────────────────────────────────────────────────
+// ── QC-2 sizing check ──────────────────────────────────────────────────────────────────
 
 /**
  * Where the QC-2 sample was taken: one of the 9 silos, or the RCN as received, before calibration (the sheet's
@@ -202,14 +173,13 @@ export const SILO_CHECK_LABELS: Record<SiloCheckState, string> = {
   re_sized: "Nuts moved · check again",
 };
 
-export type CalibrationStep = "sort" | "check" | "fix" | "none";
+export type CalibrationStep = "check" | "fix" | "none";
 
 /**
- * The one job to point this person at. Only what they can act on: a QFS Officer is never sent to sort a load or
- * to approve their own check, so with nothing to sample they are simply told there is nothing to do.
+ * The one job to point this person at. Only what they can act on: a QFS Officer is never sent to approve their own
+ * check, so with nothing to sample they are simply told there is nothing to do.
  */
-export function nextCalibrationStep(v: { canSize: boolean; canCheck: boolean; loadsToSort: number; checksWaiting: number; failedSilos: number; silosToCheck: number }): CalibrationStep {
-  if (v.canSize && v.loadsToSort > 0) return "sort";
+export function nextCalibrationStep(v: { canSize: boolean; canCheck: boolean; checksWaiting: number; failedSilos: number; silosToCheck: number }): CalibrationStep {
   if (v.canSize && v.checksWaiting > 0) return "check";
   if (v.canSize && v.failedSilos > 0) return "fix";
   if (v.canCheck && v.silosToCheck > 0) return "check";
@@ -241,19 +211,17 @@ export function siloChecks(
 }
 
 /**
- * The silos that still need someone. Only silos holding nuts count: an empty silo can't be sampled and nothing can
- * be moved out of it, so a failed check on one must not leave the screen asking for a move that is refused.
+ * The silos that still need someone: a failed one to fix, a fixed one to check again. With the silos tracked as one
+ * total, which silo holds nuts isn't known, so a silo never checked isn't asked for; sampling it stays the QFS
+ * Officer's call. Silos that are empty in total have nothing to sample or move.
  */
-export function silosWaiting(silos: { size: SiloSize; stockKg: number }[], checks: Record<SiloSize, SiloCheck>): { toCheck: SiloSize[]; failed: SiloSize[]; moved: SiloSize[] } {
-  const holding = silos.filter((s) => s.stockKg > 0).map((s) => s.size);
-  return {
-    toCheck: holding.filter((s) => checks[s].state === "not_checked" || checks[s].state === "re_sized"),
-    failed: holding.filter((s) => checks[s].state === "failed"),
-    moved: holding.filter((s) => checks[s].state === "re_sized"),
-  };
+export function silosWaiting(stockKg: number, checks: Record<SiloSize, SiloCheck>): { toCheck: SiloSize[]; failed: SiloSize[]; moved: SiloSize[] } {
+  const all = stockKg > 0 ? SILO_SIZE_KEYS : [];
+  const moved = all.filter((s) => checks[s].state === "re_sized");
+  return { toCheck: moved, failed: all.filter((s) => checks[s].state === "failed"), moved };
 }
 
-// ── Step 4 · Wholes manual calibration ──────────────────────────────────────────────────────────
+// ── Wholes manual calibration ──────────────────────────────────────────────────────────
 
 export interface ManualCalibrationValues {
   date?: string;
@@ -262,8 +230,11 @@ export interface ManualCalibrationValues {
   kg?: string;
 }
 
-/** "Only after a failed QC-2; kg moves between silos." `fromStockKg` is the stock of the silo it leaves. */
-export function manualCalibrationError(v: ManualCalibrationValues, fromStockKg: number | null): string | null {
+/**
+ * "Only after a failed QC-2; kg moves between silos." Recorded as typed: no silo's own kg is known, so the move can't
+ * be held to one, and it never changes the silos' total.
+ */
+export function manualCalibrationError(v: ManualCalibrationValues): string | null {
   if (!(v.date ?? "").trim()) return "A date is required.";
   if (!isSiloSize(v.fromSize)) return "Choose the silo the nuts are taken from.";
   if (!isSiloSize(v.toSize)) return "Choose the silo the nuts go into.";
@@ -271,90 +242,54 @@ export function manualCalibrationError(v: ManualCalibrationValues, fromStockKg: 
   const kg = num(v.kg);
   if (kg === null) return "Enter the kg moved.";
   if (Number.isNaN(kg) || kg <= 0) return "Kg moved must be a number above 0.";
-  if (fromStockKg !== null && kg > kg2(fromStockKg)) return `Silo ${siloLabel(v.fromSize)} holds ${fmt(fromStockKg)} kg; ${fmt(kg)} kg can't be moved out of it.`;
   return null;
 }
 
-// ── Step 5 · Silo stock ─────────────────────────────────────────────────────────────────────────
+// ── Silo stock ──────────────────────────────────────────────────────────────────────────────────
 
-export interface SiloStock {
-  size: SiloSize;
-  sizedInKg: number;
-  manualInKg: number;
-  manualOutKg: number;
+/** The silos as one pool: what calibrated loads put in, minus what was cooked out. */
+export interface SiloPool {
+  inKg: number;
   cookedKg: number;
   stockKg: number;
 }
 
-/** "Silo stock (each size) = opening + sized in − cooked ± manual calibration". Opening is 0: the app's silos start empty. */
-export function siloStock(
-  runs: { sizes: SizeValues }[],
-  moves: { fromSize: string; toSize: string; kg: string }[],
-  cooks: { sizes: SizeValues }[] = [],
-): SiloStock[] {
-  return SILO_SIZE_KEYS.map((size) => {
-    const sizedInKg = kg2(runs.reduce((n, r) => n + (num(r.sizes[size]) || 0), 0));
-    const manualInKg = kg2(moves.filter((m) => m.toSize === size).reduce((n, m) => n + (num(m.kg) || 0), 0));
-    const manualOutKg = kg2(moves.filter((m) => m.fromSize === size).reduce((n, m) => n + (num(m.kg) || 0), 0));
-    const cookedKg = kg2(cooks.reduce((n, c) => n + (num(c.sizes[size]) || 0), 0));
-    return { size, sizedInKg, manualInKg, manualOutKg, cookedKg, stockKg: kg2(sizedInKg + manualInKg - manualOutKg - cookedKg) };
-  });
+/** "Silo stock = opening + calibrated in − cooked". Opening is 0: the app's silos start empty. */
+export function siloPool(loads: { kg: number }[], cooks: { sizes: SizeValues }[] = []): SiloPool {
+  const inKg = kg2(loads.reduce((n, l) => n + l.kg, 0));
+  const cookedKg = kg2(cooks.reduce((n, c) => n + sizesTotal(c.sizes), 0));
+  return { inKg, cookedKg, stockKg: kg2(inKg - cookedKg) };
 }
 
 /**
- * "5. Calibrated RCN Silos Stock report", one row per day: opening + sized − cooked = closing, with the kg per size.
- * Calculated from the runs and moves, so it can't drift from the silo stock above. A move by hand shifts kg between
- * sizes and leaves the total alone (the report's "Adjusted qty"), so it shows in `sizes` and `movedKg`, not in closing.
+ * "5. Calibrated RCN Silos Stock report", one row per day: opening + calibrated in − cooked = closing. Calculated from
+ * the loads and cooking rows, so it can't drift from the silo stock above. A move by hand shifts nuts between silos
+ * and leaves the total alone (the report's "Adjusted qty"), so it shows in `movedKg`, not in closing.
  */
 export interface SiloDay {
   date: string;
   openingKg: number;
-  sizedKg: number;
+  inKg: number;
   cookedKg: number;
-  /** Net kg added to each size that day: sized in, plus moved in, minus moved out, minus cooked. */
-  sizes: Record<SiloSize, number>;
   movedKg: number;
   closingKg: number;
 }
 
 export function siloDailyStock(
-  runs: { date: string; sizes: SizeValues }[],
-  moves: { date: string; fromSize: string; toSize: string; kg: string }[],
+  loads: { date: string; kg: number }[],
+  moves: { date: string; kg: string }[],
   cooks: { date: string; sizes: SizeValues }[] = [],
 ): SiloDay[] {
-  const dates = [...new Set([...runs.map((r) => r.date), ...moves.map((m) => m.date), ...cooks.map((c) => c.date)])].sort();
+  const dates = [...new Set([...loads.map((l) => l.date), ...moves.map((m) => m.date), ...cooks.map((c) => c.date)])].sort();
   let closing = 0;
   return dates.map((date) => {
-    const dayRuns = runs.filter((r) => r.date === date);
-    const dayMoves = moves.filter((m) => m.date === date);
-    const dayCooks = cooks.filter((c) => c.date === date);
-    const sizedKg = kg2(dayRuns.reduce((n, r) => n + sizesTotal(r.sizes), 0));
-    const sizes = Object.fromEntries(SILO_SIZE_KEYS.map((k) => {
-      const sized = dayRuns.reduce((n, r) => n + (num(r.sizes[k]) || 0), 0);
-      const moved = dayMoves.reduce((n, m) => n + (m.toSize === k ? num(m.kg) || 0 : 0) - (m.fromSize === k ? num(m.kg) || 0 : 0), 0);
-      const cooked = dayCooks.reduce((n, c) => n + (num(c.sizes[k]) || 0), 0);
-      return [k, kg2(sized + moved - cooked)];
-    })) as Record<SiloSize, number>;
+    const inKg = kg2(loads.filter((l) => l.date === date).reduce((n, l) => n + l.kg, 0));
+    const cookedKg = kg2(cooks.filter((c) => c.date === date).reduce((n, c) => n + sizesTotal(c.sizes), 0));
+    const movedKg = kg2(moves.filter((m) => m.date === date).reduce((n, m) => n + (num(m.kg) || 0), 0));
     const openingKg = closing;
-    const cookedKg = kg2(dayCooks.reduce((n, c) => n + sizesTotal(c.sizes), 0));
-    closing = kg2(openingKg + sizedKg - cookedKg);
-    return { date, openingKg, sizedKg, cookedKg, sizes, movedKg: kg2(dayMoves.reduce((n, m) => n + (num(m.kg) || 0), 0)), closingKg: closing };
+    closing = kg2(openingKg + inKg - cookedKg);
+    return { date, openingKg, inKg, cookedKg, movedKg, closingKg: closing };
   });
-}
-
-/**
- * One run's loads, added up: what Intake handed over, what has been sorted so far, and how many loads are finished.
- * Only loads whose final weight is saved have a total to count (a load sorted before it is weighed has none yet).
- */
-export function batchCalibrationTotals(loads: { calibration: { toSilosKg: number | null; sizedKg: number; leftKg: number | null } | null }[]): { toSilosKg: number; sizedKg: number; leftKg: number; loads: number; loadsDone: number } {
-  const ready = loads.flatMap((l) => (l.calibration && l.calibration.toSilosKg !== null && l.calibration.leftKg !== null ? [{ ...l.calibration, toSilosKg: l.calibration.toSilosKg, leftKg: l.calibration.leftKg }] : []));
-  return {
-    toSilosKg: kg2(ready.reduce((n, c) => n + c.toSilosKg, 0)),
-    sizedKg: kg2(ready.reduce((n, c) => n + c.sizedKg, 0)),
-    leftKg: kg2(ready.reduce((n, c) => n + c.leftKg, 0)),
-    loads: ready.length,
-    loadsDone: ready.filter((c) => c.leftKg <= 0).length,
-  };
 }
 
 /** A silo as a workbook writes it: the report's "A++", the QC-2 sheet's "DE", or our own "E". Null when it's none of them. */

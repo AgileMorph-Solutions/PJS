@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canTakeMoistureCheck, rcnReceiptStatus } from "../src/domain/rcnReceipt";
+import { acceptanceProblem, canTakeMoistureCheck, rcnReceiptStatus } from "../src/domain/rcnReceipt";
 import { emptyPalletCountNote, finalWeightError, palletError, weighingTotals } from "../src/domain/rcnWeighing";
 
 /**
@@ -76,14 +76,23 @@ describe("final weight form", () => {
 describe("receipt status through weighing", () => {
   const ok = [{ status: "approved", decision: "ok" }] as const;
 
-  it("waits for weighing, then is weighing once a pallet is on, then Intake done", () => {
+  it("waits for weighing, is weighing once a pallet is on, waits for production once the final weight is saved, and is Calibrated once accepted", () => {
     expect(rcnReceiptStatus([...ok])).toBe("waiting_for_weighing");
     expect(rcnReceiptStatus([...ok], { pallets: 3, finalised: false })).toBe("weighing");
-    expect(rcnReceiptStatus([...ok], { pallets: 3, finalised: true })).toBe("intake_done");
+    expect(rcnReceiptStatus([...ok], { pallets: 3, finalised: true })).toBe("waiting_for_acceptance");
+    expect(rcnReceiptStatus([...ok], { pallets: 3, finalised: true, accepted: true })).toBe("calibrated");
   });
 
   it("a moisture check can be taken at any step, except while one is waiting for approval", () => {
-    const statuses = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done"] as const;
-    expect(statuses.map(canTakeMoistureCheck)).toEqual([true, false, true, true, true, true]);
+    const statuses = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "waiting_for_acceptance", "calibrated"] as const;
+    expect(statuses.map(canTakeMoistureCheck)).toEqual([true, false, true, true, true, true, true]);
+  });
+
+  // Production accepts only what the warehouse finished: quality OK and approved, and the net known (final weight).
+  it("can be accepted only once weighed with its moisture approved OK, and only once", () => {
+    const statuses = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "waiting_for_acceptance", "calibrated"] as const;
+    expect(statuses.map((s) => acceptanceProblem(s) === null)).toEqual([false, false, false, false, false, true, false]);
+    expect(acceptanceProblem("weighing")).toMatch(/final weight/);
+    expect(acceptanceProblem("calibrated")).toMatch(/already accepted/);
   });
 });

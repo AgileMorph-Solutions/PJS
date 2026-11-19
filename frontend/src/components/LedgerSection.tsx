@@ -1,4 +1,4 @@
-import { Fragment, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type { JuteLedger, JuteLedgerColumn } from "../types/stage";
 import { useTracking } from "../state/TrackingContext";
 import { usePagination } from "./ui/usePagination";
@@ -27,6 +27,9 @@ const KNOWN_ACTIVITY_TYPES = [
   "REBAGGING DURING DRYING",
   "TRANSFFER TO YAMOUSSOUKRO",
 ];
+
+/** The column both supplier-facing ledgers (Warehouse stock, Supplier movement) name a supplier in (juteBags.ts). */
+const SUPPLIER_CODE_COLUMN = "Supplier code";
 
 function blankRow(columns: JuteLedgerColumn[]): Row {
   return Object.fromEntries(columns.filter((c) => !DERIVED_COLUMNS.has(c.label)).map((c) => [c.label, ""]));
@@ -74,7 +77,12 @@ function withoutKey(row: Row, key: string): Row {
 }
 
 export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveEntry, renderTable, newestFirst, warehouse, calculatedField }: Props) {
-  const { ledgerEntries, addLedgerEntry } = useTracking();
+  const { ledgerEntries, addLedgerEntry, masters } = useTracking();
+  // Active suppliers by name, the way people look them up; the code is what the ledger stores.
+  const supplierChoices = useMemo(
+    () => masters.suppliers.filter((s) => s.active !== false).sort((a, b) => a.name.localeCompare(b.name)),
+    [masters.suppliers],
+  );
   const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label) || c.label === calculatedField?.column);
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
   const [saving, setSaving] = useState(false);
@@ -179,6 +187,18 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                         {warehouse.options.map((w) => <option key={w} value={w}>{w}</option>)}
                       </select>
                     )
+                  ) : c.label === SUPPLIER_CODE_COLUMN ? (
+                    // docs/Procurement Auto Populate Fields.xlsx rows 9-10: picked from the supplier master, not typed. Optional:
+                    // a purchase or a transfer row has no supplier.
+                    <select
+                      id={id}
+                      value={draft[c.label] ?? ""}
+                      onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
+                      className={inputCls}
+                    >
+                      <option value="">No supplier</option>
+                      {supplierChoices.map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
+                    </select>
                   ) : c.label === "Activities type" ? (
                     <>
                       <input

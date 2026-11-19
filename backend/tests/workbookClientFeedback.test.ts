@@ -75,7 +75,7 @@ beforeAll(async () => {
   await setBranch(onTruck, "n-xferdec", "transfer");
   const t = await createTransfer({ transferDate: "2035-05-20", fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: onTruck, bags: 590 }] });
   bkt = t.id;
-  await dispatchTransfer(bkt, { whReceiptNo: "WR-D", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880 });
+  await dispatchTransfer(bkt, { whReceiptNo: "WR-D", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880, transporter: "T", driver: "D", driverPhone: "0", lines: [{ receiptId: onTruck, nutCount: 170 }] });
   await receiveTransfer(bkt, { whReceiptNo: "WR-R", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road" });
 });
 afterAll(async () => {

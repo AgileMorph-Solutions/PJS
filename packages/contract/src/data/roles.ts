@@ -8,14 +8,29 @@
  */
 import type { WarehouseType } from "./warehouseTypes.js";
 
-export type Role ="admin" | "warehouse_incharge" | "branch_manager" | "qfs_officer";
+export type Role =
+  | "admin" | "warehouse_incharge" | "branch_manager" | "qfs_officer"
+  | "production_incharge" | "factory_manager";
 
 export const ROLES: { value: Role; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "warehouse_incharge", label: "Warehouse Incharge" },
   { value: "branch_manager", label: "Branch Manager" },
   { value: "qfs_officer", label: "QFS Officer" },
+  { value: "production_incharge", label: "Production Incharge" },
+  { value: "factory_manager", label: "Factory Manager" },
 ];
+
+/**
+ * Roles that only exist at the factory, so they may only be assigned to a Central warehouse (Lokesh, 16 Nov 2026: "two user
+ * IDs more for Production incharge and Factory Manager" to monitor the factory's area reports).
+ */
+export const CENTRAL_ONLY_ROLES: readonly Role[] = ["production_incharge", "factory_manager"];
+
+/** Whether a user with this role may be assigned to a warehouse of this category. Admin has no warehouse at all. */
+export function roleFitsWarehouseType(role: Role, warehouseType: WarehouseType | string | null | undefined): boolean {
+  return !CENTRAL_ONLY_ROLES.includes(role) || warehouseType === "CENTRAL";
+}
 
 export const ROLE_LABEL: Record<Role, string> = Object.fromEntries(
   ROLES.map((r) => [r.value, r.label])
@@ -94,10 +109,11 @@ export const ROLE_FORMS: RoleForm[] = [
           "FINAL KOR",
         ],
       },
-      // SACS (total) is not here: it is calculated as good + damp + torn (domain/receiptMath.ts).
+      // Nov 2026: the total on the truck is counted; good bags are filled in from it (and can be changed), and the tally
+      // is calculated from good + reconditioned (domain/receiptMath.ts), so it is not here.
       {
         stageId: "n-unload",
-        labels: ["BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"],
+        labels: ["SACS (bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)", "Reconditioning of torn bags", "BON SACS (good bags)"],
       },
     ],
   },
@@ -143,8 +159,36 @@ export function canWriteStageDirectly(role: Role): boolean {
   return role === "admin" || role === "warehouse_incharge";
 }
 
-/** The roles with work in Production: the Incharge runs it, the QFS Officer takes its quality checks. */
-export const PRODUCTION_ROLES: readonly Role[] = ["admin", "warehouse_incharge", "qfs_officer"];
+/**
+ * The roles with work in Production. The warehouse sends a load and the factory accepts it (Lokesh, 16 Nov 2026, "Option
+ * 1": "Warehouse page, they will update the details of quantity and quality. Then operations will accept"), so the work
+ * splits at that acceptance. The warehouse team — the Warehouse Incharge, with the QFS Officer's moisture check — records,
+ * checks and weighs the load (canRecordIntake), and sees only that: its intake. The production team sees the whole of
+ * production (canSeeFactory), the warehouse's forms included, read-only: the Production Incharge accepts the load and runs
+ * everything after it, its quality checks included (canRunProduction); the Factory Manager watches and changes nothing.
+ */
+export const PRODUCTION_ROLES: readonly Role[] = ["admin", "warehouse_incharge", "qfs_officer", "production_incharge", "factory_manager"];
+
+/** The warehouse's side of a load: record it, weigh it, and approve its moisture check. */
+export function canRecordIntake(role: Role): boolean {
+  return role === "admin" || role === "warehouse_incharge";
+}
+
+/**
+ * The factory's side: accept a weighed load, then every record after it (calibration, cooking, shelling, sorting,
+ * by-products) and its quality checks.
+ */
+export function canRunProduction(role: Role): boolean {
+  return role === "admin" || role === "production_incharge";
+}
+
+/**
+ * Who sees production past the intake (team decision, 18 Nov 2026: "the warehouse guy will not see the entire production
+ * process"): the production team and Admin. The warehouse team sees its loads, nothing after them.
+ */
+export function canSeeFactory(role: Role): boolean {
+  return canRunProduction(role) || role === "factory_manager";
+}
 
 /**
  * Production runs at the factory, which is the Central warehouse. So a role that works in Production

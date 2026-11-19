@@ -21,16 +21,17 @@ export function useBatch(code: string | undefined): { batch: BatchDetail | null;
   return { batch: rows[0] ?? null, loading, error, refetch };
 }
 
-/** Phase 2 for one batch: the factory's silos and the batch's QC-2 checks. One-row list, like useBatch. */
-export function useBatchCalibration(code: string | undefined): { calibration: BatchCalibration | null; error: string | null; refetch: () => Promise<void> } {
+/** Phase 2 for one batch: the factory's silos and the batch's QC-2 checks. One-row list, like useBatch. `enabled: false` for
+ * the warehouse team, who don't see the factory. */
+export function useBatchCalibration(code: string | undefined, enabled = true): { calibration: BatchCalibration | null; error: string | null; refetch: () => Promise<void> } {
   const { factory } = useProductionFactory();
-  const { rows, error, refetch } = useLoaded(() => (code ? api.getBatchCalibration(code).then((c) => [c]) : Promise.resolve([])), [code, factory]);
+  const { rows, error, refetch } = useLoaded(() => (code ? api.getBatchCalibration(code).then((c) => [c]) : Promise.resolve([])), [code, factory], { enabled });
   return { calibration: rows[0] ?? null, error, refetch };
 }
 
 /** Phases 3–4 for one batch: its Lots, and the factory's by-product stores, trucks and boiler. One-row list, like useBatch. */
-export function useBatchLots(code: string | undefined): { data: BatchLots | null; error: string | null; refetch: () => Promise<void> } {
+export function useBatchLots(code: string | undefined, enabled = true): { data: BatchLots | null; error: string | null; refetch: () => Promise<void> } {
   const { factory } = useProductionFactory();
-  const { rows, error, refetch } = useLoaded(() => (code ? api.getBatchLots(code).then((d) => [d]) : Promise.resolve([])), [code, factory]);
+  const { rows, error, refetch } = useLoaded(() => (code ? api.getBatchLots(code).then((d) => [d]) : Promise.resolve([])), [code, factory], { enabled });
   return { data: rows[0] ?? null, error, refetch };
 }

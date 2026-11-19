@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { formatKg } from "./batchUi";
-import { ReviewBar } from "./MoistureCard";
+import { ReviewBar } from "./ReviewBar";
 import { StepCard } from "./StepCard";
 import { Button } from "../ui/Button";
 import { DateInput } from "../ui/DateInput";
@@ -17,7 +17,7 @@ import type { BatchCalibration, ManualCalibrationInput, SizingCheck, SizingCheck
 import type { BatchDetail } from "@anagroci/contract/types/productionBatch";
 
 export interface CalibrationPermissions {
-  /** Sort a load (the Incharge / Admin; Data Entry later). */
+  /** Approve silo checks and fix a failed silo (the Production Incharge / Admin). */
   canSize: boolean;
   /** Enter a silo check (the QFS Officer, or the Incharge / Admin directly). */
   canCheck: boolean;
@@ -27,21 +27,21 @@ export interface CalibrationPermissions {
 
 const pct = (n: number | null) => (n === null ? "-" : `${n.toFixed(1)} %`);
 
-/** Silos with nuts that want a check, leaving out one whose check is already waiting for approval: it can't be sampled twice. */
+/** Silos that want a check again, leaving out one whose check is already waiting for approval: it can't be sampled twice. */
 export function silosToCheck(calibration: BatchCalibration): SiloSize[] {
   const sent = new Set(calibration.sizingChecks.filter((c) => c.status === "submitted").map((c) => c.point));
-  return silosWaiting(calibration.silos, calibration.siloChecks).toCheck.filter((s) => !sent.has(s));
+  return silosWaiting(calibration.silos.stockKg, calibration.siloChecks).toCheck.filter((s) => !sent.has(s));
 }
 
-/** Step 2: QC-2. A sample from one silo, weighed by size, says whether the silo holds the right nuts. */
-export function CheckSilosStep({ batch, calibration, can, active, done, status, onChanged }: { batch: BatchDetail; calibration: BatchCalibration; can: CalibrationPermissions; active: boolean; done: boolean; status: string; onChanged: () => void }) {
+/** QC-2. A sample from one silo, weighed by size, says whether the silo holds the right nuts. */
+export function CheckSilosStep({ n, batch, calibration, can, active, done, status, onChanged }: { n: number; batch: BatchDetail; calibration: BatchCalibration; can: CalibrationPermissions; active: boolean; done: boolean; status: string; onChanged: () => void }) {
   // Which silo the form opens on: "" is the form with no silo chosen yet, null is no form.
   const [adding, setAdding] = useState<SiloSize | "" | null>(null);
   const checks = calibration.sizingChecks;
   const toCheck = silosToCheck(calibration);
 
   return (
-    <StepCard n={2} title="Check the silos" status={status} active={active} done={done}>
+    <StepCard n={n} title="Check the silos" status={status} active={active} done={done}>
       <p className="text-[13px] text-warmstone-800 mb-3">
         Take a {DEFAULT_SIZING_SAMPLE_G} g sample from a silo and weigh the nuts by size. At least {CORRECT_SIZE_TARGET_PCT} % should be the silo's own size.
       </p>
@@ -58,14 +58,14 @@ export function CheckSilosStep({ batch, calibration, can, active, done, status, 
       )}
       {adding !== null && (
         <Modal wide title="Check a silo" onClose={() => setAdding(null)}>
-          <SizingForm batch={batch} calibration={calibration} point={adding} direct={can.canReview} onSaved={() => { setAdding(null); onChanged(); }} />
+          <SizingForm batch={batch} point={adding} direct={can.canReview} onSaved={() => { setAdding(null); onChanged(); }} />
         </Modal>
       )}
     </StepCard>
   );
 }
 
-function SizingForm({ batch, calibration, point: startPoint, direct, onSaved }: { batch: BatchDetail; calibration: BatchCalibration; point: SiloSize | ""; direct: boolean; onSaved: () => void }) {
+function SizingForm({ batch, point: startPoint, direct, onSaved }: { batch: BatchDetail; point: SiloSize | ""; direct: boolean; onSaved: () => void }) {
   const [v, setV] = useState<SizingCheckInput>({ batchCode: batch.code, date: todayIso(), point: startPoint, sampleG: DEFAULT_SIZING_SAMPLE_G, grams: {} });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,8 +98,8 @@ function SizingForm({ batch, calibration, point: startPoint, direct, onSaved }: 
         <Field label="Which silo did the sample come from?">
           <Select value={v.point ?? ""} onChange={set("point")}>
             <option value="">Choose a silo…</option>
-            {/* Only silos holding nuts: an empty one can't be sampled. */}
-            {calibration.silos.filter((s) => s.stockKg > 0).map((s) => <option key={s.size} value={s.size}>{samplingPointLabel(s.size)} · {formatKg(s.stockKg)}</option>)}
+            {/* Every silo: only the silos' total is known, not which of them holds nuts. */}
+            {SILO_SIZES.map((s) => <option key={s.key} value={s.key}>{samplingPointLabel(s.key)}</option>)}
             <option value="received">{samplingPointLabel("received")}</option>
           </Select>
         </Field>
@@ -152,7 +152,7 @@ function SizingForm({ batch, calibration, point: startPoint, direct, onSaved }: 
 
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       <div className="flex items-center justify-end gap-3 flex-wrap">
-        {!direct && <span className="text-[12px] text-warmstone-500">The Warehouse Incharge will approve it.</span>}
+        {!direct && <span className="text-[12px] text-warmstone-500">The Production Incharge will approve it.</span>}
         <Button type="submit" icon={direct ? "check" : "send"} disabled={saving}>{direct ? "Save" : "Send for approval"}</Button>
       </div>
     </form>
@@ -198,7 +198,7 @@ function CheckRow({ check, batchCode, canReview, onChanged }: { check: SizingChe
               onDone={onChanged}
             />
           ) : (
-            <p className="text-[12px] text-ambernut-800">Sent. Waiting for the Warehouse Incharge to approve.</p>
+            <p className="text-[12px] text-ambernut-800">Sent. Waiting for the Production Incharge to approve.</p>
           ))}
         </div>
       )}
@@ -207,23 +207,25 @@ function CheckRow({ check, batchCode, canReview, onChanged }: { check: SizingChe
 }
 
 /**
- * The failed checks still to act on, one per silo: the check a silo holding nuts stands on now. A silo that has
- * since passed, or has since been emptied, needs nothing more; its moves stay in History.
+ * The failed checks still to act on, one per silo: the check a silo stands on now. A silo that has since passed needs
+ * nothing more; its moves stay in History.
  */
 export function checksToFix(calibration: BatchCalibration): SizingCheck[] {
-  const { failed, moved } = silosWaiting(calibration.silos, calibration.siloChecks);
+  const { failed, moved } = silosWaiting(calibration.silos.stockKg, calibration.siloChecks);
   return [...failed, ...moved].flatMap((size) => calibration.sizingChecks.filter((c) => c.id === calibration.siloChecks[size].checkId));
 }
 
-/** Step 3: only for a silo whose failed check was approved. The nuts leave that silo and go to the one they belong in. */
-export function FixSiloStep({ calibration, can, active, onChanged }: { calibration: BatchCalibration; can: CalibrationPermissions; active: boolean; onChanged: () => void }) {
+/**
+ * Only for a silo whose failed check was approved. The nuts leave that silo and go to the one they belong in. `checkStep`
+ * is the number of the check step, for "check the silo again in step N".
+ */
+export function FixSiloStep({ n, checkStep, calibration, can, active, onChanged }: { n: number; checkStep: number; calibration: BatchCalibration; can: CalibrationPermissions; active: boolean; onChanged: () => void }) {
   const failed = checksToFix(calibration);
-  const stockOf = (size: SiloSize) => calibration.silos.find((s) => s.size === size)!.stockKg;
   const stillToMove = failed.filter((c) => c.manualCalibrations.length === 0).length;
-  const status = stillToMove > 0 ? `${stillToMove} silo${stillToMove === 1 ? "" : "s"} failed` : failed.length > 0 ? "Nuts moved. Check the silo again in step 2." : "Nothing to fix";
+  const status = stillToMove > 0 ? `${stillToMove} silo${stillToMove === 1 ? "" : "s"} failed` : failed.length > 0 ? `Nuts moved. Check the silo again in step ${checkStep}.` : "Nothing to fix";
 
   return (
-    <StepCard n={3} title="Fix a failed silo" status={status} active={active} done={false}>
+    <StepCard n={n} title="Fix a failed silo" status={status} active={active} done={false}>
       {failed.length === 0 ? (
         <p className="text-[13px] text-warmstone-800">No silo has failed. If a check fails, you will move the nuts here.</p>
       ) : (
@@ -239,8 +241,8 @@ export function FixSiloStep({ calibration, can, active, onChanged }: { calibrati
                   <p key={m.id} className="text-[13px] text-warmstone-800 tabular-nums">Moved {formatKg(Number(m.kg))} to silo {siloLabel(m.toSize)} on {formatDate(m.date)}. Check this silo again.</p>
                 ))}
                 {can.canReview
-                  ? <MoveForm checkId={c.id} fromSize={from} stockKg={stockOf(from)} onSaved={onChanged} />
-                  : <p className="text-[12px] text-warmstone-500">The Warehouse Incharge moves the nuts. You will be asked to check the silo again after that.</p>}
+                  ? <MoveForm checkId={c.id} fromSize={from} onSaved={onChanged} />
+                  : <p className="text-[12px] text-warmstone-500">The Production Incharge moves the nuts. You will be asked to check the silo again after that.</p>}
               </li>
             );
           })}
@@ -250,14 +252,14 @@ export function FixSiloStep({ calibration, can, active, onChanged }: { calibrati
   );
 }
 
-function MoveForm({ checkId, fromSize, stockKg, onSaved }: { checkId: number; fromSize: SiloSize; stockKg: number; onSaved: () => void }) {
+function MoveForm({ checkId, fromSize, onSaved }: { checkId: number; fromSize: SiloSize; onSaved: () => void }) {
   const [v, setV] = useState<ManualCalibrationInput>({ date: todayIso(), fromSize });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const problem = manualCalibrationError(v, stockKg);
+    const problem = manualCalibrationError(v);
     if (problem) return setError(problem);
     setSaving(true);
     setError(null);
@@ -281,7 +283,7 @@ function MoveForm({ checkId, fromSize, stockKg, onSaved }: { checkId: number; fr
             {SILO_SIZES.filter((s) => s.key !== fromSize).map((s) => <option key={s.key} value={s.key}>{siloLabel(s.key)}</option>)}
           </Select>
         </Field>
-        <Field label="How many kg?" hint={`This silo holds ${formatKg(stockKg)}.`}><Input numeric value={v.kg ?? ""} onChange={(e) => setV((p) => ({ ...p, kg: e.target.value }))} /></Field>
+        <Field label="How many kg?" hint="As weighed when moved. The silos' total stays the same."><Input numeric value={v.kg ?? ""} onChange={(e) => setV((p) => ({ ...p, kg: e.target.value }))} /></Field>
         <Field label="Date"><DateInput value={v.date ?? ""} onChange={(d) => setV((p) => ({ ...p, date: d }))} className={inputClass} /></Field>
       </div>
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}

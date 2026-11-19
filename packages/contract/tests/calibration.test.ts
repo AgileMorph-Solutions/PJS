@@ -1,32 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
-  batchCalibrationTotals, calibrationProgress, calibrationRunError, correctSizePct, largestOtherGrade, manualCalibrationError, nextCalibrationStep, samplingPointFromWord, siloChecks, siloDailyStock, siloFromWord, siloStock, silosWaiting, sizingCheckError, sizingCheckNotes, sizingGradePct,
+  correctSizePct, largestOtherGrade, manualCalibrationError, nextCalibrationStep, samplingPointFromWord, siloChecks, siloDailyStock, siloFromWord, siloPool, silosWaiting, sizingCheckError, sizingCheckNotes, sizingGradePct,
 } from "../src/domain/calibration.js";
-import { rcnReceiptStatus } from "../src/domain/rcnReceipt.js";
+import { cookRunError } from "../src/domain/cooking.js";
+import { RCN_STAGES, rcnReceiptStages, rcnReceiptStatus } from "../src/domain/rcnReceipt.js";
 import { pctOfNet } from "../src/domain/rcnWeighing.js";
 
-describe("calibration runs", () => {
-  it("adds up a load sized over two days, as the client's Calibration Process report does for BTM 1001", () => {
-    // 48,699.15 kg into silos, sized as 17,966.1 then 30,733.05 (4. Calibration Process report, 23–24/04/2026).
-    const runs = [{ sizes: { A: "17966.1" } }, { sizes: { A: "30733.05" } }];
-    expect(calibrationProgress(48_699.15, runs)).toEqual({ toSilosKg: 48_699.15, sizedKg: 48_699.15, leftKg: 0 });
-  });
-
-  it("refuses a run larger than what is left, and one with nothing in it", () => {
-    expect(calibrationRunError({ date: "2026-04-24", sizes: { A: "30733.06" } }, 30_733.05)).toMatch(/more than the 30,733.05 kg/);
-    expect(calibrationRunError({ date: "2026-04-24", sizes: { A: "30733.05" } }, 30_733.05)).toBeNull();
-    expect(calibrationRunError({ date: "2026-04-24", sizes: { A: "0" } }, 100)).toMatch(/at least one silo/);
-  });
-});
-
-describe("the receipt's status carries on past Intake", () => {
+// Decision, Nov 2026: only the silos' total is known. Intake and Calibration are one stage; a load is in the silos,
+// net − dust − voids, the moment production accepts it (Lokesh, 16 Nov 2026: the warehouse weighs, "then operations
+// will accept").
+describe("Intake & Calibration is one stage", () => {
   const ok = [{ status: "approved" as const, decision: "ok" as const }];
-  it("is Intake done, then Calibration in progress, then Calibrated", () => {
-    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: true, calibration: { sizedKg: 0, leftKg: 10 } })).toBe("intake_done");
-    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: true, calibration: { sizedKg: 4, leftKg: 6 } })).toBe("calibrating");
-    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: true, calibration: { sizedKg: 10, leftKg: 0 } })).toBe("calibrated");
-    // Phase 1 callers that know nothing of calibration see what they always did.
-    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: true })).toBe("intake_done");
+
+  it("a weighed load waits for production; it is Calibrated once production accepts it, with nothing left to sort", () => {
+    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: false })).toBe("weighing");
+    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: true })).toBe("waiting_for_acceptance");
+    expect(rcnReceiptStatus(ok, { pallets: 1, finalised: true, accepted: true })).toBe("calibrated");
+    // Steps stay any-order: a final weight saved before the moisture check still waits for that check.
+    expect(rcnReceiptStatus([], { pallets: 1, finalised: true })).toBe("waiting_for_moisture");
+  });
+
+  it("has no separate calibration step on a load: production's acceptance is the last one", () => {
+    expect(RCN_STAGES.map((s) => s.id)).toEqual(["receipt", "moisture", "pallets", "final_weight", "acceptance"]);
+    const weighed = rcnReceiptStages({ status: "waiting_for_acceptance", moistureChecks: ok, pallets: [1], finalWeight: {}, acceptance: null });
+    expect(weighed.acceptance).toBe("current");
+    const stages = rcnReceiptStages({ status: "calibrated", moistureChecks: ok, pallets: [1], finalWeight: {}, acceptance: {} });
+    expect(Object.values(stages).every((s) => s === "done")).toBe(true);
   });
 });
 
@@ -65,12 +64,11 @@ describe("a silo's QC-2 standing", () => {
 });
 
 describe("the next job on screen", () => {
-  const nothing = { loadsToSort: 0, checksWaiting: 0, failedSilos: 0, silosToCheck: 0 };
+  const nothing = { checksWaiting: 0, failedSilos: 0, silosToCheck: 0 };
   const incharge = { canSize: true, canCheck: true };
   const qfs = { canSize: false, canCheck: true };
 
-  it("goes load, then approval, then failed silo, then the next check", () => {
-    expect(nextCalibrationStep({ ...incharge, ...nothing, loadsToSort: 1, failedSilos: 1 })).toBe("sort");
+  it("goes approval, then failed silo, then the next check; there is no load to sort any more", () => {
     expect(nextCalibrationStep({ ...incharge, ...nothing, checksWaiting: 1, failedSilos: 1 })).toBe("check");
     expect(nextCalibrationStep({ ...incharge, ...nothing, failedSilos: 1, silosToCheck: 1 })).toBe("fix");
     expect(nextCalibrationStep({ ...incharge, ...nothing, silosToCheck: 1 })).toBe("check");
@@ -78,8 +76,8 @@ describe("the next job on screen", () => {
   });
 
   it("never sends a QFS Officer to a job only the Incharge can do", () => {
-    expect(nextCalibrationStep({ ...qfs, ...nothing, loadsToSort: 1, checksWaiting: 1, failedSilos: 1 })).toBe("none");
-    expect(nextCalibrationStep({ ...qfs, ...nothing, loadsToSort: 1, silosToCheck: 1 })).toBe("check");
+    expect(nextCalibrationStep({ ...qfs, ...nothing, checksWaiting: 1, failedSilos: 1 })).toBe("none");
+    expect(nextCalibrationStep({ ...qfs, ...nothing, silosToCheck: 1 })).toBe("check");
   });
 });
 
@@ -97,31 +95,36 @@ describe("what Intake hands over", () => {
   });
 });
 
-describe("silo stock", () => {
-  it("is sized in ± moved by hand; a move changes no total", () => {
-    const stock = siloStock([{ sizes: { Ap: "600", A: "100" } }], [{ fromSize: "Ap", toSize: "A", kg: "500" }]);
-    expect(stock.find((s) => s.size === "Ap")!.stockKg).toBe(100);
-    expect(stock.find((s) => s.size === "A")!.stockKg).toBe(600);
-    expect(stock.reduce((n, s) => n + s.stockKg, 0)).toBe(700);
+describe("silo stock, as one total", () => {
+  it("is calibrated in − cooked; cooking's kg per size count only as their total", () => {
+    // BTM 1001's two receipts, 48,699.15 kg each into the silos (4. Calibration Process report).
+    const pool = siloPool([{ kg: 48_699.15 }, { kg: 48_699.15 }], [{ sizes: { A: "20000", B: "5000.3" } }]);
+    expect(pool).toEqual({ inKg: 97_398.3, cookedKg: 25_000.3, stockKg: 72_398 });
   });
 
-  it("won't move more than the silo holds, or into the same silo", () => {
-    expect(manualCalibrationError({ date: "2026-08-28", fromSize: "Ap", toSize: "A", kg: "601" }, 600)).toMatch(/holds 600 kg/);
-    expect(manualCalibrationError({ date: "2026-08-28", fromSize: "Ap", toSize: "Ap", kg: "1" }, 600)).toMatch(/different silo/);
+  it("won't let a Lot cook more than the silos hold in total, whatever sizes it names", () => {
+    expect(cookRunError({ date: "2026-08-28", code: "ANG26H01", sizes: { A: "600", B: "400" } }, 1000)).toBeNull();
+    expect(cookRunError({ date: "2026-08-28", code: "ANG26H01", sizes: { A: "600", B: "400.01" } }, 1000)).toMatch(/has 1,000 kg in the silos/);
+    expect(cookRunError({ date: "2026-08-28", code: "ANG26H01", sizes: { A: "-1" } }, 1000)).toMatch(/0 or more/);
+  });
+
+  it("records a move by hand as typed: no silo's own kg is known to hold it to", () => {
+    expect(manualCalibrationError({ date: "2026-08-28", fromSize: "Ap", toSize: "A", kg: "601" })).toBeNull();
+    expect(manualCalibrationError({ date: "2026-08-28", fromSize: "Ap", toSize: "Ap", kg: "1" })).toMatch(/different silo/);
+    expect(manualCalibrationError({ date: "2026-08-28", fromSize: "Ap", toSize: "A", kg: "0" })).toMatch(/above 0/);
   });
 });
 
 describe("the silos that still need someone", () => {
   const check = (over: object) => ({ id: 1, point: "A", status: "approved", decision: "fail", date: "2026-08-28", correctPct: 20, moves: 0, ...over });
-  const stock = (a: number) => siloStock([{ sizes: { A: String(a), B: "10" } }], []);
 
-  it("asks to fix a failed silo that holds nuts, then to check it again once they are moved", () => {
-    expect(silosWaiting(stock(100), siloChecks([check({})]))).toEqual({ toCheck: ["B"], failed: ["A"], moved: [] });
-    expect(silosWaiting(stock(100), siloChecks([check({ moves: 1 })]))).toEqual({ toCheck: ["A", "B"], failed: [], moved: ["A"] });
+  it("asks to fix a failed silo, then to check it again once its nuts are moved; never a silo nobody sampled", () => {
+    expect(silosWaiting(100, siloChecks([check({})]))).toEqual({ toCheck: [], failed: ["A"], moved: [] });
+    expect(silosWaiting(100, siloChecks([check({ moves: 1 })]))).toEqual({ toCheck: ["A"], failed: [], moved: ["A"] });
   });
 
-  it("never asks to fix an empty silo: nothing can be moved out of it, so the screen would be stuck", () => {
-    expect(silosWaiting(stock(0), siloChecks([check({})]))).toEqual({ toCheck: ["B"], failed: [], moved: [] });
+  it("asks nothing while the silos are empty: nothing can be sampled or moved, so the screen would be stuck", () => {
+    expect(silosWaiting(0, siloChecks([check({})]))).toEqual({ toCheck: [], failed: [], moved: [] });
   });
 
   it("names the deciding check, so a silo failed from another batch can still be fixed", () => {
@@ -132,31 +135,29 @@ describe("the silos that still need someone", () => {
 
 describe("the silo stock report, day by day (report 5)", () => {
   // The client's own first rows: 17,957.2 on 23/04, then 30,733.05 and 33,665.7 on 24/04 → closing 82,355.95.
-  const runs = [
-    { date: "2026-04-24", sizes: { A: "30733.05" } },
-    { date: "2026-04-23", sizes: { A: "17957.2" } },
-    { date: "2026-04-24", sizes: { B: "33665.7" } },
+  const loads = [
+    { date: "2026-04-24", kg: 30_733.05 },
+    { date: "2026-04-23", kg: 17_957.2 },
+    { date: "2026-04-24", kg: 33_665.7 },
   ];
 
   it("carries each day's closing into the next day's opening, as the client's report does", () => {
-    const days = siloDailyStock(runs, []);
-    expect(days.map((d) => [d.date, d.openingKg, d.sizedKg, d.closingKg])).toEqual([
+    const days = siloDailyStock(loads, []);
+    expect(days.map((d) => [d.date, d.openingKg, d.inKg, d.closingKg])).toEqual([
       ["2026-04-23", 0, 17_957.2, 17_957.2],
       ["2026-04-24", 17_957.2, 64_398.75, 82_355.95],
     ]);
-    expect(days[1]!.sizes).toMatchObject({ A: 30_733.05, B: 33_665.7, C: 0 });
   });
 
-  it("a move by hand shifts kg between sizes, on a day of its own if need be, and changes no total", () => {
-    const days = siloDailyStock(runs, [{ date: "2026-04-25", fromSize: "A", toSize: "B", kg: "500" }]);
-    expect(days[2]).toMatchObject({ date: "2026-04-25", openingKg: 82_355.95, sizedKg: 0, movedKg: 500, closingKg: 82_355.95 });
-    expect(days[2]!.sizes).toMatchObject({ A: -500, B: 500 });
+  it("a move by hand shows on its day, on a day of its own if need be, and changes no total", () => {
+    const days = siloDailyStock(loads, [{ date: "2026-04-25", kg: "500" }]);
+    expect(days[2]).toEqual({ date: "2026-04-25", openingKg: 82_355.95, inKg: 0, cookedKg: 0, movedKg: 500, closingKg: 82_355.95 });
   });
 
   it("always closes on the same total as the silo stock", () => {
-    const days = siloDailyStock(runs, [{ date: "2026-04-24", fromSize: "A", toSize: "C", kg: "12.5" }]);
-    const stock = siloStock(runs, [{ fromSize: "A", toSize: "C", kg: "12.5" }]).reduce((n, s) => n + s.stockKg, 0);
-    expect(days.at(-1)!.closingKg).toBeCloseTo(stock, 2);
+    const cooks = [{ date: "2026-04-25", sizes: { A: "1000.5" } }];
+    const days = siloDailyStock(loads, [{ date: "2026-04-24", kg: "12.5" }], cooks);
+    expect(days.at(-1)!.closingKg).toBeCloseTo(siloPool(loads, cooks).stockKg, 2);
   });
 });
 
@@ -167,32 +168,9 @@ describe("where a failed silo's nuts probably belong", () => {
   });
 });
 
-describe("a batch's loads added up", () => {
-  it("counts only loads with a final weight", () => {
-    expect(batchCalibrationTotals([
-      { calibration: { toSilosKg: 100, sizedKg: 100, leftKg: 0 } },
-      { calibration: { toSilosKg: 50.5, sizedKg: 20, leftKg: 30.5 } },
-      { calibration: null },
-    ])).toEqual({ toSilosKg: 150.5, sizedKg: 120, leftKg: 30.5, loads: 2, loadsDone: 1 });
-  });
-});
-
 describe("a silo as a workbook writes it", () => {
   it("reads the report's words and the QC-2 sheet's", () => {
     expect([siloFromWord("A++"), siloFromWord(" a+ "), siloFromWord("DE"), siloFromWord("E"), siloFromWord("Z")]).toEqual(["App", "Ap", "E", "E", null]);
     expect([samplingPointFromWord("Received RCN"), samplingPointFromWord("Before Calibration"), samplingPointFromWord("AB"), samplingPointFromWord("")]).toEqual(["received", "received", "AB", null]);
-  });
-});
-
-describe("sorting a load before its final weight is saved (any order)", () => {
-  it("has no total to keep within yet, but still checks the kg themselves", () => {
-    expect(calibrationRunError({ date: "2026-07-21", sizes: { A: "999999" } }, null)).toBeNull();
-    expect(calibrationRunError({ date: "2026-07-21", sizes: { A: "-1" } }, null)).toMatch(/0 or more/);
-    expect(calibrationRunError({ date: "2026-07-21", sizes: {} }, null)).toMatch(/at least one silo/);
-  });
-
-  it("knows how much is left only once the total is known", () => {
-    expect(calibrationProgress(null, [{ sizes: { A: "500" } }])).toEqual({ toSilosKg: null, sizedKg: 500, leftKg: null });
-    expect(calibrationProgress(1000, [{ sizes: { A: "500" } }])).toEqual({ toSilosKg: 1000, sizedKg: 500, leftKg: 500 });
   });
 });

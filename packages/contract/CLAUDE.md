@@ -31,6 +31,11 @@ src/domain/truckTimeline.ts      A truck's journey (arrived, quality, unloaded, 
                                   receipt. A date the warehouse typed is "entered"; one the system only noted is "recorded".
 src/domain/uploadChecks.ts       Soft checks on an uploaded truck row (impossible values, disagreement with the supplier master
                                   or another truck's fiche). They never block an upload; the backend saves them as UploadIssue.
+src/domain/fieldRules.ts         What a typed procurement value may be: per-field limits (STOP = never saved from the app, WARN =
+                                  saved and flagged) and the values that must agree (empty truck vs loaded, offloading vs arrival…).
+                                  The backend refuses a person's STOPs; the forms show both. Uploads and imports are never stopped.
+src/domain/phaseGate.ts          The order a truck's phases open in (Arrival → Weight → Quality → Unloading → Bin → GRN → after),
+                                  and the plain "X is locked, finish Y first: …" message. Same function on both sides.
 src/domain/supplierCode.ts       normalizeSupplierName() (drops the leading "RCN") and suggestLbaCode() (next free LBA-NNN-XXX).
 src/domain/receiptStatus.ts      deriveStatus() — the ONLY place status is computed. Never let
                                   either side set status directly.

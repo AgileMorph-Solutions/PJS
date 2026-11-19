@@ -6,13 +6,13 @@
  * Reports" (9,173 sampled rows) and "11. Shell Waste Sample Report" (1,449 sampled rows).
  *
  * `who: "qfs"` is a quality check: a QFS Officer's waits for the Incharge, an Incharge's or Admin's is approved as it
- * is saved. `who: "floor"` is the floor's own record: the Incharge's or Admin's for now (Data Entry later).
+ * is saved. `who: "floor"` is the floor's own record: the Production Incharge's or Admin's.
  */
 import { COOLING_HOURS, hoursBetween, isTime } from "./cooking.js";
 import { SILO_SIZES, siloFromWord, siloLabel, type SiloSize } from "./calibration.js";
 import { SORTER_SIZE_GROUPS, SORTER_STREAMS, sorterFigures } from "./colourSort.js";
 
-export const ENTRY_KINDS = ["cooker_log", "qc3", "qc4", "waste_water", "line_run", "qc5_frequency", "qc5_capacity", "qty1", "qc6", "qc7_before", "qc7_after"] as const;
+export const ENTRY_KINDS = ["cooker_log", "qc4", "waste_water", "line_run", "qc5_frequency", "qc5_capacity", "qty1", "qc6", "qc7_before", "qc7_after"] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
 /** The 14 cutting lines, as the sheets name them; the doc: "14 cutting lines open the shells". */
@@ -22,6 +22,8 @@ export const SHIFTS = ["A", "B", "G"];
 /** All values of the shell sample sheet's Sampling Point column. */
 export const SHELL_SAMPLE_POINTS = ["Line 1", "Line 2", "Direct Line", "Before Conveyor", "After Conveyor"];
 export const YES_NO = ["Yes", "No"];
+/** A cooling silo's gates: the cooker log names the one a run goes in by. */
+export const COOLING_GATES = ["1", "2", "3"];
 
 /** The doc's targets: "Wholes % (target 95 %)", "Alert if kernel left in shell > 0.5 %". */
 export const WHOLES_TARGET_PCT = 95;
@@ -51,7 +53,10 @@ type Values = Record<string, string | undefined>;
 
 export interface EntryDef {
   kind: EntryKind;
-  /** The tab of the production workbook. */
+  /**
+   * The tab of the production workbook: the client's own file it comes from ("17. Cooking Cycles Monitoring", cut to
+   * Excel's 31 characters), or "New · …" for a record no client file has.
+   */
   sheet: string;
   title: string;
   /** "QC-3" and so on, for what the doc numbers. */
@@ -166,28 +171,26 @@ const sorterNotes = (v: Values): string[] => {
 
 export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
   cooker_log: {
-    kind: "cooker_log", sheet: "Cooker Log", title: "Cooker log", who: "floor",
-    help: "One line for each run of a cooker. A re-cook is a new line, so both runs stay on record.",
+    kind: "cooker_log", sheet: "17. Cooking Cycles Monitoring", title: "Cooker log", who: "floor",
+    help: "One line for each run of a cooker: which cooker, which size, and the cooling silo and gate it goes to, so its 24 hours can be followed. A re-cook is a new line, so both runs stay on record.",
+    // The client's "17. Cooking Cycles Monitoring report" (its Online sheet). Cooker no, size, the target silo and its
+    // gate (1–3) are asked for (Nov 2026: to follow each run through its 24 h of cooling); bin and quantity stay optional.
     fields: [
+      { key: "cookerNo", label: "Cooker no", type: "text", required: true, keep: true },
       { key: "size", label: "Size", type: "size", required: true },
       { key: "start", label: "Start", type: "time", required: true },
       { key: "stop", label: "Stop", type: "time", required: true },
       { key: "tempC", label: "Temperature (°C)", type: "number", required: true },
       { key: "pressureBar", label: "Pressure (bar)", type: "number", required: true },
+      { key: "binNo", label: "Bin no", type: "text" },
+      { key: "siloName", label: "Target cooling silo", type: "text", required: true },
+      { key: "gateNo", label: "Gate", type: "select", options: COOLING_GATES, required: true },
+      { key: "kg", label: "Quantity (kg)", type: "number" },
     ],
     figures: (v) => [{ label: "Running time", value: hrs(durationHours(v.start, v.stop)) }],
   },
-  qc3: {
-    kind: "qc3", sheet: "Cooking Checks", title: "Cooking check", check: "QC-3", who: "qfs",
-    decision: { ok: "OK", okHint: "The cooker's settings were met for this size.", no: "No · re-cook", noHint: "The size is held and cooked again.", noValue: "no" },
-    help: "One check for each size cooked: were the cooker's settings met?",
-    fields: [
-      { key: "size", label: "Size", type: "size", required: true },
-      { key: "remarks", label: "Remarks", type: "text" },
-    ],
-  },
   qc4: {
-    kind: "qc4", sheet: "Cooling Checks", title: "Moisture and temperature check", check: "QC-4", who: "qfs",
+    kind: "qc4", sheet: "New · Cooling Checks (QC-4)", title: "Moisture and temperature check", check: "QC-4", who: "qfs",
     decision: { ok: "OK", okHint: "The Lot can go to shelling.", no: "Wait", noHint: "The Lot stays in the cooling silo and is checked again.", noValue: "wait" },
     help: "After 24 hours in the cooling silo. Shelling can't start until this says OK.",
     fields: [
@@ -202,7 +205,7 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
     },
   },
   waste_water: {
-    kind: "waste_water", sheet: "Waste Water", title: "Cooking waste water", who: "floor",
+    kind: "waste_water", sheet: "New · Waste Water", title: "Cooking waste water", who: "floor",
     help: "What went to the waste water tank. It leaves by truck, recorded under By-products & trucks.",
     fields: [
       { key: "kg", label: "Quantity (kg)", type: "number", required: true },
@@ -210,8 +213,9 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
     ],
   },
   line_run: {
-    kind: "line_run", sheet: "Line Runs", title: "Line run", who: "floor",
+    kind: "line_run", sheet: "23. Line wise Processing Data", title: "Line run", who: "floor",
     help: "One line for each cutting line that ran this Lot.",
+    // The client's "23. Shelling Line wise Processing Data": the uncut re-run's own times and the breakdown are its columns.
     fields: [
       { key: "line", label: "Line", type: "line", required: true },
       { key: "size", label: "Size", type: "size", required: true },
@@ -219,24 +223,30 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
       { key: "start", label: "Start", type: "time", required: true },
       { key: "end", label: "End", type: "time", required: true },
       { key: "uncutKg", label: "Uncut (kg)", type: "number" },
+      { key: "uncutStart", label: "Uncut start", type: "time" },
+      { key: "uncutEnd", label: "Uncut end", type: "time" },
+      { key: "breakdown", label: "Breakdown time (hh:mm)", type: "time" },
     ],
     figures: (v) => [
       { label: "Duration", value: hrs(durationHours(v.start, v.end)) },
       { label: "Uncut %", value: n0(v.inputKg) > 0 ? pct((n0(v.uncutKg) / n0(v.inputKg)) * 100) : "-" },
+      ...(isTime(v.uncutStart) && isTime(v.uncutEnd) ? [{ label: "Uncut duration", value: hrs(durationHours(v.uncutStart, v.uncutEnd)) }] : []),
     ],
   },
   qc5_frequency: {
-    kind: "qc5_frequency", sheet: "Machine Frequency", title: "Machine frequency", check: "QC-5", who: "qfs",
+    kind: "qc5_frequency", sheet: "21. Shelling Frequency Machine", title: "Machine frequency", check: "QC-5", who: "qfs",
     help: "How fast each machine runs. Count the grams it cuts in one minute.",
     fields: [
       { key: "line", label: "Line", type: "line", required: true, keep: true },
+      // The sheet's "Material": the size the line is cutting.
+      { key: "material", label: "Size", type: "size", keep: true },
       { key: "machine", label: "Machine no", type: "number", required: true },
       { key: "gramsPerMin", label: "Grams per minute", type: "number", required: true },
     ],
     figures: (v) => [{ label: "Kg per hour", value: fmt(n0(v.gramsPerMin) * 0.06) }],
   },
   qc5_capacity: {
-    kind: "qc5_capacity", sheet: "Machine Samples", title: "Machine capacity sample", check: "QC-5", who: "qfs",
+    kind: "qc5_capacity", sheet: "13. Shelling Machine Quality", title: "Machine capacity sample", check: "QC-5", who: "qfs",
     help: "A 1,000 g sample from one machine, weighed into its parts. The percentages tell you if the machine needs adjusting.",
     fields: [
       { key: "shift", label: "Shift", type: "select", options: SHIFTS, required: true, keep: true },
@@ -271,7 +281,7 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
     },
   },
   qty1: {
-    kind: "qty1", sheet: "Uncut Checks", title: "Uncut quantity check", check: "QTY-1", who: "qfs",
+    kind: "qty1", sheet: "New · Uncut Checks (QTY-1)", title: "Uncut quantity check", check: "QTY-1", who: "qfs",
     help: "Shells that did not open, per line. They go back through shelling until only the final uncut is left.",
     fields: [
       { key: "line", label: "Line", type: "line", required: true },
@@ -280,7 +290,7 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
     ],
   },
   qc6: {
-    kind: "qc6", sheet: "Shell Samples", title: "Kernel left in the shell", check: "QC-6", who: "qfs",
+    kind: "qc6", sheet: "11. Shell Waste Sample Report", title: "Kernel left in the shell", check: "QC-6", who: "qfs",
     help: "A sample of the shell before it goes to the silo. Too much kernel means a line must be checked; the shell still moves on.",
     fields: [
       { key: "point", label: "Sampling point", type: "select", options: SHELL_SAMPLE_POINTS, required: true, keep: true },
@@ -308,12 +318,12 @@ export const ENTRY_DEFS: Record<EntryKind, EntryDef> = {
     },
   },
   qc7_before: {
-    kind: "qc7_before", sheet: "Sorter Before", title: "Sample before the sorter", check: "QC-7", who: "qfs",
+    kind: "qc7_before", sheet: "12. Shelled Kernels Quality", title: "Sample before the sorter", check: "QC-7", who: "qfs",
     help: "A 1,000 g sample of the shelled kernels going into the colour sorter, weighed into its parts.",
     fields: SORTER_FIELDS, figures: sorterFigureList, notes: sorterNotes,
   },
   qc7_after: {
-    kind: "qc7_after", sheet: "Sorter After", title: "Sample after the sorter", check: "QC-7", who: "qfs",
+    kind: "qc7_after", sheet: "12. Shelled Kernels Quality", title: "Sample after the sorter", check: "QC-7", who: "qfs",
     decision: { ok: "OK", okHint: "The stream goes on to the Borma ovens.", no: "No · sort again", noHint: "The stream goes through the sorter again before Borma.", noValue: "no" },
     help: "A 1,000 g sample of one stream coming out of the sorter. One check for each stream: wholes, pieces, and rejection + oil.",
     fields: SORTER_FIELDS, figures: sorterFigureList, notes: sorterNotes,
@@ -376,7 +386,7 @@ export function entryError(kind: EntryKind, v: EntryValues, sizes?: SiloSize[]):
     if (f.type === "select" && !f.options!.includes(t)) return `${f.label} must be one of ${f.options!.join(", ")}.`;
     if (f.type === "size") {
       if (!SILO_SIZES.some((s) => s.key === t)) return `${t} is not one of the 9 sizes.`;
-      if (sizes && kind !== "line_run" && !sizes.includes(t as SiloSize)) return `This Lot cooked no size ${siloLabel(t as SiloSize)}.`;
+      if (sizes && kind !== "line_run" && kind !== "qc5_frequency" && !sizes.includes(t as SiloSize)) return `This Lot cooked no size ${siloLabel(t as SiloSize)}.`;
     }
   }
   if (kind === "qc4" && Number(values.moisture) > 20) return "Moisture must be a number between 0 and 20.";
