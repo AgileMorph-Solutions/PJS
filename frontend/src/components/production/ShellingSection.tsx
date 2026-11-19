@@ -43,7 +43,7 @@ export function ShellingSection({ data, can, onChanged }: { data: BatchLots; can
     : step === "qty1" ? `Next: in step 4, count the uncut nuts (QTY-1) for Lot ${lot.code}.`
     : step === "qc6" ? `Next: in step 5, take a shell sample (QC-6) for Lot ${lot.code}.`
     : counts.days > 0 ? `Lot ${lot.code} is shelled and every check is done. Its kernels go on to Colour sorting, the next stage.`
-    : `Nothing for you to do on Lot ${lot.code} right now. The Warehouse Incharge does the next job.`;
+    : `Nothing for you to do on Lot ${lot.code} right now. The Production Incharge does the next job.`;
   const allDone = lot !== null && step === "none" && counts.days > 0 && waitingApproval.length === 0;
 
   return (

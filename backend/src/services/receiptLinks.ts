@@ -30,7 +30,8 @@
  * the one identifier that genuinely travels with a batch. `ficheAgrees` still says which matched
  * rows are confirmed by the fiche.
  */
-import { splitBinCodes } from "@anagroci/contract/domain/productionBatch";
+import { binsOfLot } from "@anagroci/contract/domain/productionBatch";
+import { dryingRoundsByLot } from "./dryingRounds.js";
 import { prisma } from "../db.js";
 
 // Extended to production: a linked transfer's own `idTransfer` column IS the production BTM
@@ -201,13 +202,23 @@ async function appRecords(id: string): Promise<{ bkt: LinkedBkt | null; batchCod
       where: { receiptId: id },
       select: { receivedBinCode: true, transfer: { select: { id: true, dispatchedAt: true, receivedAt: true } } },
     }),
-    prisma.receipt.findUnique({ where: { id }, select: { bin: { select: { binNumber: true } }, drying: { select: { driedStockBin: true } } } }),
+    prisma.receipt.findUnique({
+      where: { id },
+      select: { bin: { select: { binNumber: true } }, drying: { select: { driedStockBin: true, driedQtyReturned: true } }, lot: { select: { lotNumber: true } } },
+    }),
   ]);
-  // The same order as binsOfLot: the bin it came back to from drying, otherwise the one it was allocated.
-  const ownBins = splitBinCodes(receipt?.drying?.driedStockBin ?? undefined);
-  const bins = line
-    ? (line.receivedBinCode ? [line.receivedBinCode.trim().toUpperCase()] : [])
-    : ownBins.length ? ownBins : splitBinCodes(receipt?.bin?.binNumber ?? undefined);
+  // binsOfLot itself: the bin it came back to from drying (its last sun-drying round, or the Drying step for an imported Lot),
+  // otherwise the one it was allocated.
+  const lot = receipt?.lot?.lotNumber ?? "";
+  const rounds = lot ? (await dryingRoundsByLot(prisma, [lot])).get(lot) : undefined;
+  const ownBins = binsOfLot({
+    binNo: undefined,
+    stageData: {
+      "n-bin": { "Bin Number": receipt?.bin?.binNumber ?? "" },
+      "n-drying": { "Dried quantity returned to warehouse": receipt?.drying?.driedQtyReturned ?? "", 'New/assigned Bin (marked "dried stock")': receipt?.drying?.driedStockBin ?? "" },
+    },
+  }, rounds);
+  const bins = line ? (line.receivedBinCode ? [line.receivedBinCode.trim().toUpperCase()] : []) : ownBins;
   const inBatch = bins.length ? await prisma.productionBatchBin.findFirst({ where: { binCode: { in: bins } }, select: { batchCode: true } }) : null;
   return {
     bkt: line ? { id: line.transfer.id, dispatchedAt: line.transfer.dispatchedAt?.toISOString() ?? null, receivedAt: line.transfer.receivedAt?.toISOString() ?? null } : null,

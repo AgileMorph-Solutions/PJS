@@ -3,8 +3,13 @@ import type { BatchStatus, LotInBin } from "../domain/productionBatch.js";
 /** A factory warehouse bin offered on the New batch screen. */
 export interface AvailableBin {
   binCode: string;
-  /** The store the Bin is in, from the Bin master; null when the master doesn't say. */
+  /**
+   * The warehouse the Bin is in: where its Lots are (their trucks' warehouse, or the BKT's receiving one), else the Bin master.
+   * Many imported Bin masters have no warehouse, so the Lots are the better witness. null when neither says.
+   */
   store: string | null;
+  /** The Lots in the bin, each tracing back to its truck (or the BKT that brought it): the trucks to open when the bin adds no kg. */
+  lots: LotInBin[];
   /** Current stock (kg), worked out from the procurement Lots in it. */
   kg: number;
   lotCount: number;
@@ -22,8 +27,10 @@ export interface BatchBinView {
   binCode: string;
   /** The bin's stock when the batch was created: the plan, kept as it was. */
   plannedKg: number;
-  /** What procurement says is in the bin now. */
+  /** What is in the bin now: procurement's stock less what production accepted out of it (issuedKg). */
   currentKg: number;
+  /** The net kg of the loads from this bin production has accepted, already taken off currentKg. */
+  issuedKg: number;
   lots: LotInBin[];
 }
 

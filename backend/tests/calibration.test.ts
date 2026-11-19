@@ -1,13 +1,15 @@
 /**
- * Production Phase 2 (client's "Production module" doc, Phase 2): a load whose Intake is done is sized into the
- * 9 silos run by run until its into-silo kg is used up; QC-2 sizing checks go through the Incharge like a
- * moisture check; a failed silo is re-sized by hand, moving kg between silos; silo stock follows.
+ * Production Phase 2 (client's "Production module" doc, Phase 2), as agreed in Nov 2026: only the silos' total is
+ * known, so a load goes into the silos as net − dust − voids when its final weight is saved (Intake & Calibration are
+ * one stage); QC-2 sizing checks go through the Incharge like a moisture check; a failed silo is re-sized by hand,
+ * recorded as typed; silo stock is one total.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
+import { submitSizingCheck } from "../src/services/production/calibration.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -21,7 +23,6 @@ async function cleanup() {
   const atSite = { rcnReceipt: { batch: { warehouse: SITE } } };
   await prisma.manualCalibration.deleteMany({ where: { sizingCheck: { batch: { warehouse: SITE } } } });
   await prisma.sizingCheck.deleteMany({ where: { batch: { warehouse: SITE } } });
-  await prisma.rcnCalibrationRun.deleteMany({ where: atSite });
   await prisma.rcnPallet.deleteMany({ where: atSite });
   await prisma.rcnEmptyPalletStack.deleteMany({ where: atSite });
   await prisma.rcnMoistureCheck.deleteMany({ where: atSite });
@@ -33,17 +34,19 @@ async function cleanup() {
   await prisma.warehouse.deleteMany({ where: { name: SITE } });
 }
 
+const ids: Record<string, string> = {};
+
 async function login(key: string, role: string) {
-  await prisma.user.create({ data: { username: `cal-${key}`, displayName: key, role, warehouse: SITE, passwordHash: hashPassword(PW) } });
+  ids[key] = (await prisma.user.create({ data: { username: `cal-${key}`, displayName: key, role, warehouse: SITE, passwordHash: hashPassword(PW) } })).id;
   const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: `cal-${key}`, password: PW } });
   cookies[key] = String(res.headers["set-cookie"]).split(";")[0]!;
 }
 
-const call = (who: string, method: "GET" | "POST" | "DELETE", url: string, payload?: unknown) =>
+const call = (who: string, method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: unknown) =>
   app.inject({ method, url, payload: payload as object | undefined, headers: { cookie: cookies[who]!, ...(payload ? { "content-type": "application/json" } : {}) } });
 
-/** A load through all of Intake: OK moisture, one pallet, final weight. Into silos = 140,000 − 19.5 − 2,000 − 1,250 − 8. */
-async function intakeDoneLoad(btmNo: string): Promise<string> {
+/** A load weighed but not closed: OK moisture, one pallet. Its final weight (below) puts 140,000 − 19.5 − 2,000 − 1,250 − 8 into the silos. */
+async function weighedLoad(btmNo: string): Promise<string> {
   const id = (await call("wi", "POST", "/api/production/rcn-receipts", { batchCode: BATCH, date: "2026-07-25", btmNo, binCode: "CAL-03B" })).json().id;
   expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/moisture-checks`, { moisture: "8", nutCount: "180", decision: "ok" })).statusCode).toBe(201);
   expect((await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, { grossKg: "140000", bags: "30", factoryBin: "ANA-01" })).statusCode).toBe(201);
@@ -51,8 +54,14 @@ async function intakeDoneLoad(btmNo: string): Promise<string> {
 }
 const TO_SILOS = 136_722.5;
 
-const calibration = async () => (await call("wi", "GET", `/api/production/batches/${BATCH}/calibration`)).json();
-const silo = (cal: { silos: { size: string; stockKg: number }[] }, size: string) => cal.silos.find((s) => s.size === size)!.stockKg;
+// The silos are the production team's to see (18 Nov 2026); the warehouse team sees its loads only.
+const calibration = async () => (await call("pi", "GET", `/api/production/batches/${BATCH}/calibration`)).json();
+/**
+ * A check sent for approval. No screen role sends one now (the QFS Officer is the warehouse's; the Production Incharge's
+ * own check counts as saved), but the service still holds one from someone who can't approve it, for the factory's
+ * Quality roles to come — so the approval is tested through the service.
+ */
+const submitted = (body: object) => submitSizingCheck(SITE, { id: ids.qfs!, role: "qfs_officer" }, body as never);
 
 let loadId = "";
 
@@ -68,8 +77,10 @@ beforeAll(async () => {
   await setBranch(r.id, "n-xferdec", "production");
   await login("wi", "warehouse_incharge");
   await login("qfs", "qfs_officer");
+  await login("pi", "production_incharge");
+  await login("admin", "admin");
   expect((await call("wi", "POST", "/api/production/batches", { code: BATCH, startDate: "2026-07-19", bins: ["CAL-03B"] })).statusCode).toBe(201);
-  loadId = await intakeDoneLoad("113");
+  loadId = await weighedLoad("113");
 });
 afterAll(async () => {
   await cleanup();
@@ -77,66 +88,39 @@ afterAll(async () => {
   await app.close();
 });
 
-describe("Kg into each silo (Phase 2, step 2)", () => {
-  it("can size a load before its final weight (any order): there is no total yet, so nothing limits it", async () => {
+describe("Intake & Calibration, one stage", () => {
+  it("before the final weight the load is not in the silos, and there is no route to sort it by hand", async () => {
     const load = (await call("wi", "GET", `/api/production/rcn-receipts?batch=${BATCH}`)).json()[0];
-    expect(load.calibration).toMatchObject({ toSilosKg: null, sizedKg: 0, leftKg: null });
+    expect(load.status).toBe("weighing");
+    expect(load).not.toHaveProperty("calibration");
+    expect((await calibration()).silos).toEqual({ inKg: 0, cookedKg: 0, stockKg: 0 });
     const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-25", sizes: { A: "100" } });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().calibration).toMatchObject({ toSilosKg: null, sizedKg: 100, leftKg: null });
-    // Taken out again, so the steps below start from an unsorted load.
-    expect((await call("wi", "DELETE", `/api/production/calibration-runs/${res.json().calibration.runs[0].id}`)).statusCode).toBe(200);
+    expect(res.statusCode).toBe(404);
   });
 
-  it("after the final weight the load is Intake done, with all of its into-silo kg still to calibrate", async () => {
+  // The silos are the factory's: a weighed load is still the warehouse's until production accepts it (Lokesh, 16 Nov 2026).
+  it("the final weight alone puts nothing in the silos: the load waits for production", async () => {
     const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/final-weight`, { emptyPallets: [{ weightKg: "2000" }], dustKg: "1250", voidsKg: "8" });
-    expect(res.json()).toMatchObject({ status: "intake_done", calibration: { toSilosKg: TO_SILOS, sizedKg: 0, leftKg: TO_SILOS, runs: [] } });
+    expect(res.json().status).toBe("waiting_for_acceptance");
+    expect((await calibration()).silos).toEqual({ inKg: 0, cookedKg: 0, stockKg: 0 });
   });
 
-  it("a first run puts it In calibration, fills the silos, and shows in the history", async () => {
-    const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, {
-      date: "2026-07-25",
-      sizes: { Ap: "600", A: "24209", AB: "24089", B: " ", E: "5812" },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(res.json()).toMatchObject({ status: "calibrating", calibration: { sizedKg: 54_710, leftKg: 82_012.5 } });
-    expect(res.json().calibration.runs[0]).toMatchObject({ date: "2026-07-25", sizes: { Ap: "600", A: "24209", AB: "24089", E: "5812" }, totalKg: 54_710, createdBy: "wi" });
-
+  it("production's acceptance makes it Calibrated: net − dust − voids is in this run's silos and in the history", async () => {
+    expect((await call("pi", "POST", `/api/production/rcn-receipts/${loadId}/accept`)).json().status).toBe("calibrated");
     const cal = await calibration();
-    expect([silo(cal, "Ap"), silo(cal, "A"), silo(cal, "B"), silo(cal, "E")]).toEqual([600, 24_209, 0, 5_812]);
-    expect(cal.batchSizedKg.A).toBe(24_209);
-    const batch = (await call("wi", "GET", `/api/production/batches/${BATCH}`)).json();
-    expect(batch.history[0].text).toBe("BTM 113 sized into silos: 54,710 kg");
+    expect(cal.silos).toEqual({ inKg: TO_SILOS, cookedKg: 0, stockKg: TO_SILOS });
+    const texts = (await call("wi", "GET", `/api/production/batches/${BATCH}`)).json().history.map((h: { text: string }) => h.text);
+    expect(texts).toContain("BTM 113 weighed: 1 pallet, net 137,980.5 kg");
+    expect(texts).toContain("BTM 113 accepted by production: net 137,980.5 kg out of CAL-03B, 136,722.5 kg into the silos");
   });
 
-  it("refuses sizing more than is left of the load, and bad numbers", async () => {
-    const cases: [object, RegExp][] = [
-      [{ date: "2026-07-26", sizes: { A: "82012.6" } }, /more than the 82,012.5 kg of this load still to calibrate/],
-      [{ date: "2026-07-26", sizes: { A: "-5" } }, /Size A must be a number of kg, 0 or more/],
-      [{ date: "2026-07-26", sizes: {} }, /at least one silo/],
-      [{ date: "", sizes: { A: "1" } }, /date is required/],
-    ];
-    for (const [body, message] of cases) {
-      const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, body);
-      expect(res.statusCode, JSON.stringify(body)).toBe(422);
-      expect(res.json().error).toMatch(message);
-    }
-  });
-
-  it("is Calibrated once the runs add up to the into-silo kg, and then takes no more", async () => {
-    const res = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-26", sizes: { BC: "50000", C: "32012.5" } });
-    expect(res.json()).toMatchObject({ status: "calibrated", calibration: { sizedKg: TO_SILOS, leftKg: 0 } });
-    const more = await call("wi", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-26", sizes: { C: "1" } });
-    expect(more.json().error).toMatch(/already fully calibrated/);
-    // Weighing stays open in any order, but can't drop below what is already in the silos.
-    const pallet = res.json().pallets[0];
-    const drop = await call("wi", "DELETE", `/api/production/rcn-pallets/${pallet.id}`);
-    expect(drop.statusCode).toBe(422);
-    expect(drop.json().error).toMatch(/less than the .* kg already sorted into the silos/);
-  });
-
-  it("is the Incharge's: a QFS Officer can't size a load", async () => {
-    expect((await call("qfs", "POST", `/api/production/rcn-receipts/${loadId}/calibration-runs`, { date: "2026-07-26", sizes: { C: "1" } })).statusCode).toBe(403);
+  it("an Admin's correction to an accepted load changes what is in the silos with it: one number, never a copy", async () => {
+    const pallet = (await call("wi", "GET", `/api/production/rcn-receipts?batch=${BATCH}`)).json()[0].pallets[0];
+    const fix = (grossKg: string) => call("admin", "PUT", `/api/production/rcn-pallets/${pallet.id}?warehouse=${SITE}`, { grossKg, bags: "30", factoryBin: "ANA-01" });
+    expect((await fix("140100")).statusCode).toBe(200);
+    expect((await calibration()).silos.stockKg).toBe(TO_SILOS + 100);
+    expect((await fix("140000")).statusCode).toBe(200);
+    expect((await calibration()).silos.stockKg).toBe(TO_SILOS);
   });
 });
 
@@ -145,36 +129,41 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
   const sample = { batchCode: BATCH, date: "2026-08-28", point: "Ap", binCode: "CAL-03B", nutCount: "129", sampleG: "1000", grams: { Ap: "162", A: "792", AB: "46" }, decision: "fail" };
   let checkId = 0;
 
-  it("a QFS Officer's check waits for the Incharge, with the correct-size % and the doc's alert", async () => {
-    expect((await call("qfs", "GET", `/api/production/batches/${BATCH}/calibration`)).statusCode).toBe(200);
-    const res = await call("qfs", "POST", "/api/production/sizing-checks", sample);
-    expect(res.statusCode).toBe(201);
-    checkId = res.json().id;
-    expect(res.json()).toMatchObject({ point: "Ap", status: "submitted", decision: "fail", submittedBy: "qfs", notes: ["Only 16.2 % is the silo's own size (target 85 %)."] });
-    expect(res.json().correctPct).toBeCloseTo(16.2, 6);
+  it("is the production team's: the warehouse team neither sees the silos nor checks them", async () => {
+    for (const who of ["wi", "qfs"]) {
+      expect((await call(who, "GET", `/api/production/batches/${BATCH}/calibration`)).statusCode, who).toBe(403);
+      expect((await call(who, "POST", "/api/production/sizing-checks", sample)).statusCode, who).toBe(403);
+    }
+  });
+
+  it("a check sent for approval waits for the Production Incharge, with the correct-size % and the doc's alert", async () => {
+    const check = await submitted(sample);
+    checkId = check.id;
+    expect(check).toMatchObject({ point: "Ap", status: "submitted", decision: "fail", submittedBy: "qfs", notes: ["Only 16.2 % is the silo's own size (target 85 %)."] });
+    expect(check.correctPct).toBeCloseTo(16.2, 6);
   });
 
   it("no re-sizing by hand until the failed check is approved", async () => {
-    const res = await call("wi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", toSize: "A", kg: "100" });
+    const res = await call("pi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", toSize: "A", kg: "100" });
     expect(res.json().error).toMatch(/only after a failed, approved sizing check/);
   });
 
-  it("only the Incharge approves; then nuts move out of the failed silo, within its stock", async () => {
+  it("only the Production Incharge approves; then nuts move out of the failed silo, recorded as typed", async () => {
     expect((await call("qfs", "POST", `/api/production/sizing-checks/${checkId}/approve`)).statusCode).toBe(403);
-    expect((await call("wi", "POST", `/api/production/sizing-checks/${checkId}/approve`)).json().status).toBe("approved");
+    // Calibration is after the acceptance: the warehouse's side no longer approves it.
+    expect((await call("wi", "POST", `/api/production/sizing-checks/${checkId}/approve`)).statusCode).toBe(403);
+    expect((await call("pi", "POST", `/api/production/sizing-checks/${checkId}/approve`)).json().status).toBe("approved");
 
-    const tooMuch = await call("wi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", toSize: "A", kg: "601" });
-    expect(tooMuch.json().error).toMatch(/holds 600 kg; 601 kg can't be moved out of it/);
-    const wrongSilo = await call("wi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", fromSize: "B", toSize: "A", kg: "1" });
+    const nothing = await call("pi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", toSize: "A", kg: "0" });
+    expect(nothing.json().error).toMatch(/above 0/);
+    const wrongSilo = await call("pi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", fromSize: "B", toSize: "A", kg: "1" });
     expect(wrongSilo.json().error).toMatch(/re-sized out of that silo/);
 
-    const res = await call("wi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", toSize: "A", kg: "500" });
+    const res = await call("pi", "POST", `/api/production/sizing-checks/${checkId}/manual-calibrations`, { date: "2026-08-28", toSize: "A", kg: "500" });
     expect(res.statusCode).toBe(201);
-    expect(res.json().manualCalibrations).toMatchObject([{ fromSize: "Ap", toSize: "A", kg: "500", createdBy: "wi" }]);
-    const cal = await calibration();
-    expect([silo(cal, "Ap"), silo(cal, "A")]).toEqual([100, 24_709]);
+    expect(res.json().manualCalibrations).toMatchObject([{ fromSize: "Ap", toSize: "A", kg: "500", createdBy: "pi" }]);
     // Moving between silos changes no total: it is the same nuts.
-    expect(cal.silos.reduce((n: number, s: { stockKg: number }) => n + s.stockKg, 0)).toBe(TO_SILOS);
+    expect((await calibration()).silos.stockKg).toBe(TO_SILOS);
   });
 
   it("flags the silo until it is re-sized, then asks for a new check; a silo not yet checked says so", async () => {
@@ -184,26 +173,18 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
     expect(cal.siloChecks.B).toEqual({ state: "not_checked", correctPct: null, date: null, checkId: null });
   });
 
-  it("won't remove a run whose nuts have since been moved out of a silo by hand", async () => {
-    const load = (await call("wi", "GET", `/api/production/rcn-receipts?batch=${BATCH}`)).json()[0];
-    const firstRun = load.calibration.runs[0].id;
-    const res = await call("wi", "DELETE", `/api/production/calibration-runs/${firstRun}`);
-    expect(res.json().error).toMatch(/would leave silo A\+ \(25 mm\) at -500 kg/);
-    expect(await prisma.rcnCalibrationRun.count({ where: { id: firstRun } })).toBe(1);
-  });
-
   it("an OK check needs no re-sizing, and a check can't be reviewed twice or rejected without a reason", async () => {
-    const ok = (await call("qfs", "POST", "/api/production/sizing-checks", { ...sample, point: "A", grams: { A: "900", AB: "100" }, decision: "ok" })).json();
+    const ok = await submitted({ ...sample, point: "A", grams: { A: "900", AB: "100" }, decision: "ok" });
     expect(ok.correctPct).toBe(90);
     expect(ok.notes).toEqual([]);
-    expect((await call("wi", "POST", `/api/production/sizing-checks/${ok.id}/reject`, { reason: " " })).json().error).toMatch(/Give a reason/);
-    expect((await call("wi", "POST", `/api/production/sizing-checks/${ok.id}/reject`, { reason: "wrong silo" })).json()).toMatchObject({ status: "rejected", rejectReason: "wrong silo" });
-    expect((await call("wi", "POST", `/api/production/sizing-checks/${ok.id}/approve`)).json().error).toMatch(/already rejected/);
+    expect((await call("pi", "POST", `/api/production/sizing-checks/${ok.id}/reject`, { reason: " " })).json().error).toMatch(/Give a reason/);
+    expect((await call("pi", "POST", `/api/production/sizing-checks/${ok.id}/reject`, { reason: "wrong silo" })).json()).toMatchObject({ status: "rejected", rejectReason: "wrong silo" });
+    expect((await call("pi", "POST", `/api/production/sizing-checks/${ok.id}/approve`)).json().error).toMatch(/already rejected/);
   });
 
   it("refuses a sample from a bin outside the batch, and one with no grams", async () => {
-    expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, binCode: "BIN-NOPE" })).json().error).toMatch(/BIN-NOPE is not in production run/);
-    expect((await call("wi", "POST", "/api/production/sizing-checks", { ...sample, grams: {} })).json().error).toMatch(/grams found in each size/);
+    expect((await call("pi", "POST", "/api/production/sizing-checks", { ...sample, binCode: "BIN-NOPE" })).json().error).toMatch(/BIN-NOPE is not in production run/);
+    expect((await call("pi", "POST", "/api/production/sizing-checks", { ...sample, grams: {} })).json().error).toMatch(/grams found in each size/);
   });
 
   it("a silo failed from another batch can be fixed from this one: the silos are the factory's", async () => {
@@ -216,31 +197,30 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
     await setBranch(r.id, "n-drying", "none");
     await setBranch(r.id, "n-xferdec", "production");
     expect((await call("wi", "POST", "/api/production/batches", { code: "CAL-OTHER-B", startDate: "2026-08-01", bins: ["CAL-OTHER"] })).statusCode).toBe(201);
-    const other = (await call("wi", "GET", "/api/production/batches/CAL-OTHER-B/calibration")).json();
+    const other = (await call("pi", "GET", "/api/production/batches/CAL-OTHER-B/calibration")).json();
     // BATCH is the run's name; the check is stored against the run's system ID.
-    const runId = (await call("wi", "GET", `/api/production/batches/${BATCH}`)).json().code;
+    const runId = (await call("pi", "GET", `/api/production/batches/${BATCH}`)).json().code;
     expect(other.sizingChecks.map((c: { id: number; batchCode: string }) => [c.id, c.batchCode])).toEqual([[checkId, runId]]);
     expect(other.siloChecks.Ap.checkId).toBe(checkId);
-    // The silo stock is the factory's; the batch's own share is what it sized itself.
-    expect(other.batchSizedKg.Ap).toBe(0);
-    expect(other.silos.find((s: { size: string }) => s.size === "Ap").stockKg).toBe(100);
+    // The silo kg are not shared: each run's stock is only what its own accepted loads put in.
+    expect(other.silos).toEqual({ inKg: 0, cookedKg: 0, stockKg: 0 });
+    expect(other.daily).toEqual([]);
   });
 
   it("reports the silos day by day, closing on the same total as the silo stock", async () => {
     const cal = await calibration();
-    expect(cal.daily.map((d: { date: string; openingKg: number; sizedKg: number; closingKg: number }) => [d.date, d.openingKg, d.sizedKg, d.closingKg])).toEqual([
-      ["2026-07-25", 0, 54_710, 54_710],
-      ["2026-07-26", 54_710, 82_012.5, TO_SILOS],
+    expect(cal.daily.map((d: { date: string; openingKg: number; inKg: number; closingKg: number }) => [d.date, d.openingKg, d.inKg, d.closingKg])).toEqual([
+      ["2026-07-25", 0, TO_SILOS, TO_SILOS],
       ["2026-08-28", TO_SILOS, 0, TO_SILOS],
     ]);
-    expect(cal.daily[2].movedKg).toBe(500);
-    expect(cal.daily[2].sizes).toMatchObject({ Ap: -500, A: 500 });
+    expect(cal.daily[1].movedKg).toBe(500);
+    expect(cal.daily.at(-1).closingKg).toBe(cal.silos.stockKg);
   });
 
   it("an Incharge's own check is approved as saved, and the batch history reads both checks", async () => {
-    const own = (await call("wi", "POST", "/api/production/sizing-checks", { ...sample, decision: "ok" })).json();
-    expect(own).toMatchObject({ status: "approved", reviewedBy: "wi" });
-    const texts = (await call("wi", "GET", `/api/production/batches/${BATCH}`)).json().history.map((h: { text: string }) => h.text);
+    const own = (await call("pi", "POST", "/api/production/sizing-checks", { ...sample, decision: "ok" })).json();
+    expect(own).toMatchObject({ status: "approved", reviewedBy: "pi" });
+    const texts = (await call("pi", "GET", `/api/production/batches/${BATCH}`)).json().history.map((h: { text: string }) => h.text);
     expect(texts).toContain("Sizing check (QC-2), Silo A+ (25 mm): Fail · re-size by hand: submitted for approval");
     expect(texts).toContain("Sizing check approved");
     expect(texts).toContain("Re-sized by hand: 500 kg from silo A+ (25 mm) to A (24 mm)");

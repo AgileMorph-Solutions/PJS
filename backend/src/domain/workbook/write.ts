@@ -22,6 +22,9 @@ export interface BuiltWorkbook {
 }
 
 const HEADER_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F5F4" } };
+/** A column the app adds to a client's sheet: amber, so it reads apart from the client's own columns at a glance. */
+export const NEW_FILL: ExcelJS.Fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFCE7C8" } };
+export const NEW_NOTE = "New: not in your Excel file. The app adds this column.";
 
 export const BLANK_ID_NOTE = "Leave this blank to add a new row. For an existing row, keep it as it is.";
 
@@ -31,14 +34,18 @@ export const BLANK_ID_NOTE = "Leave this blank to add a new row. For an existing
  * `firstColumnNote` explains the first column where it is the one nobody fills in.
  */
 export function addTableSheet(
-  wb: ExcelJS.Workbook, title: string, fields: { key: string; label: string; note?: string }[], rows: Record<string, unknown>[], firstColumnNote?: string,
+  wb: ExcelJS.Workbook, title: string, fields: { key: string; label: string; note?: string; isNew?: boolean }[], rows: Record<string, unknown>[], firstColumnNote?: string,
 ) {
   const ws = wb.addWorksheet(title.slice(0, 31));
   const header = ws.addRow(fields.map((f) => f.label));
   header.font = { bold: true };
-  header.eachCell((cell) => { cell.fill = HEADER_FILL; });
+  header.eachCell((cell, col) => { cell.fill = fields[col - 1]?.isNew ? NEW_FILL : HEADER_FILL; });
   if (firstColumnNote) header.getCell(1).note = firstColumnNote;
-  fields.forEach((f, i) => { if (f.note && !(i === 0 && firstColumnNote)) header.getCell(i + 1).note = f.note; });
+  fields.forEach((f, i) => {
+    if (i === 0 && firstColumnNote) return;
+    const note = [f.isNew ? NEW_NOTE : "", f.note ?? ""].filter(Boolean).join(" ");
+    if (note) header.getCell(i + 1).note = note;
+  });
   ws.views = [{ state: "frozen", ySplit: 1, xSplit: 1 }];
   fields.forEach((f, i) => { ws.getColumn(i + 1).width = Math.min(Math.max(f.label.length + 4, 12), 40); });
   for (const row of rows) ws.addRow(fields.map((f) => serializeCell(row[f.key])));

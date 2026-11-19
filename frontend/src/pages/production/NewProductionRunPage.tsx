@@ -1,11 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { BinTrucks, formatTonnes } from "../../components/production/batchUi";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DateInput } from "../../components/ui/DateInput";
 import { Button } from "../../components/ui/Button";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { Field, inputClass } from "../../components/ui/Input";
-import { formatTonnes } from "../../components/production/batchUi";
 import { PRODUCTION_PAGE_SIZE, kgCol, numCol, statusCol, textCol } from "../../components/production/columns";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { Pill } from "../../components/ui/Pill";
@@ -14,13 +14,13 @@ import { ProductionFactorySwitcher, useProductionFactory } from "../../state/pro
 import { api, ApiError } from "../../repository/api";
 import { DAILY_CAPACITY_KG, MONTHLY_GUIDE_KG, planBatch } from "@anagroci/contract/domain/productionBatch";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
-import type { AvailableBin } from "@anagroci/contract/types/productionBatch";
-
-/** Why a bin can't be ticked, or undefined when it can. */
+import type { AvailableBin } from "@anagroci/contract/types/productionBatch";/** Why a bin can't be ticked, or undefined when it can. */
 function unavailableReason(b: AvailableBin): string | undefined {
   if (b.inBatch) return `Already in production run ${b.inBatch}`;
   if (!b.inMaster) return "Not in Masters › Bins";
   if (b.lotCount === 0) return "No stock";
+  // The Truck column marks which truck has no weight; that's the one to open and fix.
+  if (b.kg === 0) return "No net stock: record the weight on its truck first";
   return undefined;
 }
 
@@ -77,6 +77,8 @@ export function NewProductionRunPage() {
       ),
     },
     textCol("Warehouse", (b) => b.store, { mono: true }),
+    // The truck each Lot came on: its page, or the BKT's when another warehouse sent it. Filterable by truck or BKT number.
+    { ...textCol<AvailableBin>("Truck", (b) => b.lots.map((l) => l.transferId ?? l.receiptId).join(" "), { wrap: true }), render: (b) => <BinTrucks lots={b.lots} /> },
     numCol("Lots", (b) => b.lotCount, { digits: 0 }),
     { ...kgCol("Net stock", (b) => b.kg, { zeroAsDash: true, strong: true }), render: (b) => (b.kg ? <b className="font-semibold">{formatTonnes(b.kg)}</b> : "-") },
     statusCol("Can be taken", (b) => unavailableReason(b) ?? "Yes", (b) => {

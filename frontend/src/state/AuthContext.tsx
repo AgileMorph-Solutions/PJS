@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { UserView } from "../types/user";
 import { api, ApiError, UNAUTHORIZED_EVENT } from "../repository/api";
-import { canAccessProduction, canWriteStageDirectly, type Role } from "../data/roles";
+import { CENTRAL_ONLY_ROLES, canAccessProduction, canRecordIntake, canRunProduction, canSeeFactory, canWriteStageDirectly, type Role } from "../data/roles";
 import { warehouseSlug } from "../config/sites";
 
 type Status = "loading" | "anonymous" | "authenticated";
@@ -98,10 +98,39 @@ export function useHasRole(...roles: Role[]): boolean {
   return roles.includes(useMe().role);
 }
 
-/** Where this user lands: admin sees the dashboard; everyone else goes to their own warehouse's
- * Reception (a Branch Manager / QFS Officer has no dashboard access). */
+/**
+ * Who does which side of a production load (contract's canRecordIntake / canRunProduction / canSeeFactory): the warehouse
+ * team records, checks and weighs it and sees only that; the production team sees the whole of production, the
+ * warehouse's forms included, and accepts the load and runs what follows.
+ */
+export function useProductionPermissions() {
+  const role = useMe().role;
+  const isQfs = role === "qfs_officer";
+  const intake = canRecordIntake(role);
+  const factory = canRunProduction(role);
+  return {
+    /** Record and weigh a load, approve its moisture check (Admin / Warehouse Incharge). */
+    intake,
+    /** Accept a load, every record after it and its quality checks (Admin / Production Incharge). */
+    factory,
+    /** See production past the intake: silos, Lots, every stage (the production team and Admin). */
+    seeFactory: canSeeFactory(role),
+    /** Take a moisture check on a load (the warehouse team's QFS Officer, or its Incharge directly). */
+    moistureCheck: intake || isQfs,
+    /** Take a quality check after acceptance (QC-2 onwards): production's own. */
+    factoryCheck: factory,
+    /** Download the production workbook: everyone with Production but the QFS Officer, whose checks are on screen. */
+    exportWorkbook: !isQfs,
+    /** Admin is the one who may still correct a load production has accepted. */
+    isAdmin: role === "admin",
+  };
+}
+
+/** Where this user lands: admin sees the dashboard; the factory's roles go to Production; everyone else goes to their own
+ * warehouse's Reception (a Branch Manager / QFS Officer has no dashboard access). */
 export function homePathFor(me: UserView): string {
   const site = me.site ?? me.warehouse;
   if (me.role === "admin" || !site) return "/";
+  if (CENTRAL_ONLY_ROLES.includes(me.role)) return "/production/runs";
   return `/${warehouseSlug(site)}/receipts`;
 }

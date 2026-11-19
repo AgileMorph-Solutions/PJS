@@ -143,6 +143,26 @@ describe("user administration", () => {
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({ warehouse: "BOUAKE", site: "BOUAKE", warehouseType: "UNIT" });
   });
+
+  // The factory roles work at a Central warehouse only; a Unit one is refused on create and on a later move.
+  it("puts a Production Incharge or Factory Manager on a Central warehouse only", async () => {
+    for (const role of ["production_incharge", "factory_manager"]) {
+      const unit = await as(P + "admin", "POST", "/api/users", { username: P + role, password: PW, role, warehouse: "BOUAKE" });
+      expect(unit.statusCode).toBe(422);
+      expect(unit.json().error).toMatch(/Central warehouse/);
+      const central = await as(P + "admin", "POST", "/api/users", { username: P + role, password: PW, role, warehouse: "YAKRO FACTORY" });
+      expect(central.statusCode).toBe(201);
+      expect(central.json()).toMatchObject({ role, warehouse: "YAKRO FACTORY", warehouseType: "CENTRAL" });
+      expect((await as(P + "admin", "PATCH", `/api/users/${central.json().id}`, { warehouse: "BOUAKE" })).statusCode).toBe(422);
+    }
+  });
+
+  it("lets a factory role into Production, and keeps it off procurement's trucks", async () => {
+    await login(P + "production_incharge");
+    expect((await as(P + "production_incharge", "GET", "/api/auth/me")).statusCode).toBe(200);
+    expect((await as(P + "production_incharge", "GET", "/api/receipts")).statusCode).toBe(403);
+    expect((await as(P + "production_incharge", "GET", "/api/production/batches")).statusCode).toBe(200);
+  });
 });
 
 describe("Branch Manager submission → Warehouse Incharge approval", () => {

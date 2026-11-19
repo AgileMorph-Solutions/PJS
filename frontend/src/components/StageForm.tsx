@@ -1,6 +1,9 @@
 import type { Stage } from "../types/stage";
 import { derivedRuleFor } from "../domain/receiptMath";
-import { AUTO_DATE_FIELDS } from "@anagroci/contract/data/autoFields";
+import { AUTO_FIELD_NOTES, autoFieldFor } from "@anagroci/contract/data/autoFields";
+import { BIN_FINALISE_FIELDS } from "@anagroci/contract/domain/binFinalise";
+import { fieldChoices } from "@anagroci/contract/data/fieldChoices";
+import { isNoFutureDate, isNumericField, type FieldIssue } from "@anagroci/contract/domain/fieldRules";
 import { FieldInput } from "./FieldInput";
 
 interface Props {
@@ -22,8 +25,15 @@ interface Props {
   suggestions?: Record<string, { value: string; from: string }>;
   /** Known values per field label to choose from. */
   options?: Record<string, string[]>;
+  /** Closed lists per field label that come from a master (WH LOCATION's warehouses): shown as a dropdown. The fixed lists of
+   * the spec (contract data/fieldChoices.ts) are added by this form itself. */
+  choices?: Record<string, readonly string[]>;
   /** A caution per field label, shown under the field while it is editable. */
   warnings?: Record<string, string>;
+  /** What the field rules say about each value (contract domain/fieldRules.ts): shown as a warning under the field; the value is saved either way. */
+  issues?: Record<string, FieldIssue>;
+  /** Set when the phase before this one isn't complete (contract domain/phaseGate.ts): shown above the fields, which are read-only. */
+  lockedMessage?: string;
 }
 
 /**
@@ -48,7 +58,8 @@ function pairSampleFinal<F extends { n: string }>(fields: F[]) {
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly, only, hidden, suggestions, options, warnings }: Props) {
+export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly: readOnlyProp, only, hidden, suggestions, options, warnings, choices, issues, lockedMessage }: Props) {
+  const readOnly = readOnlyProp || Boolean(lockedMessage);
   const shown = stage.fields.filter((f) => (!only || only.includes(f.n)) && !hidden?.includes(f.n));
   const { single, pairs } = pairSampleFinal(shown);
   const render = (f: Stage["fields"][number]) => {
@@ -65,14 +76,12 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
             kind: "issued" as const,
             hint: f.n === "Lot Number" ? "Issued by the system when the truck passes quality" : "Filled in when the Lot is issued",
           }
-        : stage.id === "n-bin" && (f.n === "Bin allocation date" || f.n === "Finalised by")
-          ? { kind: "issued" as const, hint: "Stamped when the bin allocation is finalised" }
+        : stage.id === "n-bin" && (BIN_FINALISE_FIELDS as readonly string[]).includes(f.n)
+          ? { kind: "issued" as const, hint: f.n === "Finalised (same day / next day)" ? "Worked out when the bin allocation is finalised: the Lot's date against the allocation date" : "Stamped when the bin allocation is finalised" }
           : undefined;
-    // A date that fills itself: say so while it is still blank, so nobody wonders why it appears after saving.
-    const auto = AUTO_DATE_FIELDS[stage.id]?.find((a) => a.label === f.n);
-    const note = auto && !(values[f.n] ?? "").trim() && !readOnly
-      ? auto.from === "arrival" ? "Fills itself with the day the truck arrived when this step is saved. You can change it until the record is locked." : "Fills itself with today's date when this step is saved. You can change it until the record is locked."
-      : undefined;
+    // A field that fills itself: say so while it is still blank, so nobody wonders why it appears after saving.
+    const auto = autoFieldFor(stage.id, f.n);
+    const note = auto &&!(values[f.n] ?? "").trim() && !readOnly ? `${AUTO_FIELD_NOTES[auto.from]} You can change it until the record is locked.` : undefined;
     return (
       <FieldInput
         key={f.n}
@@ -80,7 +89,10 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
         value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
         suggestion={suggestions?.[f.n]}
         options={options?.[f.n]}
-        warning={warnings?.[f.n]}
+        choices={choices?.[f.n] ?? fieldChoices(stage.id, f.n)}
+        warning={warnings?.[f.n] ?? issues?.[f.n]?.message}
+        numeric={isNumericField(stage.id, f.n)}
+        maxDate={isNoFutureDate(stage.id, f.n) ? new Date().toISOString().slice(0, 10) : undefined}
         onChange={(v) => onFieldChange(f.n, v)}
         onBlur={onFieldBlur}
         idPrefix={stage.id}
@@ -93,6 +105,12 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
 
   return (
     <div className="space-y-4">
+      {lockedMessage && (
+        <p role="status" className="flex items-start gap-2 rounded-xl border border-warmstone-200 bg-warmstone-100 px-3 py-2 text-[13px] text-warmstone-800">
+          <span className="material-symbols-outlined text-[18px] text-warmstone-500">lock</span>
+          {lockedMessage}
+        </p>
+      )}
       {stage.file && (
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-warmstone-100 text-warmstone-600 text-[11px] font-medium">
           <span className="material-symbols-outlined text-[13px]">description</span>

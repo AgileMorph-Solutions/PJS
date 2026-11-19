@@ -6,7 +6,7 @@
  *    concept the app offers any more; an account left on an old store row keeps working (domain/site.ts resolveScope)
  *    until an admin moves it, but no account is newly put on one.
  */
-import { isRole, type Role } from "@anagroci/contract/data/roles";
+import { ROLE_LABEL, isRole, roleFitsWarehouseType, type Role } from "@anagroci/contract/data/roles";
 import type { UserView } from "@anagroci/contract/types/user";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { prisma } from "../db.js";
@@ -32,6 +32,9 @@ async function assertAssignableWarehouse(role: Role, warehouse: string | null | 
   if (wh.siteRef) throw new ValidationError(`"${warehouse}" is an old store of ${wh.siteRef.name}, not a warehouse. Choose ${wh.siteRef.name}.`);
   const gaps = siteSetupGaps(wh);
   if (gaps.length) throw new ValidationError(`"${warehouse}" isn't ready yet: it needs ${gaps.join(" and ")} (Masters › Warehouses).`);
+  if (!roleFitsWarehouseType(role, wh.type as WarehouseType | null)) {
+    throw new ValidationError(`A ${ROLE_LABEL[role]} works at the factory: assign them to a Central warehouse, not "${warehouse}".`);
+  }
 }
 
 export async function listUsers(): Promise<UserView[]> {

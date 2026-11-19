@@ -10,6 +10,7 @@ import { GRN_QUANTITY_LABEL } from "./receiptStatus.js";
 import { isGrnComplete } from "./recordLock.js";
 import { parseQty } from "./receiptMath.js";
 import { transferVariance } from "./transfers.js";
+import { dryingPhase, isOpenRound } from "./sunDrying.js";
 
 /** The client's settings: about 150 t a day, so a month is 3,700–4,500 t (150 t × ~26 working days). */
 export const DAILY_CAPACITY_KG = 150_000;
@@ -40,6 +41,10 @@ export interface LotInBin {
   dried: boolean;
   /** Set when the Lot reached this site on a transfer (BKT): its receipt belongs to the sending site. */
   transferId?: string;
+  /** The warehouse the Lot is in now: its truck's own warehouse, or the BKT's receiving one. */
+  warehouse: string;
+  /** For a Lot that came on a BKT, the warehouse that sent it. */
+  fromWarehouse?: string;
 }
 
 /**
@@ -57,6 +62,8 @@ export interface ArrivedLot {
   binCode: string;
   /** Net at arrival, from this site's scale. Undefined when the truck carried several Lots. */
   kg?: number;
+  fromWarehouse: string;
+  toWarehouse: string;
 }
 
 /**
@@ -79,14 +86,25 @@ export function arrivedLots(transfers: TransferRequest[]): ArrivedLot[] {
           arrivalDate: (t.receivedAt ?? "").slice(0, 10),
           binCode: l.receivedBinCode!.trim().toUpperCase(),
           kg: t.lines.length === 1 && net !== null ? net : undefined,
+          fromWarehouse: t.fromWarehouse,
+          toWarehouse: t.toWarehouse,
         }));
     });
 }
 
 export interface WarehouseBinStock {
   binCode: string;
+  /** What is in the bin now: its Lots' kg less issuedKg. */
   kg: number;
+  /** The net kg production accepted out of the bin (IssuedLoad), already taken off kg. */
+  issuedKg: number;
   lots: LotInBin[];
+}
+
+/** A load production accepted out of a warehouse bin: its net weight (pallets and bags off) has left the bin. */
+export interface IssuedLoad {
+  binCode: string;
+  netKg: number;
 }
 
 const filled = (v: string | undefined) => (v ?? "").trim() !== "";
@@ -117,9 +135,41 @@ function procurementComplete(r: ReceiptRecord): boolean {
   return Boolean(r.stageData["n-drying"]) || r.branches["n-drying"] === "none";
 }
 
+/** The facts of one drying round (a DryingBatch row) that say whether, and where, a Lot came back from drying. */
+export interface DryingRoundFacts {
+  sn: number;
+  status: string | null;
+  /** "entered": sun drying done in the app. Imported workbook rows are left to the receipt's own Drying fields. */
+  source: string | null;
+  receivedNetWeightKg: number | null;
+  destinationBinNo: string | null;
+}
+
+const DRIED_KG = "Dried quantity returned to warehouse";
+const DRIED_BIN = 'New/assigned Bin (marked "dried stock")';
+
+/**
+ * What came back from drying, and to which bins; undefined while the Lot is still out (or never went). Sun drying done in the
+ * app records this on its rounds, never on the Drying step's own fields, so the rounds are read first: the Lot is back once its
+ * latest round passed with a quantity and a bin, and out while any round is open. Only a Lot with no in-app round (an imported
+ * one) falls back to the Drying step's "Dried quantity returned" and "New/assigned Bin".
+ */
+export function driedReturn(r: Pick<ReceiptRecord, "stageData">, rounds: readonly DryingRoundFacts[] = []): { kg: number; bins: string[] } | undefined {
+  const app = rounds.filter((b) => b.source === "entered").sort((a, b) => a.sn - b.sn);
+  if (app.length) {
+    const last = app[app.length - 1]!;
+    if (app.some((b) => isOpenRound(b.status)) || dryingPhase(last.status) !== "passed" || last.receivedNetWeightKg === null) return undefined;
+    const bins = splitBinCodes(last.destinationBinNo ?? undefined);
+    return bins.length ? { kg: last.receivedNetWeightKg, bins } : undefined;
+  }
+  const kg = parseQty(r.stageData["n-drying"]?.[DRIED_KG]);
+  const bins = splitBinCodes(r.stageData["n-drying"]?.[DRIED_BIN]);
+  return kg !== undefined && bins.length ? { kg, bins } : undefined;
+}
+
 /** The bins a Lot sits in now: the one it came back to from drying, otherwise the one it was allocated. */
-export function binsOfLot(r: Pick<ReceiptRecord, "stageData" | "binNo">): string[] {
-  const back = splitBinCodes(r.stageData["n-drying"]?.['New/assigned Bin (marked "dried stock")']);
+export function binsOfLot(r: Pick<ReceiptRecord, "stageData" | "binNo">, rounds: readonly DryingRoundFacts[] = []): string[] {
+  const back = driedReturn(r, rounds)?.bins ?? splitBinCodes(r.stageData["n-drying"]?.[DRIED_BIN]);
   return back.length ? back : splitBinCodes(r.stageData["n-bin"]?.["Bin Number"] || r.binNo);
 }
 
@@ -127,12 +177,16 @@ export function binsOfLot(r: Pick<ReceiptRecord, "stageData" | "binNo">): string
  * What still stands between a Lot and "Ready for production", in the warehouse's words. Empty means it
  * can be marked. The same facts procurementComplete reads, so a Lot marked ready is one a batch can count.
  */
-export function productionReadinessGaps(r: Pick<ReceiptRecord, "branches" | "stageData" | "binNo" | "source">): string[] {
+export function productionReadinessGaps(
+  r: Pick<ReceiptRecord, "branches" | "stageData" | "binNo" | "source">,
+  /** This Lot's drying rounds: sun drying done in the app records what came back there, not on the Drying step. */
+  rounds: readonly DryingRoundFacts[] = [],
+): string[] {
   const drying = r.stageData["n-drying"];
-  const dried = !drying || (parseQty(drying["Dried quantity returned to warehouse"]) !== undefined && binsOfLot(r).length > 0);
+  const dried = !drying || driedReturn(r, rounds) !== undefined;
   return [
     r.branches["n-qfs"] !== "pass" && "pass Quality",
-    binsOfLot(r).length === 0 && "allocate a Bin",
+    binsOfLot(r, rounds).length === 0 && "allocate a Bin",
     !(r.source === "imported" ? Boolean(r.stageData["n-grn"]) : isGrnComplete(r.stageData)) && "complete the GRN (quantity and price)",
     !drying && r.branches["n-drying"] !== "none" && "answer the Drying step",
     !dried && "record the dried quantity returned to a Bin",
@@ -162,17 +216,31 @@ export function keptLotsByBin(receipts: ReceiptRecord[]): Map<string, number> {
  *   transferred-out trucks never are.
  * - The quantity is the GRN Weight: the quantity officially recognised into stock (recordLock.ts).
  *   Net, GRN and Paid are kept apart on purpose (client, Oct 2026), so Net is never substituted.
- * - A Lot sent to sun drying is out of its bin until the dried quantity is recorded as returned to a
- *   bin ("Dried quantity returned to warehouse" + "New/assigned Bin"); from then it counts there, at
- *   the dried quantity.
+ * - A Lot sent to sun drying is out of its bin until it is back (driedReturn: its last drying round passed,
+ *   or for an imported Lot "Dried quantity returned to warehouse" + "New/assigned Bin"); from then it counts
+ *   there, at the dried quantity.
+ * - A load production accepted has left the bin (Lokesh, 16 Nov 2026: "Once it is confirmed ... stock of RCN should be
+ *   debited from warehouse stock"), at its net weight: the RCN that came out, before the factory's dust and voids. A
+ *   bin is debited as a whole, not Lot by Lot: a load's slip names the bin, never the Lots on its pallets. The result
+ *   may go below zero (GRN and the factory's scale are different weighings); that is shown, never clamped.
  */
-export function warehouseBinStock(receipts: ReceiptRecord[], arrivals: ArrivedLot[] = []): Map<string, WarehouseBinStock> {
+export function warehouseBinStock(
+  receipts: ReceiptRecord[],
+  arrivals: ArrivedLot[] = [],
+  /** Drying rounds by Lot number (driedReturn): where an in-app sun drying left each Lot. */
+  roundsByLot: ReadonlyMap<string, readonly DryingRoundFacts[]> = new Map(),
+  issued: readonly IssuedLoad[] = [],
+): Map<string, WarehouseBinStock> {
   const bins = new Map<string, WarehouseBinStock>();
+  const binOf = (binCode: string) => {
+    const bin = bins.get(binCode) ?? { binCode, kg: 0, issuedKg: 0, lots: [] };
+    bins.set(binCode, bin);
+    return bin;
+  };
   const add = (binCode: string, lot: LotInBin) => {
-    const bin = bins.get(binCode) ?? { binCode, kg: 0, lots: [] };
+    const bin = binOf(binCode);
     bin.lots.push(lot);
     if (lot.kg !== undefined) bin.kg += lot.kg;
-    bins.set(binCode, bin);
   };
 
   for (const r of receipts) {
@@ -183,6 +251,7 @@ export function warehouseBinStock(receipts: ReceiptRecord[], arrivals: ArrivedLo
       lotNo: r.lotNo || r.stageData["n-lot"]?.["Lot Number"] || "",
       supplierName: r.supplierName,
       arrivalDate: r.arrivalDate,
+      warehouse: r.warehouse,
     };
 
     const drying = r.stageData["n-drying"];
@@ -190,11 +259,10 @@ export function warehouseBinStock(receipts: ReceiptRecord[], arrivals: ArrivedLo
     let kg: number | undefined;
     let dried = false;
     if (drying) {
-      const returned = parseQty(drying["Dried quantity returned to warehouse"]);
-      const back = splitBinCodes(drying['New/assigned Bin (marked "dried stock")']);
-      if (returned === undefined || back.length === 0) continue; // still out for drying
-      binCodes = back;
-      kg = returned;
+      const back = driedReturn(r, roundsByLot.get(base.lotNo));
+      if (!back) continue; // still out for drying
+      binCodes = back.bins;
+      kg = back.kg;
       dried = true;
     } else {
       binCodes = splitBinCodes(r.stageData["n-bin"]?.["Bin Number"] || r.binNo);
@@ -213,10 +281,16 @@ export function warehouseBinStock(receipts: ReceiptRecord[], arrivals: ArrivedLo
   // The sending site's receipt says "transferred out", so procurementComplete above never counts it there:
   // a Lot is in one site's bins or the other's, never both.
   for (const a of arrivals) {
-    const lot = { receiptId: a.receiptId, lotNo: a.lotNo, supplierName: a.supplierName, arrivalDate: a.arrivalDate, dried: false, transferId: a.transferId };
+    const lot = { receiptId: a.receiptId, lotNo: a.lotNo, supplierName: a.supplierName, arrivalDate: a.arrivalDate, dried: false, transferId: a.transferId, warehouse: a.toWarehouse, fromWarehouse: a.fromWarehouse };
     add(a.binCode, a.kg === undefined ? { ...lot, state: "weighed_with_other_lots" } : { ...lot, kg: a.kg, state: "in_bin" });
   }
-  for (const bin of bins.values()) bin.kg = Math.round(bin.kg * 100) / 100;
+  for (const load of issued) {
+    const bin = binOf(load.binCode);
+    bin.issuedKg += load.netKg;
+    bin.kg -= load.netKg;
+  }
+  const round = (n: number) => Math.round(n * 100) / 100;
+  for (const bin of bins.values()) Object.assign(bin, { kg: round(bin.kg), issuedKg: round(bin.issuedKg) });
   return bins;
 }
 

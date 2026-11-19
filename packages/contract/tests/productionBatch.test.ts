@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planBatch, suggestBatchCode, warehouseBinStock, splitBinCodes, arrivedLots } from "../src/domain/productionBatch";
+import { planBatch, suggestBatchCode, warehouseBinStock, splitBinCodes, arrivedLots, productionReadinessGaps, type DryingRoundFacts } from "../src/domain/productionBatch";
 import { GRN_QUANTITY_LABEL } from "../src/domain/receiptStatus";
 import type { ReceiptRecord, TransferRequest } from "../src/types/receipt";
 
@@ -84,6 +84,55 @@ describe("warehouse bin stock, as procurement left it", () => {
     expect(stock.get("BIN-02")!.lots.map((l) => l.state)).toEqual(["split_across_bins"]);
     expect(splitBinCodes(" a, b/c ")).toEqual(["A", "B", "C"]);
   });
+
+  // Lokesh, 16 Nov 2026: once production accepts a load, "stock of RCN should be debited from warehouse stock".
+  it("takes the net of every load production accepted off its bin, keeping the Lots listed", () => {
+    const inBin = { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("30000") };
+    const stock = warehouseBinStock([receipt("A", inBin)], [], new Map(), [{ binCode: "BIN-03B", netKg: 9500.25 }, { binCode: "BIN-03B", netKg: 499.75 }]);
+    expect(stock.get("BIN-03B")).toMatchObject({ kg: 20000, issuedKg: 10000, lots: [{ receiptId: "A" }] });
+  });
+
+  // The workbooks' own balances go negative; a debit past the GRN stock is a real disagreement, shown as it is.
+  it("never clamps: more accepted than the bin's Lots hold leaves it below zero, and a bin with no Lots still shows its debit", () => {
+    const stock = warehouseBinStock([receipt("A", { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("1000") })], [], new Map(), [
+      { binCode: "BIN-03B", netKg: 1200 },
+      { binCode: "BIN-09", netKg: 300 },
+    ]);
+    expect(stock.get("BIN-03B")).toMatchObject({ kg: -200, issuedKg: 1200 });
+    expect(stock.get("BIN-09")).toMatchObject({ kg: -300, issuedKg: 300, lots: [] });
+  });
+});
+
+// REC-YAK-2026-0317 (Nov 2026): sun drying passed in the app, 100 kg back to BIN-001, yet "Ready for production" stayed blocked
+// because only the Drying step's own "Dried quantity returned" field was read, and in-app drying never writes it.
+describe("a Lot dried in the app is back once its last round passed", () => {
+  const round = (sn: number, status: string, extra: Partial<DryingRoundFacts> = {}): DryingRoundFacts =>
+    ({ sn, status, source: "entered", receivedNetWeightKg: 100, destinationBinNo: "BIN-001", ...extra });
+  const dried = receipt("DRIED", { "n-bin": { "Bin Number": "BIN-006" }, ...grn("39700"), "n-drying": { "Decision (Direct to drying / Warehouse → Drying)": "Warehouse → Drying" } },
+    { lotNo: "LOT-YAK-2026-0015", branches: { "n-qfs": "pass", "n-drying": "indirect", "n-xferdec": "production" } });
+  const WAITING = "record the dried quantity returned to a Bin";
+
+  it("opens Ready for production after a passed round, with nothing typed on the Drying step", () => {
+    expect(productionReadinessGaps(dried, [round(1, "PASSED")])).toEqual([]);
+    expect(productionReadinessGaps(dried, [])).toContain(WAITING); // no round recorded at all: still waiting
+  });
+
+  it("waits while any round is open, or the last one was sent for re-drying", () => {
+    expect(productionReadinessGaps(dried, [round(1, "IN DRYING")])).toContain(WAITING);
+    expect(productionReadinessGaps(dried, [round(1, "RE-DRY"), round(2, "QUALITY CHECK")])).toContain(WAITING);
+    // Passed, then "Dry this Lot again": the new drying is open, so the Lot is out of its bin again.
+    expect(productionReadinessGaps(dried, [round(1, "PASSED"), round(2, "IN DRYING")])).toContain(WAITING);
+  });
+
+  it("counts the dried quantity in the bin the last round came back to", () => {
+    const stock = warehouseBinStock([dried], [], new Map([["LOT-YAK-2026-0015", [round(1, "RE-DRY", { receivedNetWeightKg: 300 }), round(2, "PASSED", { receivedNetWeightKg: 250 })]]]));
+    expect(stock.has("BIN-006")).toBe(false);
+    expect(stock.get("BIN-001")).toMatchObject({ kg: 250, lots: [{ receiptId: "DRIED", dried: true }] });
+  });
+
+  it("an imported workbook row doesn't stand in for the Drying step's own fields", () => {
+    expect(productionReadinessGaps(dried, [round(1, "PASSED", { source: "imported" })])).toContain(WAITING);
+  });
 });
 
 describe("Lots that arrived on a BKT", () => {
@@ -102,10 +151,14 @@ describe("Lots that arrived on a BKT", () => {
 
   it("counts a Lot alone on its truck at the net weighed on arrival, dated the day it arrived here", () => {
     const arrivals = arrivedLots([bkt("BKT-2026-001", "received", [line("0001", "bin-03b")])]);
-    expect(arrivals).toEqual([{ transferId: "BKT-2026-001", receiptId: "0001", lotNo: "LOT-BKE-2026-0001", supplierName: "S", arrivalDate: "2026-07-03", binCode: "BIN-03B", kg: 9950 }]);
+    expect(arrivals).toEqual([{ transferId: "BKT-2026-001", receiptId: "0001", lotNo: "LOT-BKE-2026-0001", supplierName: "S", arrivalDate: "2026-07-03", binCode: "BIN-03B", kg: 9950, fromWarehouse: "BOUAKE", toWarehouse: "YAKRO FACTORY" }]);
     const stock = warehouseBinStock([receipt("LOCAL", { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("1000") })], arrivals);
     expect(stock.get("BIN-03B")).toMatchObject({ kg: 10950 });
-    expect(stock.get("BIN-03B")!.lots[1]).toMatchObject({ receiptId: "0001", transferId: "BKT-2026-001", state: "in_bin", kg: 9950 });
+    // Where each Lot is now: a local truck at its own warehouse; a BKT's Lot at the receiving one, remembering who sent it.
+    // Many imported Bin masters have no warehouse, so this is what the New run screen's Warehouse column reads.
+    expect(stock.get("BIN-03B")!.lots[0]).toMatchObject({ receiptId: "LOCAL", warehouse: receipt("LOCAL", {}).warehouse });
+    expect(stock.get("BIN-03B")!.lots[0]!.fromWarehouse).toBeUndefined();
+    expect(stock.get("BIN-03B")!.lots[1]).toMatchObject({ receiptId: "0001", transferId: "BKT-2026-001", state: "in_bin", kg: 9950, warehouse: "YAKRO FACTORY", fromWarehouse: "BOUAKE" });
   });
 
   it("doesn't split one truck's weight between several Lots, and ignores trucks not yet received or Lots with no bin", () => {

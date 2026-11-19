@@ -79,7 +79,7 @@ describe("before and after, compared", () => {
       s(4, "qc7_after", "Pieces", "", "700", "submitted"),
       s(5, "qc7_before", "Wholes", "A++ to B", "880"),
       // The Lot's other records come in the same list, and must not make a row of their own.
-      { id: 6, kind: "qc3", status: "approved", values: { size: "A" } },
+      { id: 6, kind: "qc4", status: "approved", values: {} },
       { id: 7, kind: "cooker_log", status: "approved", values: { size: "A" } },
     ]);
     expect(rows.map((r) => [r.stream, r.sizes, r.before?.wholesPct, r.after?.wholesPct])).toEqual([

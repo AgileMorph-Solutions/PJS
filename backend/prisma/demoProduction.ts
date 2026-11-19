@@ -14,7 +14,7 @@
  * Loaded through the production workbook upload (preview, then apply), so every row passes the same rules as the
  * screens: what the demo shows is what the app would accept. Sized so that every kind of production table has more
  * than one page (10 rows a page):
- *   DEMO-RUN-A    30 loads, all sorted into the silos; 12 Lots at every stage — 4 colour sorted, 4 cooled and ready to
+ *   DEMO-RUN-A    30 loads, all in the silos; 12 Lots at every stage — 4 colour sorted, 4 cooled and ready to
  *                 shell, 4 still cooking. Lot DEM26K01 carries 12 of each check and log, and 12 shelling days.
  *   DEMO-RUN-B    14 loads at every step of Intake; Lot DEM26K13 cooked and cooled.
  *   DEMO-RUN-C    2 loads just recorded.
@@ -53,8 +53,8 @@ function demoRows(): Record<string, Row[]> {
   [...LETTERS].forEach((l, i) => add("Batches", { "Batch Name": `DEMO-RUN-${l}`, "Start Date": day(10 + i * 2), Bins: bin(7 + i), "Proposed By": "Demo data" }));
 
   // One load, as far as `upTo` says: each weighed load is 2335 + 2445.4 kg gross, 60 bags, 200 kg of pallets, 2.5 kg of
-  // dust → 4,538.9 kg to sort, sorted 3,000 into silo A and 1,538.9 into silo B.
-  type Step = "receipt" | "moisture" | "hold" | "pallets" | "final" | "sorted";
+  // dust → 4,538.9 kg into the silos once the final weight is saved (Intake & Calibration are one stage).
+  type Step = "receipt" | "moisture" | "hold" | "pallets" | "final";
   const load = (run: string, btm: number, fromBin: string, date: string, upTo: Step) => {
     const BTM = String(btm);
     add("RCN Receipts", { "Batch Name": run, Date: date, "BTM No": BTM, "Source Bin": fromBin });
@@ -66,20 +66,18 @@ function demoRows(): Record<string, Row[]> {
     add("Pallets", { "BTM No": BTM, "Gross Weight (kg)": 2445.4, "No of Bags": 30, "Factory Bin": "ANA-DEMO" });
     if (upTo === "pallets") return;
     add("Final Weight", { "BTM No": BTM, "Empty Pallets Weight (kg)": "120 / 80", "No of Pallets": "1 / 1", "Dust (kg)": 2.5 });
-    if (upTo === "final") return;
-    add("Calibration Runs", { "BTM No": BTM, Date: date, "Size A (24mm)": 3000, "Size B (22mm)": 1538.9 });
   };
 
-  // DEMO-RUN-A: 30 loads over 15 days, all the way into the silos (90,000 kg into silo A).
-  for (let i = 0; i < 30; i++) load("DEMO-RUN-A", 1001 + i, i % 2 ? bin(2) : bin(1), day(6 + Math.floor(i / 2)), "sorted");
+  // DEMO-RUN-A: 30 loads over 15 days, all the way into the silos (30 × 4,538.9 = 136,167 kg).
+  for (let i = 0; i < 30; i++) load("DEMO-RUN-A", 1001 + i, i % 2 ? bin(2) : bin(1), day(6 + Math.floor(i / 2)), "final");
   // DEMO-RUN-B: 14 loads, every step of Intake represented.
-  const stepsB: Step[] = ["sorted", "sorted", "sorted", "sorted", "sorted", "final", "final", "pallets", "pallets", "moisture", "hold", "hold", "receipt", "receipt"];
+  const stepsB: Step[] = ["final", "final", "final", "final", "final", "final", "final", "pallets", "pallets", "moisture", "hold", "hold", "receipt", "receipt"];
   stepsB.forEach((step, i) => load("DEMO-RUN-B", 601 + i, i % 2 ? bin(4) : bin(3), day(32 + Math.floor(i / 2)), step));
   // DEMO-RUN-C: two loads just recorded.
   load("DEMO-RUN-C", 701, bin(5), day(39), "receipt");
   load("DEMO-RUN-C", 702, bin(5), day(40), "receipt");
   // DEMO-RUN-E…P: one load each, at different steps.
-  const stepsE: Step[] = ["sorted", "final", "pallets", "moisture", "receipt", "hold"];
+  const stepsE: Step[] = ["final", "final", "pallets", "moisture", "receipt", "hold"];
   [...LETTERS].forEach((l, i) => load(`DEMO-RUN-${l}`, 801 + i, bin(7 + i), day(11 + i * 2), stepsE[i % stepsE.length]!));
 
   // Silo checks: A is fine; B fails and 100 kg move to BC.
@@ -173,7 +171,6 @@ async function remove() {
   await prisma.boilerReading.deleteMany({ where: { warehouse: SITE } });
   await prisma.manualCalibration.deleteMany({ where: { sizingCheck: { batch: { warehouse: SITE } } } });
   await prisma.sizingCheck.deleteMany({ where: { batch: { warehouse: SITE } } });
-  await prisma.rcnCalibrationRun.deleteMany({ where: atLoad });
   await prisma.rcnPallet.deleteMany({ where: atLoad });
   await prisma.rcnEmptyPalletStack.deleteMany({ where: atLoad });
   await prisma.rcnMoistureCheck.deleteMany({ where: atLoad });

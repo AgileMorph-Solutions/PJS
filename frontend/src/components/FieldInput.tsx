@@ -23,15 +23,23 @@ interface Props {
   options?: string[];
   /** A caution under an editable field (a value the master doesn't have) — it warns, it doesn't block. */
   warning?: string;
+  /** A number field: phones and tablets open the number keyboard. */
+  numeric?: boolean;
+  /** The latest day a date field's calendar offers (ISO): later days are greyed out. */
+  maxDate?: string;
+  /** A closed list: shown as a dropdown instead of a text box. A stored value outside it stays selectable, never dropped. */
+  choices?: readonly string[];
 }
 
 /** One field row: label + an optional system/calculated badge + a controlled input. The displayed
  * value always comes from the record itself via `value`, never from the generic sample (`field.v`)
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, options, warning }: Props) {
+export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, options, warning, numeric, choices, maxDate }: Props) {
   const locked = readOnly || Boolean(system);
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
+  const inputClass = `w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${locked ? "cursor-default text-warmstone-600" : ""}`;
+  const choiceList = choices && value.trim() && !choices.includes(value) ? [value, ...choices] : choices;
 
   return (
     <div>
@@ -46,7 +54,13 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         )}
       </div>
       {field.format === "date" && !locked ? (
-        <DateInput id={id} value={value} onChange={onChange} onBlur={onBlur} className={`w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${locked ? "cursor-default text-warmstone-600" : ""}`} />
+        <DateInput id={id} value={value} onChange={onChange} onBlur={onBlur} max={maxDate} className={inputClass} />
+      ) : choiceList && !locked ? (
+        // Saved on change, not on blur: a pick is a whole answer, unlike a half-typed number.
+        <select id={id} value={value} onChange={(e) => { onChange(e.target.value); onBlur?.(); }} className={inputClass}>
+          <option value="">Choose…</option>
+          {choiceList.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
       ) : (
       <input
         id={id}
@@ -55,10 +69,11 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         readOnly={locked}
+        inputMode={numeric ? "decimal" : undefined}
         aria-describedby={system ? `${id}-hint` : undefined}
         list={options && !locked ? `${id}-options` : undefined}
         placeholder={value ? "" : system ? (system.kind === "calculated" ? "Calculated automatically" : "Issued automatically") : "Not recorded yet"}
-        className={`w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13.5px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700 ${locked ? "cursor-default text-warmstone-600" : ""}`}
+        className={inputClass}
       />
       )}
       {options && !locked && (
@@ -72,7 +87,7 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         </p>
       )}
       {note && !system && <p className="mt-1 text-[11.5px] text-warmstone-500">{note}</p>}
-      {warning && !locked && <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">{warning}</p>}
+      {warning && !locked && <p className="mt-1 text-[12px] font-semibold text-ambernut-700">{warning}</p>}
       {suggestion && !locked && !value.trim() && (
         <button
           type="button"

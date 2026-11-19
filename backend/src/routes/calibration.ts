@@ -1,38 +1,28 @@
 /**
- * Production Phase 2: Calibration. Thin, like rcnReceipts.ts. Sizing a load and moving nuts between silos are
- * Admin / Warehouse Incharge for now (the Data Entry role comes later); a QFS Officer reads the batch's
- * calibration and submits a QC-2 sizing check, which the Incharge approves — auth/policy.ts lists those routes.
+ * Production Phase 2: Calibration. Thin, like rcnReceipts.ts. A load needs no route of its own here: production's
+ * acceptance puts it into the silos (rcnReceipts). Calibration is the factory's side, after that acceptance: the
+ * production team sees it, and the Production Incharge (or Admin) takes its QC-2 checks and moves nuts between silos.
+ * The warehouse team never reaches it (18 Nov 2026).
  */
 import type { FastifyInstance } from "fastify";
-import type { CalibrationRunInput, ManualCalibrationInput, SizingCheckInput } from "@anagroci/contract/types/calibration";
+import type { ManualCalibrationInput, SizingCheckInput } from "@anagroci/contract/types/calibration";
 import { currentUser, requireRole } from "../auth/plugin.js";
-import {
-  addCalibrationRun, addManualCalibration, batchCalibration, deleteCalibrationRun, reviewSizingCheck, submitSizingCheck,
-} from "../services/production/calibration.js";
+import { addManualCalibration, batchCalibration, reviewSizingCheck, submitSizingCheck } from "../services/production/calibration.js";
 import { siteFor } from "./productionBatches.js";
 
 export async function calibrationRoutes(app: FastifyInstance) {
-  const reviewers = { preHandler: requireRole("admin", "warehouse_incharge") };
+  const reviewers = { preHandler: requireRole("admin", "production_incharge") };
+  // The factory is the production team's to see (canSeeFactory): the warehouse team sees its loads, nothing after.
+  const watchers = { preHandler: requireRole("admin", "production_incharge", "factory_manager") };
 
-  app.get("/api/production/batches/:code/calibration", async (req, reply) => {
+  app.get("/api/production/batches/:code/calibration", watchers, async (req, reply) => {
     const { code } = req.params as { code: string };
     const found = await batchCalibration(await siteFor(req), code);
     if (!found) return reply.code(404).send({ error: `Batch ${code} not found` });
     return found;
   });
 
-  app.post("/api/production/rcn-receipts/:id/calibration-runs", reviewers, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const receipt = await addCalibrationRun(await siteFor(req), currentUser(req).id, id, (req.body ?? {}) as CalibrationRunInput);
-    return reply.code(201).send(receipt);
-  });
-
-  app.delete("/api/production/calibration-runs/:id", reviewers, async (req) => {
-    const { id } = req.params as { id: string };
-    return deleteCalibrationRun(await siteFor(req), Number(id));
-  });
-
-  app.post("/api/production/sizing-checks", async (req, reply) => {
+  app.post("/api/production/sizing-checks", reviewers, async (req, reply) => {
     const check = await submitSizingCheck(await siteFor(req), currentUser(req), (req.body ?? {}) as SizingCheckInput);
     return reply.code(201).send(check);
   });

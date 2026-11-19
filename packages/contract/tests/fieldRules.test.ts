@@ -1,0 +1,227 @@
+/**
+ * docs/procurement-field-rules.png: what a typed value may be, which values must agree, and the order phases open in. One
+ * case per rule in the image, so a rule that stops working is named.
+ */
+import { describe, it, expect } from "vitest";
+import { FIELD_RULES, checkValue, isNoFutureDate, recordIssues } from "../src/domain/fieldRules";
+import { stageGate, passBlocked, decisionGate } from "../src/domain/phaseGate";
+import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap";
+import { fieldChoices } from "../src/data/fieldChoices";
+import { autoFill, weekLabel } from "../src/data/autoFields";
+import { prefillSuggestions } from "../src/domain/receiptMath";
+
+const ctx = { today: "2026-11-16", arrivalDate: "2026-11-14" };
+// Every rule only warns (Nov 2026: "all values can be saved, just warn the user"), so a value is either fine or flagged.
+const level = (stageId: string, label: string, v: string) => (checkValue(stageId, label, v) ? "warn" : undefined);
+
+describe("every rule names a real field", () => {
+  it("FIELD_RULES labels exist in the spec", () => {
+    for (const [stageId, fields] of Object.entries(FIELD_RULES)) {
+      for (const label of Object.keys(fields)) expect(STAGE_FIELD_MAP[stageId]?.fields.some((f) => f.label === label), `${stageId} / ${label}`).toBe(true);
+    }
+  });
+});
+
+describe("one value on its own", () => {
+  it("blank is never wrong: it is 'not recorded yet'", () => {
+    expect(checkValue("n-qfs", "Sample moisture (%)", "")).toBeUndefined();
+  });
+
+  it("moisture: above 10 % warns that it needs drying; over 100 % warns as a typing slip", () => {
+    expect(level("n-qfs", "Sample moisture (%)", "9.5")).toBeUndefined();
+    expect(level("n-qfs", "Sample moisture (%)", "12")).toBe("warn");
+    expect(level("n-qfs", "Final moisture (%)", "30")).toBe("warn");
+    expect(level("n-qfs", "Final moisture (%)", "100.5")).toBe("warn");
+    expect(level("n-qfs", "Sample moisture (%)", "abc")).toBe("warn");
+  });
+
+  it("nut count: whole number 100 - 300, above 230 warns", () => {
+    expect(level("n-qfs", "Sample nut count", "172")).toBeUndefined();
+    expect(level("n-qfs", "Sample nut count", "240")).toBe("warn");
+    expect(level("n-qfs", "Final nut count", "1000")).toBe("warn");
+    expect(level("n-qfs", "Final nut count", "172.5")).toBe("warn");
+  });
+
+  it("KOR: 30 - 60 lbs, below 43 warns", () => {
+    expect(level("n-qfs", "KOR", "47.69")).toBeUndefined();
+    expect(level("n-qfs", "FINAL KOR", "41")).toBe("warn");
+    expect(level("n-qfs", "KOR", "75")).toBe("warn");
+  });
+
+  it("the French decimal comma the real sheets use is a number", () => {
+    expect(level("n-qfs", "KOR", "47,69")).toBeUndefined();
+  });
+
+  it("weights and price must be more than 0; gross above 60,000 kg warns", () => {
+    expect(level("n-gross", "Loaded truck weight (kg)", "0")).toBe("warn");
+    expect(level("n-gross", "GROSS WT KGS", "41300")).toBeUndefined();
+    expect(level("n-gross", "GROSS WT KGS", "116480")).toBe("warn");
+    expect(level("n-grn", "PRICE", "0")).toBe("warn");
+  });
+
+  it("bags are whole numbers; more than 750 good bags warns", () => {
+    expect(level("n-unload", "BON SACS (good bags)", "463")).toBeUndefined();
+    expect(level("n-unload", "BON SACS (good bags)", "800")).toBe("warn");
+    expect(level("n-unload", "Sacs déchirés (torn bags)", "1.5")).toBe("warn");
+  });
+
+  it("cut-test grams: 0 - 1000 g each", () => {
+    expect(level("n-qfs", "Sample – Good Kernel (g)", "243")).toBeUndefined();
+    expect(level("n-qfs", "Sample – Good Kernel (g)", "1243")).toBe("warn");
+  });
+
+  it("fiche number digits only, fiche code and plate format: each warns when it doesn't fit", () => {
+    expect(level("n-verify", "FICHE", "72515")).toBeUndefined();
+    expect(level("n-verify", "FICHE", "72-515")).toBe("warn");
+    expect(level("n-verify", "FICHE CODE", "0401-0007")).toBeUndefined();
+    expect(level("n-verify", "FICHE CODE", "401/7")).toBe("warn");
+    // A plain number is a FICHE CODE the team uses too (Nov 2026): never warned about.
+    expect(checkValue("n-verify", "FICHE CODE", "77583")).toBeUndefined();
+    expect(level("n-gate", "VEHICLE NO.", "4972KB01/9901KD01")).toBeUndefined();
+    expect(level("n-gate", "VEHICLE NO.", "7957-GN-01")).toBeUndefined();
+    expect(level("n-gate", "VEHICLE NO.", "827 KT 01!")).toBe("warn");
+  });
+});
+
+describe("values that must agree", () => {
+  const ids = (sd: Record<string, Record<string, string>>) => recordIssues(sd, ctx).map((i) => i.label);
+
+  it("the empty truck can't weigh as much as the loaded one", () => {
+    expect(ids({ "n-gross": { "Loaded truck weight (kg)": "15000", "Tare / empty truck weight (kg)": "16000" } }))
+      .toContain("Tare / empty truck weight (kg)");
+  });
+
+  it("an arrival before the day the record was entered warns lightly; the same day doesn't", () => {
+    const entered = { ...ctx, enteredOn: "2026-11-14" };
+    const at = (d: string) => recordIssues({ "n-gate": { "DATE OF ARRIVAL": d } }, entered).map((i) => i.message);
+    expect(at("2026-11-10")).toEqual(["A past date: this record was entered on 14/11/2026. Please check it."]);
+    expect(at("2026-11-14")).toEqual([]);
+  });
+
+  it("arrival and offloading can't be picked in the future; other dates can", () => {
+    expect(isNoFutureDate("n-gate", "DATE OF ARRIVAL")).toBe(true);
+    expect(isNoFutureDate("n-unload", "DATE OF OFFLOADING")).toBe(true);
+    expect(isNoFutureDate("n-gate", "REMARKS")).toBe(false);
+  });
+
+  it("dates: no arrival in the future, no offloading before arrival", () => {
+    expect(ids({ "n-gate": { "DATE OF ARRIVAL": "2026-12-01" } })).toContain("DATE OF ARRIVAL");
+    expect(ids({ "n-unload": { "DATE OF OFFLOADING": "2026-11-12" } })).toContain("DATE OF OFFLOADING");
+    expect(ids({ "n-unload": { "DATE OF OFFLOADING": "2026-11-15" } })).not.toContain("DATE OF OFFLOADING");
+  });
+
+  it("refraction: more than 1 % of net warns (net is taken as the system calculates it)", () => {
+    const base = { "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } };
+    expect(ids({ ...base, "n-unload": { ...base["n-unload"], Refraction: "60" } })).not.toContain("Refraction");
+    expect(ids({ ...base, "n-unload": { ...base["n-unload"], Refraction: "600" } })).toContain("Refraction");
+    expect(ids({ ...base, "n-unload": { ...base["n-unload"], Refraction: "50000" } })).toContain("Refraction");
+  });
+
+  it("kg per bag far from 80 warns; the real first truck (41,300 kg, 478 bags = 86 kg) does not", () => {
+    const sd = (bags: string) => ({ "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "BON SACS (good bags)": bags, "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } });
+    expect(ids(sd("463"))).not.toContain("GROSS WT KGS");
+    expect(ids(sd("35"))).toContain("GROSS WT KGS");
+  });
+
+  it("tally clerk count and total bags; damp + torn over 10 %; pallets too few", () => {
+    const sd = { "n-unload": { "BON SACS (good bags)": "400", "HUMID SACS (damp bags)": "30", "Sacs déchirés (torn bags)": "48", "Tally Clerk bag count": "470", "Pallets used (30 bags/pallet)": "10" } };
+    expect(ids(sd)).toEqual(expect.arrayContaining(["Tally Clerk bag count", "HUMID SACS (damp bags)", "Pallets used (30 bags/pallet)"]));
+  });
+
+  it("GRN quantity above net weight warns", () => {
+    expect(ids({ "n-netwt": { "NET WT KGS": "40822" }, "n-grn": { "GRN Weight (kept separate from Gross/Net/Paid)": "42000" } }))
+      .toContain("GRN Weight (kept separate from Gross/Net/Paid)");
+  });
+
+  it("cut-test grams over the 1,000 g sample warn; moisture not dropping after drying warns", () => {
+    expect(ids({ "n-qfs": { "Sample – Good Kernel (g)": "800", "Sample – Shell (g)": "440" } })).toContain("Sample – Good Kernel (g)");
+    expect(ids({ "n-drying": { "Moisture % — before drying": "11.8", "Moisture % — after drying": "12.1" } })).toContain("Moisture % — after drying");
+  });
+
+  it("final moisture far from the sample warns (the two are minutes apart); close readings don't", () => {
+    expect(ids({ "n-qfs": { "Sample moisture (%)": "2", "Final moisture (%)": "9" } })).toContain("Final moisture (%)");
+    expect(ids({ "n-qfs": { "Sample moisture (%)": "9", "Final moisture (%)": "2" } })).toContain("Final moisture (%)");
+    expect(ids({ "n-qfs": { "Sample moisture (%)": "8", "Final moisture (%)": "9.5" } })).not.toContain("Final moisture (%)");
+  });
+});
+
+describe("phase order: a phase opens only when the one before is complete", () => {
+  const arrival = {
+    "n-gate": { "DATE OF ARRIVAL": "2026-11-14", "CREDIT/CASH": "CASH", "WH LOCATION": "BOUAKE", "VEHICLE NO.": "827KT01" },
+    "n-verify": { "SUPPLIERS NAME": "SCOOP IMANE", "LBA CODE": "LBA-006-IMA", "FICHE CODE": "0401-0007", FICHE: "72515", ORIGIN: "DIANRA" },
+  };
+
+  it("Arrival is always open; Weight waits for every Arrival field and names what is missing", () => {
+    expect(stageGate({ stageData: {}, branches: {} }, "n-gate").open).toBe(true);
+    const g = stageGate({ stageData: { "n-gate": { "VEHICLE NO.": "827KT01" } }, branches: {} }, "n-gross");
+    expect(g.open).toBe(false);
+    expect(g.message).toMatch(/^Weight is locked\. Please finish Arrival first: /);
+    expect(g.missing).toContain("ORIGIN");
+    expect(stageGate({ stageData: arrival, branches: {} }, "n-gross").open).toBe(true);
+  });
+
+  it("Quality waits for the gross weight, which counts when calculated from the two weights", () => {
+    expect(stageGate({ stageData: arrival, branches: {} }, "n-qfs").open).toBe(false);
+    const weighed = { ...arrival, "n-gross": { "Loaded truck weight (kg)": "56000", "Tare / empty truck weight (kg)": "14700" } };
+    expect(stageGate({ stageData: weighed, branches: {} }, "n-qfs").open).toBe(true);
+  });
+
+  it("Pass needs the sample moisture, nut count and KOR; Fail doesn't", () => {
+    const weighed = { ...arrival, "n-gross": { "GROSS WT KGS": "41300" } };
+    expect(passBlocked(weighed)).toMatch(/Sample moisture/);
+    expect(decisionGate({ stageData: weighed, branches: {} }, "n-qfs", "pass").open).toBe(false);
+    expect(decisionGate({ stageData: weighed, branches: {} }, "n-qfs", "fail").open).toBe(true);
+    const sampled = { ...weighed, "n-qfs": { "Sample moisture (%)": "9", "Sample nut count": "170", KOR: "47" } };
+    expect(decisionGate({ stageData: sampled, branches: {} }, "n-qfs", "pass").open).toBe(true);
+  });
+
+  it("Unloading opens only on Pass; Bin waits for Unloading; GRN waits for a finalised Bin and the final readings", () => {
+    const passed = { ...arrival, "n-gross": { "GROSS WT KGS": "41300" } };
+    expect(stageGate({ stageData: passed, branches: {} }, "n-unload").message).toBe("Unloading is locked. The truck must pass Quality first.");
+    expect(stageGate({ stageData: passed, branches: { "n-qfs": "pass" } }, "n-unload").open).toBe(true);
+    expect(stageGate({ stageData: passed, branches: { "n-qfs": "pass" } }, "n-bin").waitingFor).toBe("Unloading");
+    const unloaded = {
+      ...passed,
+      "n-unload": { "DATE OF OFFLOADING": "2026-11-14", "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60", "Tally Clerk bag count": "478" },
+    };
+    expect(stageGate({ stageData: unloaded, branches: { "n-qfs": "pass" } }, "n-bin").open).toBe(true);
+    const binned = { ...unloaded, "n-bin": { "Bin Number": "BKE-002-BIN-003", "Basis for allocation (moisture / quality / KOR / space)": "Moisture" } };
+    expect(stageGate({ stageData: binned, branches: { "n-qfs": "pass" } }, "n-grn").waitingFor).toBe("Bin");
+    const finalised = { ...binned, "n-bin": { ...binned["n-bin"], "Bin allocation date": "2026-11-15" } };
+    expect(stageGate({ stageData: finalised, branches: { "n-qfs": "pass" } }, "n-grn").waitingFor).toBe("Quality (final readings)");
+    const finals = { ...finalised, "n-qfs": { "Final moisture (%)": "9", "Final nut count": "170", "FINAL KOR": "47" } };
+    expect(stageGate({ stageData: finals, branches: { "n-qfs": "pass" } }, "n-grn").open).toBe(true);
+  });
+
+  it("Drying, other activities, the ledger and transfer wait for a complete GRN", () => {
+    for (const s of ["n-drying", "n-otheract", "n-ledger", "n-xferdec", "n-stock"]) {
+      expect(stageGate({ stageData: {}, branches: {} }, s).message).toMatch(/locked until the GRN is complete/);
+      expect(stageGate({ stageData: { "n-grn": { PRICE: "470", "GRN Weight (kept separate from Gross/Net/Paid)": "40822" } }, branches: {} }, s).open).toBe(true);
+    }
+  });
+});
+
+describe("drop-downs, auto-fill and suggestions from the image", () => {
+  it("Credit/Cash, RM/FG, basis for allocation and 'driven by' are picked from a list", () => {
+    expect(fieldChoices("n-gate", "CREDIT/CASH")).toEqual(["CREDIT", "CASH"]);
+    expect(fieldChoices("n-gate", "RM/FG")).toEqual(["RM", "FG"]);
+    expect(fieldChoices("n-bin", "Basis for allocation (moisture / quality / KOR / space)")).toContain("Space");
+    expect(fieldChoices("n-xferdec", "Driven by (space at warehouse)")).toContain("Space at warehouse");
+  });
+
+  it("the week fills itself from the arrival date the way the 2026 sheet writes it", () => {
+    expect(weekLabel("2026-02-16")).toBe("W-8 Feb");
+    expect(weekLabel("2026-03-02")).toBe("W-10 Mar");
+    expect(weekLabel("")).toBe("");
+    expect(autoFill("n-gate", { "VEHICLE NO.": "1KT" }, undefined, { today: "2026-11-16", arrivalDate: "2026-02-16" }).WEEK).toBe("W-8 Feb");
+  });
+
+  it("the Bin's linked Lot fills itself from the truck's Lot", () => {
+    expect(autoFill("n-bin", { "Bin Number": "BKE-002-BIN-003" }, undefined, { today: "2026-11-16", arrivalDate: "2026-11-14", lot: "LOT-BKE-2026-001" }))
+      .toEqual({ "Linked Lot Number(s)": "LOT-BKE-2026-001" });
+  });
+
+  it("pallets are suggested as bags ÷ 30, rounded up", () => {
+    expect(prefillSuggestions({ "n-unload": { "SACS (bags)": "478" } }, "n-unload")["Pallets used (30 bags/pallet)"]).toEqual({ value: "16", from: "bags ÷ 30" });
+  });
+});

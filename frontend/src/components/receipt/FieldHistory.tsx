@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import type { FieldChangeRecord } from "@anagroci/contract/types/receipt";
+import { Link } from "react-router-dom";
+import type { FieldChangeRecord, SiteFieldChangeRecord } from "@anagroci/contract/types/receipt";
+import { checkValue } from "@anagroci/contract/domain/fieldRules";
 import type { StageField } from "@anagroci/contract/types/stage";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import { stages, rejectStage } from "../../data/stages";
@@ -25,21 +27,41 @@ function Value({ value, format, strike }: { value: string | null; format?: Stage
   return <span className={strike ? "text-warmstone-500 line-through decoration-warmstone-300" : "font-semibold text-warmstone-900"}>{shown}</span>;
 }
 
+type Change = FieldChangeRecord & Partial<Pick<SiteFieldChangeRecord, "receiptId" | "vehicleNo">>;
+
 interface Props {
-  /** The truck's whole change log (useFieldChanges), read once by the page and shared with every stage card. */
-  changes: FieldChangeRecord[];
+  /** The truck's whole change log (useFieldChanges), read once by the page and shared with every stage card, or a warehouse's (Logs page). */
+  changes: Change[];
   loading: boolean;
   error: string | null;
+  /** Set on the Logs page, where the changes span many trucks: adds a Truck column linking to each. */
+  truckHref?: (receiptId: string) => string;
 }
+
+/**
+ * What the field rules (contract domain/fieldRules.ts) say about the value saved, worked out from the rules rather than
+ * stored, so it can't disagree with them. The rules only warn, so every value was saved.
+ */
+const WARNED = { label: "Saved with a warning", tone: "decision" } as const;
+const checkOf = (c: Change) => checkValue(c.stageId, c.label, c.newValue ?? "");
 
 /**
  * Every saved edit on this truck: who, when, which field, old → new. Read straight from the server's change log; fields the
  * viewer's role may not see (price and amount for the Warehouse Incharge) are already removed from the response there.
  */
-export function FieldHistory({ changes, loading, error }: Props) {
-  const search = useTableSearch(changes, (c) => [c.label, STAGES.get(c.stageId)?.title, c.by, c.oldValue, c.newValue]);
+export function FieldHistory({ changes, loading, error, truckHref }: Props) {
+  const search = useTableSearch(changes, (c) => [c.label, STAGES.get(c.stageId)?.title, c.by, c.oldValue, c.newValue, c.receiptId, c.vehicleNo]);
 
-  const columns: Column<FieldChangeRecord>[] = useMemo(() => [
+  const columns: Column<Change>[] = useMemo(() => [
+    ...(truckHref ? [{
+      label: "Truck", nowrap: true, filter: { value: (c: Change) => c.receiptId ?? "", kind: "select" as const },
+      render: (c: Change) => (
+        <Link to={truckHref(c.receiptId ?? "")} className="font-semibold text-brand-700 hover:text-brand-800">
+          {c.receiptId}
+          {c.vehicleNo && <span className="block text-[12px] font-normal text-warmstone-500">{c.vehicleNo}</span>}
+        </Link>
+      ),
+    }] : []),
     {
       label: "When", nowrap: true, filter: { value: (c) => c.at.slice(0, 10), kind: "date" },
       render: (c) => <span className="tabular-nums text-warmstone-700">{formatDateTime(c.at)}</span>,
@@ -82,7 +104,20 @@ export function FieldHistory({ changes, loading, error }: Props) {
       label: "How", nowrap: true, filter: { value: (c) => VIA[c.via]?.label ?? c.via, kind: "select" },
       render: (c) => <Pill tone={VIA[c.via]?.tone ?? "system"} label={VIA[c.via]?.label ?? c.via} />,
     },
-  ], []);
+    {
+      label: "Check", filter: { value: (c) => { const i = checkOf(c); return i ? WARNED.label : "Within the rules"; }, kind: "select" },
+      render: (c) => {
+        const i = checkOf(c);
+        if (!i) return <span className="text-warmstone-400">-</span>;
+        return (
+          <span className="block max-w-xs">
+            <Pill tone={WARNED.tone} label={WARNED.label} />
+            <span className="mt-0.5 block text-[12px] text-warmstone-500">{i.message}</span>
+          </span>
+        );
+      },
+    },
+  ], [truckHref]);
 
   if (error) return <p role="alert" className="px-1 text-[13px] text-danger-700">Couldn't load the history: {error}</p>;
 

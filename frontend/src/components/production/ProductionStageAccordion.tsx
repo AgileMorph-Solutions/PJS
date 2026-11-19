@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useOpenPanels } from "../ui/useOpenPanels";
 
 export interface AccordionStep {
   id: string;
@@ -31,6 +32,7 @@ interface Props {
  * default.
  */
 export function ProductionStageAccordion({ steps }: Props) {
+  const panels = useOpenPanels(steps.find((s) => s.active)?.id);
   return (
     <div className="space-y-3">
       {steps.map((step) => {
@@ -38,7 +40,8 @@ export function ProductionStageAccordion({ steps }: Props) {
         return (
           <details
             key={step.id}
-            open={step.active}
+            open={panels.isOpen(step.id)}
+            onToggle={panels.onToggle(step.id)}
             className={`bg-white rounded-2xl overflow-hidden transition-all ${
               step.active ? "border-2 border-brand-700 shadow-md shadow-brand-700/10" : "border border-warmstone-200 shadow-xs"
             }`}

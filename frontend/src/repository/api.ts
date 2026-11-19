@@ -6,7 +6,7 @@
  */
 import type { TransferDestination } from "@anagroci/contract/domain/transfers";
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SiteFieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
@@ -14,8 +14,9 @@ import type {
 import type { BatchTruckRow } from "@anagroci/contract/data/batchEntry";
 import type { AvailableBin, BatchDetail, BatchSummary } from "@anagroci/contract/types/productionBatch";
 import type { BatchLots, BoilerInput, BoilerReadingView, CoolingInput, CookRunInput, LotEntryInput, LotView, ShellingDayInput, TruckInput, TruckView } from "@anagroci/contract/types/lots";
-import type { BatchCalibration, CalibrationRunInput, ManualCalibrationInput, SizingCheck, SizingCheckInput } from "@anagroci/contract/types/calibration";
+import type { BatchCalibration, ManualCalibrationInput, SizingCheck, SizingCheckInput } from "@anagroci/contract/types/calibration";
 import type { MoistureCheckInput, RcnFinalWeightInput, RcnPalletInput, RcnReceipt, RcnReceiptInput } from "@anagroci/contract/types/rcnReceipt";
+import type { ProductionApproval } from "@anagroci/contract/domain/productionApprovals";
 
 export const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -219,6 +220,11 @@ export const api = {
     request<unknown>(`/masters/warehouses/${encodeURIComponent(name)}`, { method: "PATCH", body: JSON.stringify({ code }) }),
 
   listFieldChanges: (receiptId: string) => request<FieldChangeRecord[]>(`/receipts/${encodeURIComponent(receiptId)}/field-changes`),
+  /** The Logs page: every field change on a warehouse's trucks (Warehouse Incharge: their own; admin: any). Dates are ISO, inclusive. */
+  listSiteFieldChanges: (warehouse?: string, from?: string, to?: string) => {
+    const q = new URLSearchParams(Object.entries({ warehouse, from, to }).filter((e): e is [string, string] => Boolean(e[1])));
+    return request<SiteFieldChangeRecord[]>(`/field-changes${q.size ? `?${q}` : ""}`);
+  },
   listUploadIssues: (receiptId: string) => request<UploadIssueRecord[]>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues`),
   reviewUploadIssue: (receiptId: string, issueId: string) =>
     request<UploadIssueRecord>(`/receipts/${encodeURIComponent(receiptId)}/upload-issues/${encodeURIComponent(issueId)}/review`, { method: "POST" }),
@@ -371,6 +377,8 @@ export const api = {
   previewProductionWorkbook: (file: File) => postWorkbookFile("/production/workbook/preview", file, productionFactory),
   commitProductionWorkbook: (token: string) =>
     request<WorkbookCommitResult>(`/production/workbook/${encodeURIComponent(token)}/commit`, { method: "POST" }),
+  /** Who uploaded which production workbook, when, and what it added and changed, newest first. */
+  listProductionWorkbookUploads: () => request<ProductionWorkbookUpload[]>(prod("/production/workbook/uploads")),
 
   // ── Production Phase 0: batches (client's "Phase 1 — Batch & Intake" doc). ──
   listBatchBins: () => request<AvailableBin[]>(prod("/production/batch-bins")),
@@ -385,6 +393,8 @@ export const api = {
   listRcnReceipts: (batchCode?: string) =>
     request<RcnReceipt[]>(prod(`/production/rcn-receipts${batchCode ? `?batch=${encodeURIComponent(batchCode)}` : ""}`)),
   createRcnReceipt: (r: RcnReceiptInput) => request<RcnReceipt>(prod("/production/rcn-receipts"), { method: "POST", body: JSON.stringify(r) }),
+  setRcnCropYear: (receiptId: string, cropYear: string) =>
+    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/crop-year`), { method: "PUT", body: JSON.stringify({ cropYear }) }),
   submitMoistureCheck: (receiptId: string, c: MoistureCheckInput) =>
     request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/moisture-checks`), { method: "POST", body: JSON.stringify(c) }),
   approveMoistureCheck: (checkId: number) => request<RcnReceipt>(prod(`/production/moisture-checks/${checkId}/approve`), { method: "POST" }),
@@ -397,12 +407,13 @@ export const api = {
   deleteRcnPallet: (palletId: number) => request<RcnReceipt>(prod(`/production/rcn-pallets/${palletId}`), { method: "DELETE" }),
   saveRcnFinalWeight: (receiptId: string, f: RcnFinalWeightInput) =>
     request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/final-weight`), { method: "POST", body: JSON.stringify(f) }),
+  /** What waits for the caller's decision in production (accept a load, approve a check). */
+  listProductionApprovals: () => request<ProductionApproval[]>(prod("/production/approvals")),
+  acceptRcnReceipt: (receiptId: string) =>
+    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/accept`), { method: "POST" }),
 
-  // ── Production Phase 2: calibration (sizing into the 9 silos, QC-2, manual re-sizing). ──
+  // ── Production Phase 2: calibration (the silos as one total, QC-2, manual re-sizing). A load's final weight is its calibration. ──
   getBatchCalibration: (code: string) => request<BatchCalibration>(prod(`/production/batches/${encodeURIComponent(code)}/calibration`)),
-  addCalibrationRun: (receiptId: string, r: CalibrationRunInput) =>
-    request<RcnReceipt>(prod(`/production/rcn-receipts/${encodeURIComponent(receiptId)}/calibration-runs`), { method: "POST", body: JSON.stringify(r) }),
-  deleteCalibrationRun: (runId: number) => request<RcnReceipt>(prod(`/production/calibration-runs/${runId}`), { method: "DELETE" }),
   submitSizingCheck: (c: SizingCheckInput) => request<SizingCheck>(prod("/production/sizing-checks"), { method: "POST", body: JSON.stringify(c) }),
   approveSizingCheck: (checkId: number) => request<SizingCheck>(prod(`/production/sizing-checks/${checkId}/approve`), { method: "POST" }),
   rejectSizingCheck: (checkId: number, reason: string) =>
@@ -588,6 +599,18 @@ export interface WorkbookPreview {
   totalCreated: number;
   totalChanged: number;
 }
+/** One applied production workbook upload (backend services/productionWorkbook.ts listProductionWorkbookUploads). */
+export interface ProductionWorkbookUpload {
+  id: number;
+  filename: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  uploadedByRole: string;
+  created: number;
+  updated: number;
+  tabs: { name: string; created: number; updated: number }[];
+}
+
 export interface WorkbookCommitResult {
   applied: { name: string; created: number; updated: number }[];
   totalCreated: number;

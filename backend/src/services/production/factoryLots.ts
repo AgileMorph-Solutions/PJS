@@ -1,5 +1,5 @@
 /**
- * Production Phases 3–4: a batch's Lots. Cooking takes kg out of the silos, QC-3 and QC-4 decide when a Lot may move on,
+ * Production Phases 3–4: a batch's Lots. Cooking takes kg out of the silos, QC-4 decides when a Lot may move on,
  * and shelling records its day. Rules are in the contract (domain/cooking.ts, lotEntries.ts, shelling.ts); status,
  * totals and every percentage are calculated from these rows, never stored.
  *
@@ -7,10 +7,10 @@
  * upload goes through the same rules with the same words.
  */
 import type { Prisma } from "@prisma/client";
-import { canWriteStageDirectly } from "@anagroci/contract/data/roles";
+import { canRunProduction } from "@anagroci/contract/data/roles";
 import { SILO_SIZE_KEYS, siloLabel, type SiloSize, type SizeValues } from "@anagroci/contract/domain/calibration";
 import {
-  canColourSort, canShell, coolingCheck, coolingError, cookChecks, cookRunError, lotBags, lotSizes, lotStatus,
+  canColourSort, canShell, coolingCheck, coolingError, cookRunError, lotBags, lotSizes, lotStatus,
 } from "@anagroci/contract/domain/cooking";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
 import { SORTER_STREAMS, isColourSorted, sortChecks, sorterStreamKg } from "@anagroci/contract/domain/colourSort";
@@ -22,7 +22,7 @@ import { prisma } from "../../db.js";
 import { runWhere } from "./batches.js";
 import { ForbiddenError, ValidationError } from "../../domain/validation.js";
 import { assertStoresNotShort } from "./byProducts.js";
-import { siloStockBySize } from "./calibration.js";
+import { siloStockKg } from "./calibration.js";
 import { blankToNull, runSizes, type Actor } from "./rcnReceipts.js";
 
 type Tx = Prisma.TransactionClient;
@@ -57,18 +57,21 @@ function dayValues(d: LotRow["shellingDays"][number]) {
 export function lotView(l: LotRow): LotView {
   const runs = l.runs.map((r) => {
     const sizes = runSizes(r);
-    return { id: r.id, date: r.date, sizes, totalKg: Object.values(sizes).reduce((n, v) => n + (Number(v) || 0), 0), createdBy: r.createdBy.displayName, createdAt: r.createdAt.toISOString() };
+    return { id: r.id, date: r.date, sizes, totalKg: Object.values(sizes).reduce((n, v) => n + (Number(v) || 0), 0), damagedKg: r.damagedKg, createdBy: r.createdBy.displayName, createdAt: r.createdAt.toISOString() };
   });
   const sizes = lotSizes(runs);
   const cookedSizes = SILO_SIZE_KEYS.filter((k) => sizes[k] > 0);
   const totalKg = Math.round(runs.reduce((n, r) => n + r.totalKg, 0) * 100) / 100;
+  const damagedKg = Math.round(runs.reduce((n, r) => n + (Number(r.damagedKg) || 0), 0) * 100) / 100;
+  // What can still reach shelling: the damaged kg left the silos with the rest, but were never good to shell.
+  const shellableKg = totalKg - damagedKg;
   const entries = l.entries.map((e) => entryView(e, l.coolingAt));
   const of = (kind: EntryKind) => entries.filter((e) => e.kind === kind);
   const cooling = coolingCheck(of("qc4"));
   let shelled = 0;
   const shellingDays: ShellingDayView[] = l.shellingDays.map((d) => {
     const kg = dayValues(d);
-    const left = totalKg - shelled;
+    const left = shellableKg - shelled;
     shelled += Number(d.inputKg) || 0;
     const v = { ...kg, inputKg: d.inputKg, date: d.date };
     return { id: d.id, lotCode: d.lotCode, date: d.date, inputKg: d.inputKg, kg, figures: shellingFigures(v), notes: shellingDayNotes(v, left), createdBy: d.createdBy.displayName, createdAt: d.createdAt.toISOString() };
@@ -80,10 +83,10 @@ export function lotView(l: LotRow): LotView {
   return {
     code: l.code, batchCode: l.batchCode,
     status: lotStatus({ inCooling: l.coolingAt !== null, cooling, shellingDays: shellingDays.length, colourSorted: isColourSorted(sorterStreams, sorted) }),
-    date: runs[0]?.date ?? "", runs, sizes, cookedSizes, totalKg, bags: lotBags(totalKg),
+    date: runs[0]?.date ?? "", runs, sizes, cookedSizes, totalKg, damagedKg, bags: lotBags(totalKg),
     coolingSilo: l.coolingSilo, coolingAt: l.coolingAt,
-    cookChecks: cookChecks(cookedSizes, of("qc3")), coolingCheck: cooling,
-    entries, shellingDays, shelledKg, leftToShellKg: Math.round((totalKg - shelledKg) * 100) / 100,
+    coolingCheck: cooling,
+    entries, shellingDays, shelledKg, leftToShellKg: Math.round((shellableKg - shelledKg) * 100) / 100,
     sorterKg, sorterStreams, sortChecks: sorted,
   };
 }
@@ -114,7 +117,7 @@ export async function cookLot(site: string, actorId: string, input: CookRunInput
   return lotView(await prisma.$transaction((tx) => cookLotIn(tx, site, actorId, input)));
 }
 
-/** A new number makes the Lot; a number of this batch still cooking takes one more row. Never past a silo's stock. */
+/** A new number makes the Lot; a number of this batch still cooking takes one more row. Never past the run's own silo stock. */
 export async function cookLotIn(tx: Tx, site: string, actorId: string, input: CookRunInput): Promise<LotRow> {
   const runRef = (input.batchCode ?? "").trim().toUpperCase();
   if (!runRef) throw new ValidationError("Choose the production run the Lot is for.");
@@ -123,7 +126,7 @@ export async function cookLotIn(tx: Tx, site: string, actorId: string, input: Co
   const batchCode = batch.code;
   const code = (input.code ?? "").trim().toUpperCase();
   const date = asDate(input.date);
-  const problem = cookRunError({ date, code, sizes: input.sizes }, await siloStockBySize(tx, site));
+  const problem = cookRunError({ date, code, sizes: input.sizes, damagedKg: input.damagedKg }, await siloStockKg(tx, site, batchCode));
   if (problem) throw new ValidationError(problem);
 
   const existing = await tx.factoryLot.findUnique({ where: { code } });
@@ -133,7 +136,7 @@ export async function cookLotIn(tx: Tx, site: string, actorId: string, input: Co
   } else {
     await tx.factoryLot.create({ data: { code, batchCode, createdById: actorId } });
   }
-  await tx.lotCookRun.create({ data: { lotCode: code, date, ...kgColumns(input.sizes), createdById: actorId } });
+  await tx.lotCookRun.create({ data: { lotCode: code, date, ...kgColumns(input.sizes), damagedKg: blankToNull(input.damagedKg), createdById: actorId } });
   return lotAt(tx, site, code);
 }
 
@@ -161,15 +164,13 @@ export async function moveToCooling(site: string, code: string, input: CoolingIn
   return lotView(await prisma.$transaction((tx) => moveToCoolingIn(tx, site, code, input)));
 }
 
-/** Only with every cooked size past QC-3: "a failed check does not move forward". Correctable until QC-4 has looked at it. */
+/** Correctable until QC-4 has looked at it. There is no check after the cooker to wait for (QC-3 dropped, Nov 2026). */
 export async function moveToCoolingIn(tx: Tx, site: string, code: string, input: CoolingInput): Promise<LotRow> {
   const lot = await lotAt(tx, site, code);
   const date = asDate(input.date);
   const problem = coolingError({ ...input, date });
   if (problem) throw new ValidationError(problem);
   const view = lotView(lot);
-  const held = view.cookedSizes.filter((s) => view.cookChecks[s] !== "ok");
-  if (held.length) throw new ValidationError(`Size ${held.map(siloLabel).join(", ")} of ${lot.code} has not passed its cooking check (QC-3).`);
   if (view.entries.some((e) => e.kind === "qc4" && e.status !== "rejected")) throw new ValidationError(`${lot.code} already has its moisture and temperature check; its cooling silo can't change now.`);
   await tx.factoryLot.update({ where: { code: lot.code }, data: { coolingSilo: input.silo!.trim(), coolingAt: `${date}T${input.time!.trim()}` } });
   return lotAt(tx, site, lot.code);
@@ -181,13 +182,13 @@ export async function addLotEntry(site: string, actor: Actor, code: string, inpu
   return lotView(await prisma.$transaction((tx) => addLotEntryIn(tx, site, actor, code, input)));
 }
 
-/** A QFS Officer's check waits for the Incharge; an Incharge's or Admin's, and the floor's own records, are approved as saved. */
+/** A QFS Officer's check waits for the Production Incharge; theirs or an Admin's, and the floor's own records, are approved as saved. */
 export async function addLotEntryIn(tx: Tx, site: string, actor: Actor, code: string, input: LotEntryInput): Promise<LotRow> {
   if (!isEntryKind(input.kind)) throw new ValidationError("Choose what is being recorded.");
   const kind = input.kind;
   const def = ENTRY_DEFS[kind];
-  const direct = canWriteStageDirectly(actor.role);
-  if (def.who === "floor" && !direct) throw new ForbiddenError(`${def.title} is the Warehouse Incharge's to record.`);
+  const direct = canRunProduction(actor.role);
+  if (def.who === "floor" && !direct) throw new ForbiddenError(`${def.title} is the Production Incharge's to record.`);
   const lot = await lotAt(tx, site, code);
   const view = lotView(lot);
   const date = asDate(input.date);

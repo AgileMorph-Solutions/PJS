@@ -100,7 +100,12 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         if (e instanceof ApiError && e.status === 403) return {} as LedgerEntries;
         throw e;
       });
-      const [rs, ls, ms] = await Promise.all([api.listReceipts(), ledgersOrNone, api.masters()]);
+      // The factory's roles (Production Incharge, Factory Manager) aren't allowed procurement's trucks either: same reason.
+      const receiptsOrNone = api.listReceipts().catch((e) => {
+        if (e instanceof ApiError && e.status === 403) return [];
+        throw e;
+      });
+      const [rs, ls, ms] = await Promise.all([receiptsOrNone, ledgersOrNone, api.masters()]);
       setReceipts(rs);
       setSavedRevision((n) => n + 1);
       setLedgerEntries(ls);
@@ -510,6 +515,15 @@ export function useFieldChanges(receiptId: string | undefined, enabled = true) {
   const { savedRevision } = useTracking();
   const { rows: changes, loading, error } = useLoaded(
     () => api.listFieldChanges(receiptId!), [receiptId], { enabled: enabled && Boolean(receiptId), reloadOn: savedRevision },
+  );
+  return { changes, loading, error };
+}
+
+/** The Logs page: a warehouse's field changes between two dates (ISO, inclusive; blank = no limit). Reloads after any save. */
+export function useSiteFieldChanges(warehouse: string | undefined, from: string, to: string) {
+  const { savedRevision } = useTracking();
+  const { rows: changes, loading, error } = useLoaded(
+    () => api.listSiteFieldChanges(warehouse, from || undefined, to || undefined), [warehouse, from, to], { reloadOn: savedRevision },
   );
   return { changes, loading, error };
 }

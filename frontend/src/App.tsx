@@ -5,6 +5,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/admin/UsersPage";
 import { ApprovalsPage } from "./pages/warehouse/ApprovalsPage";
 import { BatchEntryPage } from "./pages/warehouse/BatchEntryPage";
+import { LogsPage } from "./pages/warehouse/LogsPage";
 import { SupplierAssignmentPage } from "./pages/masters/SupplierAssignmentPage";
 import { MySuppliersPage } from "./pages/MySuppliersPage";
 import { MySubmissionsPage } from "./pages/MySubmissionsPage";
@@ -12,6 +13,7 @@ import { canAccessProduction, type Role } from "./data/roles";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 import { PendingApprovalsProvider } from "./state/PendingApprovals";
+import { APPROVERS } from "./config/nav";
 import { SiteLayout } from "./state/SiteContext";
 import { ProductionFactoryLayout } from "./state/productionFactory";
 
@@ -19,6 +21,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { ProductionRunsPage } from "./pages/production/ProductionRunsPage";
 import { NewProductionRunPage } from "./pages/production/NewProductionRunPage";
 import { ProductionRunPage } from "./pages/production/ProductionRunPage";
+import { RcnReceiptPage } from "./pages/production/RcnReceiptPage";
 import { BtmListPage } from "./pages/production/BtmListPage";
 import { BtmDetailPage } from "./pages/production/BtmDetailPage";
 import { ProductionBinsListPage } from "./pages/production/ProductionBinsListPage";
@@ -58,12 +61,6 @@ import { OriginsPage } from "./pages/masters/OriginsPage";
 
 /** Everything a Branch Manager / QFS Officer can't reach; the API refuses it for them too. */
 const REVIEWERS: Role[] = ["admin", "warehouse_incharge"];
-
-/** /production/runs/:code/loads/:id from when a load had a page of its own: the load now opens inside its run. */
-function OldLoadLink() {
-  const { code = "", id = "" } = useParams();
-  return <Navigate to={`/production/runs/${encodeURIComponent(code)}?stage=intake&load=${encodeURIComponent(id)}`} replace />;
-}
 
 /** /production/batches/:code from before production runs were renamed. */
 function OldBatchLink() {
@@ -138,6 +135,7 @@ function AppRoutes() {
                 <Route path="delivery-plans/:id" element={<DeliveryPlanDetailPage />} />
                 <Route path="transfers" element={<TransfersPage />} />
                 <Route path="transfers/:id" element={<TransferDetailPage />} />
+                <Route path="logs" element={<LogsPage />} />
               {/* Not in nav.ts (see its own comment) - reached from Reception's Downstream chips
                   and a receipt's "Linked records" card, same as the legacy /procurement/* URLs
                   below are reachable without a sidebar entry. */}
@@ -182,8 +180,13 @@ function AppRoutes() {
               <Route path="/masters/bins" element={<BinsPage />} />
               <Route path="/masters/bins/:binNo" element={<BinDetailPage />} />
               <Route path="/masters/origins" element={<OriginsPage />} />
-              <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/supplier-assignment" element={<SupplierAssignmentPage />} />
+            </Route>
+
+            {/* Whoever decides something has a queue: procurement's reviewers, and the Production Incharge for the loads
+                the warehouse hands over and the factory's checks (state/PendingApprovals.tsx). */}
+            <Route element={<RequireRole roles={APPROVERS} />}>
+              <Route path="/approvals" element={<ApprovalsPage />} />
             </Route>
 
             {/* Production is the factory's (Central warehouse's) work: a Unit warehouse user sees none of it, whatever their
@@ -211,8 +214,8 @@ function AppRoutes() {
               <Route element={<ProductionFactoryLayout />}>
                 <Route path="/production/runs" element={<ProductionRunsPage />} />
                 <Route path="/production/runs/:code" element={<ProductionRunPage />} />
-                {/* A load is worked on inside its run; an old link to a load page opens it there. */}
-                <Route path="/production/runs/:code/loads/:id" element={<OldLoadLink />} />
+                {/* A load (RCN receipt) has its own page, as a truck does in Reception: the run's Intake table links to it. */}
+                <Route path="/production/runs/:code/loads/:id" element={<RcnReceiptPage />} />
               </Route>
             </Route>
 

@@ -10,6 +10,7 @@ import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/recei
 import { decisionBranchesFor, stageForSite } from "../../domain/decisions";
 import { productionReadinessGaps, productionReadinessNotice } from "@anagroci/contract/domain/productionBatch";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
+import { warehouseFieldChoices } from "../../components/receipt/warehousePicker";
 import { stages, rejectStage, RECEPTION_STEPS } from "../../data/stages";
 import { computeDerivedFields } from "../../domain/receiptMath";
 import { StageForm } from "../../components/StageForm";
@@ -37,6 +38,10 @@ import { binProblemMessage } from "../../components/receipt/binPicker";
 import { binNumberProblems } from "@anagroci/contract/domain/binNumber";
 import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { useFieldRules } from "../../components/receipt/useFieldRules";
+import { arrivalFieldChoices } from "../../components/receipt/arrivalPickers";
+import { Pill } from "../../components/ui/Pill";
+import { useOpenPanels } from "../../components/ui/useOpenPanels";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -99,6 +104,10 @@ export function ReceiptDetailPage() {
   // empty saved value back over the typing. Held here instead, and saved the moment it names real Bins.
   const [binDraft, setBinDraft] = useState<{ receiptId: string; value: string } | null>(null);
   const plan = plans.find((p) => p.id === receipt?.deliveryPlanId);
+  // The field rules and the phase order: impossible values held back in red, later phases locked until earlier ones are complete.
+  const rules = useFieldRules(receipt, (stageId, label, value) => { if (receipt) setStageField(receipt.id, stageId, label, value); });
+  // Stage cards stay open while you type in them, though the first value moves "In progress" on to the next stage.
+  const panels = useOpenPanels(receipt ? getStageProgress(receipt).activeStage?.id : undefined);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
   const isAdmin = me.role === "admin";
@@ -110,7 +119,7 @@ export function ReceiptDetailPage() {
       if (binNumberProblems(value, binOptions, storeNames).length) { setBinDraft({ receiptId: receipt.id, value }); return; }
       setBinDraft(null);
     }
-    setStageField(receipt.id, stageId, fieldName, value);
+    rules.change(stageId, fieldName, value);
   };
   // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
   if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
@@ -130,7 +139,7 @@ export function ReceiptDetailPage() {
   // The receipt's own site decides its last question and how its journey ends, whichever section it is viewed from.
   const siteType = siteTypeOf(masters.warehouses, masters.aliases, receipt.warehouse);
   const journey = buildJourney(receipt, links, siteType);
-  const readinessGaps = siteType === "CENTRAL" ? productionReadinessGaps(receipt) : [];
+  const readinessGaps = siteType === "CENTRAL" ? productionReadinessGaps(receipt, links?.dryingBatches) : [];
 
   // Once a Lot exists, that's the record's real-world identity from here on — the receipt id
   // stays as the underlying record key, but the page leads with what a warehouse user actually
@@ -321,8 +330,10 @@ export function ReceiptDetailPage() {
             const isActive = stage.id === activeStage?.id;
             const branchOptions = decisionBranchesFor(stage.id, siteType);
             const chosen = receipt.branches[stage.id];
-            const values = receipt.stageData[stage.id] ?? {};
+            const values = rules.valuesOf(stage.id);
             const blank = done && isStageBlank(values);
+            const gate = rules.gateOf(stage.id);
+            const lockedMessage = canEdit && !gate.open ? gate.message : undefined;
 
             return (
               <Fragment key={stage.id}>
@@ -332,7 +343,8 @@ export function ReceiptDetailPage() {
                 </h3>
               )}
               <details
-                open={isActive}
+                open={panels.isOpen(stage.id)}
+                onToggle={panels.onToggle(stage.id)}
                 className={`bg-white rounded-2xl overflow-hidden transition-all ${
                   isActive ? "border-2 border-brand-700 shadow-md shadow-brand-700/10" : "border border-warmstone-200 shadow-xs"
                 }`}
@@ -367,6 +379,7 @@ export function ReceiptDetailPage() {
                       {isActive && (
                         <span className="px-2.5 py-0.5 rounded-full bg-brand-700 text-white text-[11px] font-bold">In progress</span>
                       )}
+                      {lockedMessage && <Pill tone="system" label={`Locked · finish ${gate.waitingFor} first`} />}
                       {blank && (
                         <span className="px-2.5 py-0.5 rounded-full bg-ambernut-100 text-ambernut-800 text-[11px] font-bold">
                           Reached, not filled in
@@ -384,7 +397,12 @@ export function ReceiptDetailPage() {
                 </summary>
                 <div className="px-5 pb-5 pt-1 border-t border-warmstone-100 bg-warmstone-50/60">
                   <div className="pt-4">
-                    {stage.id === "n-drying" ? (
+                    {stage.id === "n-drying" && lockedMessage ? (
+                      <p role="status" className="flex items-start gap-2 rounded-xl border border-warmstone-200 bg-warmstone-100 px-3 py-2 text-[13px] text-warmstone-800">
+                        <span className="material-symbols-outlined text-[18px] text-warmstone-500">lock</span>
+                        {lockedMessage}
+                      </p>
+                    ) : stage.id === "n-drying" ? (
                       <DryingPanel
                         receipt={receipt}
                         batches={[...(links?.dryingBatches ?? [])].sort((a, b) => a.sn - b.sn)}
@@ -401,6 +419,9 @@ export function ReceiptDetailPage() {
                         derived={derived[stage.id]}
                         suggestions={suggestionsFor(stage.id, values)}
                         options={stage.id === "n-bin" ? { "Bin Number": binOptions } : originFieldProps(stage.id, values, masters.origins).options}
+                        choices={{ ...warehouseFieldChoices(stage.id, masters.warehouses), ...arrivalFieldChoices(stage.id, values, masters) }}
+                        issues={rules.issuesOf(stage.id)}
+                        lockedMessage={lockedMessage}
                         warnings={stage.id === "n-bin" ? (binWarning ? { "Bin Number": binWarning } : undefined) : originFieldProps(stage.id, values, masters.origins).warnings}
                         onFieldChange={(fieldName, value) => onFieldChange(stage.id, fieldName, value)}
                         onFieldBlur={() => flushStage(receipt.id, stage.id)}
@@ -440,9 +461,15 @@ export function ReceiptDetailPage() {
                       <div className="mt-4">
                         <DecisionBranch
                           branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)}
-                          readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))}
-                          unavailable={stage.id === "n-xferdec" && readinessGaps.length ? ["production"] : undefined}
-                          notice={stage.id === "n-xferdec" && canEdit ? productionReadinessNotice(readinessGaps) : undefined}
+                          readOnly={!canEdit || Boolean(lockedMessage) || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))}
+                          unavailable={
+                            stage.id === "n-xferdec" && readinessGaps.length ? ["production"]
+                              : stage.id === "n-qfs" && rules.passBlocked ? ["pass"] : undefined
+                          }
+                          notice={
+                            stage.id === "n-xferdec" && canEdit ? productionReadinessNotice(readinessGaps)
+                              : stage.id === "n-qfs" && canEdit && !lockedMessage ? rules.passBlocked : undefined
+                          }
                         />
                       </div>
                     )}

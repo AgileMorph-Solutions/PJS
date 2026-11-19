@@ -19,6 +19,7 @@ import { resolveSite } from "../../domain/site.js";
 import { ValidationError } from "../../domain/validation.js";
 import { listReceipts } from "../receipts.js";
 import { listTransfers } from "../transfers.js";
+import { dryingRoundsByLot } from "../dryingRounds.js";
 import { nextProductionRunId, siteOf } from "../ids.js";
 import { parseSiteId } from "@anagroci/contract/domain/ids";
 import { isUsableSite } from "@anagroci/contract/domain/siteType";
@@ -53,11 +54,20 @@ export async function productionSite(scoped: string | undefined): Promise<string
   return factories[0]!.name;
 }
 
-/** Stock of every bin at the site: its own procurement receipts, plus the Lots other sites sent here on a BKT. */
+/**
+ * Stock of every bin at the site: its own procurement receipts, plus the Lots other sites sent here on a BKT, less the
+ * loads production accepted out of it (at their net weight, the same function a load's own page shows).
+ */
 export async function procurementBinStock(site: string): Promise<Map<string, WarehouseBinStock>> {
   const names = await resolveSite(site);
-  const [receipts, transfers] = await Promise.all([listReceipts(names), listTransfers(names)]);
-  return warehouseBinStock(receipts, arrivedLots(transfers.filter((t) => names.includes(t.toWarehouse))));
+  const [receipts, transfers, accepted] = await Promise.all([
+    listReceipts(names),
+    listTransfers(names),
+    prisma.rcnReceipt.findMany({ where: { acceptedAt: { not: null }, batch: { warehouse: site } }, select: { binCode: true, pallets: true, emptyPallets: true } }),
+  ]);
+  const rounds = await dryingRoundsByLot(prisma, receipts.filter((r) => r.stageData["n-drying"]).map((r) => r.lotNo ?? ""));
+  const issued = accepted.map((r) => ({ binCode: r.binCode, netKg: weighingTotals(r.pallets, { emptyPallets: r.emptyPallets }).netKg }));
+  return warehouseBinStock(receipts, arrivedLots(transfers.filter((t) => names.includes(t.toWarehouse))), rounds, issued);
 }
 
 /**
@@ -86,9 +96,11 @@ export async function listAvailableBins(site: string): Promise<AvailableBin[]> {
   return codes
     .map((code) => {
       const s = stock.get(code);
+      const lotWarehouses = [...new Set(s?.lots.map((l) => l.warehouse) ?? [])];
       return {
         binCode: code,
-        store: storeOf.get(code) ?? null,
+        store: lotWarehouses.length ? lotWarehouses.join(" / ") : (storeOf.get(code) ?? null),
+        lots: s?.lots ?? [],
         kg: s?.kg ?? 0,
         lotCount: s?.lots.length ?? 0,
         lotsWithoutKg: s?.lots.filter((l) => l.kg === undefined).length ?? 0,
@@ -141,6 +153,13 @@ export async function createBatchIn(tx: Prisma.TransactionClient, site: string, 
     const empty = binCodes.filter((c) => !stock.get(c)?.lots.length);
     if (empty.length) throw new ValidationError(`No procurement stock in ${empty.join(", ")} at ${site}.`);
 
+    // Lots but no kg (GRN weight blank, a split, a BKT weighed with other Lots): the run would plan 0 t. Fix the trucks first.
+    const noKg = binCodes.filter((c) => !stock.get(c)!.kg);
+    if (noKg.length) {
+      const trucks = (c: string) => [...new Set(stock.get(c)!.lots.map((l) => l.transferId ?? l.receiptId))].join(", ");
+      throw new ValidationError(noKg.map((c) => `${c} has no net stock: record the weight on ${trucks(c)} first`).join("; ") + ".");
+    }
+
     const taken = await tx.productionBatchBin.findMany({ where: { binCode: { in: binCodes } }, select: { binCode: true, batchCode: true, batch: { select: { name: true } } } });
     if (taken.length) throw new ValidationError(taken.map((t) => `${t.binCode} is already in production run ${runLabel(t.batchCode, t.batch.name)}`).join("; ") + ".");
 
@@ -177,12 +196,7 @@ const BATCH_INCLUDE = {
       pallets: { select: { grossKg: true, bags: true } },
       emptyPallets: { select: { weightKg: true } },
       dustKg: true, voidsKg: true, finalisedAt: true, finalisedBy: { select: { displayName: true } },
-      calibrationRuns: {
-        select: {
-          date: true, createdAt: true, createdBy: { select: { displayName: true } },
-          kgApp: true, kgAp: true, kgA: true, kgAB: true, kgB: true, kgBC: true, kgC: true, kgD: true, kgE: true,
-        },
-      },
+      acceptedAt: true, acceptedBy: { select: { displayName: true } },
     },
     orderBy: { createdAt: "asc" },
   },
@@ -196,7 +210,7 @@ const BATCH_INCLUDE = {
   lots: {
     select: {
       code: true, coolingSilo: true, coolingAt: true, createdAt: true, createdBy: { select: { displayName: true } },
-      runs: { select: { createdAt: true, createdBy: { select: { displayName: true } }, kgApp: true, kgAp: true, kgA: true, kgAB: true, kgB: true, kgBC: true, kgC: true, kgD: true, kgE: true } },
+      runs: { select: { createdAt: true, createdBy: { select: { displayName: true } }, kgApp: true, kgAp: true, kgA: true, kgAB: true, kgB: true, kgBC: true, kgC: true, kgD: true, kgE: true, damagedKg: true } },
       entries: {
         select: {
           kind: true, values: true, decision: true, status: true, submittedById: true, reviewedById: true, submittedAt: true, reviewedAt: true, rejectReason: true,
@@ -235,7 +249,11 @@ export async function listBatches(site: string): Promise<BatchSummary[]> {
 
 const tonnes = (kg: number) => `${(kg / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} t`;
 
-export async function getBatch(site: string, code: string): Promise<BatchDetail | null> {
+/**
+ * One run, as its page reads it. `factory: false` is the warehouse team's view (18 Nov 2026: it sees its loads, nothing
+ * after them): the History keeps the loads, their checks, weighing and acceptance, and leaves out the silos and the Lots.
+ */
+export async function getBatch(site: string, code: string, { factory = true }: { factory?: boolean } = {}): Promise<BatchDetail | null> {
   const row = await prisma.productionBatch.findFirst({ where: runWhere(site, code), include: BATCH_INCLUDE });
   if (!row) return null;
   const stock = await procurementBinStock(site);
@@ -244,7 +262,7 @@ export async function getBatch(site: string, code: string): Promise<BatchDetail 
   const bins = row.bins
     .map((b) => {
       const s = stock.get(b.binCode);
-      return { binCode: b.binCode, plannedKg: Number(b.plannedKg), currentKg: s?.kg ?? 0, lots: s?.lots ?? [] };
+      return { binCode: b.binCode, plannedKg: Number(b.plannedKg), currentKg: s?.kg ?? 0, issuedKg: s?.issuedKg ?? 0, lots: s?.lots ?? [] };
     })
     .sort((a, b) => b.plannedKg - a.plannedKg);
 
@@ -259,13 +277,9 @@ export async function getBatch(site: string, code: string): Promise<BatchDetail 
       },
       ...r.moistureChecks.flatMap((c) => moistureHistory(r.btmNo, c)),
       ...(r.finalisedAt ? [weighedHistory(r)] : []),
-      ...r.calibrationRuns.map((c) => ({
-        at: c.createdAt.toISOString(),
-        text: `BTM ${r.btmNo} sized into silos: ${kgText(sizesTotal({ App: c.kgApp ?? undefined, Ap: c.kgAp ?? undefined, A: c.kgA ?? undefined, AB: c.kgAB ?? undefined, B: c.kgB ?? undefined, BC: c.kgBC ?? undefined, C: c.kgC ?? undefined, D: c.kgD ?? undefined, E: c.kgE ?? undefined }))}`,
-        actor: c.createdBy.displayName,
-      })),
+      ...(r.acceptedAt ? [acceptedHistory(r)] : []),
     ]),
-    ...row.sizingChecks.flatMap((c) => [
+    ...(factory ? row.sizingChecks : []).flatMap((c) => [
       ...reviewedHistory(
         `Sizing check (QC-2), ${samplingPointLabel(c.point as SamplingPoint)}: ${SIZING_DECISION_LABELS[c.decision as SizingDecision]}`,
         "Sizing check",
@@ -277,7 +291,7 @@ export async function getBatch(site: string, code: string): Promise<BatchDetail 
         actor: m.createdBy.displayName,
       })),
     ]),
-    ...row.lots.flatMap(lotHistory),
+    ...(factory ? row.lots : []).flatMap(lotHistory),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
   return { ...summary, bins, history };
@@ -296,13 +310,13 @@ function lotHistory(l: BatchRow["lots"][number]): BatchHistoryEntry[] {
   return [
     ...l.runs.map((r) => ({
       at: r.createdAt.toISOString(),
-      text: `Lot ${l.code} cooked: ${kgText(sizesTotal({ App: r.kgApp ?? undefined, Ap: r.kgAp ?? undefined, A: r.kgA ?? undefined, AB: r.kgAB ?? undefined, B: r.kgB ?? undefined, BC: r.kgBC ?? undefined, C: r.kgC ?? undefined, D: r.kgD ?? undefined, E: r.kgE ?? undefined }))}`,
+      text: `Lot ${l.code} cooked: ${kgText(sizesTotal({ App: r.kgApp ?? undefined, Ap: r.kgAp ?? undefined, A: r.kgA ?? undefined, AB: r.kgAB ?? undefined, B: r.kgB ?? undefined, BC: r.kgBC ?? undefined, C: r.kgC ?? undefined, D: r.kgD ?? undefined, E: r.kgE ?? undefined }))}${Number(r.damagedKg) > 0 ? `, of which ${kgText(Number(r.damagedKg))} damaged or spoiled` : ""}`,
       actor: r.createdBy.displayName,
     })),
     ...(l.coolingAt ? [{ at: l.createdAt.toISOString(), text: `Lot ${l.code} in cooling silo ${l.coolingSilo} from ${l.coolingAt.replace("T", " ")}`, actor: l.createdBy.displayName }] : []),
     ...l.entries.filter((e) => ENTRY_DEFS[e.kind as EntryKind].decision).flatMap((e) => {
       const def = ENTRY_DEFS[e.kind as EntryKind];
-      // Name what the check was about: the size for QC-3, the stream for QC-7.
+      // Name what the check was about: the stream for QC-7.
       const about_ = def.fields.find((f) => f.type === "size") ?? def.fields.find((f) => f.key === "stream");
       const about = about_ ? `, ${entryFieldText(about_, (e.values as Record<string, string>)[about_.key])}` : "";
       const said = e.decision === "ok" ? def.decision!.ok : def.decision!.no;
@@ -318,12 +332,25 @@ function lotHistory(l: BatchRow["lots"][number]): BatchHistoryEntry[] {
 const kgText = (kg: number) => `${kg.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg`;
 
 /** One entry when the final weight is saved, not one per pallet: 50–100 pallet rows would drown the history. */
+const loadTotals = (r: BatchRow["rcnReceipts"][number]) =>
+  weighingTotals(r.pallets, { emptyPallets: r.emptyPallets, dustKg: r.dustKg ?? undefined, voidsKg: r.voidsKg ?? undefined });
+
 function weighedHistory(r: BatchRow["rcnReceipts"][number]): BatchHistoryEntry {
-  const t = weighingTotals(r.pallets, { emptyPallets: r.emptyPallets, dustKg: r.dustKg ?? undefined, voidsKg: r.voidsKg ?? undefined });
+  const t = loadTotals(r);
   return {
     at: r.finalisedAt!.toISOString(),
-    text: `BTM ${r.btmNo} weighed: ${t.pallets} pallet${t.pallets === 1 ? "" : "s"}, net ${kgText(t.netKg)}, ${kgText(t.toSilosKg)} to silos`,
+    text: `BTM ${r.btmNo} weighed: ${t.pallets} pallet${t.pallets === 1 ? "" : "s"}, net ${kgText(t.netKg)}`,
     actor: r.finalisedBy?.displayName ?? null,
+  };
+}
+
+/** No actor for a load in the silos before acceptance existed: nobody accepted it in the app. */
+function acceptedHistory(r: BatchRow["rcnReceipts"][number]): BatchHistoryEntry {
+  const t = loadTotals(r);
+  return {
+    at: r.acceptedAt!.toISOString(),
+    text: `BTM ${r.btmNo} accepted by production: net ${kgText(t.netKg)} out of ${r.binCode}, ${kgText(t.toSilosKg)} into the silos`,
+    actor: r.acceptedBy?.displayName ?? null,
   };
 }
 

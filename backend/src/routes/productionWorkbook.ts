@@ -1,27 +1,29 @@
 /**
  * The production workbook (services/productionWorkbook.ts): the same four routes as Reception's workbook
- * (routes/workbook.ts), for the factory site the caller works at. Admin and Warehouse Incharge only:
- * auth/policy.ts closes them to every other role by default, and a QFS Officer's moisture check keeps going
- * through the screen, where the Incharge approves it.
+ * (routes/workbook.ts), for the factory site the caller works at. Anyone with Production may download it; only Admin and
+ * the Production Incharge upload (team, 18 Nov 2026), every tab, with no approval after (domain/productionWorkbook/apply.ts). A QFS Officer's
+ * check keeps going through the screen, where an Incharge approves it.
  */
 import type { FastifyInstance } from "fastify";
-import { currentUser } from "../auth/plugin.js";
+import { currentUser, requireRole } from "../auth/plugin.js";
 import { scopedWarehouse } from "../auth/scope.js";
 import { parseDateRange } from "../domain/workbook/dateFilter.js";
 import { productionSite } from "../services/production/batches.js";
 import {
-  commitProductionWorkbook, downloadProductionWorkbook, previewProductionWorkbook, productionWorkbookInfo,
+  commitProductionWorkbook, downloadProductionWorkbook, listProductionWorkbookUploads, previewProductionWorkbook, productionWorkbookInfo,
 } from "../services/productionWorkbook.js";
 import { siteFor } from "./productionBatches.js";
 
 const XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export async function productionWorkbookRoutes(app: FastifyInstance) {
-  app.get("/api/production/workbook/info", async (req) => productionWorkbookInfo(await siteFor(req)));
+  const uploaders = { preHandler: requireRole("admin", "production_incharge") };
+
+  app.get("/api/production/workbook/info", async (req) => productionWorkbookInfo(await siteFor(req), currentUser(req).role));
 
   app.get("/api/production/workbook", async (req, reply) => {
     const { from, to, blank } = req.query as { from?: string; to?: string; blank?: string };
-    const built = await downloadProductionWorkbook(await siteFor(req), blank === "1" ? {} : parseDateRange(from, to), blank === "1");
+    const built = await downloadProductionWorkbook(await siteFor(req), blank === "1" ? {} : parseDateRange(from, to), blank === "1", currentUser(req).role);
     return reply
       .header("Content-Type", XLSX)
       .header("Content-Disposition", `attachment; filename="${built.filename}"`)
@@ -31,7 +33,7 @@ export async function productionWorkbookRoutes(app: FastifyInstance) {
   });
 
   /** Multipart `file` (+ optional `warehouse` field for an admin). Writes nothing; answers under a token to apply. */
-  app.post("/api/production/workbook/preview", async (req, reply) => {
+  app.post("/api/production/workbook/preview", uploaders, async (req, reply) => {
     const file = await req.file();
     if (!file) return reply.code(400).send({ error: 'No file uploaded — expected multipart field "file".' });
     const buffer = await file.toBuffer();
@@ -41,7 +43,11 @@ export async function productionWorkbookRoutes(app: FastifyInstance) {
     return previewProductionWorkbook(currentUser(req), site, buffer, file.filename);
   });
 
-  app.post("/api/production/workbook/:token/commit", async (req) => {
+  /** Who uploaded which file, when, and what it added and changed: the uploaders, and the Factory Manager who watches. */
+  app.get("/api/production/workbook/uploads", { preHandler: requireRole("admin", "production_incharge", "factory_manager") },
+    async (req) => listProductionWorkbookUploads(await siteFor(req)));
+
+  app.post("/api/production/workbook/:token/commit", uploaders, async (req) => {
     const { token } = req.params as { token: string };
     return commitProductionWorkbook(currentUser(req), token);
   });

@@ -22,7 +22,7 @@ async function cleanup() {
   await prisma.receipt.deleteMany({ where: { warehouse: A } });
   await prisma.bin.deleteMany({ where: { code: { startsWith: "LOCK-BIN" } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "lock-" } } });
-  await prisma.warehouse.deleteMany({ where: { name: A } });
+  await prisma.warehouse.deleteMany({ where: { name: { in: [A, "LOCK-FACTORY"] } } });
 }
 async function login(key: string, role: string) {
   await prisma.user.create({ data: { username: `lock-${key}`, displayName: key, role, warehouse: role === "admin" ? null : A, passwordHash: hashPassword(PW) } });
@@ -32,6 +32,7 @@ async function login(key: string, role: string) {
 beforeAll(async () => {
   await cleanup();
   await prisma.warehouse.create({ data: { name: A, kind: "REGIONAL_CENTRAL", type: "UNIT", code: "LCK" } });
+  await prisma.warehouse.create({ data: { name: "LOCK-FACTORY", kind: "FACTORY" } });
   await prisma.bin.create({ data: { code: "LOCK-BIN-1" } });
   await login("admin", "admin");
   await login("wi", "warehouse_incharge");
@@ -62,6 +63,30 @@ describe("dates that fill themselves", () => {
     expect((await get(id)).stageData["n-unload"]["DATE OF OFFLOADING"]).toBe(today());
   });
 
+  // docs/Procurement Auto Populate Fields.xlsx rows 1-2 and 5-8, through the same write every route uses.
+  it("fills the Arrival warehouse and its type from the master, and the Activity ledger from the receipt and who saves it", async () => {
+    const id = await truckToGrn();
+    expect((await get(id)).stageData["n-gate"]).toMatchObject({ "WH LOCATION": A, "Warehouse type (Village/Regional/Factory)": "Regional Central" });
+    // The type follows WH LOCATION: pick another warehouse and it changes with it. A person may override it with one of the
+    // master's kinds (until the location changes again), and the location must be a warehouse of the master.
+    await setStageFields(id, "n-gate", { "WH LOCATION": "LOCK-FACTORY" });
+    expect((await get(id)).stageData["n-gate"]["Warehouse type (Village/Regional/Factory)"]).toBe("Factory");
+    await setStageFields(id, "n-gate", { "Warehouse type (Village/Regional/Factory)": "Village" });
+    expect((await get(id)).stageData["n-gate"]["Warehouse type (Village/Regional/Factory)"]).toBe("Village");
+    await setStageFields(id, "n-gate", { "VEHICLE NO.": "AB-123" });
+    expect((await get(id)).stageData["n-gate"]["Warehouse type (Village/Regional/Factory)"]).toBe("Village"); // the override stands
+    await expect(setStageFields(id, "n-gate", { "Warehouse type (Village/Regional/Factory)": "Depot" })).rejects.toThrow(/must be one of/);
+    await setStageFields(id, "n-gate", { "WH LOCATION": "LOCK-FACTORY" });
+    expect((await get(id)).stageData["n-gate"]["Warehouse type (Village/Regional/Factory)"]).toBe("Factory"); // a location pick refills it
+    await expect(setStageFields(id, "n-gate", { "WH LOCATION": "NOWHERE" })).rejects.toThrow(/isn't a warehouse in Masters/);
+    await setStageFields(id, "n-gate", { "WH LOCATION": A });
+    await setStageFields(id, "n-bin", { "Bin Number": "LOCK-BIN-1" });
+    const wi = await prisma.user.findFirstOrThrow({ where: { username: "lock-wi" } });
+    await setStageFields(id, "n-ledger", { Quantity: "120" }, { actor: { id: wi.id, via: "direct" } });
+    const r = await get(id);
+    expect(r.stageData["n-ledger"]).toMatchObject({ "Date/time": today(), Location: A, "Linked Lot/Bin": `${r.lotNo} / LOCK-BIN-1`, "Performed by": "wi" });
+  });
+
   it("leaves a date the person typed, and one already stored, alone", async () => {
     const r = await createReceipt(A, "2026-09-01");
     await setStageFields(r.id, "n-gate", { "VEHICLE NO.": "LOCK-2", "DATE OF ARRIVAL": "2026-08-30" });
@@ -77,7 +102,8 @@ describe("bin finalised", () => {
     await setStageFields(id, "n-bin", { "Bin Number": "LOCK-BIN-1" });
     const res = await call("wi", "POST", `/api/receipts/${id}/bin/finalise`);
     expect(res.statusCode).toBe(200);
-    expect(res.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": today(), "Finalised by": "wi" });
+    // Row 4: the Lot was issued today (on the quality pass) and the bin is finalised today, so it's the same day.
+    expect(res.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": today(), "Finalised by": "wi", "Finalised (same day / next day)": "Same day" });
     const again = await call("wi", "POST", `/api/receipts/${id}/bin/finalise`);
     expect(again.statusCode).toBe(422);
     expect(again.json().error).toMatch(/already finalised/);
@@ -87,11 +113,12 @@ describe("bin finalised", () => {
     const [{ id }] = await prisma.receipt.findMany({ where: { warehouse: A, bin: { allocationDate: { not: null } } }, select: { id: true } });
     await expect(setStageFields(id, "n-bin", { "Bin Number": "LOCK-BIN-1", "Basis for allocation (moisture / quality / KOR / space)": "Space" })).rejects.toThrow(/finalised/);
     await expect(setStageFields(id, "n-bin", { "Bin allocation date": "2026-01-01" })).rejects.toThrow(/stamped when the allocation is finalised/);
+    await expect(setStageFields(id, "n-bin", { "Finalised (same day / next day)": "Next day" })).rejects.toThrow(/stamped when the allocation is finalised/);
 
     expect((await call("wi", "POST", `/api/receipts/${id}/reopen`, { reason: "x" })).statusCode).toBe(403);
     expect((await call("admin", "POST", `/api/receipts/${id}/reopen`, {})).statusCode).toBe(422);
     const ok = await call("admin", "POST", `/api/receipts/${id}/reopen`, { reason: "Wrong bin chosen" });
-    expect(ok.json().stageData["n-bin"]["Bin allocation date"]).toBe("");
+    expect(ok.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": "", "Finalised (same day / next day)": "" });
     expect(ok.json().timeline.at(-1).note).toMatch(/Reopened by admin: Wrong bin chosen/);
     await setStageFields(id, "n-bin", { "Basis for allocation (moisture / quality / KOR / space)": "Space" });
   });

@@ -2405,6 +2405,8 @@ model RcnReceipt {
   batchBin    ProductionBatchBin @relation(fields: [batchCode, binCode], references: [batchCode, binCode])
   batch       ProductionBatch    @relation(fields: [batchCode], references: [code])
   date        String
+  /// The crop year as typed ("2026"), as the client's register and quality report carry it. Null until given.
+  cropYear    String?
   btmNo       String
   createdById String
   createdBy   User               @relation("RcnReceiptCreator", fields: [createdById], references: [id])
@@ -2419,7 +2421,12 @@ model RcnReceipt {
   finalisedById String?
   finalisedBy   User?     @relation("RcnReceiptFinaliser", fields: [finalisedById], references: [id], onDelete: SetNull)
   finalisedAt   DateTime?
-  calibrationRuns RcnCalibrationRun[]
+  /// Production's acceptance of the warehouse's load (Lokesh, 16 Nov 2026, "Option 1"): from then its net is out of the
+  /// warehouse bin and net − dust − voids is in the silos. A load finalised before acceptance existed was counted as
+  /// accepted at its finalisedAt, with no acceptedById: nobody accepted it in the app, and none is invented.
+  acceptedById  String?
+  acceptedBy    User?     @relation("RcnReceiptAccepter", fields: [acceptedById], references: [id], onDelete: SetNull)
+  acceptedAt    DateTime?
 
   @@index([batchCode])
   @@index([batchCode, binCode, btmNo])
@@ -2492,31 +2499,9 @@ model RcnMoistureCheck {
 
 // ── Production Phase 2: Calibration ──────────────────────────────────────────────────────────────
 // From the client's "Production module" document (Oct 2026), Phase 2, and its workbooks 4. Calibration Process
-// report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual Calibration (Sheet2). Silo stock is
-// calculated from these rows (contract domain/calibration.ts siloStock), never stored.
-
-/// One run of a load through the sizing machine: the kg that went into each of the 9 silos (A++ … E, the silo
-/// report's own columns). A load can take several runs over several days; their total can't pass its into-silo kg.
-model RcnCalibrationRun {
-  id           Int        @id @default(autoincrement())
-  rcnReceiptId String
-  rcnReceipt   RcnReceipt @relation(fields: [rcnReceiptId], references: [id], onDelete: Restrict)
-  date         String
-  kgApp        String?
-  kgAp         String?
-  kgA          String?
-  kgAB         String?
-  kgB          String?
-  kgBC         String?
-  kgC          String?
-  kgD          String?
-  kgE          String?
-  createdById  String
-  createdBy    User       @relation("CalibrationRunAuthor", fields: [createdById], references: [id])
-  createdAt    DateTime   @default(now())
-
-  @@index([rcnReceiptId])
-}
+// report, 5. Calibrated RCN Silos Stock report and 24. Wholes Manual Calibration (Sheet2). No kg per silo is recorded
+// (decision, Nov 2026): a load goes into the silos as one total, net − dust − voids, when its final weight is saved.
+// Silo stock is calculated from the loads and cooking rows (contract domain/calibration.ts siloPool), never stored.
 
 /// QC-2: one sample from a silo (or of the RCN as received), sorted into grams per size — a row of the
 /// "24. Wholes Manual Calibration" Sheet2. Submitted / approved / rejected exactly like a moisture check.
@@ -2613,6 +2598,8 @@ model LotCookRun {
   kgC         String?
   kgD         String?
   kgE         String?
+  /// Damaged or spoiled in the cooker (power cuts, breakdowns): out of the silos, but never shelled.
+  damagedKg   String?
   createdById String
   createdBy   User       @relation("LotCookRunAuthor", fields: [createdById], references: [id])
   createdAt   DateTime   @default(now())
@@ -2620,7 +2607,7 @@ model LotCookRun {
   @@index([lotCode])
 }
 
-/// A Lot's small records: cooker log, QC-3, QC-4, waste water, line runs, QC-5, QTY-1, QC-6. One table because they
+/// A Lot's small records: cooker log, QC-4, waste water, line runs, QC-5, QTY-1, QC-6. One table because they
 /// differ only in their fields, which the contract's domain/lotEntries.ts defines; values are kept as typed.
 model LotEntry {
   id            Int        @id @default(autoincrement())
@@ -2754,7 +2741,7 @@ model User {
   reviewedMoisture    RcnMoistureCheck[]      @relation("MoistureCheckReviewer")
   weighedPallets      RcnPallet[]             @relation("RcnPalletWeigher")
   finalisedRcnReceipts RcnReceipt[]           @relation("RcnReceiptFinaliser")
-  calibrationRuns     RcnCalibrationRun[]     @relation("CalibrationRunAuthor")
+  acceptedRcnReceipts  RcnReceipt[]           @relation("RcnReceiptAccepter")
   sizingChecks        SizingCheck[]           @relation("SizingCheckAuthor")
   reviewedSizingChecks SizingCheck[]          @relation("SizingCheckReviewer")
   manualCalibrations  ManualCalibration[]     @relation("ManualCalibrationAuthor")
@@ -2765,6 +2752,7 @@ model User {
   shellingDays        ShellingDay[]           @relation("ShellingDayAuthor")
   truckMovements      TruckMovement[]         @relation("TruckMovementAuthor")
   boilerReadings      BoilerReading[]         @relation("BoilerReadingAuthor")
+  workbookUploads     ProductionWorkbookUpload[] @relation("WorkbookUploader")
 
   @@index([role])
   @@index([warehouse])
@@ -2883,4 +2871,23 @@ model UploadIssue {
 
   @@index([receiptId])
   @@index([reviewedAt])
+}
+
+/// One applied upload of the production workbook (team, 18 Nov 2026: "save logs like who uploads it"). Written when the
+/// file is applied, never on a preview; an upload refused whole leaves no row, as it changed nothing.
+model ProductionWorkbookUpload {
+  id           Int      @id @default(autoincrement())
+  /// The factory site the file was uploaded to.
+  warehouse    String
+  filename     String
+  uploadedAt   DateTime @default(now())
+  uploadedById String
+  uploadedBy   User     @relation("WorkbookUploader", fields: [uploadedById], references: [id])
+  /// Rows added and changed, across every tab.
+  created      Int
+  updated      Int
+  /// Per tab: [{ name, created, updated }], the tabs the upload added to or changed.
+  tabs         Json
+
+  @@index([warehouse, uploadedAt])
 }

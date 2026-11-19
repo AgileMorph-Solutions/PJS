@@ -4,8 +4,9 @@ import { DataTable, type Column } from "../../components/ui/DataTable";
 import { PRODUCTION_PAGE_SIZE, dateCol, kgCol, numCol, textCol } from "../../components/production/columns";
 import { Pill } from "../../components/ui/Pill";
 import { Card, CardTitle } from "../../components/ui/Card";
+import { SheetRef } from "../../components/ui/SheetRef";
 import { StepNav, type StepItem, type StepState } from "../../components/ui/StepNav";
-import { PRODUCTION_STAGES, BatchStatusPill, formatTonnes, useSiteHrefs, type ProductionStageId } from "../../components/production/batchUi";
+import { PRODUCTION_STAGES, BatchStatusPill, BinTrucks, formatTonnes, LotTruckLink, useSiteHrefs, type ProductionStageId } from "../../components/production/batchUi";
 import { IntakeStage } from "../../components/production/IntakeStage";
 import { CalibrationSection } from "../../components/production/CalibrationSection";
 import { CookingSection } from "../../components/production/CookingSection";
@@ -13,8 +14,8 @@ import { ShellingSection } from "../../components/production/ShellingSection";
 import { ColourSortSection } from "../../components/production/ColourSortSection";
 import { useBatch, useBatchCalibration, useBatchLots } from "../../state/productionBatches";
 import { useRcnReceipts } from "../../state/rcnReceipts";
-import { useCanEditDirectly, useHasRole } from "../../state/AuthContext";
-import { RCN_RECEIPT_STATUS_LABELS, canCalibrate, isIntakeDone, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
+import { useProductionPermissions } from "../../state/AuthContext";
+import { RCN_RECEIPT_STATUS_LABELS, isIntakeDone, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import type { LotInBin } from "@anagroci/contract/domain/productionBatch";
 import type { BatchBinView, BatchDetail } from "@anagroci/contract/types/productionBatch";
@@ -27,20 +28,21 @@ const LOT_NOTE: Record<LotInBin["state"], string | null> = {
 };
 
 /** The doc's "next person" column, for what the run's loads are waiting on. */
-const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "intake_done", "calibrating"];
+const WAITING_ORDER: RcnReceiptStatus[] = ["waiting_for_moisture", "moisture_pending", "on_hold", "waiting_for_weighing", "weighing", "waiting_for_acceptance"];
 const NEXT_PERSON: Record<RcnReceiptStatus, string> = {
   waiting_for_moisture: "QFS Officer",
   moisture_pending: "Warehouse Incharge",
   on_hold: "QFS Officer, to re-check",
   waiting_for_weighing: "weighing team",
   weighing: "weighing team, to finish",
-  intake_done: "calibration team",
-  calibrating: "calibration team, to finish",
+  waiting_for_acceptance: "Production Incharge, to accept",
   calibrated: "nobody, done",
 };
 
 type View = ProductionStageId | "bins" | "history";
 const isView = (v: string | null): v is View => v === "bins" || v === "history" || PRODUCTION_STAGES.some((s) => s.id === v);
+/** Calibration was its own stage until Nov 2026; an old link to it opens the stage it is part of now. */
+const viewOf = (v: string | null): string | null => (v === "calibration" ? "intake" : v);
 
 /**
  * One production run, worked on stage by stage, laid out like a truck's Reception page: a tab row, then the stages
@@ -53,10 +55,10 @@ export function ProductionRunPage() {
   const { code } = useParams<{ code: string }>();
   const { batch: run, loading, error, refetch } = useBatch(code);
   const receipts = useRcnReceipts(code, { enabled: Boolean(code) });
-  const calibration = useBatchCalibration(code);
-  const lots = useBatchLots(code);
-  const canEdit = useCanEditDirectly();
-  const isQfs = useHasRole("qfs_officer");
+  const perm = useProductionPermissions();
+  // The warehouse team sees its loads and nothing after them (18 Nov 2026): the silos and the Lots are never read for it.
+  const calibration = useBatchCalibration(code, perm.seeFactory);
+  const lots = useBatchLots(code, perm.seeFactory);
   const [params, setParams] = useSearchParams();
 
   if (loading) return <div className="p-10 text-warmstone-400 text-[13px]">Loading…</div>;
@@ -70,16 +72,15 @@ export function ProductionRunPage() {
   const entriesWaiting = lotList.flatMap((l) => l.entries).filter((e) => e.status === "submitted").length;
 
   // Stages overlap (loads keep arriving while earlier ones are cooked), so the run is "at" the furthest one reached.
-  const reached = lotList.some((l) => l.status === "colour_sorted" || l.entries.some((e) => e.kind === "qc7_before" || e.kind === "qc7_after")) ? 5
-    : lotList.some((l) => l.status === "ready" || l.status === "shelled") ? 4 : lotList.length > 0 ? 3 : loads.some((r) => isIntakeDone(r.status)) ? 2 : 1;
+  const reached = lotList.some((l) => l.status === "colour_sorted" || l.entries.some((e) => e.kind === "qc7_before" || e.kind === "qc7_after")) ? 4
+    : lotList.some((l) => l.status === "ready" || l.status === "shelled") ? 3 : lotList.length > 0 ? 2 : 1;
   const stateOf = (n: number, built: boolean): StepState => (!built ? "later" : n < reached ? "done" : n === reached ? "current" : "todo");
 
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const inIntake = loads.filter((r) => !isIntakeDone(r.status)).length;
-  const toSort = loads.filter((r) => canCalibrate(r.status)).length;
   const SUB: Record<ProductionStageId, string> = {
-    intake: loads.length === 0 ? "No load yet" : `${plural(loads.length, "load")}${inIntake ? ` · ${inIntake} in progress` : ""}`,
-    calibration: toSort ? `${plural(toSort, "load")} to sort` : checksWaiting ? `${plural(checksWaiting, "check")} to approve` : "Silos and their checks",
+    intake: loads.length === 0 ? "No load yet"
+      : `${plural(loads.length, "load")}${inIntake ? ` · ${inIntake} in progress` : ""}${checksWaiting ? ` · ${plural(checksWaiting, "silo check")} to approve` : ""}`,
     cooking: lotList.length ? `${plural(lotList.length, "Lot")} cooked` : "No Lot yet",
     shelling: `${lotList.filter((l) => l.status === "shelled" || l.status === "colour_sorted").length} of ${plural(lotList.length, "Lot")} shelled`,
     colour_sort: `${lotList.filter((l) => l.status === "colour_sorted").length} sorted`,
@@ -87,15 +88,20 @@ export function ProductionRunPage() {
     peeling: "Not built yet",
     packing: "Not built yet",
   };
-  const steps: StepItem<ProductionStageId>[] = PRODUCTION_STAGES.map((s, i) => ({ id: s.id, label: s.label, state: stateOf(i + 1, s.built), sub: SUB[s.id] }));
+  // The stages this person sees: the warehouse team only its Intake, the production team every one.
+  const shownStages = perm.seeFactory ? PRODUCTION_STAGES : PRODUCTION_STAGES.filter((s) => s.id === "intake");
+  const steps: StepItem<ProductionStageId>[] = shownStages.map((s, i) => ({ id: s.id, label: s.label, state: stateOf(i + 1, s.built), sub: SUB[s.id] }));
+  const firstStage = perm.seeFactory ? PRODUCTION_STAGES[reached - 1]!.id : "intake";
 
-  const asked = params.get("stage");
-  const view: View = isView(asked) ? asked : PRODUCTION_STAGES[reached - 1]!.id;
+  const asked = viewOf(params.get("stage"));
+  const allowed = (v: View) => v === "bins" || v === "history" || shownStages.some((s) => s.id === v);
+  const view: View = isView(asked) && allowed(asked) ? asked : firstStage;
   const show = (v: View) => setParams((p) => { const next = new URLSearchParams(p); next.set("stage", v); return next; }, { replace: true });
-  const stage = PRODUCTION_STAGES.find((s) => s.id === view);
+  const stage = shownStages.find((s) => s.id === view);
 
   const waiting = WAITING_ORDER.map((st) => [st, loads.filter((r) => r.status === st).length] as const).filter(([, n]) => n > 0);
-  const can = { canFloor: canEdit, canCheck: canEdit || isQfs, canReview: canEdit };
+  // The warehouse records and weighs the loads; everything from their acceptance on is production's.
+  const can = { canFloor: perm.factory, canCheck: perm.factoryCheck, canReview: perm.factory };
   const loadingText = (e: string | null | undefined) => <p className="text-[13px] text-warmstone-500">{e ?? "Loading…"}</p>;
 
   return (
@@ -129,7 +135,7 @@ export function ProductionRunPage() {
                   <WaitingLine key={st} n={n} what={`load${n === 1 ? "" : "s"} ${RCN_RECEIPT_STATUS_LABELS[st].toLowerCase()}`} who={NEXT_PERSON[st]} />
                 ))}
                 {checksWaiting + entriesWaiting > 0 && (
-                  <WaitingLine n={checksWaiting + entriesWaiting} what={`quality check${checksWaiting + entriesWaiting === 1 ? "" : "s"} to approve`} who="Warehouse Incharge" />
+                  <WaitingLine n={checksWaiting + entriesWaiting} what={`quality check${checksWaiting + entriesWaiting === 1 ? "" : "s"} to approve`} who="Production Incharge" />
                 )}
               </ul>
             )}
@@ -149,7 +155,7 @@ export function ProductionRunPage() {
             <button
               key={id}
               type="button"
-              onClick={() => show(id === "stages" ? PRODUCTION_STAGES[reached - 1]!.id : id)}
+              onClick={() => show(id === "stages" ? firstStage : id)}
               aria-current={on ? "page" : undefined}
               className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
                 on ? "border-brand-700 text-brand-700" : "border-transparent text-warmstone-500 hover:text-warmstone-800 hover:border-warmstone-200"
@@ -172,16 +178,24 @@ export function ProductionRunPage() {
             <div>
               <h2 className="text-[17px] font-bold text-warmstone-900">{stage.label}</h2>
               <p className="text-[13px] text-warmstone-500 mt-0.5">{stage.text}</p>
-              {stage.sheets && <p className="text-[11px] text-warmstone-400 mt-1">Replaces the sheets: {stage.sheets}</p>}
+              {/* The client's workbooks this stage replaces, named as their files are, so people who know the sheets find their way. */}
+              {stage.sheets && <div className="mt-2"><SheetRef sheets={stage.sheets.split(" · ").map((s) => `${s}.xlsx`)} /></div>}
             </div>
           )}
 
           {view === "intake" && (
-            <IntakeStage run={run} receipts={loads} can={{ canReceive: canEdit, canEnterMoisture: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} />
+            <>
+              <IntakeStage run={run} receipts={loads} can={{ canReceive: perm.intake, canEnterMoisture: perm.moistureCheck, canReview: perm.intake, canAccept: perm.factory }} onChanged={onChanged} />
+              {/* The silos are the factory's: the production team's to see. */}
+              {perm.seeFactory && (
+                <div className="pt-4">
+                  {calibration.calibration
+                    ? <CalibrationSection batch={run} receipts={loads} calibration={calibration.calibration} can={{ canSize: perm.factory, canCheck: perm.factoryCheck, canReview: perm.factory }} onChanged={onChanged} onGoToCooking={() => show("cooking")} />
+                    : loadingText(calibration.error)}
+                </div>
+              )}
+            </>
           )}
-          {view === "calibration" && (calibration.calibration
-            ? <CalibrationSection batch={run} receipts={loads} calibration={calibration.calibration} can={{ canSize: canEdit, canCheck: canEdit || isQfs, canReview: canEdit }} onChanged={onChanged} onGoToCooking={() => show("cooking")} />
-            : loadingText(calibration.error))}
           {view === "cooking" && (lots.data && calibration.calibration
             ? <CookingSection batchCode={run.code} data={lots.data} calibration={calibration.calibration} can={can} onChanged={onChanged} onGoToShelling={() => show("shelling")} />
             : loadingText(lots.error ?? calibration.error))}
@@ -233,8 +247,13 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
   const binColumns: Column<BatchBinView>[] = [
     { ...textCol<BatchBinView>("Bin", (b) => b.binCode, { mono: true, strong: true }), render: (b) => <Link to={`/masters/bins/${encodeURIComponent(b.binCode)}`} className="font-mono font-semibold hover:text-brand-700">{b.binCode}</Link> },
     { ...kgCol<BatchBinView>("Planned", (b) => b.plannedKg), render: (b) => formatTonnes(b.plannedKg) },
+    { ...kgCol<BatchBinView>("Accepted by production", (b) => b.issuedKg), render: (b) => formatTonnes(b.issuedKg) },
     { ...kgCol<BatchBinView>("In bin now", (b) => b.currentKg), render: (b) => formatTonnes(b.currentKg) },
     numCol("Lots", (b) => b.lots.length, { digits: 0 }),
+    {
+      ...textCol<BatchBinView>("Truck", (b) => b.lots.map((l) => l.transferId ?? l.receiptId).join(" "), { wrap: true }),
+      render: (b) => <BinTrucks lots={b.lots} />,
+    },
   ];
   const lotColumns: Column<LotRow>[] = [
     {
@@ -248,6 +267,7 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
         </span>
       ),
     },
+    { ...textCol<LotRow>("Truck", (l) => l.transferId ?? l.receiptId, { mono: true }), render: (l) => <LotTruckLink lot={l} /> },
     textCol("Bin", (l) => l.binCode, { mono: true }),
     textCol("Supplier", (l) => l.supplierName, { wrap: true }),
     dateCol("Arrived", (l) => l.arrivalDate),
@@ -258,7 +278,7 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
     <div className="space-y-5">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatBlock icon="inventory_2" label="Planned" value={formatTonnes(run.plannedKg)} sub={`≈ ${run.days} days at 150 t/day`} />
-        <StatBlock icon="warehouse" label="Still in warehouse bins" value={formatTonnes(inBinsKg)} sub="Procurement stock in the run's bins now" />
+        <StatBlock icon="warehouse" label="Still in warehouse bins" value={formatTonnes(inBinsKg)} sub="Procurement stock, less the loads production accepted" />
         <StatBlock icon="receipt_long" label="Lots in its bins" value={String(lots.length)} sub="Each traces back to its truck" />
         <StatBlock icon="event" label="Estimated end" value={run.endDate ? formatDate(run.endDate) : "-"} />
       </div>
@@ -266,7 +286,7 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
       <Card>
         <div className="px-5 pt-4 pb-3">
           <CardTitle>Warehouse bins</CardTitle>
-          <p className="text-[12px] text-warmstone-500 mt-0.5">Planned is the bin's stock when the run was started.</p>
+          <p className="text-[12px] text-warmstone-500 mt-0.5">Planned is the bin's stock when the run was started. Each load production accepts leaves the bin at its net weight.</p>
         </div>
         <div className="px-5 pb-5"><DataTable pageSize={PRODUCTION_PAGE_SIZE} columns={binColumns} rows={run.bins} keyFn={(b) => b.binCode} /></div>
       </Card>

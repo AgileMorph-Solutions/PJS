@@ -20,6 +20,37 @@ export const streamLabel = (s: Stream): string => STREAMS.find((x) => x.key === 
 /** A stream as a workbook names it. */
 export const streamFromWord = (w: string | null | undefined): Stream | null => STREAMS.find((s) => s.label.toLowerCase() === (w ?? "").trim().toLowerCase())?.key ?? null;
 
+/**
+ * The "Category" words of the client's "15. Waste Management Dispatch Tracker" for the streams the app follows (its
+ * 93 rows: Cooking Waste Water 50, Shell Dust 22, Calibration Dust 11). Black rejection isn't in that file — the client
+ * sells it on a gate pass — so it takes its own word. Factory, toilet and pouch waste aren't production by-products.
+ */
+export const WASTE_CATEGORIES: { word: string; stream: Exclude<Stream, "shell"> }[] = [
+  { word: "Calibration Dust", stream: "dust_voids" },
+  { word: "Cooking Waste Water", stream: "waste_water" },
+  { word: "Shell Dust", stream: "shell_dust" },
+  { word: "Black Rejection", stream: "black_rejection" },
+];
+
+/** A file-15 Category (or the app's own stream name) → its stream; null for a waste the app doesn't follow. */
+export function streamFromCategory(w: string | null | undefined): Exclude<Stream, "shell"> | null {
+  const t = (w ?? "").trim().toLowerCase();
+  const byWord = WASTE_CATEGORIES.find((c) => c.word.toLowerCase() === t)?.stream;
+  if (byWord) return byWord;
+  const own = streamFromWord(w);
+  return own && own !== "shell" ? own : null;
+}
+
+/** The Category word file 15 writes for a stream. */
+export const categoryOf = (s: Stream): string => WASTE_CATEGORIES.find((c) => c.stream === s)?.word ?? streamLabel(s);
+
+/**
+ * A truck's Category as file 15 shows it: what was typed when it names the truck's own stream, else that stream's word.
+ * A free-text category typed before (blank, "Processing") would otherwise read back as a different waste.
+ */
+export const truckCategory = (stream: Stream, typed: string | null | undefined): string =>
+  typed && streamFromCategory(typed) === stream ? typed : categoryOf(stream);
+
 const num = (v: string | undefined | null): number | null => {
   const t = (v ?? "").trim();
   if (t === "") return null;

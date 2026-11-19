@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ReviewBar } from "./MoistureCard";
+import { ReviewBar } from "./ReviewBar";
 import { Button } from "../ui/Button";
 import { DataTable, type Column } from "../ui/DataTable";
 import { DateInput } from "../ui/DateInput";
@@ -15,7 +15,7 @@ import { PRODUCTION_PAGE_SIZE, dateCol, statusCol } from "./columns";
 import { IconButton } from "../ui/IconButton";
 
 export interface LotPermissions {
-  /** The floor's own records (the Incharge / Admin; Data Entry later). */
+  /** The floor's own records (the Production Incharge / Admin). */
   canFloor: boolean;
   /** Enter a quality check (the QFS Officer, or the Incharge / Admin directly). */
   canCheck: boolean;
@@ -181,7 +181,7 @@ function EntryForm({ kind, lot, direct, startValues, onSaved, onClose }: { kind:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(0);
-  // A cooker or a QC-3 is about what this Lot cooked; a line can run any of the sizes.
+  // A cooker run is about what this Lot cooked; a line can run any of the sizes.
   const sizes = kind === "line_run" ? SILO_SIZES.map((s) => s.key) : lot.cookedSizes;
   const canRepeat = def.fields.some((f) => f.keep);
   const figures = entryFigures(kind, values);
@@ -248,7 +248,7 @@ function EntryForm({ kind, lot, direct, startValues, onSaved, onClose }: { kind:
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
       <div className="flex items-center justify-end gap-3 flex-wrap">
         {saved > 0 && <span className="text-[12px] text-success-700 mr-auto">{saved} saved. Enter the next one.</span>}
-        {def.who === "qfs" && !direct && <span className="text-[12px] text-warmstone-500">The Warehouse Incharge will approve it.</span>}
+        {def.who === "qfs" && !direct && <span className="text-[12px] text-warmstone-500">The Production Incharge will approve it.</span>}
         {canRepeat && <Button variant="secondary" disabled={saving} onClick={() => void save(true)}>Save and add another</Button>}
         <Button type="submit" icon={def.who === "qfs" && !direct ? "send" : "check"} disabled={saving}>{def.who === "qfs" && !direct ? "Send for approval" : "Save"}</Button>
       </div>

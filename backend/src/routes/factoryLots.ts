@@ -1,6 +1,7 @@
 /**
- * Production Phases 3–4: Lots, by-products and the boiler. Thin, like calibration.ts. Everything is Admin / Warehouse
- * Incharge except what auth/policy.ts opens to a QFS Officer: reading a batch's Lots and submitting their checks.
+ * Production Phases 3–4: Lots, by-products and the boiler. Thin, like calibration.ts. The factory's side, after a load
+ * is accepted: the production team sees it, and the Production Incharge (or Admin) records it, quality checks included.
+ * The warehouse team never reaches it (18 Nov 2026).
  */
 import type { FastifyInstance } from "fastify";
 import type { BatchLots, BoilerInput, CoolingInput, CookRunInput, LotEntryInput, ShellingDayInput, TruckInput } from "@anagroci/contract/types/lots";
@@ -16,9 +17,11 @@ import { siteFor } from "./productionBatches.js";
 import { runWhere } from "../services/production/batches.js";
 
 export async function factoryLotRoutes(app: FastifyInstance) {
-  const reviewers = { preHandler: requireRole("admin", "warehouse_incharge") };
+  const reviewers = { preHandler: requireRole("admin", "production_incharge") };
+  // The factory is the production team's to see (canSeeFactory): the warehouse team sees its loads, nothing after.
+  const watchers = { preHandler: requireRole("admin", "production_incharge", "factory_manager") };
 
-  app.get("/api/production/batches/:code/lots", async (req, reply): Promise<BatchLots | undefined> => {
+  app.get("/api/production/batches/:code/lots", watchers, async (req, reply): Promise<BatchLots | undefined> => {
     const { code } = req.params as { code: string };
     const site = await siteFor(req);
     const batch = await prisma.productionBatch.findFirst({ where: runWhere(site, code), select: { code: true } });
@@ -48,7 +51,7 @@ export async function factoryLotRoutes(app: FastifyInstance) {
     return moveToCooling(await siteFor(req), code, (req.body ?? {}) as CoolingInput);
   });
 
-  app.post("/api/production/factory-lots/:code/entries", async (req, reply) => {
+  app.post("/api/production/factory-lots/:code/entries", reviewers, async (req, reply) => {
     const { code } = req.params as { code: string };
     const lot = await addLotEntry(await siteFor(req), currentUser(req), code, (req.body ?? {}) as LotEntryInput);
     return reply.code(201).send(lot);

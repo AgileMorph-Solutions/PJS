@@ -69,6 +69,8 @@ const DAMP: FieldRef = ["n-unload", "HUMID SACS (damp bags)"];
 const TORN: FieldRef = ["n-unload", "Sacs déchirés (torn bags)"];
 const SACS: FieldRef = ["n-unload", "SACS (bags)"];
 const REFRACTION: FieldRef = ["n-unload", "Refraction"];
+const TALLY_CLERK_BAGS: FieldRef = ["n-unload", "Tally Clerk bag count"];
+const PALLETS: FieldRef = ["n-unload", "Pallets used (30 bags/pallet)"];
 const NET: FieldRef = ["n-netwt", "NET WT KGS"];
 const PAID: FieldRef = ["n-netwt", "PAID WT"];
 const GRN_WEIGHT: FieldRef = ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"];
@@ -107,12 +109,20 @@ export const DERIVED_RULES: readonly DerivedRule[] = [
  */
 export interface PrefillRule {
   target: FieldRef;
-  source: FieldRef;
+  /** Added up. Every one must be recorded: a sum missing a part would be offered as if it were the whole. */
+  sources: readonly FieldRef[];
   /** Shown beside the suggestion so the person knows where it came from. */
   from: string;
+  /** Turns the sum into the suggestion; the sum itself when absent. */
+  compute?: (sum: number) => number;
 }
 export const PREFILL_RULES: readonly PrefillRule[] = [
-  { target: GRN_WEIGHT, source: NET, from: "net weight" },
+  { target: GRN_WEIGHT, sources: [NET], from: "net weight" },
+  // docs/Procurement Auto Populate Fields.xlsx row 3 (a Suggestion, not an Auto-fill): the tally clerk counts the bags
+  // physically, so the good + torn bags already recorded are proposed for them to confirm, never written for them.
+  { target: TALLY_CLERK_BAGS, sources: [GOOD, TORN], from: "good + torn bags" },
+  // 30 bags to a pallet (the label's own rule), so the pallets needed for the bags unloaded, rounded up.
+  { target: PALLETS, sources: [SACS], from: "bags ÷ 30", compute: (bags) => Math.ceil(bags / 30) },
 ];
 
 /** Suggestions for the empty fields of one stage, as {label: {value, from}}. A field that already has a value gets none. */
@@ -121,8 +131,10 @@ export function prefillSuggestions(stageData: StageData, stageId: string): Recor
   for (const r of PREFILL_RULES) {
     if (r.target[0] !== stageId) continue;
     if ((stageData[stageId]?.[r.target[1]] ?? "").trim() !== "") continue; // already has a value, typed or imported
-    const value = parseQty(stageData[r.source[0]]?.[r.source[1]]);
-    if (value !== undefined) out[r.target[1]] = { value: formatQty(value), from: r.from };
+    const parts = r.sources.map(([s, l]) => parseQty(stageData[s]?.[l]));
+    if (!parts.every((p) => p !== undefined)) continue;
+    const sum = parts.reduce<number>((a, b) => a + b!, 0);
+    out[r.target[1]] = { value: formatQty(r.compute ? r.compute(sum) : sum), from: r.from };
   }
   return out;
 }

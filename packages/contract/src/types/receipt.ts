@@ -234,6 +234,13 @@ export interface FieldChangeRecord {
   via: "direct" | "approval" | "import";
 }
 
+/** One line of a warehouse's Logs page: a field change, with the truck it was made on. */
+export interface SiteFieldChangeRecord extends FieldChangeRecord {
+  receiptId: string;
+  vehicleNo: string;
+  warehouse: string;
+}
+
 export type TransferStatus = "requested" | "dispatched" | "received";
 
 export interface TransferLine {

@@ -1,9 +1,10 @@
 /**
- * Production Phase 3: Cooking & cooling. Each size is steam-cooked, checked (QC-3), rested 24 hours in a cooling silo
- * and checked again (QC-4); only then may the Lot be shelled. Source: the client's "Production module" document
+ * Production Phase 3: Cooking & cooling. Each size is steam-cooked, rested 24 hours in a cooling silo and checked
+ * (QC-4); only then may the Lot be shelled. There is no check after the cooker (QC-3 was dropped, Nov 2026): the cooker
+ * log's settings are the record of the cook. Source: the client's "Production module" document
  * (Oct 2026), Phase 3, and docs/Production/6. Cooking Process Report (Sheet1).
  */
-import { SILO_SIZES, SILO_SIZE_KEYS, siloLabel, sizesTotal, type SiloSize, type SizeValues } from "./calibration.js";
+import { SILO_SIZES, SILO_SIZE_KEYS, sizesTotal, type SiloSize, type SizeValues } from "./calibration.js";
 
 const num = (v: string | undefined | null): number | null => {
   const t = (v ?? "").trim();
@@ -34,19 +35,27 @@ export interface CookRunValues {
   date?: string;
   code?: string;
   sizes?: SizeValues;
+  /** Damaged or spoiled in the cooker (a power cut, a breakdown): taken from the silos, but it never reaches shelling. */
+  damagedKg?: string;
 }
 
-/** "Cannot exceed that silo's stock." `stock` is each silo's kg now. */
-export function cookRunError(v: CookRunValues, stock: Record<SiloSize, number>): string | null {
+/**
+ * "Cannot exceed the silo stock." `stockKg` is the silos' total now: calibration records no kg per size (decision,
+ * Nov 2026), so the cooking sheet's kg per size are kept as typed but only their total is held to the stock.
+ */
+export function cookRunError(v: CookRunValues, stockKg: number): string | null {
   if (!(v.date ?? "").trim()) return "A date is required.";
   if (!(v.code ?? "").trim()) return "Give the Lot its number.";
   for (const s of SILO_SIZES) {
     const n = num(v.sizes?.[s.key]);
-    if (n === null) continue;
-    if (Number.isNaN(n) || n < 0) return `Size ${s.code} must be a number of kg, 0 or more.`;
-    if (n > stock[s.key]) return `Silo ${siloLabel(s.key)} holds ${fmt(stock[s.key])} kg; ${fmt(n)} kg can't be cooked from it.`;
+    if (n !== null && (Number.isNaN(n) || n < 0)) return `Size ${s.code} must be a number of kg, 0 or more.`;
   }
-  if (sizesTotal(v.sizes ?? {}) <= 0) return "Enter the kg cooked from at least one silo.";
+  const total = sizesTotal(v.sizes ?? {});
+  if (total <= 0) return "Enter the kg cooked from at least one silo.";
+  if (total > Math.round(stockKg * 100) / 100) return `This production run has ${fmt(stockKg)} kg in the silos; ${fmt(total)} kg can't be cooked from it.`;
+  const damaged = num(v.damagedKg);
+  if (damaged !== null && (Number.isNaN(damaged) || damaged < 0)) return "Damaged or spoiled must be a number of kg, 0 or more.";
+  if (damaged !== null && damaged > total) return `Damaged or spoiled can't be more than the ${fmt(total)} kg cooked.`;
   return null;
 }
 
@@ -79,31 +88,11 @@ export function coolingError(v: CoolingValues): string | null {
   return null;
 }
 
-/** QC-3 per size, from its newest approved check: "No → re-cook" holds the size until a newer check passes it. */
-export type CookCheckState = "not_checked" | "waiting" | "ok" | "recook";
-
-export const COOK_CHECK_LABELS: Record<CookCheckState, string> = {
-  not_checked: "Not checked yet",
-  waiting: "Waiting for approval",
-  ok: "OK",
-  recook: "Held · re-cook",
-};
-
 interface CheckLike {
   id: number;
   status: string;
   decision: string | null;
   values: Record<string, string | undefined>;
-}
-
-export function cookChecks(sizes: SiloSize[], qc3: CheckLike[]): Record<string, CookCheckState> {
-  const newestFirst = [...qc3].sort((a, b) => b.id - a.id);
-  return Object.fromEntries(sizes.map((size) => {
-    const mine = newestFirst.filter((c) => c.values.size === size && c.status !== "rejected");
-    if (mine[0]?.status === "submitted") return [size, "waiting"];
-    const decided = mine.find((c) => c.status === "approved");
-    return [size, !decided ? "not_checked" : decided.decision === "ok" ? "ok" : "recook"];
-  }));
 }
 
 /** QC-4: "Wait → re-check", and "shelling cannot start on it" until the newest approved one says OK. */
@@ -139,35 +128,16 @@ export const canShell = (status: LotStatus): boolean => status === "ready" || st
 /** Shelled, so the sorter has its kernels: Phase 5 may be recorded on it. */
 export const canColourSort = (status: LotStatus): boolean => status === "shelled" || status === "colour_sorted";
 
-export type CookingStep = "cook" | "cooker_log" | "qc3" | "cooling" | "qc4" | "none";
-
-/**
- * Held sizes with no cooker run since the check that held them: these still have to be cooked again. Once the new run
- * is logged the job passes back to the QFS Officer, who checks the size again.
- */
-export function sizesToRecook(sizes: SiloSize[], entries: { id: number; kind: string; status: string; decision: string | null; values: Record<string, string | undefined> }[]): SiloSize[] {
-  return sizes.filter((size) => {
-    const checks = entries.filter((e) => e.kind === "qc3" && e.status === "approved" && e.values.size === size).sort((a, b) => b.id - a.id);
-    const newest = checks[0];
-    if (!newest || newest.decision === "ok") return false;
-    return !entries.some((e) => e.kind === "cooker_log" && e.values.size === size && e.id > newest.id);
-  });
-}
+export type CookingStep = "cook" | "cooker_log" | "cooling" | "qc4" | "none";
 
 /**
  * The one job to point this person at, for a Lot still in Phase 3. A QFS Officer is only sent to a check, the
  * Incharge also to the floor's jobs and to approvals.
  */
-export function nextCookingStep(v: { canFloor: boolean; canCheck: boolean; canReview: boolean; loggedSizes: SiloSize[]; sizes: SiloSize[]; checks: Record<string, CookCheckState>; toRecook: SiloSize[]; inCooling: boolean; cooling: CoolingCheckState }): CookingStep {
-  const states = v.sizes.map((s) => v.checks[s]);
+export function nextCookingStep(v: { canFloor: boolean; canCheck: boolean; canReview: boolean; loggedSizes: SiloSize[]; sizes: SiloSize[]; inCooling: boolean; cooling: CoolingCheckState }): CookingStep {
   if (!v.inCooling) {
-    if (v.canReview && states.includes("waiting")) return "qc3";
-    if (v.canFloor && v.sizes.some((s) => !v.loggedSizes.includes(s))) return "cooker_log";
-    if (v.canFloor && v.toRecook.length > 0) return "cooker_log";
-    // A held size whose new run is logged wants its check again, just as a size never checked does.
-    if (v.canCheck && v.sizes.some((s) => v.checks[s] === "not_checked" || (v.checks[s] === "recook" && !v.toRecook.includes(s)))) return "qc3";
-    if (v.canFloor && states.every((s) => s === "ok")) return "cooling";
-    return "none";
+    if (!v.canFloor) return "none";
+    return v.sizes.some((s) => !v.loggedSizes.includes(s)) ? "cooker_log" : "cooling";
   }
   if (v.canReview && v.cooling === "waiting") return "qc4";
   if (v.canCheck && (v.cooling === "not_checked" || v.cooling === "wait")) return "qc4";

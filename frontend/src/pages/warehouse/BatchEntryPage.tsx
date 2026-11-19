@@ -12,6 +12,7 @@ import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
 import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
 import { UNLISTED_ORIGIN } from "../../components/receipt/originPicker";
+import { isNoFutureDate } from "@anagroci/contract/domain/fieldRules";
 
 /** A grid row's values, keyed by the stage field label (so it maps straight onto the API payload). */
 type Values = Record<string, string>;
@@ -268,6 +269,7 @@ export function BatchEntryPage() {
                           <DateInput
                             aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
                             value={r.v[c.key] ?? ""} onChange={(d) => setValue(r.key, c.key, d)}
+                            max={isNoFutureDate("n-gate", c.key) ? new Date().toISOString().slice(0, 10) : undefined}
                             onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
                           />
                         ) : (
