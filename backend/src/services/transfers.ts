@@ -25,7 +25,7 @@ import { canTransferBetween, formatLotPiece, lotPieceProblem, pieceChanged, sugg
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { prisma } from "../db.js";
-import { ValidationError } from "../domain/validation.js";
+import { binWithoutWarehouseMessage, ValidationError } from "../domain/validation.js";
 import { toReceiptRecord } from "../serialize.js";
 import { nextTransferId, siteOf, siteTypeOf } from "./ids.js";
 import { loadReceiptRow, type WriteOpts } from "./receipts.js";
@@ -81,8 +81,8 @@ export interface ReceiveInput {
   receivedComment?: string | null;
   receivedLotNoRaw?: string | null;
   /**
-   * Per Lot on the truck: the bin at the receiving site it was unloaded into (required), and the bags of it counted
-   * off (required when the truck carries several Lots — the truck's net is shared by them).
+   * Per Lot on the truck: the bin at the receiving site it was unloaded into (required), and, optionally, the bags of
+   * it counted off — without them the truck's net is shared by the bags each Lot was sent with.
    */
   lines?: { receiptId: string; binCode?: string | null; bagsReceived?: number | string | null }[];
 }
@@ -300,6 +300,30 @@ export async function addTransferLines(id: string, lines: TransferLineInput[], o
   return toWire(row);
 }
 
+/**
+ * The truck is still out on another BKT that hasn't been received. Carries that BKT so the route can say which one — but
+ * only to someone allowed to see it (routes/transfers.ts); the message here is the full one, for an admin or a script.
+ */
+export class TruckOnTheRoadError extends ValidationError {
+  constructor(readonly truckNo: string, readonly clash: { id: string; fromWarehouse: string; toWarehouse: string; toStore: string | null }) {
+    super(truckOnTheRoadMessage(truckNo, clash));
+  }
+}
+
+export function truckOnTheRoadMessage(truckNo: string, clash?: { id: string; toWarehouse: string; toStore: string | null }): string {
+  return clash
+    ? `Truck ${truckNo} can't be dispatched yet: it is still on ${clash.id}, which hasn't been received at ${clash.toStore ?? clash.toWarehouse}. ` +
+        `A truck carries one BKT at a time. Record the arrival on ${clash.id} first, or check the truck number.`
+    : `Truck ${truckNo} can't be dispatched yet: it is still on another warehouse's BKT, which hasn't been received. ` +
+        "A truck carries one BKT at a time. Check the truck number, or ask that warehouse to record the arrival.";
+}
+
+/** The site names whose Transfers list holds this BKT: the sender's and the destination's (a store reads as its site). */
+export async function transferSites(t: { fromWarehouse: string; toWarehouse: string }): Promise<string[]> {
+  const sites = await Promise.all([siteOf(prisma, t.fromWarehouse), siteOf(prisma, t.toWarehouse)]);
+  return [...new Set(sites.filter((s): s is string => Boolean(s)))];
+}
+
 /** "1796 GC 01 / 3922-BB-04" and "1796GC01/3922BB04" are the same rig. */
 const rig = (truck: string) => truck.toUpperCase().replace(/[\s-]+/g, "");
 
@@ -345,9 +369,11 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
       quality.set(l.id, { moisture: moisture!, kor: kor!, nutCount });
     }
 
-    const out = await tx.transferRequest.findMany({ where: { status: "dispatched", id: { not: id } }, select: { id: true, truckNo: true } });
+    const out = await tx.transferRequest.findMany({
+      where: { status: "dispatched", id: { not: id } }, select: { id: true, truckNo: true, fromWarehouse: true, toWarehouse: true, toStore: true },
+    });
     const clash = out.find((o) => o.truckNo && rig(o.truckNo) === rig(truckNo));
-    if (clash) throw new ValidationError(`Truck ${truckNo} is still on ${clash.id}, which hasn't arrived — one BKT is one voyage.`);
+    if (clash) throw new TruckOnTheRoadError(truckNo, clash);
 
     await tx.transferRequest.update({
       where: { id },
@@ -366,8 +392,8 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
 /**
  * The bin each Lot was unloaded into at the receiving site. Every Lot needs one — without it the Lot is
  * in no bin and production can't reach it — and it must be a bin in Masters (a production batch is made
- * of master bins) that isn't in another site's store. Bins imported without a store are accepted, as
- * they are everywhere else.
+ * of master bins) of the receiving site. A bin with no warehouse yet is refused until an admin sets one: Bouaké's and
+ * Yakro's bins are separate sets, and accepting unowned ones let a truck at Yakro be put in a Bouaké bin.
  */
 async function receivingBins(
   tx: Tx, toWarehouse: string,
@@ -384,6 +410,8 @@ async function receivingBins(
   const [bins, site] = await Promise.all([tx.bin.findMany({ where: { code: { in: codes } }, select: { code: true, warehouseName: true } }), resolveSite(toWarehouse)]);
   const missing = codes.filter((c) => !bins.some((b) => b.code === c));
   if (missing.length) throw new ValidationError(`Not in Masters › Bins: ${missing.join(", ")}. Add the bin there first.`);
+  const unowned = bins.filter((b) => !b.warehouseName);
+  if (unowned.length) throw new ValidationError(unowned.map((b) => binWithoutWarehouseMessage(b.code)).join(" "));
   const elsewhere = bins.filter((b) => b.warehouseName && !site.includes(b.warehouseName));
   if (elsewhere.length) throw new ValidationError(elsewhere.map((b) => `${b.code} is in ${b.warehouseName}, not at ${toWarehouse}`).join("; ") + ".");
   return out;
@@ -393,14 +421,15 @@ const NO_BAGS = "Enter the bags received — it is what the transfer is checked 
 
 /**
  * The bags of each Lot counted off the truck, and the truck's total. Counted per Lot, the total is their sum (one
- * figure, typed once); a truck with one Lot may give just the total. With several Lots every count is needed: the
- * truck is weighed once, and its net is shared by them (contract's lineNetAtArrival).
+ * figure, typed once). Or just the truck's total, as the client's receiving sheet records it (one row per truck): the
+ * Lots then have no count of their own (null), and the truck's net is shared by the bags each was sent with
+ * (contract's lineNetAtArrival). A Lot alone on its truck takes the total.
  */
 function bagsPerLot(
   lines: { receiptId: string; receipt: { lot: { lotNumber: string | null } | null } }[],
   given: ReadonlyMap<string, number | null>,
   total: number | null,
-): { perLot: Map<string, number>; total: number } {
+): { perLot: Map<string, number | null>; total: number } {
   const counts = lines.map((l) => given.get(l.receiptId) ?? null);
   if (counts.every((c) => c !== null)) {
     const sum = counts.reduce<number>((a, c) => a + c!, 0);
@@ -409,8 +438,7 @@ function bagsPerLot(
   }
   if (total === null) throw new ValidationError(NO_BAGS);
   if (lines.length === 1) return { perLot: new Map([[lines[0]!.receiptId, total]]), total };
-  const missing = lines.filter((_, i) => counts[i] === null).map((l) => l.receipt.lot?.lotNumber ?? l.receiptId);
-  throw new ValidationError(`Enter the bags of each Lot counted off the truck (missing: ${missing.join(", ")}). The truck is weighed once, and its weight is shared by them.`);
+  return { perLot: new Map(lines.map((l) => [l.receiptId, null])), total };
 }
 
 /**
@@ -460,7 +488,7 @@ export async function receiveTransfer(id: string, input: ReceiveInput, opts: Wri
       },
     });
     for (const l of t.lines) {
-      await tx.transferRequestLine.update({ where: { id: l.id }, data: { receivedBinCode: binOf.get(l.receiptId)!, bagsReceived: perLot.get(l.receiptId)! } });
+      await tx.transferRequestLine.update({ where: { id: l.id }, data: { receivedBinCode: binOf.get(l.receiptId)!, bagsReceived: perLot.get(l.receiptId) ?? null } });
       await timeline(tx, l.receiptId, `Received at ${t.toWarehouse} on ${id}, into ${binOf.get(l.receiptId)}`, opts);
     }
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });

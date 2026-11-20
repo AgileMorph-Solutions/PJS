@@ -72,7 +72,7 @@ export function buildApp() {
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof UnauthorizedError) return reply.code(401).send({ error: err.message });
     if (err instanceof ForbiddenError) return reply.code(403).send({ error: err.message });
-    if (err instanceof ValidationError) return reply.code(422).send({ error: err.message });
+    if (err instanceof ValidationError) return reply.code(422).send(err.detail === undefined ? { error: err.message } : { error: err.message, detail: err.detail });
     if (err instanceof UnknownStageFieldError) return reply.code(400).send({ error: err.message });
     if (err instanceof ImportRejectedError) return reply.code(422).send({ error: err.message, detail: err.detail });
     if (err instanceof ImportTokenError) return reply.code(404).send({ error: err.message });

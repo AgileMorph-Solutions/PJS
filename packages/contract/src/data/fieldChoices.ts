@@ -21,6 +21,10 @@ export const STAGE_FIELD_CHOICES: Record<string, Record<string, readonly string[
     // The two answers the label and the client's process notes name; picked by the person before finalising (Nov 2026).
     [FINALISED_WHEN_LABEL]: [FINALISED_SAME_DAY, FINALISED_NEXT_DAY],
   },
+  "n-stock": {
+    // Same label and same master vocabulary as the arrival step's (n-gate) — one list, not two that could drift.
+    "Warehouse type (Village/Regional/Factory)": WAREHOUSE_KINDS.map((k) => k.label),
+  },
   "n-xferdec": {
     // The label names space; production need and other cover a Central warehouse sending to the factory floor.
     "Driven by (space at warehouse)": ["Space at warehouse", "Production need", "Other"],

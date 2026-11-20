@@ -1,19 +1,27 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   listTransfers, listTransferDestinations, getTransfer, createTransfer, addTransferLines, dispatchTransfer, receiveTransfer,
+  TruckOnTheRoadError, transferSites, truckOnTheRoadMessage,
   type TransferInput, type TransferLineInput, type DispatchInput, type ReceiveInput,
 } from "../services/transfers.js";
+import type { TruckOnTheRoadDetail } from "@anagroci/contract/domain/transfers";
 import { assertWarehouseAccess, scopedSite, scopedWarehouse } from "../auth/scope.js";
 import { currentUser } from "../auth/plugin.js";
-import { ForbiddenError } from "../domain/validation.js";
+import { ForbiddenError, ValidationError } from "../domain/validation.js";
 import { resolveScope } from "../domain/site.js";
 
+type TransferEnds = { fromWarehouse: string; toWarehouse: string; toStore?: string | null };
+
 /** A Warehouse Incharge sees transfers that leave from or arrive at their own warehouse. */
-async function assertTransferAccess(req: FastifyRequest, t: { fromWarehouse: string; toWarehouse: string; toStore?: string | null }) {
+async function canSeeTransfer(req: FastifyRequest, t: TransferEnds): Promise<boolean> {
   const user = currentUser(req);
-  if (user.role === "admin") return;
+  if (user.role === "admin") return true;
   const mine = user.warehouse ? await resolveScope(user.warehouse) : [];
-  if (!mine.includes(t.fromWarehouse) && !mine.includes(t.toStore ?? t.toWarehouse)) throw new ForbiddenError("That transfer isn't to or from your warehouse.");
+  return mine.includes(t.fromWarehouse) || mine.includes(t.toStore ?? t.toWarehouse);
+}
+
+async function assertTransferAccess(req: FastifyRequest, t: TransferEnds) {
+  if (!(await canSeeTransfer(req, t))) throw new ForbiddenError("That transfer isn't to or from your warehouse.");
 }
 
 const actorOf = (req: FastifyRequest) => ({ actor: { id: currentUser(req).id, via: "direct" as const } });
@@ -62,7 +70,16 @@ export async function transferRoutes(app: FastifyInstance) {
     const t = await getTransfer(id);
     if (!t) return reply.code(404).send({ error: "Transfer not found" });
     if (currentUser(req).role !== "admin") scopedWarehouse(req, t.fromWarehouse);
-    return dispatchTransfer(id, (req.body ?? {}) as DispatchInput, actorOf(req));
+    try {
+      return await dispatchTransfer(id, (req.body ?? {}) as DispatchInput, actorOf(req));
+    } catch (err) {
+      if (!(err instanceof TruckOnTheRoadError)) throw err;
+      // Name and link the BKT the truck is still on only for someone who may open it; anyone else is told it is
+      // another warehouse's, never its number.
+      if (!(await canSeeTransfer(req, err.clash))) throw new ValidationError(truckOnTheRoadMessage(err.truckNo));
+      const detail: TruckOnTheRoadDetail = { kind: "truck_on_the_road", transferId: err.clash.id, sites: await transferSites(err.clash) };
+      throw new ValidationError(err.message, detail);
+    }
   });
 
   app.post("/api/transfers/:id/receive", async (req, reply) => {

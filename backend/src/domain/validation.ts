@@ -5,10 +5,17 @@
 // different thing entirely — they are warnings attached to a successful write, because the real
 // client data violates them and blocking would make it unimportable. See domain/dataQuality/.
 
+/** A Bin no warehouse has claimed yet (imported that way): never offered or accepted until an admin sets where it is. */
+export const binWithoutWarehouseMessage = (code: string) =>
+  `Bin ${code} isn't assigned to a warehouse yet. An admin sets its warehouse in Masters › Bins, then it can be used.`;
+
 export class ValidationError extends Error {
-  constructor(message: string) {
+  /** Sent alongside the message (the 422's `detail`) when the page can do more than print it — e.g. link to a record. */
+  detail?: unknown;
+  constructor(message: string, detail?: unknown) {
     super(message);
     this.name = "ValidationError";
+    this.detail = detail;
   }
 }
 

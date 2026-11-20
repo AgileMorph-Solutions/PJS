@@ -150,10 +150,10 @@ describe("calculated weights, bags and amount", () => {
 
   it("fill themselves from the readings, in order, as each one arrives", async () => {
     await setStageFields(id, "n-gross", { "Loaded truck weight (kg)": "56300" });
-    // Nov 2026: the bags on the truck are counted and typed; good bags are filled in as total − torn.
-    await setStageFields(id, "n-unload", { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
+    // Good, damp and torn bags are typed; the total on the truck is calculated from them.
+    await setStageFields(id, "n-unload", { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
     let r = (await getReceipt(id))!;
-    expect(r.stageData["n-unload"]["BON SACS (good bags)"]).toBe("463");
+    expect(r.stageData["n-unload"]["SACS (bags)"]).toBe("478");
     expect(r.stageData["n-netwt"]).toBeUndefined(); // no empty-truck weight yet — nothing to subtract
 
     await setStageFields(id, "n-gross", { "Tare / empty truck weight (kg)": "15000" });
@@ -173,8 +173,19 @@ describe("calculated weights, bags and amount", () => {
 
   it("can't be typed", async () => {
     await expect(setStageFields(id, "n-netwt", { "NET WT KGS": "1" })).rejects.toThrow(/is calculated/);
+    await expect(setStageFields(id, "n-unload", { "SACS (bags)": "1" })).rejects.toThrow(/Good \+ damp \+ torn/);
     await expect(setStageFields(id, "n-unload", { "Tally Clerk bag count": "1" })).rejects.toThrow(/Good bags \+ reconditioned/);
     await expect(setStageFields(id, "n-grn", { AMOUNT: "1" })).rejects.toThrow(/Price × paid weight/);
+  });
+
+  it("are blanked when one of their inputs is cleared, so no old result stays next to readings that can't give it", async () => {
+    const r = (await createReceipt(SITE, `${YEAR}-05-03`)).id;
+    await setStageFields(r, "n-qfs", { "Sample – Good Kernel (g)": "100", "Sample – Immature (g)": "1", "Sample – Spotted (g)": "10" });
+    expect((await getReceipt(r))!.stageData["n-qfs"]["KOR"]).toBe("18.61");
+    await setStageFields(r, "n-qfs", { "Sample – Spotted (g)": "" });
+    expect((await getReceipt(r))!.stageData["n-qfs"]["KOR"] ?? "").toBe("");
+    await setStageFields(r, "n-qfs", { "Sample – Spotted (g)": "20" }); // back again once all three are in
+    expect((await getReceipt(r))!.stageData["n-qfs"]["KOR"]).toBe("19.49");
   });
 
   it("are left alone on imported records, which keep what the workbook recorded", async () => {

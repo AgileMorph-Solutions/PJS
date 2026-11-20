@@ -1,3 +1,6 @@
+import type { WarehouseAliasMaster, WarehouseMaster } from "../types/receipt.js";
+import { siteOf } from "./siteType.js";
+
 /**
  * The Allocate Bin stage's "Bin Number" field. One entry can name more than one Bin — the real
  * workbook has "BKE-002-BIN-004 / BKE-002-BIN-006" — so a value is a list, split on "/" or ",".
@@ -25,4 +28,19 @@ export function binNumberProblems(value: string | null | undefined, bins: readon
   return splitBinNumber(value).flatMap((code): BinProblem[] =>
     storeSet.has(code) ? [{ code, reason: "store" }] : known.has(code) ? [] : [{ code, reason: "unknown" }]
   );
+}
+
+/**
+ * The Bins a warehouse may put a Lot in: those whose own warehouse is in the same site (BOUAKE and its stores, or YAKRO
+ * FACTORY). Bouaké's bins (BKE-002-BIN-012) and Yakro's (BIN-001) are two separate sets in the client's sheets, so a Bin
+ * with no warehouse yet is offered nowhere until an admin sets it in Masters › Bins — never to every site at once.
+ */
+export function binsAtSite(
+  binInfo: readonly { code: string; store: string | null }[], warehouses: WarehouseMaster[], aliases: WarehouseAliasMaster[] | undefined, warehouse: string,
+): string[] {
+  const site = siteOf(warehouses, aliases, warehouse)?.name ?? warehouse;
+  return binInfo
+    .filter((b) => b.store !== null && (siteOf(warehouses, aliases, b.store)?.name ?? b.store) === site)
+    .map((b) => b.code)
+    .sort();
 }

@@ -86,7 +86,7 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
           {system.hint}
         </p>
       )}
-      {note && !system && <p className="mt-1 text-[11.5px] text-warmstone-500">{note}</p>}
+      {note && !system && <p className="mt-1 text-[12px] text-warmstone-500">{note}</p>}
       {warning && !locked && <p className="mt-1 text-[12px] font-semibold text-ambernut-700">{warning}</p>}
       {suggestion && !locked && !value.trim() && (
         <button

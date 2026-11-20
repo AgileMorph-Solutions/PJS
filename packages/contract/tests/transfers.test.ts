@@ -222,8 +222,10 @@ describe("a truck's net at arrival, per Lot", () => {
     expect(got).toEqual([{ kg: 5000, shared: true }, { kg: 35000, shared: true }]);
   });
 
-  it("without a count for every Lot, nothing is attributed", () => {
-    expect(lineNetAtArrival(facts([{ bags: 100, bagsReceived: 100 }, { bags: 700, bagsReceived: null }]))).toEqual([undefined, undefined]);
+  it("with only the truck's total counted (one row per truck, as the client's sheet), Lots share it by the bags they were sent with", () => {
+    expect(lineNetAtArrival(facts([{ bags: 100, bagsReceived: null }, { bags: 700, bagsReceived: null }]))).toEqual([{ kg: 5100, shared: true }, { kg: 35700, shared: true }]);
+    // A count for only some Lots isn't mixed with the sent bags: the sent bags decide for all.
+    expect(lineNetAtArrival(facts([{ bags: 100, bagsReceived: 100 }, { bags: 700, bagsReceived: null }]))).toEqual([{ kg: 5087.5, shared: true }, { kg: 35612.5, shared: true }]); // net 40,800 − 100 bags, by 100 : 700
   });
 });
 

@@ -8,7 +8,9 @@ import { useTableSearch } from "../../components/ui/useTableSearch";
 import { usePagination } from "../../components/ui/usePagination";
 import { Pagination } from "../../components/ui/Pagination";
 import { useTracking } from "../../state/TrackingContext";
+import { useMe } from "../../state/AuthContext";
 import { api } from "../../repository/api";
+import { Select } from "../../components/ui/Input";
 
 const inputCls =
   "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
@@ -28,6 +30,26 @@ export function BinsPage() {
     [masters.binInfo],
   );
   const search = useTableSearch(masters.bins, (b) => [b, storeOf.get(b)]);
+  const isAdmin = useMe().role === "admin";
+  // Bins the workbooks brought in without saying where they are: no site can pick them until an admin places them.
+  const unassigned = useMemo(() => (masters.binInfo ?? []).filter((b) => b.store === null).map((b) => b.code).sort(), [masters.binInfo]);
+  const [placing, setPlacing] = useState<string | null>(null);
+  const [placeMsg, setPlaceMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function place(code: string, warehouse: string) {
+    if (!warehouse) return;
+    setPlacing(code);
+    setPlaceMsg(null);
+    try {
+      await api.setBinWarehouse(code, warehouse);
+      await refresh();
+      setPlaceMsg({ ok: true, text: `Bin ${code} is now in ${warehouse}.` });
+    } catch (err) {
+      setPlaceMsg({ ok: false, text: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setPlacing(null);
+    }
+  }
   const page = usePagination(search.filtered);
 
   async function handleSubmit(e: FormEvent) {
@@ -127,6 +149,25 @@ export function BinsPage() {
           <p className="mt-3 text-[13px] text-success-700">{notice}</p>
         )}
       </CollapsibleCard>
+      {isAdmin && unassigned.length > 0 && (
+        <CollapsibleCard title={`Bins not assigned to a warehouse (${unassigned.length})`}>
+          <p className="mb-3 text-[12px] text-warmstone-500">
+            These came from the workbooks without a warehouse. No warehouse can pick them until you choose where each one is.
+          </p>
+          {placeMsg && <p role={placeMsg.ok ? "status" : "alert"} className={`mb-3 text-[13px] ${placeMsg.ok ? "text-success-700" : "text-danger-700"}`}>{placeMsg.text}</p>}
+          <div className="divide-y divide-warmstone-100">
+            {unassigned.map((code) => (
+              <div key={code} className="grid grid-cols-[minmax(0,1fr)_minmax(0,16rem)] items-center gap-4 py-2">
+                <span className="font-mono font-semibold text-[13px] text-warmstone-800">{code}</span>
+                <Select aria-label={`Warehouse of ${code}`} value="" disabled={placing === code} onChange={(e) => void place(code, e.target.value)}>
+                  <option value="">Choose its warehouse…</option>
+                  {stores.map((s) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </div>
+            ))}
+          </div>
+        </CollapsibleCard>
+      )}
       <FilterBar>
         <input
           placeholder="Search bin code or warehouse…"

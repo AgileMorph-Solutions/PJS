@@ -12,7 +12,7 @@ import { Prisma } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
-import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
+import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce, staleDerivedFields } from "@anagroci/contract/domain/receiptMath";
 import { RECEIPT_STAGE_MIRRORS, STAGE_TO_RECEIPT_COLUMNS } from "@anagroci/contract/domain/receiptMirror";
 import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
 import { splitBinNumber } from "@anagroci/contract/domain/binNumber";
@@ -28,11 +28,12 @@ import { supplierNameKey } from "@anagroci/contract/domain/supplierCode";
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
-import { assertLotBeforeBin, assertRejectionHasReason, ForbiddenError, ValidationError } from "../domain/validation.js";
+import { assertLotBeforeBin, assertRejectionHasReason, binWithoutWarehouseMessage, ForbiddenError, ValidationError } from "../domain/validation.js";
 import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
 import { planFitProblem } from "./receiptPlanInfo.js";
 import { assertKnownOrigin } from "./masters.js";
+import { resolveSite } from "../domain/site.js";
 
 type Tx = Prisma.TransactionClient;
 export interface WriteOpts {
@@ -206,8 +207,8 @@ export async function applyStageFields(
   fields: Record<string, string>,
   opts: WriteOpts = {}
 ) {
-  // The record as it was before this write: a filled-in value (good bags) follows its inputs only while it still holds
-  // what the formula gave from them (refreshDerivedFields).
+  // The record as it was before this write: a calculated value whose input is now cleared is blanked only if the app had
+  // worked it out from those inputs (refreshDerivedFields).
   let before: Record<string, Record<string, string>> | undefined;
   if (!opts.bypassValidation) {
     // A person typing in the app (a direct edit, or an approved form) may never type KOR; an upload or a script writes
@@ -385,15 +386,19 @@ async function assertCallerMayWrite(tx: Tx, id: string, stageId: string, fields:
 const DERIVED_INPUT_STAGES = new Set(DERIVED_RULES.flatMap((r) => r.inputs.map(([stageId]) => stageId)));
 
 /**
- * Rewrites every calculated field whose inputs are all present and whose stored value differs.
+ * Rewrites every calculated field whose inputs are all present and whose stored value differs, and blanks one the app
+ * had calculated whose inputs are no longer all there (staleDerivedFields — never a value an upload brought in).
  * Calculated values are audited like any other change (same actor, same channel), so the history
- * shows why a net weight moved. A filled-in field a person may change (good bags) is rewritten only while
- * blank or still holding the formula's value from `before` — never over what someone typed.
+ * shows why a net weight moved.
  */
 async function refreshDerivedFields(tx: Tx, id: string, opts: WriteOpts, before?: Record<string, Record<string, string>>) {
+  if (before) {
+    const stale = staleDerivedFields(assembleStageData((await loadReceiptRow(id, tx)) as Record<string, unknown>), before);
+    for (const [stageId, values] of Object.entries(stale)) await writeStageFields(tx, id, stageId, values, opts);
+  }
   const row = await loadReceiptRow(id, tx);
   const current = assembleStageData(row as Record<string, unknown>);
-  for (const [stageId, values] of Object.entries(computeDerivedFields(current, before))) {
+  for (const [stageId, values] of Object.entries(computeDerivedFields(current))) {
     const changed = Object.fromEntries(Object.entries(values).filter(([label, v]) => current[stageId]?.[label] !== v));
     if (Object.keys(changed).length) await writeStageFields(tx, id, stageId, changed, opts);
   }
@@ -416,7 +421,8 @@ async function writeStageFields(
   if (!opts.bypassValidation && stageId === "n-bin" && "Bin Number" in fields) {
     const existing = await tx.stageLotAssignment.findUnique({ where: { receiptId: id } });
     assertLotBeforeBin(existing?.lotNumber, fields["Bin Number"]);
-    await assertBinIsAPhysicalBin(tx, fields["Bin Number"]);
+    const meta = await tx.receipt.findUnique({ where: { id }, select: { warehouse: true, source: true } });
+    await assertBinIsAPhysicalBin(tx, fields["Bin Number"], isPersonEdit(opts, meta?.source ?? undefined) ? meta?.warehouse : undefined);
   }
 
   if (stageId === "n-lot") {
@@ -587,16 +593,24 @@ export async function applyBranch(
  * Several Bins for one Lot may be written "BKE-002-BIN-004 / BKE-002-BIN-006", as their sheet does.
  * Only NEW writes are held to this: Bin values already stored are never rewritten, and the ones
  * that are really store codes are reported by the data-quality audit instead.
+ *
+ * `atWarehouse`, for a person's edit: the Bin must also be one of the truck's own site. Bouaké's bins (BKE-…) and Yakro's
+ * (BIN-…) are separate sets in the client's sheets, and a Lot at Bouaké was being put in a Yakro bin. An upload keeps what
+ * its sheet says.
  */
-async function assertBinIsAPhysicalBin(tx: Tx, value: string | undefined) {
+async function assertBinIsAPhysicalBin(tx: Tx, value: string | undefined, atWarehouse?: string | null) {
+  const site = atWarehouse ? await resolveSite((await siteOf(tx, atWarehouse)) ?? atWarehouse) : undefined;
   for (const code of splitBinNumber(value)) {
     const store = await tx.warehouse.findFirst({ where: { name: code, site: { not: null } }, select: { name: true } });
     if (store) {
       throw new ValidationError(`${code} is a store (a warehouse code), not a Bin. Choose the Bin inside it, e.g. ${code}-BIN-012.`);
     }
-    if (!(await tx.bin.findUnique({ where: { code }, select: { code: true } }))) {
+    const bin = await tx.bin.findUnique({ where: { code }, select: { code: true, warehouseName: true } });
+    if (!bin) {
       throw new ValidationError(`Bin "${code}" isn't in the Bin master — add it in Masters › Bins first, so the same place is never spelled two ways.`);
     }
+    if (site && !bin.warehouseName) throw new ValidationError(binWithoutWarehouseMessage(code));
+    if (site && !site.includes(bin.warehouseName!)) throw new ValidationError(`Bin ${code} is in ${bin.warehouseName}, not at ${atWarehouse}. Choose one of this warehouse's bins.`);
   }
 }
 

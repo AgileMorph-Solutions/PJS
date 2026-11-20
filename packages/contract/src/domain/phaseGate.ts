@@ -69,7 +69,7 @@ const UNLOADING: Phase = {
   title: "Unloading",
   required: [
     ["n-unload", "DATE OF OFFLOADING"],
-    // Nov 2026: the total on the truck is counted; good bags follow from it (and can be changed), the tally from them.
+    // SACS and the tally are calculated (good + damp + torn; good + reconditioned): missing, they name their inputs.
     ["n-unload", "SACS (bags)"],
     ["n-unload", "BON SACS (good bags)"],
     ["n-unload", "HUMID SACS (damp bags)"],
@@ -142,9 +142,9 @@ export function missingFields(stageData: StageData, phase: Phase): string[] {
   const blank = ([s, l]: Ref) => !(derived[s]?.[l] ?? stageData[s]?.[l] ?? "").trim();
   return phase.required.filter(blank).flatMap((ref) => {
     // A value nobody types (KOR in the app, the tally) is missing because its inputs are: name those, the fields a person
-    // can fill. One a person may type (a fallback outside the app, good bags' default) is named itself.
+    // can fill. One a person may type (a fallback outside the app) is named itself.
     const rule = derivedRuleFor(ref[0], ref[1]);
-    const locked = rule && !rule.defaultOnly && (!rule.fallbackToTyped || rule.calculatedOnlyInApp);
+    const locked = rule && (!rule.fallbackToTyped || rule.calculatedOnlyInApp);
     const inputs = locked ? rule.inputs.filter(blank) : [];
     return inputs.length ? inputs.map(label) : [label(ref)];
   });

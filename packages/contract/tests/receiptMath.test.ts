@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, storedFormulaMismatches, KOR_FACTOR,
+  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, storedFormulaMismatches, staleDerivedFields, KOR_FACTOR,
 } from "../src/domain/receiptMath.js";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap.js";
 
@@ -36,14 +36,14 @@ describe("derived fields", () => {
   });
 
   it("reproduces the real sample receipt (Truck Reception row 1)", () => {
-    // 478 bags on the truck − 15 torn = 463 good; 41300 − 478 = 40822 net; − 60 refraction = 40762 paid;
+    // 463 good + 0 damp + 15 torn = 478 bags; 41300 − 478 = 40822 net; − 60 refraction = 40762 paid;
     // × 470 CFA = 19,158,140 — every figure as the workbook records it.
     const out = computeDerivedFields({
       "n-gross": { "GROSS WT KGS": "41300" },
-      "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
+      "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
       "n-grn": { PRICE: "470" },
     });
-    expect(out["n-unload"]!["BON SACS (good bags)"]).toBe("463");
+    expect(out["n-unload"]!["SACS (bags)"]).toBe("478");
     expect(out["n-netwt"]).toEqual({ "NET WT KGS": "40822", "PAID WT": "40762" });
     expect(out["n-grn"]!.AMOUNT).toBe("19158140");
   });
@@ -51,7 +51,7 @@ describe("derived fields", () => {
   it("flows a new weighbridge reading through gross, net, paid and amount", () => {
     const out = computeDerivedFields({
       "n-gross": { "Loaded truck weight (kg)": "56300", "Tare / empty truck weight (kg)": "15000" },
-      "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
+      "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" },
       "n-grn": { PRICE: "470" },
     });
     expect(out["n-gross"]!["GROSS WT KGS"]).toBe("41300");
@@ -69,42 +69,36 @@ describe("derived fields", () => {
   });
 
   it("skips a rule whose inputs are incomplete", () => {
-    const out = computeDerivedFields({ "n-unload": { "SACS (bags)": "478" } });
+    const out = computeDerivedFields({ "n-unload": { "BON SACS (good bags)": "463", "Sacs déchirés (torn bags)": "15" } });
     expect(out).toEqual({});
   });
 
-  it("knows which fields are calculated, and that the total on the truck is typed (Nov 2026)", () => {
+  it("knows which fields are calculated, and that good bags are typed (20 Nov 2026)", () => {
     expect(isDerivedField("n-netwt", "NET WT KGS")).toBe(true);
-    expect(isDerivedField("n-unload", "SACS (bags)")).toBe(false);
+    expect(isDerivedField("n-unload", "SACS (bags)")).toBe(true);
+    expect(isDerivedField("n-unload", "BON SACS (good bags)")).toBe(false);
     expect(isDerivedField("n-unload", "Tally Clerk bag count")).toBe(true);
   });
 });
 
-// Nov 2026: good bags = total − torn, filled in but changeable; tally = good + reconditioned torn bags, calculated.
+// 20 Nov 2026: good, damp and torn are typed; SACS = their total and the tally = good + reconditioned, both calculated.
 describe("bags at unloading", () => {
   const unload = (v: Record<string, string>) => ({ "n-unload": v });
 
-  it("fills in good bags and the tally from the count and the torn bags", () => {
-    const out = computeDerivedFields(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "10" }));
-    expect(out["n-unload"]).toEqual({ "BON SACS (good bags)": "463", "Tally Clerk bag count": "473" }); // 463 + 10
+  it("calculates the total and the tally from the typed counts", () => {
+    const out = computeDerivedFields(unload({ "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "10" }));
+    expect(out["n-unload"]).toEqual({ "SACS (bags)": "478", "Tally Clerk bag count": "473" }); // 463 + 0 + 15; 463 + 10
   });
 
-  it("keeps good bags a person typed, and the tally follows what they typed", () => {
-    const out = computeDerivedFields(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "BON SACS (good bags)": "460", "Reconditioning of torn bags": "10" }));
-    expect(out["n-unload"]).toEqual({ "Tally Clerk bag count": "470" });
+  it("locks SACS in the app from the start, even before its counts are in", () => {
+    expect(derivedRuleInForce(unload({}), "n-unload", "SACS (bags)")?.formula).toBe("Good + damp + torn bags");
+    expect(derivedRuleInForce(unload({}), "n-unload", "BON SACS (good bags)")).toBeUndefined();
   });
 
-  it("good bags follow a corrected count while they still hold the filled-in value, but never once a person changed them", () => {
-    const saved = unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "BON SACS (good bags)": "463" });
-    const recounted = unload({ ...saved["n-unload"], "SACS (bags)": "480" });
-    expect(computeDerivedFields(recounted, saved)["n-unload"]!["BON SACS (good bags)"]).toBe("465");
-    const typed = unload({ ...saved["n-unload"], "BON SACS (good bags)": "450" });
-    expect(computeDerivedFields(unload({ ...typed["n-unload"], "SACS (bags)": "480" }), typed)["n-unload"]?.["BON SACS (good bags)"]).toBeUndefined();
-  });
-
-  it("never locks good bags, and never reports a typed one as a formula mismatch", () => {
-    expect(derivedRuleInForce(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15" }), "n-unload", "BON SACS (good bags)")).toBeUndefined();
-    expect(storedFormulaMismatches(unload({ "SACS (bags)": "478", "Sacs déchirés (torn bags)": "15", "BON SACS (good bags)": "450" }))).toEqual([]);
+  it("keeps an imported total that disagrees with its parts, and reports it rather than correcting it", () => {
+    // 44 real Truck Reception rows are like this; the stored total stands and is reported.
+    expect(storedFormulaMismatches(unload({ "SACS (bags)": "480", "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" })))
+      .toEqual([{ stageId: "n-unload", label: "SACS (bags)", stored: "480", expected: "478" }]);
   });
 });
 
@@ -209,5 +203,36 @@ describe("dryingLoss", () => {
   it("is undefined without both weights", () => {
     expect(dryingLoss(undefined, 9600)).toBeUndefined();
     expect(dryingLoss(0, 0)).toBeUndefined();
+  });
+});
+
+// Found 20 Nov 2026 on REC-YAK-2026-0317: Spotted was cleared, KOR kept 18.61 — a value its grams could no longer give.
+describe("a calculated value whose input is cleared", () => {
+  const qfs = (g: string, i: string, sp: string, kor: string) => ({ "n-qfs": { "Sample – Good Kernel (g)": g, "Sample – Immature (g)": i, "Sample – Spotted (g)": sp, KOR: kor } });
+
+  it("is blanked when the app had worked it out (the real case: Spotted 10 → 18.61, then Spotted cleared)", () => {
+    const before = qfs("100", "1", "10", "18.61");
+    expect(computeDerivedFields(before)["n-qfs"]!.KOR).toBe("18.61"); // the 18.61 on the screen came from Spotted 10
+    expect(staleDerivedFields(qfs("100", "1", "", "18.61"), before)).toEqual({ "n-qfs": { KOR: "" } });
+  });
+
+  it("is kept when an upload brought it in with nothing behind it (a sheet's KOR without grams)", () => {
+    const imported = { "n-qfs": { KOR: "47.2" } };
+    expect(staleDerivedFields({ "n-qfs": { KOR: "47.2", "Sample – Good Kernel (g)": "" } }, imported)).toEqual({});
+  });
+
+  it("is left alone while its inputs are all still there", () => {
+    const before = qfs("100", "1", "10", "18.61");
+    expect(staleDerivedFields(qfs("100", "1", "12", "18.61"), before)).toEqual({});
+  });
+
+  it("clears what was worked out from it too: no empty-truck weight, so no gross, net or paid", () => {
+    const before = {
+      "n-gross": { "Loaded truck weight (kg)": "56300", "Tare / empty truck weight (kg)": "15000", "GROSS WT KGS": "41300" },
+      "n-unload": { "SACS (bags)": "478", Refraction: "60" },
+      "n-netwt": { "NET WT KGS": "40822", "PAID WT": "40762" },
+    };
+    const after = { ...before, "n-gross": { ...before["n-gross"], "Tare / empty truck weight (kg)": "" } };
+    expect(staleDerivedFields(after, before)).toEqual({ "n-gross": { "GROSS WT KGS": "" }, "n-netwt": { "NET WT KGS": "", "PAID WT": "" } });
   });
 });

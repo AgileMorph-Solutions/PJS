@@ -61,12 +61,6 @@ export interface DerivedRule {
    * result). The typed fallback is then for uploads alone, whose sheet may hold the result without its inputs.
    */
   calculatedOnlyInApp?: boolean;
-  /**
-   * Filled in from its formula but the person may change it (Nov 2026: good bags = total − torn "by default"). It is
-   * worked out while blank, and follows its inputs while it still holds the value they gave; once a person types a
-   * different value it is theirs and is left alone. Never locks the field.
-   */
-  defaultOnly?: boolean;
 }
 
 /** 80 lb of kernels per 1000 g sample, as a factor — the client's own constant in their Warehouse Receiving sheet. */
@@ -76,6 +70,7 @@ const LOADED: FieldRef = ["n-gross", "Loaded truck weight (kg)"];
 const TARE: FieldRef = ["n-gross", "Tare / empty truck weight (kg)"];
 const GROSS: FieldRef = ["n-gross", "GROSS WT KGS"];
 const GOOD: FieldRef = ["n-unload", "BON SACS (good bags)"];
+const DAMP: FieldRef = ["n-unload", "HUMID SACS (damp bags)"];
 const TORN: FieldRef = ["n-unload", "Sacs déchirés (torn bags)"];
 const SACS: FieldRef = ["n-unload", "SACS (bags)"];
 const REFRACTION: FieldRef = ["n-unload", "Refraction"];
@@ -104,8 +99,8 @@ const korRule = (target: FieldRef, name: "Sample" | "Final"): DerivedRule => ({
 
 /** In dependency order: each rule may read the targets of the rules above it. */
 export const DERIVED_RULES: readonly DerivedRule[] = [
-  // Nov 2026: the total on the truck (SACS) is counted and typed; good bags follow from it, and the tally from them.
-  { target: GOOD, inputs: [SACS, TORN], compute: ([s, t]) => s! - t!, formula: "Total bags received − torn bags", defaultOnly: true },
+  // 20 Nov 2026 team decision (reverting the 19 Nov one): good, damp and torn bags are counted and typed; SACS is their total.
+  { target: SACS, inputs: [GOOD, DAMP, TORN], compute: ([g, d, t]) => g! + d! + t!, formula: "Good + damp + torn bags" },
   { target: TALLY_CLERK_BAGS, inputs: [GOOD, RECONDITIONED], compute: ([g, r]) => g! + r!, formula: "Good bags + reconditioned torn bags" },
   { target: GROSS, inputs: [LOADED, TARE], compute: ([l, t]) => l! - t!, formula: "Loaded truck − empty truck" },
   { target: NET, inputs: [GROSS, SACS], compute: ([g, b]) => g! - b! * BAG_WEIGHT_KG, formula: "Gross − 1 kg per bag" },
@@ -170,7 +165,6 @@ export function isDerivedField(stageId: string, label: string): boolean {
 /** `from`: "app" for a person typing in the app; "upload" for a sheet or script writing what its source recorded. */
 export function derivedRuleInForce(stageData: StageData, stageId: string, label: string, from: "app" | "upload" = "app"): DerivedRule | undefined {
   const rule = derivedRuleFor(stageId, label);
-  if (rule?.defaultOnly) return undefined; // filled in, never locked
   if (!rule || !rule.fallbackToTyped) return rule;
   if (rule.calculatedOnlyInApp && from === "app") return rule;
   return rule.inputs.every(([s, l]) => parseQty(stageData[s]?.[l]) !== undefined) ? rule : undefined;
@@ -181,13 +175,12 @@ export function derivedRuleInForce(stageData: StageData, stageId: string, label:
  * results of earlier rules, so a new loaded/tare reading flows through Gross → Net → Paid → Amount
  * in one call. Rules whose inputs are incomplete are simply absent from the result.
  */
-export function computeDerivedFields(stageData: StageData, before?: StageData): Record<string, Record<string, string>> {
+export function computeDerivedFields(stageData: StageData): Record<string, Record<string, string>> {
   const working: Record<string, Record<string, string>> = {};
   for (const [stageId, fields] of Object.entries(stageData)) working[stageId] = { ...fields };
   const out: Record<string, Record<string, string>> = {};
 
   for (const rule of DERIVED_RULES) {
-    if (rule.defaultOnly && !followsDefault(rule, stageData, before)) continue;
     const values = rule.inputs.map(([s, l]) => parseQty(working[s]?.[l]));
     if (values.some((v) => v === undefined)) continue;
     const [stageId, label] = rule.target;
@@ -199,18 +192,29 @@ export function computeDerivedFields(stageData: StageData, before?: StageData): 
 }
 
 /**
- * Whether a default-only field (good bags) is still the formula's to fill: blank, or — when `before` (the record as it was
- * saved) is given — untouched by this change and still holding the value the formula gave from the inputs then.
+ * Calculated values that no longer have their inputs, to be blanked: a calculation runs only when every input is
+ * recorded, so clearing one (Spotted grams) used to leave the old result behind (KOR 18.61 next to grams that can't give
+ * it — found 20 Nov 2026). A value is blanked only if `before` shows the app worked it out (it equals the formula of the
+ * inputs as they were): a value an upload brought in with no inputs behind it (a sheet's KOR without grams) stays.
+ * In rule order, so a cleared Gross also clears the Net and Paid worked out from it.
  */
-function followsDefault(rule: DerivedRule, stageData: StageData, before?: StageData): boolean {
-  const [s, l] = rule.target;
-  const now = (stageData[s]?.[l] ?? "").trim();
-  if (!now) return true;
-  if (!before) return false;
-  const was = (before[s]?.[l] ?? "").trim();
-  if (now !== was) return false; // typed in this change: the person's
-  const inputsThen = rule.inputs.map(([is, il]) => parseQty(before[is]?.[il]));
-  return !inputsThen.some((v) => v === undefined) && formatQty(rule.compute(inputsThen as number[])) === was;
+export function staleDerivedFields(stageData: StageData, before: StageData): Record<string, Record<string, string>> {
+  const now: Record<string, Record<string, string>> = {};
+  for (const [stageId, fields] of Object.entries(stageData)) now[stageId] = { ...fields };
+  const then: Record<string, Record<string, string>> = {};
+  for (const [stageId, fields] of Object.entries(before)) then[stageId] = { ...fields };
+  const out: Record<string, Record<string, string>> = {};
+  for (const rule of DERIVED_RULES) {
+    const [stageId, label] = rule.target;
+    const stored = (now[stageId]?.[label] ?? "").trim();
+    if (!stored || rule.inputs.every(([s, l]) => parseQty(now[s]?.[l]) !== undefined)) continue;
+    const inputsThen = rule.inputs.map(([s, l]) => parseQty(then[s]?.[l]));
+    if (inputsThen.some((v) => v === undefined)) continue;
+    if (formatQty(rule.compute(inputsThen as number[])) !== (then[stageId]?.[label] ?? "").trim()) continue;
+    (now[stageId] ??= {})[label] = "";
+    (out[stageId] ??= {})[label] = "";
+  }
+  return out;
 }
 
 export interface FormulaMismatch {
@@ -228,7 +232,6 @@ export interface FormulaMismatch {
 export function storedFormulaMismatches(stageData: StageData): FormulaMismatch[] {
   const out: FormulaMismatch[] = [];
   for (const rule of DERIVED_RULES) {
-    if (rule.defaultOnly) continue; // a person may set it to something else on purpose
     const values = rule.inputs.map(([s, l]) => parseQty(stageData[s]?.[l]));
     const [stageId, label] = rule.target;
     const stored = parseQty(stageData[stageId]?.[label]);

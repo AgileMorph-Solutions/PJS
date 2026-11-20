@@ -65,14 +65,13 @@ export function TransferPanel({
   const dispatchReady = [d.wr, d.truckNo, d.transporter, d.driver, d.driverPhone, d.gross].every((x) => x.trim() !== "")
     && t.lines.every((l) => QUALITY.every(({ key }) => (quality[l.receiptId]?.[key] ?? "").trim() !== ""));
   const [r, setR] = useState({ damaged: "", gross: "", kor: "", moisture: "", nuts: "", lot: "", comment: "", wr: "" });
-  const [bins, setBins] = useState<Record<string, string>>({});
-  // Bags counted off per Lot: the truck is weighed once, and its net is shared between its Lots by these.
-  const [lotBags, setLotBags] = useState<Record<string, string>>({});
-  const allBinned = t.lines.every((l) => (bins[l.receiptId] ?? "").trim() !== "");
-  const counted = t.lines.map((l) => (lotBags[l.receiptId] ?? "").trim());
-  const allCounted = counted.every((b) => b !== "" && Number.isInteger(Number(b)) && Number(b) >= 0);
-  const bagsTotal = allCounted ? counted.reduce((a, b) => a + Number(b), 0) : null;
   const v = t.variance;
+  // One bin and one bag count for the whole truck, as the client's receiving sheet records an arrival (one row per truck,
+  // 20 Nov 2026). The count starts at the bags sent and is changed when it differs; the server shares the truck's weight
+  // between its Lots by the bags each was sent with.
+  const [bin, setBin] = useState("");
+  const [bagsIn, setBagsIn] = useState(v.bagsDispatched === null ? "" : String(v.bagsDispatched));
+  const bagsTotal = bagsIn.trim() !== "" && Number.isInteger(Number(bagsIn)) && Number(bagsIn) >= 0 ? Number(bagsIn) : null;
   const shares = lineNetAtArrival(t);
   // The same test the server applies: if what arrived differs from what was sent, the receiving warehouse has to say why.
   const arrival: TransferFacts = {
@@ -116,7 +115,11 @@ export function TransferPanel({
             <span className="min-w-0">{lotLink(l)} <span className="text-warmstone-500">{normalizeSupplierName(l.supplierName)}</span></span>
             <span className="text-right tabular-nums text-warmstone-700 shrink-0">
               {n(l.bags)} bags{l.netWeightKg !== null ? ` · ${formatKg(l.netWeightKg)}` : ""}
-              {l.bagsReceived !== null && <span className="block text-[11px] text-warmstone-500">{n(l.bagsReceived)} bags received{shares[i] ? ` · ${formatKg(shares[i]!.kg)}${shares[i]!.shared ? " (share of the truck, by bags)" : ""}` : ""}</span>}
+              {(l.bagsReceived !== null || shares[i]) && (
+                <span className="block text-[11px] text-warmstone-500">
+                  {[l.bagsReceived !== null ? `${n(l.bagsReceived)} bags received` : null, shares[i] ? `${formatKg(shares[i]!.kg)} received${shares[i]!.shared ? " (share of the truck, by bags)" : ""}` : null].filter(Boolean).join(" · ")}
+                </span>
+              )}
               {(l.binCode || l.receivedBinCode) && <span className="block text-[11px] text-warmstone-400">{[l.binCode, l.receivedBinCode].filter(Boolean).join(" → ")}</span>}
               {(l.moisture !== null || l.kor !== null) && <span className="block text-[11px] text-warmstone-500">moisture {l.moisture ?? "-"}% · KOR {l.kor ?? "-"}{l.nutCount !== null ? ` · ${l.nutCount} nuts` : ""}</span>}</span>
           </div>
@@ -167,7 +170,7 @@ export function TransferPanel({
 
       {receiving && (
         <form
-          onSubmit={(e) => { e.preventDefault(); void onReceive({ whReceiptNo: r.wr, receivedGrossKg: r.gross, damagedBags: r.damaged || null, korReceived: r.kor || null, moistureReceived: r.moisture || null, nutCountReceived: r.nuts || null, receivedLotNoRaw: r.lot || null, receivedComment: r.comment || null, lines: t.lines.map((l) => ({ receiptId: l.receiptId, binCode: bins[l.receiptId] ?? "", bagsReceived: lotBags[l.receiptId] ?? "" })) }); }}
+          onSubmit={(e) => { e.preventDefault(); void onReceive({ whReceiptNo: r.wr, receivedGrossKg: r.gross, damagedBags: r.damaged || null, korReceived: r.kor || null, moistureReceived: r.moisture || null, nutCountReceived: r.nuts || null, receivedLotNoRaw: r.lot || null, receivedComment: r.comment || null, bagsReceived: bagsIn, lines: t.lines.map((l) => ({ receiptId: l.receiptId, binCode: bin })) }); }}
           className="lg:col-span-3 bg-white border-2 border-brand-700 rounded-2xl p-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start"
         >
           <Field id="rc-wr" label="Warehouse receipt no." hint="Your own receipt for this arrival."><input id="rc-wr" required value={r.wr} onChange={(e) => setR({ ...r, wr: e.target.value })} className={inputClass} /></Field>
@@ -178,33 +181,26 @@ export function TransferPanel({
           <Field id="rc-moisture" label="Moisture (%)"><input id="rc-moisture" inputMode="decimal" value={r.moisture} onChange={(e) => setR({ ...r, moisture: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-nuts" label="Nut count"><input id="rc-nuts" inputMode="numeric" value={r.nuts} onChange={(e) => setR({ ...r, nuts: e.target.value })} className={inputClass} /></Field>
           <Field id="rc-comment" label={differs ? "Why it differs *" : "Comment"} hint={differs ? "What arrived is not what was sent: say why (damaged bags, a short load, a weighing difference…)." : undefined}><input id="rc-comment" required={differs} value={r.comment} onChange={(e) => setR({ ...r, comment: e.target.value })} className={`${inputClass} ${differs ? "border-ambernut-300 bg-ambernut-50" : ""}`} /></Field>
-          <div className="sm:col-span-2 lg:col-span-4 space-y-2">
-            <p className="text-[12px] font-semibold text-warmstone-700">Each Lot: bags counted off the truck, and the bin it was unloaded into <span className="font-normal text-warmstone-500">(the truck is weighed once, so its weight is shared between the Lots by their bags; the bin is what makes the Lot available to production)</span></p>
+          <Field id="rc-bags" label="Bags received *" hint={`Filled in with the ${n(v.bagsDispatched)} bags sent. Change it if you counted a different number.`}>
+            <input id="rc-bags" required inputMode="numeric" value={bagsIn} onChange={(e) => setBagsIn(e.target.value)} className={`${inputClass} tabular-nums`} />
+          </Field>
+          <Field id="rc-bin" label="Bin *" hint="The bin the truck was unloaded into. It makes the Lots available to production.">
+            <select id="rc-bin" required value={bin} onChange={(e) => setBin(e.target.value)} className={inputClass}>
+              <option value="">Choose a bin…</option>
+              {binOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </Field>
+          <div className="sm:col-span-2 lg:col-span-2 space-y-1">
+            <p className="text-[12px] font-semibold text-warmstone-700">Lots on this truck</p>
             {t.lines.map((l) => (
-              <div key={l.receiptId} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)] gap-3 items-center">
-                <span className="text-[13px] font-mono text-warmstone-800 truncate">{l.lotNumber ?? l.receiptId}</span>
-                <span className="text-[12px] text-warmstone-500 tabular-nums">{n(l.bags)} bags sent</span>
-                <input
-                  required inputMode="numeric" aria-label={`Bags received, ${l.lotNumber ?? l.receiptId}`} placeholder="Bags received" value={lotBags[l.receiptId] ?? ""}
-                  onChange={(e) => setLotBags({ ...lotBags, [l.receiptId]: e.target.value })} className={inputClass}
-                />
-                <select
-                  required aria-label={`Bin, ${l.lotNumber ?? l.receiptId}`} value={bins[l.receiptId] ?? ""}
-                  onChange={(e) => setBins({ ...bins, [l.receiptId]: e.target.value })} className={inputClass}
-                >
-                  <option value="">Choose a bin…</option>
-                  {binOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
-              </div>
+              <p key={l.receiptId} className="flex justify-between gap-3 text-[13px]">
+                <span className="font-mono text-warmstone-800 truncate">{l.lotNumber ?? l.receiptId}</span>
+                <span className="tabular-nums text-warmstone-800">{n(l.bags)} bags</span>
+              </p>
             ))}
-            <p className="text-[12px] text-warmstone-500 tabular-nums">
-              {bagsTotal === null
-                ? `${n(v.bagsDispatched)} bags were sent.`
-                : <>Bags received on the truck: <span className="font-semibold text-warmstone-800">{n(bagsTotal)}</span> · {n(v.bagsDispatched)} were sent.</>}
-            </p>
           </div>
           <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-3">
-            <button type="submit" disabled={saving || !allCounted || !r.gross.trim() || !r.wr.trim() || !allBinned || (differs && !r.comment.trim())} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
+            <button type="submit" disabled={saving || bagsTotal === null || !r.gross.trim() || !r.wr.trim() || !bin || (differs && !r.comment.trim())} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
               <span className="material-symbols-outlined text-[17px]">inventory_2</span>
               Record arrival
             </button>
