@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitBinNumber, binNumberProblems } from "../src/domain/binNumber.js";
+import { splitBinNumber, binNumberProblems, binsAtSite } from "../src/domain/binNumber.js";
 
 const bins = ["BKE-002-BIN-004", "BKE-002-BIN-006"];
 const stores = ["BKE-002"];
@@ -31,5 +31,28 @@ describe("Bin Number", () => {
 
   it("matches exactly, like the server — a lower-case spelling is not silently accepted", () => {
     expect(binNumberProblems("bke-002-bin-004", bins, stores)).toEqual([{ code: "bke-002-bin-004", reason: "unknown" }]);
+  });
+});
+
+describe("each site picks only its own bins (20 Nov 2026)", () => {
+  const warehouses = [
+    { name: "BOUAKE", kind: "REGIONAL_CENTRAL", type: "UNIT", site: null },
+    { name: "BKE-002", kind: null, site: "BOUAKE" },
+    { name: "YAKRO FACTORY", kind: "FACTORY", type: "CENTRAL", site: null },
+  ];
+  const bins = [
+    { code: "BKE-002-BIN-012", store: "BKE-002" }, { code: "BKE-001-BIN-016", store: "BOUAKE" },
+    { code: "BIN-001", store: "YAKRO FACTORY" }, { code: "BIN-04", store: null },
+  ];
+
+  it("Bouaké sees its site's and stores' bins, Yakro only its own, from a store or the site alike", () => {
+    expect(binsAtSite(bins, warehouses, [], "BOUAKE")).toEqual(["BKE-001-BIN-016", "BKE-002-BIN-012"]);
+    expect(binsAtSite(bins, warehouses, [], "BKE-002")).toEqual(["BKE-001-BIN-016", "BKE-002-BIN-012"]);
+    expect(binsAtSite(bins, warehouses, [], "YAKRO FACTORY")).toEqual(["BIN-001"]);
+  });
+
+  it("offers a bin with no warehouse to nobody, and resolves an alias to its site", () => {
+    for (const w of ["BOUAKE", "YAKRO FACTORY"]) expect(binsAtSite(bins, warehouses, [], w)).not.toContain("BIN-04");
+    expect(binsAtSite(bins, warehouses, [{ alias: "ANAGROCI-01", warehouseName: "YAKRO FACTORY" }], "ANAGROCI-01")).toEqual(["BIN-001"]);
   });
 });

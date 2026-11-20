@@ -101,9 +101,9 @@ export const STAGE_FIELD_MAP: Record<string, StageTableSpec> = {
     fields: [
       { label: "DATE OF OFFLOADING", col: "dateOfOffloading" },
       { label: "SACS (bags)", col: "sacs" },
-      { label: "BON SACS (good bags)", col: "bonSacs" },
       { label: "HUMID SACS (damp bags)", col: "humidSacs" },
       { label: "Sacs déchirés (torn bags)", col: "sacsDechires" },
+      { label: "BON SACS (good bags)", col: "bonSacs" },
       { label: "Reconditioning of torn bags", col: "reconditionedTornBags" },
       { label: "Refraction", col: "refraction" },
       { label: "Manpower contractor / team", col: "manpowerContractor" },

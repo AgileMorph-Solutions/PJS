@@ -4,7 +4,7 @@ import type { WarehouseKind } from "@anagroci/contract/data/warehouseKinds";
 import type { WarehouseType } from "@anagroci/contract/data/warehouseTypes";
 import { currentUser, requireRole } from "../auth/plugin.js";
 import {
-  listMasters, addWarehouse, createBin, createOrigin, setWarehouseType, setWarehouseCode,
+  listMasters, addWarehouse, createBin, createOrigin, setWarehouseType, setWarehouseCode, setBinWarehouse,
   viewerWarehouseNames, assertCanAddWarehouse,
 } from "../services/masters.js";
 
@@ -34,6 +34,12 @@ export async function masterRoutes(app: FastifyInstance) {
   app.post("/api/masters/bins", async (req, reply) => {
     const body = (req.body ?? {}) as { code?: string; warehouseName?: string };
     return reply.code(201).send(await createBin(body, await viewerWarehouseNames(currentUser(req))));
+  });
+
+  // Where a Bin is: for the bins imported with no warehouse, or a correction. Admin only — it moves a Bin between sites.
+  app.patch("/api/masters/bins/:code", { preHandler: requireRole("admin") }, async (req) => {
+    const { code } = req.params as { code: string };
+    return setBinWarehouse(code, ((req.body ?? {}) as { warehouseName?: string | null }).warehouseName);
   });
 
   app.post("/api/masters/origins", async (req, reply) => {

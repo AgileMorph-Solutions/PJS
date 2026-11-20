@@ -161,16 +161,18 @@ describe("Lots that arrived on a BKT", () => {
     expect(stock.get("BIN-03B")!.lots[1]).toMatchObject({ receiptId: "0001", transferId: "BKT-2026-001", state: "in_bin", kg: 9950, warehouse: "YAKRO FACTORY", fromWarehouse: "BOUAKE" });
   });
 
-  it("on a BKT received before bags were counted per Lot, doesn't split the truck's weight, and ignores trucks not yet received or Lots with no bin", () => {
+  // 20 Nov 2026: an arrival records the truck's bags once (the client's sheet: one row per truck), so Lots without a count
+  // of their own share the truck's net by the bags each was sent with.
+  it("on a BKT received with only the truck's bags, shares the weight by bags sent, and ignores trucks not yet received or Lots with no bin", () => {
     const arrivals = arrivedLots([
       bkt("BKT-2026-002", "received", [line("0002", "BIN-03C"), line("0003", "BIN-03C")]),
       bkt("BKT-2026-003", "dispatched", [line("0004", "BIN-03C")]),
       bkt("BKT-2026-004", "received", [line("0005", null)]),
     ]);
-    expect(arrivals.map((a) => [a.receiptId, a.kg])).toEqual([["0002", undefined], ["0003", undefined]]);
+    expect(arrivals.map((a) => [a.receiptId, a.kg, a.kgShared])).toEqual([["0002", 9950, true], ["0003", 9950, true]]);
     const lots = warehouseBinStock([], arrivals).get("BIN-03C")!;
-    expect(lots.kg).toBe(0);
-    expect(lots.lots.map((l) => l.state)).toEqual(["weighed_with_other_lots", "weighed_with_other_lots"]);
+    expect(lots.kg).toBe(19900);
+    expect(lots.lots.map((l) => l.state)).toEqual(["in_bin", "in_bin"]);
   });
 
   // Truck: 2 Lots, 200 bags, 20,100 kg gross → 19,900 kg net at arrival, shared 150 : 50 by the bags counted off.

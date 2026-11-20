@@ -28,7 +28,8 @@ export async function viewerWarehouseNames(viewer: { role: string; warehouse: st
  * `own` scopes the warehouse lists to one site (undefined = admin, everything): its own row, its stores, its aliases
  * and the Bins in its stores. Other sites never reach a non-admin's screen — where a person genuinely needs another
  * site's name (a BKT's destination), that has its own endpoint (services/transfers.ts listTransferDestinations).
- * Bins imported without a store belong to no site, so they stay visible: hiding them would strand real stock.
+ * Bins with no warehouse yet (imported that way) are an admin's to place, in Masters › Bins: a non-admin sees only their
+ * own site's, so no site is ever offered another's bins.
  */
 export async function listMasters(own?: string[]) {
   const mine = own ? new Set(own) : undefined;
@@ -37,7 +38,7 @@ export async function listMasters(own?: string[]) {
     // By name only: `own` (domain/site.ts resolveScope) already lists every store the viewer may see, and a store-bound
     // viewer must not be handed their sibling stores through `site in own`.
     prisma.warehouse.findMany({ where: own ? { name: { in: own } } : {}, orderBy: { name: "asc" } }),
-    prisma.bin.findMany({ where: own ? { OR: [{ warehouseName: null }, { warehouseName: { in: own } }] } : {}, orderBy: { code: "asc" } }),
+    prisma.bin.findMany({ where: own ? { warehouseName: { in: own } } : {}, orderBy: { code: "asc" } }),
     prisma.origin.findMany({ orderBy: { name: "asc" } }),
     prisma.warehouseAlias.findMany({ orderBy: { alias: "asc" } }),
   ]);
@@ -183,6 +184,21 @@ export async function createBin(input: { code?: string; warehouseName?: string }
   }
   if (await prisma.bin.findUnique({ where: { code }, select: { code: true } })) throw new ValidationError(`Bin ${code} already exists.`);
   return prisma.bin.create({ data: { code, warehouseName: store, source: "entered", createdAt: new Date() } });
+}
+
+/**
+ * Admin only (routes/masters.ts): which warehouse a Bin is in. For the bins imported with none, and to correct a wrong
+ * one. Bins already holding Lots keep them — the Lots' own records are never rewritten.
+ */
+export async function setBinWarehouse(codeRaw: string, warehouseRaw: string | null | undefined) {
+  const code = codeRaw.trim().toUpperCase();
+  if (!(await prisma.bin.findUnique({ where: { code }, select: { code: true } }))) throw new ValidationError(`Bin ${code} isn't in Masters › Bins.`);
+  const warehouseName = (warehouseRaw ?? "").trim();
+  if (!warehouseName) throw new ValidationError("Choose the warehouse this Bin is in.");
+  if (!(await prisma.warehouse.findUnique({ where: { name: warehouseName }, select: { name: true } }))) {
+    throw new ValidationError(`"${warehouseName}" isn't a warehouse in Masters › Warehouses.`);
+  }
+  return prisma.bin.update({ where: { code }, data: { warehouseName } });
 }
 
 /**

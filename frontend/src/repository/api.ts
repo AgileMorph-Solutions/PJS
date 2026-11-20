@@ -292,6 +292,9 @@ export const api = {
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/receive`, { method: "POST", body: JSON.stringify(p) }),
   /** A new Bin in a store; refuses a duplicate or a bad code with a plain reason. */
   createBin: (code: string, warehouseName: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code, warehouseName }) }),
+  /** Admin: which warehouse a Bin is in — for the bins imported with none. */
+  setBinWarehouse: (code: string, warehouseName: string) =>
+    request<unknown>(`/masters/bins/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify({ warehouseName }) }),
   createOrigin: (name: string) => request<unknown>("/masters/origins", { method: "POST", body: JSON.stringify({ name }) }),
 
   /** `warehouse` scopes to a site via the backend's resolveSite() (site name -> itself + its
@@ -780,8 +783,8 @@ export interface ReceivePayload {
   bagsReceived?: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
   korReceived?: number | string | null; moistureReceived?: number | string | null; nutCountReceived?: number | string | null;
   receivedComment?: string | null; receivedLotNoRaw?: string | null;
-  /** Per Lot: the bin it was unloaded into at this site, and the bags of it counted off the truck (both required). */
-  lines: { receiptId: string; binCode: string; bagsReceived: string }[];
+  /** Per Lot: the bin it was unloaded into at this site (required), and optionally the bags of it counted off the truck. */
+  lines: { receiptId: string; binCode: string; bagsReceived?: string }[];
 }
 
 /** What a plan can be created or corrected with — the writable subset of DeliveryPlan; everything else is derived. */

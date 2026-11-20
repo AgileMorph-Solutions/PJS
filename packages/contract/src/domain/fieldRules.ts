@@ -4,8 +4,11 @@
  * saved, just warn the user"). The warehouse decides; the app points out what looks wrong.
  *
  * Where the limits come from, so nobody mistakes them for invented tolerances:
- * - moisture, nut count and KOR: the raw cashew trade's own grades (moisture 10 % max; 230 nuts/kg the acceptability
- *   limit; KOR 43-48 lbs good, 48-55 excellent). The outer bounds are wide physical limits, only there to catch typing slips.
+ * - moisture: the raw cashew trade's 10 % max (drying only; see the QFS note below). The outer bounds are wide physical
+ *   limits, only there to catch typing slips.
+ * - Quality (QFS) readings: no limit of their own at all (team, 20 Nov 2026: "the only warning should be if there is a huge
+ *   mismatch between Truck sampling and Final unloading"). Each final reading is compared with its truck-sampling twin
+ *   (QFS_MISMATCH below); grades like 230 nuts/kg or KOR 43 lbs are the warehouse's call, not a warning.
  * - bags and weights: bags are 80 kg and one truck carries about 60 tonnes, so 750 bags is a full truck.
  * - a cut-test sample is 1,000 g (KOR_FACTOR in receiptMath.ts is per 1,000 g).
  * The client is still to confirm the limits; they live here, once, so changing one is a one-line edit.
@@ -49,15 +52,14 @@ type Rule = { number: NumberRule } | { format: FormatRule };
 // The team doesn't set a moisture ceiling of its own (Nov 2026): over 100 % is only a typing slip; 10 % is the
 // trade standard, so above it is a warning.
 const MOISTURE: Rule = { number: { min: 0, max: 100, unit: "%", warnAbove: [10, "too wet, needs drying"] } };
-const NUT_COUNT: Rule = { number: { integer: true, min: 100, max: 300, unit: "nuts per kg", warnAbove: [230, "poor quality: 230 nuts per kg is the trade limit"] } };
-const KOR: Rule = { number: { min: 30, max: 60, unit: "lbs", warnBelow: [43, "poor quality: 43 - 48 lbs is good, 48 - 55 excellent"] } };
-const GRAMS: Rule = { number: { min: 0, max: 1000, unit: "g" } };
+/** A QFS reading: a number (so the number keyboard shows), with no limit — only the sampling/final mismatch warns. */
+const READING: Rule = { number: {} };
 const BAGS: Rule = { number: { integer: true, min: 0 } };
 const KG: Rule = { number: { min: 0, unit: "kg" } };
 const WEIGHT: Rule = { number: { positive: true, unit: "kg" } };
 
-const gramFields = (panel: "Sample" | "Final") =>
-  Object.fromEntries(["Good Kernel", "Immature", "Spotted", "Rejection", "Void", "Oil", "Shell"].map((g) => [`${panel} – ${g} (g)`, GRAMS]));
+const CUT_TEST = ["Good Kernel", "Immature", "Spotted", "Rejection", "Void", "Oil", "Shell"] as const;
+const gramFields = (panel: "Sample" | "Final") => Object.fromEntries(CUT_TEST.map((g) => [`${panel} – ${g} (g)`, READING]));
 
 /** By stage, by the field's exact label (stages.ts). A field not listed here is free text. */
 export const FIELD_RULES: Record<string, Record<string, Rule>> = {
@@ -77,12 +79,12 @@ export const FIELD_RULES: Record<string, Record<string, Rule>> = {
     "GROSS WT KGS": { number: { positive: true, unit: "kg", warnAbove: [60000, "more than one full truck (about 60,000 kg)"] } },
   },
   "n-qfs": {
-    "Sample moisture (%)": MOISTURE,
-    "Final moisture (%)": MOISTURE,
-    "Sample nut count": NUT_COUNT,
-    "Final nut count": NUT_COUNT,
-    KOR,
-    "FINAL KOR": KOR,
+    "Sample moisture (%)": READING,
+    "Final moisture (%)": READING,
+    "Sample nut count": READING,
+    "Final nut count": READING,
+    KOR: READING,
+    "FINAL KOR": READING,
     ...gramFields("Sample"),
     ...gramFields("Final"),
   },
@@ -112,6 +114,15 @@ export const FIELD_RULES: Record<string, Record<string, Rule>> = {
     Quantity: { number: { positive: true } },
   },
 };
+
+/**
+ * A line shown under a typed field to say how its value should come out — the same rule its cross-check warns on, so the
+ * person sees it before the warning ever fires (good bags, 20 Nov 2026).
+ */
+const FIELD_NOTES: Record<string, Record<string, string>> = {
+  "n-unload": { "BON SACS (good bags)": "Good bags = Total bags − Torn bags" },
+};
+export const fieldNote = (stageId: string, label: string): string | undefined => FIELD_NOTES[stageId]?.[label];
 
 export function fieldRule(stageId: string, label: string): Rule | undefined {
   return FIELD_RULES[stageId]?.[label];
@@ -184,10 +195,17 @@ const NO_FUTURE_DATES: readonly Ref[] = [ARRIVED, OFFLOADED];
 export const isNoFutureDate = (stageId: string, label: string) => NO_FUTURE_DATES.some(([s, l]) => s === stageId && l === label);
 const NET: Ref = ["n-netwt", "NET WT KGS"];
 const GRN: Ref = ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"];
-const SAMPLE_MOIST: Ref = ["n-qfs", "Sample moisture (%)"];
-const FINAL_MOIST: Ref = ["n-qfs", "Final moisture (%)"];
-/** Sample (at the gate) and final (at unloading) are minutes apart, so moisture can't really move much between them. */
-const MOISTURE_GAP = 3;
+/**
+ * Truck sampling (at the gate) and final unloading read the same load, so a reading can't really move much
+ * between them: a gap above these is a "huge mismatch" (team, 20 Nov 2026), most likely a slip in one of the two. The
+ * sizes are ours, pending the client's: moisture's 3 points predates this; the rest are set to the same scale.
+ */
+const QFS_MISMATCH: readonly (readonly [sample: string, final: string, gap: number, unit: string])[] = [
+  ["Sample moisture (%)", "Final moisture (%)", 3, "%"],
+  ["Sample nut count", "Final nut count", 20, "nuts per kg"],
+  ["KOR", "FINAL KOR", 3, "lbs"],
+  ...CUT_TEST.map((g) => [`Sample – ${g} (g)`, `Final – ${g} (g)`, 50, "g"] as const),
+];
 const MOIST_BEFORE: Ref = ["n-drying", "Moisture % — before drying"];
 const MOIST_AFTER: Ref = ["n-drying", "Moisture % — after drying"];
 
@@ -197,11 +215,13 @@ const issue = (at: Ref, message: string, ...also: Ref[]): FieldIssue => ({
   stageId: at[0], label: at[1], message, involves: [at, ...also],
 });
 
-/** The cut-test sample is 1,000 g, so its parts can't add up to more. */
-const gramsOverSample = (panel: "Sample" | "Final"): Check => (get) => {
-  const refs = ["Good Kernel", "Immature", "Spotted", "Rejection", "Void", "Oil", "Shell"].map((g) => ["n-qfs", `${panel} – ${g} (g)`] as const);
-  const total = refs.reduce((sum, r) => sum + (get(r) ?? 0), 0);
-  return total > 1000 ? issue(refs[0]!, `The ${panel.toLowerCase()} cut-test grams add up to ${fmt(total)} g, more than the 1,000 g sample.`, ...refs.slice(1)) : undefined;
+/** A final reading far from its truck-sampling twin. Shown under the final one, the later of the two. */
+const qfsMismatch = ([sampleLabel, finalLabel, gap, unit]: (typeof QFS_MISMATCH)[number]): Check => (get) => {
+  const s: Ref = ["n-qfs", sampleLabel], f: Ref = ["n-qfs", finalLabel];
+  const sample = get(s), final = get(f);
+  return sample !== undefined && final !== undefined && Math.abs(final - sample) > gap
+    ? issue(f, `Very different from truck sampling (${withUnit(sample, unit)}). Please check both readings.`, s)
+    : undefined;
 };
 
 export const CROSS_CHECKS: readonly Check[] = [
@@ -237,17 +257,23 @@ export const CROSS_CHECKS: readonly Check[] = [
       ? issue(GROSS, `That makes ${fmt(perBag)} kg in each bag, but a bag holds about 80 kg. Please check the weight and the number of bags.`, SACS, GOOD, DAMP, TORN)
       : undefined;
   },
-  (get) => {
-    const damp = get(DAMP), torn = get(TORN), total = get(SACS);
-    if (damp === undefined || torn === undefined || !total) return undefined;
-    return damp + torn > total * 0.1 ? issue(DAMP, `${fmt(damp + torn)} of the ${fmt(total)} bags are damp or torn. That is a lot (more than 1 in 10). Please check.`, TORN) : undefined;
-  },
+  // No check on the share of damp or torn bags (team, 20 Nov 2026: no warning under damp bags).
   // Nov 2026: the tally is calculated now (good + reconditioned), so it is no longer checked against the total. What a person
   // types can still disagree: only torn bags can be reconditioned, and none can be torn that weren't on the truck.
   (get) => {
     const recon = get(RECONDITIONED), torn = get(TORN);
     return recon !== undefined && torn !== undefined && recon > torn
       ? issue(RECONDITIONED, `${fmt(recon)} bags reconditioned, but only ${fmt(torn)} were torn. Please check.`, TORN)
+      : undefined;
+  },
+  // Good bags are typed, but the team's rule for them is total received − torn (20 Nov 2026): a different value is pointed
+  // out under good bags, never changed. SACS is good + damp + torn, so in the app this fires exactly when damp bags aren't 0.
+  (get) => {
+    const good = get(GOOD), torn = get(TORN), total = get(SACS);
+    if (good === undefined || torn === undefined || total === undefined) return undefined;
+    const expected = total - torn;
+    return good !== expected
+      ? issue(GOOD, `Total bags (${fmt(total)}) − torn bags (${fmt(torn)}) = ${fmt(expected)}, but good bags is ${fmt(good)}. Please check.`, SACS, TORN)
       : undefined;
   },
   (get) => {
@@ -268,14 +294,7 @@ export const CROSS_CHECKS: readonly Check[] = [
       ? issue(GRN, `The GRN quantity (${fmt(grn)} kg) is more than the net weight (${fmt(net)} kg).`)
       : undefined;
   },
-  gramsOverSample("Sample"),
-  gramsOverSample("Final"),
-  (get) => {
-    const sample = get(SAMPLE_MOIST), final = get(FINAL_MOIST);
-    return sample !== undefined && final !== undefined && Math.abs(final - sample) > MOISTURE_GAP
-      ? issue(FINAL_MOIST, `Very different from the sample (${fmt(sample)} %). Please check both readings.`, SAMPLE_MOIST)
-      : undefined;
-  },
+  ...QFS_MISMATCH.map(qfsMismatch),
   (get) => {
     const before = get(MOIST_BEFORE), after = get(MOIST_AFTER);
     return before !== undefined && after !== undefined && after >= before

@@ -3,7 +3,7 @@ import { derivedRuleFor } from "../domain/receiptMath";
 import { AUTO_FIELD_NOTES, autoFieldFor } from "@anagroci/contract/data/autoFields";
 import { BIN_FINALISE_FIELDS } from "@anagroci/contract/domain/binFinalise";
 import { fieldChoices } from "@anagroci/contract/data/fieldChoices";
-import { isNoFutureDate, isNumericField, type FieldIssue } from "@anagroci/contract/domain/fieldRules";
+import { fieldNote, isNoFutureDate, isNumericField, type FieldIssue } from "@anagroci/contract/domain/fieldRules";
 import { FieldInput } from "./FieldInput";
 
 interface Props {
@@ -79,9 +79,7 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
     // A calculation with a typed fallback locks the field only once it has a value to show (`derived` holds one
     // exactly when every input is recorded); one calculated only in the app (KOR) is never typed here at all.
     const rule = derivedRuleFor(stage.id, f.n);
-    // A filled-in value the person may change (good bags) never locks: it shows the formula's value while blank.
-    const byDefault = rule?.defaultOnly ? rule : undefined;
-    const inForce = rule && !byDefault && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived?.[f.n] !== undefined);
+    const inForce = rule && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived?.[f.n] !== undefined);
     // The whole Lot stage is the system's (the server refuses any write to it), and calculated
     // fields follow their formula. Nobody types either.
     const system = rule && inForce
@@ -96,14 +94,14 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
           : undefined;
     // A field that fills itself: say so while it is still blank, so nobody wonders why it appears after saving.
     const auto = autoFieldFor(stage.id, f.n);
-    const note = byDefault && !readOnly
-      ? `Filled in as ${byDefault.formula.toLowerCase()}. You can change it.`
-      : auto && !(values[f.n] ?? "").trim() && !readOnly ? `${AUTO_FIELD_NOTES[auto.from]} You can change it until the record is locked.` : undefined;
+    const note = auto && !(values[f.n] ?? "").trim() && !readOnly
+      ? `${AUTO_FIELD_NOTES[auto.from]} You can change it until the record is locked.`
+      : fieldNote(stage.id, f.n);
     return (
       <FieldInput
         key={f.n}
         field={f}
-        value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : byDefault && !(values[f.n] ?? "").trim() ? (derived?.[f.n] ?? "") : (values[f.n] ?? "")}
+        value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
         suggestion={suggestions?.[f.n]}
         options={options?.[f.n]}
         choices={choices?.[f.n] ?? fieldChoices(stage.id, f.n)}

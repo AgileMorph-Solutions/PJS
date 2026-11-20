@@ -27,25 +27,18 @@ describe("one value on its own", () => {
     expect(checkValue("n-qfs", "Sample moisture (%)", "")).toBeUndefined();
   });
 
-  it("moisture: above 10 % warns that it needs drying; over 100 % warns as a typing slip", () => {
-    expect(level("n-qfs", "Sample moisture (%)", "9.5")).toBeUndefined();
-    expect(level("n-qfs", "Sample moisture (%)", "12")).toBe("warn");
-    expect(level("n-qfs", "Final moisture (%)", "30")).toBe("warn");
-    expect(level("n-qfs", "Final moisture (%)", "100.5")).toBe("warn");
+  it("Quality (QFS) readings have no limits of their own: nothing warns on one reading alone (20 Nov 2026)", () => {
+    for (const [label, v] of [["Sample moisture (%)", "30"], ["Final moisture (%)", "100.5"], ["Sample nut count", "240"], ["Final nut count", "172.5"],
+      ["KOR", "75"], ["FINAL KOR", "41"], ["Sample – Good Kernel (g)", "1243"]] as const) {
+      expect(level("n-qfs", label, v), label).toBeUndefined();
+    }
+    // Still a number: text is pointed out, so the mismatch check has something to compare.
     expect(level("n-qfs", "Sample moisture (%)", "abc")).toBe("warn");
   });
 
-  it("nut count: whole number 100 - 300, above 230 warns", () => {
-    expect(level("n-qfs", "Sample nut count", "172")).toBeUndefined();
-    expect(level("n-qfs", "Sample nut count", "240")).toBe("warn");
-    expect(level("n-qfs", "Final nut count", "1000")).toBe("warn");
-    expect(level("n-qfs", "Final nut count", "172.5")).toBe("warn");
-  });
-
-  it("KOR: 30 - 60 lbs, below 43 warns", () => {
-    expect(level("n-qfs", "KOR", "47.69")).toBeUndefined();
-    expect(level("n-qfs", "FINAL KOR", "41")).toBe("warn");
-    expect(level("n-qfs", "KOR", "75")).toBe("warn");
+  it("drying moisture keeps its limits: above 10 % warns that it needs drying", () => {
+    expect(level("n-drying", "Moisture % — after drying", "9.5")).toBeUndefined();
+    expect(level("n-drying", "Moisture % — after drying", "12")).toBe("warn");
   });
 
   it("the French decimal comma the real sheets use is a number", () => {
@@ -63,11 +56,6 @@ describe("one value on its own", () => {
     expect(level("n-unload", "BON SACS (good bags)", "463")).toBeUndefined();
     expect(level("n-unload", "BON SACS (good bags)", "800")).toBe("warn");
     expect(level("n-unload", "Sacs déchirés (torn bags)", "1.5")).toBe("warn");
-  });
-
-  it("cut-test grams: 0 - 1000 g each", () => {
-    expect(level("n-qfs", "Sample – Good Kernel (g)", "243")).toBeUndefined();
-    expect(level("n-qfs", "Sample – Good Kernel (g)", "1243")).toBe("warn");
   });
 
   it("fiche number digits only, fiche code and plate format: each warns when it doesn't fit", () => {
@@ -123,12 +111,26 @@ describe("values that must agree", () => {
     expect(ids(sd("50"))).toContain("GROSS WT KGS");
   });
 
-  it("more reconditioned than torn, or more torn than received; damp + torn over 10 %; pallets too few", () => {
+  it("more reconditioned than torn, or more torn than received; pallets too few; never a warning under damp bags", () => {
     const sd = { "n-unload": { "SACS (bags)": "478", "HUMID SACS (damp bags)": "30", "Sacs déchirés (torn bags)": "48", "Reconditioning of torn bags": "50", "Pallets used (30 bags/pallet)": "10" } };
-    expect(ids(sd)).toEqual(expect.arrayContaining(["Reconditioning of torn bags", "HUMID SACS (damp bags)", "Pallets used (30 bags/pallet)"]));
+    expect(ids(sd)).toEqual(expect.arrayContaining(["Reconditioning of torn bags", "Pallets used (30 bags/pallet)"]));
+    // 20 Nov 2026: a high share of damp or torn bags is no longer pointed out.
+    expect(ids(sd)).not.toContain("HUMID SACS (damp bags)");
+    expect(ids({ "n-unload": { "BON SACS (good bags)": "32", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "7" } })).not.toContain("HUMID SACS (damp bags)");
     expect(ids({ "n-unload": { "SACS (bags)": "10", "Sacs déchirés (torn bags)": "15" } })).toContain("Sacs déchirés (torn bags)");
     // The tally is calculated now, so it is no longer checked against the total.
     expect(ids({ "n-unload": { "SACS (bags)": "478", "Tally Clerk bag count": "473" } })).not.toContain("Tally Clerk bag count");
+  });
+
+  it("good bags that aren't total − torn warn under good bags; matching ones don't (20 Nov 2026)", () => {
+    // An imported row whose sheet holds its own total: 100 received, 10 torn, so 90 good — 110 typed warns.
+    const msg = recordIssues({ "n-unload": { "SACS (bags)": "100", "Sacs déchirés (torn bags)": "10", "BON SACS (good bags)": "110" } }, ctx)
+      .find((i) => i.label === "BON SACS (good bags)")?.message;
+    expect(msg).toBe("Total bags (100) − torn bags (10) = 90, but good bags is 110. Please check.");
+    expect(ids({ "n-unload": { "SACS (bags)": "100", "Sacs déchirés (torn bags)": "10", "BON SACS (good bags)": "90" } })).not.toContain("BON SACS (good bags)");
+    // In the app the total is calculated (good + damp + torn), so damp bags are what make the two differ.
+    expect(ids({ "n-unload": { "BON SACS (good bags)": "320", "HUMID SACS (damp bags)": "2", "Sacs déchirés (torn bags)": "7" } })).toContain("BON SACS (good bags)");
+    expect(ids({ "n-unload": { "BON SACS (good bags)": "320", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "7" } })).not.toContain("BON SACS (good bags)");
   });
 
   it("GRN quantity above net weight warns", () => {
@@ -136,16 +138,25 @@ describe("values that must agree", () => {
       .toContain("GRN Weight (kept separate from Gross/Net/Paid)");
   });
 
-  it("cut-test grams over the 1,000 g sample warn; moisture not dropping after drying warns", () => {
-    expect(ids({ "n-qfs": { "Sample – Good Kernel (g)": "800", "Sample – Shell (g)": "440" } })).toContain("Sample – Good Kernel (g)");
+  it("moisture not dropping after drying warns; cut-test grams are no longer summed against the sample (20 Nov 2026)", () => {
+    expect(ids({ "n-qfs": { "Sample – Good Kernel (g)": "800", "Sample – Shell (g)": "440" } })).toEqual([]);
     expect(ids({ "n-drying": { "Moisture % — before drying": "11.8", "Moisture % — after drying": "12.1" } })).toContain("Moisture % — after drying");
   });
 
-  it("final moisture far from the sample warns (the two are minutes apart); close readings don't", () => {
-    expect(ids({ "n-qfs": { "Sample moisture (%)": "2", "Final moisture (%)": "9" } })).toContain("Final moisture (%)");
+  it("each final reading far from its truck-sampling twin warns, under the final one; close readings don't", () => {
+    expect(ids({ "n-qfs": { "Sample moisture (%)": "2", "Final moisture (%)": "9" } })).toEqual(["Final moisture (%)"]);
     expect(ids({ "n-qfs": { "Sample moisture (%)": "9", "Final moisture (%)": "2" } })).toContain("Final moisture (%)");
-    expect(ids({ "n-qfs": { "Sample moisture (%)": "8", "Final moisture (%)": "9.5" } })).not.toContain("Final moisture (%)");
+    expect(ids({ "n-qfs": { "Sample moisture (%)": "8", "Final moisture (%)": "9.5" } })).toEqual([]);
+    expect(ids({ "n-qfs": { "Sample nut count": "170", "Final nut count": "300" } })).toEqual(["Final nut count"]);
+    expect(ids({ "n-qfs": { "Sample nut count": "300", "Final nut count": "300" } })).toEqual([]); // the screenshot's case: same reading, no warning
+    expect(ids({ "n-qfs": { "Sample – Oil (g)": "10", "Final – Oil (g)": "200" } })).toEqual(["Final – Oil (g)"]);
+    expect(ids({ "n-qfs": { "Sample – Oil (g)": "10", "Final – Oil (g)": "40" } })).toEqual([]);
+    // KOR is calculated from the grams; a far one is pointed out too.
+    expect(ids({ "n-qfs": { KOR: "47", "FINAL KOR": "40" } })).toContain("FINAL KOR");
+    // One side alone is "not recorded yet", never a mismatch.
+    expect(ids({ "n-qfs": { "Final nut count": "300" } })).toEqual([]);
   });
+
 });
 
 describe("phase order: a phase opens only when the one before is complete", () => {
@@ -189,8 +200,8 @@ describe("phase order: a phase opens only when the one before is complete", () =
     expect(stageGate({ stageData: passed, branches: { "n-qfs": "pass" } }, "n-bin").waitingFor).toBe("Unloading");
     const unloaded = {
       ...passed,
-      // Good bags and the tally are filled in from the count, the torn and the reconditioned bags.
-      "n-unload": { "DATE OF OFFLOADING": "2026-11-14", "SACS (bags)": "478", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "15", Refraction: "60" },
+      // The total and the tally are calculated from the typed counts and the reconditioned bags.
+      "n-unload": { "DATE OF OFFLOADING": "2026-11-14", "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "15", Refraction: "60" },
     };
     expect(stageGate({ stageData: unloaded, branches: { "n-qfs": "pass" } }, "n-bin").open).toBe(true);
     const binned = { ...unloaded, "n-bin": { "Bin Number": "BKE-002-BIN-003", "Basis for allocation (moisture / quality / KOR / space)": "Moisture" } };

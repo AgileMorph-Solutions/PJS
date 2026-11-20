@@ -55,8 +55,7 @@ export function SubmissionCard({ receipt, role }: { receipt: ReceiptRecord; role
   /** The calculation locking this field right now (KOR always, in the app) — the value shows, and isn't submitted. */
   const inForce = (stageId: string, label: string) => {
     const rule = derivedRuleFor(stageId, label);
-    // A filled-in value the person may change (good bags) is never locked; the server fills it while left blank.
-    return rule && !rule.defaultOnly && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived[stageId]?.[label] !== undefined) ? rule : undefined;
+    return rule && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived[stageId]?.[label] !== undefined) ? rule : undefined;
   };
 
   const valueOf = (stageId: string, label: string) =>

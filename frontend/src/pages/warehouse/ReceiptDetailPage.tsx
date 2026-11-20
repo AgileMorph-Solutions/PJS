@@ -35,7 +35,7 @@ import { StageAuthor } from "../../components/receipt/StageAuthor";
 import { PricePanel } from "../../components/receipt/PricePanel";
 import { originFieldProps } from "../../components/receipt/originPicker";
 import { binProblemMessage } from "../../components/receipt/binPicker";
-import { binNumberProblems } from "@anagroci/contract/domain/binNumber";
+import { binNumberProblems, binsAtSite } from "@anagroci/contract/domain/binNumber";
 import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { useFieldRules } from "../../components/receipt/useFieldRules";
@@ -87,19 +87,18 @@ export function ReceiptDetailPage() {
   // The drying types already in use at this site, offered as suggestions on the drying form.
   const { batches: siteDryingBatches } = useDryingBatches(site.warehouseName);
   const dryTypes = useMemo(() => [...new Set(["SUN DRYING", ...siteDryingBatches.map((d) => (d.dryType ?? "").trim()).filter(Boolean)])], [siteDryingBatches]);
-  // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself: the store codes the master
-  // also holds are left out, and the bins of this truck's own store come first.
+  // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself, and only one of this truck's own site:
+  // the server refuses any other. The bins of the truck's own store come first.
   const store = receipt?.stageData["n-gate"]?.["WH NO."]?.trim();
   const storeNames = useMemo(() => masters.warehouses.filter((w) => w.site).map((w) => w.name), [masters.warehouses]);
   const binOptions = useMemo(() => {
     const stores = new Set(storeNames);
-    const bins = masters.bins.filter((b) => !stores.has(b)).sort();
+    const bins = binsAtSite(masters.binInfo ?? [], masters.warehouses, masters.aliases, receipt?.warehouse || site.warehouseName).filter((b) => !stores.has(b));
     if (!store) return bins;
-    // The Bins of this truck's own store come first: by the store each Bin was created in, or, for Bins imported without one, by its code.
     const storeOf = new Map((masters.binInfo ?? []).map((b) => [b.code, b.store]));
-    const mine = (b: string) => storeOf.get(b) === store || (!storeOf.get(b) && b.startsWith(`${store}-`));
+    const mine = (b: string) => storeOf.get(b) === store;
     return [...bins.filter(mine), ...bins.filter((b) => !mine(b))];
-  }, [masters.bins, masters.binInfo, storeNames, store]);
+  }, [masters.binInfo, masters.warehouses, masters.aliases, storeNames, store, receipt?.warehouse, site.warehouseName]);
   // Bin Number as typed but not yet a Bin the server would accept. Every field saves as you type, and the
   // server refuses a Bin that isn't in the master — so "B", "BK", ... were each refused and the reload put the
   // empty saved value back over the typing. Held here instead, and saved the moment it names real Bins.

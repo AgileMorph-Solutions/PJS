@@ -8,7 +8,7 @@ import { missingRequired, type SupplierProfileValues } from "@anagroci/contract/
 import type { Check } from "./types.js";
 import { negativeBalanceRows, transferFlagRows } from "../juteBalance.js";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
-import { parseQty, storedFormulaMismatches } from "@anagroci/contract/domain/receiptMath";
+import { storedFormulaMismatches } from "@anagroci/contract/domain/receiptMath";
 import { legacyLotSeq, parseSiteId } from "@anagroci/contract/domain/ids";
 
 /** The number inside a lot, whether system-format (LOT-BKE-2026-0017) or still the workbook's bare 17. */
@@ -902,32 +902,6 @@ export const CHECKS: Check[] = [
     },
   },
   {
-    // Until Nov 2026 SACS was calculated as good + damp + torn, and stored_value_disagrees_with_formula above reported the
-    // rows that disagreed. SACS is now the count typed for the truck (good bags follow from it), so the formula is gone —
-    // but the real sheet's rows still disagree with their own parts, and that stays reported, never corrected.
-    // Measured: 44 Truck Reception rows.
-    id: "bag_total_disagrees_with_parts",
-    async run({ prisma }) {
-      const rows = await prisma.receipt.findMany({ include: RECEIPT_INCLUDE });
-      const affected: string[] = [];
-      for (const row of rows) {
-        const u = assembleStageData(row as Record<string, unknown>)["n-unload"] ?? {};
-        const [total, good, damp, torn] = ["SACS (bags)", "BON SACS (good bags)", "HUMID SACS (damp bags)", "Sacs déchirés (torn bags)"].map((l) => parseQty(u[l]));
-        if ([total, good, damp, torn].some((v) => v === undefined)) continue;
-        if (good! + damp! + torn! !== total) affected.push(`${row.id} (${total} vs ${good} + ${damp} + ${torn})`);
-      }
-      if (!affected.length) return null;
-      return {
-        id: "bag_total_disagrees_with_parts", severity: "warning",
-        title: "Bag totals that don't match good + damp + torn",
-        entity: "Receipt", affectedCount: affected.length, sampleIds: affected.slice(0, 5),
-        evidence:
-          "SACS (the bags on the truck) differs from good + damp + torn bags as recorded. The values are kept exactly as " +
-          "the workbook holds them; a mismatch is a question for whoever filled the original sheet.",
-      };
-    },
-  },
-  {
     // A Lot is issued on quality pass and never taken back — so a truck whose decision was later
     // changed to Fail still holds one. Not wrong, but worth a look.
     id: "rejected_receipt_holds_lot",
@@ -992,6 +966,51 @@ export const CHECKS: Check[] = [
           `${masters.length} Bin master row(s) and ${allocated.length} allocation(s) hold a store code (BKE-001, BKE-002…) — a ` +
           "warehouse code, not a place inside it. The client's point: a Bin is the physical location, e.g. BKE-002-BIN-012. " +
           "The Bin picker leaves store codes out and the API refuses a store as a new Bin; nothing already stored is rewritten.",
+      };
+    },
+  },
+  {
+    // 20 Nov 2026: a Bin with no warehouse is offered and accepted nowhere until an admin places it (Masters › Bins).
+    // The migration bins_owned_by_source placed the ones their source file names; these are what it couldn't.
+    id: "bin_without_warehouse",
+    async run({ prisma }) {
+      const bins = await prisma.bin.findMany({ where: { warehouseName: null }, select: { code: true }, orderBy: { code: "asc" } });
+      if (!bins.length) return null;
+      return {
+        id: "bin_without_warehouse", severity: "warning",
+        title: "Bins not assigned to a warehouse",
+        entity: "Bin", affectedCount: bins.length, sampleIds: bins.slice(0, 5).map((b) => b.code),
+        evidence:
+          "These Bins came from the workbooks without saying which warehouse they are in, and their name and source file " +
+          "don't say either. No warehouse can pick them until an admin sets their warehouse in Masters › Bins.",
+      };
+    },
+  },
+  {
+    // 20 Nov 2026: before bins were tied to a site, a Lot could be put in another site's Bin (a Bouaké Lot in BIN-000).
+    // Reported, never moved: the Lot's own record stays as it was entered.
+    id: "lot_in_other_sites_bin",
+    async run({ prisma }) {
+      const [warehouses, bins, allocations] = await Promise.all([
+        prisma.warehouse.findMany({ select: { name: true, site: true } }),
+        prisma.bin.findMany({ where: { warehouseName: { not: null } }, select: { code: true, warehouseName: true } }),
+        prisma.stageBinAllocation.findMany({ where: { binNumber: { not: null } }, select: { receiptId: true, binNumber: true, receipt: { select: { warehouse: true } } } }),
+      ]);
+      const siteOfName = new Map(warehouses.map((w) => [w.name, w.site ?? w.name]));
+      const siteOfBin = new Map(bins.map((b) => [b.code, siteOfName.get(b.warehouseName!) ?? b.warehouseName!]));
+      const affected = allocations.flatMap((a) => {
+        const site = siteOfName.get(a.receipt.warehouse ?? "") ?? a.receipt.warehouse;
+        const foreign = a.binNumber!.split(/\s*[/,]\s*/).map((b) => b.trim()).filter((b) => siteOfBin.has(b) && siteOfBin.get(b) !== site);
+        return foreign.length ? [`${a.receiptId} at ${site} (${foreign.join(", ")})`] : [];
+      });
+      if (!affected.length) return null;
+      return {
+        id: "lot_in_other_sites_bin", severity: "warning",
+        title: "Lots allocated to another warehouse's Bin",
+        entity: "Receipt", affectedCount: affected.length, sampleIds: affected.slice(0, 5),
+        evidence:
+          "The Bin these Lots were allocated to belongs to a different site. New allocations can only pick the truck's own " +
+          "site's Bins; these were entered before that, and are kept as entered.",
       };
     },
   },

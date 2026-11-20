@@ -73,6 +73,20 @@ export function transferDestinationLabel(t: Pick<TransferRequest, "toWarehouse" 
   return t.toStore ? `${t.toWarehouse} · ${t.toStore}` : t.toWarehouse;
 }
 
+/**
+ * Why a dispatch was refused when its truck is still out on another BKT (one BKT = one truck = one voyage), sent as the
+ * 422's `detail` — only to someone allowed to open that BKT. `sites` are the site names whose Transfers list holds it
+ * (sender's and destination's), so the page can link to it under a section the person may open.
+ */
+export interface TruckOnTheRoadDetail {
+  kind: "truck_on_the_road";
+  transferId: string;
+  sites: string[];
+}
+export const isTruckOnTheRoad = (d: unknown): d is TruckOnTheRoadDetail =>
+  typeof d === "object" && d !== null && (d as { kind?: unknown }).kind === "truck_on_the_road"
+  && typeof (d as { transferId?: unknown }).transferId === "string" && Array.isArray((d as { sites?: unknown }).sites);
+
 /** The client's four states. `status` (requested / dispatched / received) is the step; this is what a person reads. */
 export type TransferState = "requested" | "in_transit" | "closed" | "discrepancy";
 
@@ -130,9 +144,10 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
 
 /**
  * Each Lot's share of the truck's net at arrival. The truck is weighed once, so a Lot alone on it gets the
- * whole net; with several Lots the net is shared by the bags of each Lot counted off at arrival (team
- * decision, Nov 2026). `shared` marks a figure worked out that way, so it is never shown as if it were weighed.
- * Undefined while the truck hasn't arrived, and on a multi-Lot BKT received before bags per Lot were counted.
+ * whole net; with several Lots the net is shared by the bags of each Lot counted off at arrival, or — when only the
+ * truck's total was counted, as the client's receiving sheet records it (one row per truck; 20 Nov 2026) — by the bags
+ * each Lot was sent with. `shared` marks a figure worked out that way, so it is never shown as if it were weighed.
+ * Undefined while the truck hasn't arrived, or when neither count is known for every Lot.
  */
 export function lineNetAtArrival(
   t: Omit<TransferFacts, "lines"> & { lines: (TransferFacts["lines"][number] & { bagsReceived?: number | null })[] },
@@ -140,7 +155,8 @@ export function lineNetAtArrival(
   const net = transferVariance(t).netAtArrivalKg;
   if (net === null) return t.lines.map(() => undefined);
   if (t.lines.length === 1) return [{ kg: net, shared: false }];
-  const counts = t.lines.map((l) => l.bagsReceived ?? null);
+  const received = t.lines.map((l) => l.bagsReceived ?? null);
+  const counts = received.every((c) => c !== null) ? received : t.lines.map((l) => l.bags);
   const total = counts.reduce<number>((a, b) => a + (b ?? 0), 0);
   if (counts.some((c) => c === null) || total === 0) return t.lines.map(() => undefined);
   return counts.map((c) => ({ kg: round2((net * c!) / total), shared: true }));
