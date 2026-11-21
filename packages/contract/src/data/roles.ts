@@ -153,6 +153,15 @@ export function canSetPrice(role: Role): boolean {
   return role === "branch_manager" || role === "admin";
 }
 
+/**
+ * Who may read the warehouse-wide feeds a receipt page shows beside the truck: delivery plans, drying rounds and the linked
+ * records. The Branch Manager and QFS Officer see their receipts only (backend auth/policy.ts, which is the real gate and is
+ * tested against this), so their pages don't ask: every such request would come back 403.
+ */
+export function canReadWarehouseFeeds(role: Role): boolean {
+  return role === "admin" || role === "warehouse_incharge";
+}
+
 /** Admin and Warehouse Incharge are top of the hierarchy: their stage edits apply immediately (except fields hidden from them). */
 export function canWriteStageDirectly(role: Role): boolean {
   return role === "admin" || role === "warehouse_incharge";

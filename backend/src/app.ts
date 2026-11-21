@@ -80,6 +80,10 @@ export function buildApp() {
     if (code === "P2002") return reply.code(409).send({ error: "That value is already taken.", meta: (err as any).meta });
     if (code === "P2003") return reply.code(422).send({ error: "Referenced record does not exist.", meta: (err as any).meta });
     if (code === "P2025") return reply.code(404).send({ error: "Record not found." });
+    // A mistake in the request itself (a body that isn't valid JSON, too large, the wrong content type) comes with its own
+    // 4xx status from Fastify; answering 500 for it blames the server and fills the log with errors that aren't ours.
+    const status = (err as { statusCode?: number }).statusCode;
+    if (status && status >= 400 && status < 500) return reply.code(status).send({ error: (err as Error).message });
     reply.log.error(err);
     return reply.code(500).send({ error: "Internal server error" });
   });

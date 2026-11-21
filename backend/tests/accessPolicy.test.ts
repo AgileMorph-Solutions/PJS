@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { isAllowed } from "../src/auth/policy.js";
+import { canReadWarehouseFeeds, ROLES } from "@anagroci/contract/data/roles";
 
 // The default-deny guard: a new route must be listed in policy.ts before a Branch Manager or QFS
 // Officer can reach it. These pin what they can NOT do, which is what a careless edit would break.
@@ -66,5 +67,18 @@ describe("role access policy", () => {
     expect(isAllowed("branch_manager", "GET", "/api/my-suppliers")).toBe(true);
     expect(isAllowed("qfs_officer", "POST", "/api/supplier-requests")).toBe(false);
     expect(isAllowed("branch_manager", "POST", "/api/supplier-requests/x/approve")).toBe(false);
+  });
+});
+
+// The receipt page asks for these feeds only when canReadWarehouseFeeds says the role may have them. If the page and the
+// policy ever disagree, a role either gets a page with a hole in it or a console full of 403s.
+describe("warehouse feeds on the receipt page", () => {
+  const FEEDS = ["/api/delivery-plans", "/api/drying-batches", "/api/receipts/REC-BKE-2026-0001/links"];
+  it("are asked for exactly by the roles the policy lets read them", () => {
+    for (const { value: role } of ROLES) {
+      for (const path of FEEDS) {
+        expect(isAllowed(role, "GET", path), `${role} ${path}`).toBe(canReadWarehouseFeeds(role));
+      }
+    }
   });
 });

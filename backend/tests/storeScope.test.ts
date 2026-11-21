@@ -83,7 +83,7 @@ describe("a user assigned to a store", () => {
   });
 
   it("plans for their own store, and never sees a plan for the sibling store", async () => {
-    const plan = { supplierName: "SS Supplier", expectedArrivalDate: "2031-06-01", expectedDeliveryEnd: "2031-06-30" };
+    const plan = { supplierName: "SS Supplier", expectedQuantityKg: 1000, expectedArrivalDate: "2031-06-01", expectedDeliveryEnd: "2031-06-30" };
     const mine = await as("wiA", "POST", "/api/delivery-plans", plan);
     expect(mine.statusCode).toBe(201);
     expect(mine.json()).toMatchObject({ destinationWarehouse: SITE, destinationStore: A });
@@ -96,7 +96,7 @@ describe("a user assigned to a store", () => {
 });
 
 describe("Reception is per store: a truck and its delivery plan", () => {
-  const plan = { supplierName: "SS Supplier", expectedArrivalDate: "2031-07-01", expectedDeliveryEnd: "2031-07-30" };
+  const plan = { supplierName: "SS Supplier", expectedQuantityKg: 1000, expectedArrivalDate: "2031-07-01", expectedDeliveryEnd: "2031-07-30" };
 
   it("opening a truck from a store's plan files it at that store", async () => {
     const p = (await as("admin", "POST", "/api/delivery-plans", { ...plan, destinationWarehouse: SITE, destinationStore: A })).json();

@@ -160,6 +160,16 @@ async function checkStore(tx: Prisma.TransactionClient, site: string, store: str
   if (!row || row.site !== site) throw new ValidationError(`"${store}" isn't a store of ${site}.`);
 }
 
+/**
+ * What the plan is measured against: without an expected quantity a plan can never show "received 60%" or flag an excess, and it
+ * never reads as delivered by weight. A plan made earlier without one stays as it is until someone edits that field.
+ */
+function requiredQuantity(v: DeliveryPlanInput["expectedQuantityKg"]): Prisma.Decimal {
+  const q = quantity(v);
+  if (q === null || q.lte(0)) throw new ValidationError("A delivery plan needs an expected quantity (kg), more than zero.");
+  return q;
+}
+
 export async function createDeliveryPlan(input: DeliveryPlanInput) {
   const supplierName = input.supplierName?.trim();
   const expectedArrivalDate = input.expectedArrivalDate?.trim();
@@ -167,6 +177,7 @@ export async function createDeliveryPlan(input: DeliveryPlanInput) {
   if (!supplierName) throw new ValidationError("A delivery plan needs a supplier.");
   if (!expectedArrivalDate || yearOf(expectedArrivalDate) === undefined) throw new ValidationError("A delivery plan needs an expected arrival date (YYYY-MM-DD).");
   if (!destination) throw new ValidationError("A delivery plan needs a destination warehouse.");
+  const expectedQuantityKg = requiredQuantity(input.expectedQuantityKg);
   const end = windowEnd(expectedArrivalDate, input.expectedDeliveryEnd);
 
   const row = await prisma.$transaction(async (tx) => {
@@ -186,7 +197,7 @@ export async function createDeliveryPlan(input: DeliveryPlanInput) {
         plannedDeliveryDate: text(input.plannedDeliveryDate),
         supplierName,
         supplierCode: text(input.supplierCode),
-        expectedQuantityKg: quantity(input.expectedQuantityKg),
+        expectedQuantityKg,
         expectedTruckType: text(input.expectedTruckType),
         expectedTrucks: trucks(input.expectedTrucks),
         expectedOrigin: text(input.expectedOrigin),
@@ -230,7 +241,11 @@ export async function updateDeliveryPlan(id: string, patch: DeliveryPlanInput, a
   }
   if (patch.plannedDeliveryDate !== undefined) data.plannedDeliveryDate = text(patch.plannedDeliveryDate);
   if (patch.supplierCode !== undefined) data.supplierCode = text(patch.supplierCode);
-  if (patch.expectedQuantityKg !== undefined) data.expectedQuantityKg = quantity(patch.expectedQuantityKg);
+  // An older plan without a quantity can be saved with the field still blank (the form sends it back as it found it); once it
+  // has one, it can be changed but not emptied.
+  if (patch.expectedQuantityKg !== undefined && !(existing.expectedQuantityKg === null && quantity(patch.expectedQuantityKg) === null)) {
+    data.expectedQuantityKg = requiredQuantity(patch.expectedQuantityKg);
+  }
   if (patch.expectedTruckType !== undefined) data.expectedTruckType = text(patch.expectedTruckType);
   if (patch.expectedTrucks !== undefined) data.expectedTrucks = trucks(patch.expectedTrucks);
   if (patch.expectedOrigin !== undefined) {

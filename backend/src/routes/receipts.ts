@@ -137,7 +137,8 @@ export async function receiptRoutes(app: FastifyInstance) {
 
   app.get("/api/receipts/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
-    return requireReceipt(id, reply, req);
+    // requireReceipt has already sent the 404 when there is no receipt; returning its null would make Fastify send a second reply.
+    return (await requireReceipt(id, reply, req)) ?? reply;
   });
 
   app.post("/api/receipts", async (req, reply) => {

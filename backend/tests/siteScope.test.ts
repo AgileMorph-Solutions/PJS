@@ -18,12 +18,13 @@ import { resolveSite } from "../src/domain/site.js";
 import { listReceipts } from "../src/services/receipts.js";
 import { listDryingBatches } from "../src/services/dryingBatches.js";
 import { getReceiptLinks } from "../src/services/receiptLinks.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
 describe("resolveSite", () => {
-  it("expands a site to itself plus its stores and aliases, deduped", async () => {
+  it.skipIf(!WORKBOOK_DATA)("expands a site to itself plus its stores and aliases, deduped", async () => {
     const bouake = await resolveSite("BOUAKE");
     expect(bouake).toContain("BOUAKE");
     expect(bouake).toEqual(expect.arrayContaining(["BKE-001", "BKE-002", "BKE-003"]));
@@ -40,7 +41,7 @@ describe("resolveSite", () => {
 });
 
 describe("site scoping partitions the unscoped result", () => {
-  it("receipts: BOUAKE + YAKRO FACTORY sum to the unscoped total with no overlap", async () => {
+  it.skipIf(!WORKBOOK_DATA)("receipts: BOUAKE + YAKRO FACTORY sum to the unscoped total with no overlap", async () => {
     const [bouake, yakro] = await Promise.all([resolveSite("BOUAKE"), resolveSite("YAKRO FACTORY")]);
     const [all, atBouake, atYakro] = await Promise.all([
       listReceipts(), listReceipts(bouake), listReceipts(yakro),
@@ -53,7 +54,7 @@ describe("site scoping partitions the unscoped result", () => {
     expect(overlap.length).toBe(0);
   });
 
-  it("drying batches: Bouaké resolves 57 rows, Yakro resolves none — 81 rows carry no site at all", async () => {
+  it.skipIf(!WORKBOOK_DATA)("drying batches: Bouaké resolves 57 rows, Yakro resolves none — 81 rows carry no site at all", async () => {
     // DryingBatch replaces DryingJob as the site-scoped drying source (see dryingBatches.ts's
     // header). Its warehouseSite column is genuinely blank on 81 of 138 rows — a real gap in the
     // "Drying Batch" sheet's central-side rows — so this does NOT partition cleanly the way

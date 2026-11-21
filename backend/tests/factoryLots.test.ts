@@ -43,6 +43,8 @@ async function cleanup() {
   await prisma.productionBatch.deleteMany({ where: { warehouse: SITE } });
   await prisma.receipt.deleteMany({ where: { warehouse: SITE } });
   await prisma.bin.deleteMany({ where: { code: { startsWith: "FLT-" } } });
+  // An upload keeps who made it, so these users can't be deleted while one stands.
+  await prisma.productionWorkbookUpload.deleteMany({ where: { uploadedBy: { username: { startsWith: "flt-" } } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "flt-" } } });
   await prisma.warehouse.deleteMany({ where: { name: SITE } });
 }

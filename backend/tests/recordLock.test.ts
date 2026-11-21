@@ -8,6 +8,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setBranch, setStageFields, patchReceipt } from "../src/services/receipts.js";
+import { truckToGrn as truckThroughPhases } from "./helpers/truckToGrn.js";
 import { LOCKED_MESSAGE } from "@anagroci/contract/domain/recordLock";
 
 const prisma = new PrismaClient();
@@ -33,7 +34,7 @@ beforeAll(async () => {
   await cleanup();
   await prisma.warehouse.create({ data: { name: A, kind: "REGIONAL_CENTRAL", type: "UNIT", code: "LCK" } });
   await prisma.warehouse.create({ data: { name: "LOCK-FACTORY", kind: "FACTORY" } });
-  await prisma.bin.create({ data: { code: "LOCK-BIN-1" } });
+  await prisma.bin.create({ data: { code: "LOCK-BIN-1", warehouseName: A } });
   await login("admin", "admin");
   await login("wi", "warehouse_incharge");
 });
@@ -82,6 +83,8 @@ describe("dates that fill themselves", () => {
     await setStageFields(id, "n-gate", { "WH LOCATION": A });
     await setStageFields(id, "n-bin", { "Bin Number": "LOCK-BIN-1" });
     const wi = await prisma.user.findFirstOrThrow({ where: { username: "lock-wi" } });
+    // The Activity ledger opens only once the GRN is complete (the phase order).
+    await setStageFields(id, "n-grn", { [GRN]: "30000", PRICE: "470" });
     await setStageFields(id, "n-ledger", { Quantity: "120" }, { actor: { id: wi.id, via: "direct" } });
     const r = await get(id);
     expect(r.stageData["n-ledger"]).toMatchObject({ "Date/time": today(), Location: A, "Linked Lot/Bin": `${r.lotNo} / LOCK-BIN-1`, "Performed by": "wi" });
@@ -131,10 +134,13 @@ describe("bin finalised", () => {
 
 describe("record locking", () => {
   it("locks when the GRN quantity and the price are both in, whichever comes first", async () => {
+    const wiUser = await prisma.user.findFirstOrThrow({ where: { username: "lock-wi" } });
+    // Every phase before the GRN done as a person does it: the GRN's own writes are gated on them.
+    const truckToGrn = () => truckThroughPhases({ warehouse: A, actor: { id: wiUser.id, displayName: "wi" }, bin: "LOCK-BIN-1" });
     const quantityFirst = await truckToGrn();
     await setStageFields(quantityFirst, "n-grn", { [GRN]: "30000" });
     expect((await get(quantityFirst)).lockedAt).toBeUndefined(); // the price is still to come, so the Branch Manager isn't shut out
-    await setStageFields(quantityFirst, "n-grn", { PRICE: "470" }, { actor: { id: (await prisma.user.findFirstOrThrow({ where: { username: "lock-wi" } })).id, via: "approval" } });
+    await setStageFields(quantityFirst, "n-grn", { PRICE: "470" }, { actor: { id: wiUser.id, via: "approval" } });
     const locked = await get(quantityFirst);
     expect(locked.lockedAt).toBeTruthy();
     expect(locked.lockedBy).toBe("wi");

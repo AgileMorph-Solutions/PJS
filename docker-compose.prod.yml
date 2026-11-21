@@ -51,6 +51,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      # Traefik serves this only over HTTPS, so the session cookie is marked Secure and never travels over plain HTTP.
+      COOKIE_SECURE: "true"
     depends_on:
       db:
         condition: service_healthy

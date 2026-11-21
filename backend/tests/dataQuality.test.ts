@@ -7,12 +7,13 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { scanAll } from "../src/domain/dataQuality/index.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
 describe("data-quality audit", () => {
-  it("reports the known findings with their measured counts", async () => {
+  it.skipIf(!WORKBOOK_DATA)("reports the known findings with their measured counts", async () => {
     const { checks } = await scanAll();
     const by = Object.fromEntries(checks.map((c) => [c.id, c]));
 
@@ -105,7 +106,7 @@ describe("data-quality audit", () => {
     expect(by["production_issue_btm_not_in_production_master"]?.affectedCount).toBe(8);
   });
 
-  it("reports what the client's Oct 2026 feedback found in the real data, with measured counts", async () => {
+  it.skipIf(!WORKBOOK_DATA)("reports what the client's Oct 2026 feedback found in the real data, with measured counts", async () => {
     const { checks } = await scanAll();
     const by = Object.fromEntries(checks.map((c) => [c.id, c]));
     // The 3 stores BKE-001/002/003 that seed/bins.json built the Bin master from — "BKE-001" isn't a place in a store.

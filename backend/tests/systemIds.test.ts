@@ -17,6 +17,7 @@ import { createTransfer, addTransferLines, dispatchTransfer, receiveTransfer, ge
 import { nextLotNumber, nextTransferId } from "../src/services/ids.js";
 import { setWarehouseCode } from "../src/services/masters.js";
 import { ValidationError } from "../src/domain/validation.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 const SITE = "SYSIDTEST-SITE";
@@ -136,7 +137,7 @@ describe("Lot Number — issued when the truck passes quality", () => {
     await expect(patchReceipt(id, { lotNo: "LOT-X-1" })).rejects.toThrow(/issued by the system/);
   });
 
-  it("continues after the 2026 workbook's own lots, so it can't collide with legacy Lot 1…454", async () => {
+  it.skipIf(!WORKBOOK_DATA)("continues after the 2026 workbook's own lots, so it can't collide with legacy Lot 1…454", async () => {
     // Real data: Bouaké's discharge sheet holds Lot 1..454 for 2026, as bare integers until the
     // renumber has run and as LOT-BKE-2026-NNNN after it. Either way the next one must be past them.
     const next = await nextLotNumber(prisma, "BOUAKE", "2026-06-01");
@@ -210,7 +211,7 @@ describe("Delivery Plan", () => {
   });
 
   it("reads as overdue once its expected date has passed with no truck", async () => {
-    const late = await createDeliveryPlan({ supplierName: "Late Supplier", expectedArrivalDate: "2025-01-10", destinationWarehouse: SITE });
+    const late = await createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "Late Supplier", expectedArrivalDate: "2025-01-10", destinationWarehouse: SITE });
     expect(late.id).toBe(`DP-${CODE}-2025-001`);
     expect(late).toMatchObject({ status: "planned", overdue: true }); // late and still nothing: both facts, not one label
   });
@@ -236,9 +237,9 @@ describe("Delivery Plan", () => {
   });
 
   it("needs a supplier, a date and a warehouse that has a code", async () => {
-    await expect(createDeliveryPlan({ expectedArrivalDate: D, destinationWarehouse: SITE })).rejects.toThrow(/supplier/);
-    await expect(createDeliveryPlan({ supplierName: "S", expectedArrivalDate: "soon", destinationWarehouse: SITE })).rejects.toThrow(/date/);
-    await expect(createDeliveryPlan({ supplierName: "S", expectedArrivalDate: D, destinationWarehouse: NOCODE })).rejects.toThrow(/no code yet/);
+    await expect(createDeliveryPlan({ expectedQuantityKg: 1000, expectedArrivalDate: D, destinationWarehouse: SITE })).rejects.toThrow(/supplier/);
+    await expect(createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "S", expectedArrivalDate: "soon", destinationWarehouse: SITE })).rejects.toThrow(/date/);
+    await expect(createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "S", expectedArrivalDate: D, destinationWarehouse: NOCODE })).rejects.toThrow(/no code yet/);
   });
 });
 
@@ -352,7 +353,7 @@ describe("Delivery Plan against its trucks", () => {
   });
 
   it("an overdue plan past its window reads as overdue only while undelivered", async () => {
-    const p = await createDeliveryPlan({ supplierName: "Old", expectedArrivalDate: "2024-01-01", expectedDeliveryEnd: "2024-02-01", expectedTrucks: 1, destinationWarehouse: SITE });
+    const p = await createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "Old", expectedArrivalDate: "2024-01-01", expectedDeliveryEnd: "2024-02-01", expectedTrucks: 1, destinationWarehouse: SITE });
     expect(p).toMatchObject({ status: "planned", overdue: true });
     await arrive(p.id, "2024-01-15", {});
     expect(await getDeliveryPlan(p.id)).toMatchObject({ status: "delivered", overdue: false });
@@ -406,7 +407,7 @@ describe("Transfer Request", () => {
     const nuts = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, nutCount: 170 }));
     expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0", lines: nuts })).status).toBe("dispatched");
     await expect(dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
-    await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test" }, update: {} });
+    await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test", warehouseName: "YAKRO FACTORY" }, update: { warehouseName: "YAKRO FACTORY" } }); // a Bin of the receiving warehouse: one with no warehouse is refused
     try {
       const lines = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, binCode: "SYSIDS-TEST-BIN" }));
       expect((await receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300, lines })).status).toBe("received");
@@ -419,7 +420,7 @@ describe("Transfer Request", () => {
     expect((await getTransfer(id))!.status).toBe("received");
   });
 
-  it("continues after the 2026 dispatch sheet's own BKT numbers, so it can't collide with BKT001…BKT-414", async () => {
+  it.skipIf(!WORKBOOK_DATA)("continues after the 2026 dispatch sheet's own BKT numbers, so it can't collide with BKT001…BKT-414", async () => {
     // Real data: 413 distinct voyages up to BKT-414 — as the workbook wrote them until the renumber
     // has run, as BKT-2026-NNN after it. Either way the next one is past them.
     const next = await nextTransferId(prisma, "2026-09-01");
@@ -448,7 +449,7 @@ describe("Warehouse code in the master", () => {
     await expect(setWarehouseCode(SITE, null)).rejects.toThrow(/already printed in issued IDs/);
   });
 
-  it("is unique, and not settable on a store", async () => {
+  it.skipIf(!WORKBOOK_DATA)("is unique, and not settable on a store", async () => {
     await expect(setWarehouseCode(NOCODE, CODE)).rejects.toMatchObject({ code: "P2002" });
     await expect(setWarehouseCode("BKE-002", "ZZ1")).rejects.toThrow(/is a store of/);
   });

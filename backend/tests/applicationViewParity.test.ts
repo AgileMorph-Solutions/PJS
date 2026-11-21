@@ -25,6 +25,7 @@ import { applyApplicationView, type ApplicationViewSeed } from "../src/services/
 import { getDeliveryPlan } from "../src/services/deliveryPlans.js";
 import { getReceiptPlanInfo } from "../src/services/receiptPlanInfo.js";
 import { assembleBranches, assembleStageData, RECEIPT_INCLUDE } from "../src/stageStore.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 class Rollback extends Error {}
@@ -64,7 +65,7 @@ async function receiptOf(tx: Tx, v: ApplicationViewSeed["receipts"][number]) {
 }
 
 describe("the workbook is applied without inventing or overwriting anything", () => {
-  it("adds its 10 plans and every truck it names, links the same-site trucks, and says which it could not", async () => {
+  it.skipIf(!WORKBOOK_DATA)("adds its 10 plans and every truck it names, links the same-site trucks, and says which it could not", async () => {
     await applied(async (tx, r) => {
       expect(r).toMatchObject({ plansAdded: 10, matched: 76, unmatched: [], ambiguous: [], rejectedMarked: 18, grnFilled: 58 });
       expect(r.conflicts).toEqual([]);
@@ -83,7 +84,7 @@ describe("the workbook is applied without inventing or overwriting anything", ()
     });
   });
 
-  it("does not take the workbook's funding placeholder as a reference, nor invent a store for plan 004", async () => {
+  it.skipIf(!WORKBOOK_DATA)("does not take the workbook's funding placeholder as a reference, nor invent a store for plan 004", async () => {
     await applied(async (tx) => {
       const plans = await tx.deliveryPlan.findMany({ where: { id: { in: SEED.plans.map((p) => p.id) } } });
       expect(plans.every((p) => p.fundingReference === null)).toBe(true);
@@ -96,7 +97,7 @@ describe("the workbook is applied without inventing or overwriting anything", ()
     });
   });
 
-  it("marks only the 18 trucks the workbook rejects — not the other 257 whose remarks also say REJECT", async () => {
+  it.skipIf(!WORKBOOK_DATA)("marks only the 18 trucks the workbook rejects — not the other 257 whose remarks also say REJECT", async () => {
     await applied(async (tx) => {
       const rejected = await tx.receiptBranch.count({ where: { stageId: "n-qfs", branchId: "fail" } });
       expect(rejected).toBe(18);
@@ -107,7 +108,7 @@ describe("the workbook is applied without inventing or overwriting anything", ()
 });
 
 describe("Delivery Plans: the app's derived totals against the client's SUMIFS / COUNTIFS", () => {
-  it("every plan's received kg, arrivals and accepted trucks match once the trucks received at the other site are counted back in", async () => {
+  it.skipIf(!WORKBOOK_DATA)("every plan's received kg, arrivals and accepted trucks match once the trucks received at the other site are counted back in", async () => {
     await applied(async (tx, report) => {
       const skipped = new Set(report.planLinkSkipped.map((s) => s.clientReceiptId));
       for (const plan of EXPECTED.plans) {
@@ -128,7 +129,7 @@ describe("Delivery Plans: the app's derived totals against the client's SUMIFS /
     });
   });
 
-  it("reads the plans the workbook gets wrong by its own rows correctly: the cancelled one that kept receiving, the over-delivered one", async () => {
+  it.skipIf(!WORKBOOK_DATA)("reads the plans the workbook gets wrong by its own rows correctly: the cancelled one that kept receiving, the over-delivered one", async () => {
     await applied(async (tx) => {
       // 007 is CANCELLED and trucks arrived anyway: each is flagged, and the plan doesn't quietly read delivered.
       const p7 = (await getDeliveryPlan("DP-BKE-2026-007", tx))!;
@@ -145,7 +146,7 @@ describe("Delivery Plans: the app's derived totals against the client's SUMIFS /
 });
 
 describe("every truck: the outcome and the weights", () => {
-  it("a rejected truck derives as rejected, an accepted one as GRN-completed or beyond, and Net = Gross − bags on all 58", async () => {
+  it.skipIf(!WORKBOOK_DATA)("a rejected truck derives as rejected, an accepted one as GRN-completed or beyond, and Net = Gross − bags on all 58", async () => {
     await applied(async (tx) => {
       const byClientId = new Map(EXPECTED.trucks.map((t) => [t.clientReceiptId, t]));
       let accepted = 0, rejected = 0;
@@ -170,7 +171,7 @@ describe("every truck: the outcome and the weights", () => {
     });
   });
 
-  it("the trucks the client calls UNPLANNED are unplanned here; the only ones that differ are the 10 received at the other site", async () => {
+  it.skipIf(!WORKBOOK_DATA)("the trucks the client calls UNPLANNED are unplanned here; the only ones that differ are the 10 received at the other site", async () => {
     await applied(async (tx, report) => {
       const skipped = new Set(report.planLinkSkipped.map((s) => s.clientReceiptId));
       const byClientId = new Map(EXPECTED.trucks.map((t) => [t.clientReceiptId, t]));

@@ -64,6 +64,23 @@ describe("delivery plan routes", () => {
     expect(res.json()).toMatchObject({ id: "DP-DPR1-2031-001", destinationWarehouse: SITE, status: "planned", progress: { arrivals: 0, remainingKg: 40000 } });
   });
 
+  it("needs an expected quantity to make a plan, and won't let it be emptied afterwards; an older plan without one can still be edited", async () => {
+    const base = { supplierName: "Qty Supplier", expectedArrivalDate: "2031-07-01" };
+    for (const bad of [undefined, "", "0", null]) {
+      const res = await as("wi", "POST", "/api/delivery-plans", { ...base, expectedQuantityKg: bad });
+      expect(res.statusCode, `quantity ${String(bad)}`).toBe(422);
+      expect(res.json().error).toMatch(/expected quantity/i);
+    }
+    expect((await as("wi", "PATCH", `/api/delivery-plans/${planId}`, { expectedQuantityKg: "" })).statusCode).toBe(422);
+    expect((await as("wi", "PATCH", `/api/delivery-plans/${planId}`, { expectedQuantityKg: 45000 })).statusCode).toBe(200);
+
+    const older = (await as("wi", "POST", "/api/delivery-plans", { ...base, expectedQuantityKg: 1000 })).json().id;
+    await prisma.deliveryPlan.update({ where: { id: older }, data: { expectedQuantityKg: null } }); // as a plan made before the rule
+    const edit = await as("wi", "PATCH", `/api/delivery-plans/${older}`, { expectedQuantityKg: null, remarks: "still editable" });
+    expect(edit.statusCode).toBe(200);
+    expect(edit.json().remarks).toBe("still editable");
+  });
+
   it("a warehouse can't read or change another warehouse's plan", async () => {
     expect((await as("wiOther", "GET", `/api/delivery-plans/${planId}`)).statusCode).toBe(403);
     expect((await as("wiOther", "PATCH", `/api/delivery-plans/${planId}`, { remarks: "x" })).statusCode).toBe(403);

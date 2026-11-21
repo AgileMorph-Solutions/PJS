@@ -12,6 +12,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setStageFields } from "../src/services/receipts.js";
+import { ensureBin, truckToGrn } from "./helpers/truckToGrn.js";
 import type { FieldChangeRecord } from "@anagroci/contract/types/receipt";
 
 const prisma = new PrismaClient();
@@ -24,6 +25,7 @@ const cookies: Record<string, string> = {};
 const ids: Record<string, string> = {};
 let receiptA: string; // BOUAKE, the receipt the flows run on
 let receiptB: string; // BOUAKE, the QFS jute-check flows run on
+let priced: string; // BOUAKE, a truck through every phase to its GRN, so the Branch Manager can price it
 const createdReceipts: string[] = [];
 
 async function login(username: string) {
@@ -44,7 +46,9 @@ async function mkUser(key: string, role: string, warehouse: string | null) {
 }
 
 async function cleanup() {
-  await prisma.receipt.deleteMany({ where: { id: { in: createdReceipts } } });
+  // Trucks the shared helper walked through the phases are found by its vehicle prefix too, so a run that stopped half-way leaves none behind.
+  await prisma.receipt.deleteMany({ where: { OR: [{ id: { in: createdReceipts } }, { warehouse: "BOUAKE", vehicleNo: { startsWith: "TTG" } }] } });
+  await prisma.bin.deleteMany({ where: { code: "BOUAKE-BIN-T1" } });
   await prisma.supplierRequest.deleteMany({ where: { requestedBy: { username: { startsWith: P } } } });
   // assignedById has no cascade: an assigner can't be deleted while their assignments remain.
   await prisma.branchManagerSupplier.deleteMany({ where: { OR: [{ user: { username: { startsWith: P } } }, { assignedBy: { username: { startsWith: P } } }] } });
@@ -61,11 +65,11 @@ beforeAll(async () => {
   await mkUser("bm", "branch_manager", "BOUAKE");
   await mkUser("qfs", "qfs_officer", "BOUAKE");
 
-  for (const key of ["a", "b"]) {
-    const r = await createReceipt("BOUAKE");
-    createdReceipts.push(r.id);
-    if (key === "a") receiptA = r.id; else receiptB = r.id;
-  }
+  receiptA = (await createReceipt("BOUAKE")).id;
+  createdReceipts.push(receiptA);
+  // receiptB takes the QFS jute-check flows, whose bag counts open only after the Pass (the phase order).
+  receiptB = await truckToGrn({ warehouse: "BOUAKE", actor: { id: ids.admin! }, bin: "", supplierName: "UM Test Supplier", upTo: "pass" });
+  createdReceipts.push(receiptB);
   await setStageFields(receiptA, "n-gate", { "VEHICLE NO.": "GATE-1" });
 });
 afterAll(async () => {
@@ -257,8 +261,11 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
   });
 
   it("the Branch Manager's price goes straight onto the truck, audited as theirs", async () => {
-    expect((await as(P + "bm", "PUT", `/api/receipts/${receiptA}/price`, { price: "470" })).statusCode).toBe(200);
-    const c = await prisma.stageFieldChange.findFirst({ where: { receiptId: receiptA, label: "PRICE" } });
+    // The price is the GRN's, and the GRN opens only after the phases before it.
+    priced = await truckToGrn({ warehouse: "BOUAKE", actor: { id: ids.admin! }, bin: await ensureBin(prisma, "BOUAKE"), lbaCode: SUPPLIER, supplierName: "UM Test Supplier" });
+    createdReceipts.push(priced);
+    expect((await as(P + "bm", "PUT", `/api/receipts/${priced}/price`, { price: "470" })).statusCode).toBe(200);
+    const c = await prisma.stageFieldChange.findFirst({ where: { receiptId: priced, label: "PRICE" } });
     expect(c).toMatchObject({ via: "direct", userId: ids.bm, newValue: "470" });
   });
 
@@ -266,7 +273,8 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     const res = await as(P + "admin", "GET", `/api/receipts/${receiptA}/field-changes`);
     expect(res.statusCode).toBe(200);
     const rows = res.json() as FieldChangeRecord[];
-    expect(rows.find((r) => r.label === "PRICE")).toMatchObject({ by: "bm", oldValue: null, newValue: "470", via: "direct" });
+    const pricedRows = (await as(P + "admin", "GET", `/api/receipts/${priced}/field-changes`)).json() as FieldChangeRecord[];
+    expect(pricedRows.find((r) => r.label === "PRICE")).toMatchObject({ by: "bm", oldValue: null, newValue: "470", via: "direct" });
     expect(rows.find((r) => r.label === "FICHE" && r.newValue === "F-101")).toMatchObject({ by: "wi", oldValue: "F-100", approvedBy: null });
     // An approved form's values are the submitter's, not the approver's: the approver is named separately.
     expect(rows.find((r) => r.label === "VEHICLE NO.")).toMatchObject({ by: "bm", approvedBy: "wi", via: "approval", newValue: "TRUCK-42" });
@@ -282,6 +290,9 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     // The price must not surface under any other label either. Compared value by value, not by searching the body:
     // row ids and millisecond timestamps can contain "470" by chance.
     expect(rows.filter((r) => r.oldValue === "470" || r.newValue === "470")).toEqual([]);
+    const pricedRows = (await as(P + "wi", "GET", `/api/receipts/${priced}/field-changes`)).json() as FieldChangeRecord[];
+    expect(pricedRows.filter((r) => r.stageId === "n-grn" && (r.label === "PRICE" || r.label === "AMOUNT"))).toEqual([]);
+    expect(pricedRows.filter((r) => r.oldValue === "470" || r.newValue === "470")).toEqual([]);
   });
 
   it("field history is closed to the narrow roles and to another warehouse", async () => {
@@ -328,11 +339,9 @@ describe("QFS Officer quality analysis", () => {
   const quality = { "Final moisture (%)": "10.3", "Final nut count": "165" };
 
   beforeAll(async () => {
-    receiptId = (await createReceipt("BOUAKE")).id;
+    // Bag counts open only once the truck has passed quality (the phase order), so this one has: arrival, weight and the Pass done.
+    receiptId = await truckToGrn({ warehouse: "BOUAKE", actor: { id: ids.admin! }, bin: "", lbaCode: SUPPLIER, supplierName: "UM Test Supplier", upTo: "pass" });
     createdReceipts.push(receiptId);
-    // Reached QFS: gate + supplier docs done, no decision yet.
-    await setStageFields(receiptId, "n-gate", { "VEHICLE NO.": "QFS-1" });
-    await setStageFields(receiptId, "n-verify", { "LBA CODE": SUPPLIER });
   });
 
   it("takes the measurements together with the bag counts in one submission", async () => {
@@ -343,24 +352,22 @@ describe("QFS Officer quality analysis", () => {
     submissionId = res.json().id;
   });
 
-  it("applies the measurements on approval but records no Pass/Fail decision", async () => {
+  it("applies the measurements on approval but changes no Pass/Fail decision", async () => {
     const before = (await as(P + "wi", "GET", `/api/receipts/${receiptId}`)).json();
-    expect(before.stageData["n-qfs"]).toBeUndefined();
+    expect(before.stageData["n-qfs"]).not.toMatchObject(quality);
 
     expect((await as(P + "wi", "POST", `/api/submissions/${submissionId}/approve`)).statusCode).toBe(200);
     const after = (await as(P + "wi", "GET", `/api/receipts/${receiptId}`)).json();
     expect(after.stageData["n-qfs"]).toMatchObject(quality);
     // Approval wrote the three counts; the total is the system's own sum of them.
     expect(after.stageData["n-unload"]["SACS (bags)"]).toBe("478");
-    // The decision is the Warehouse Incharge's: nothing here sets it.
-    expect(after.branches["n-qfs"]).toBeUndefined();
+    // The decision is the Warehouse Incharge's: the approval leaves the one they took as it was.
+    expect(after.branches["n-qfs"]).toBe(before.branches["n-qfs"]);
   });
 
   it("records the cut-test grams, and KOR then follows them when the Incharge approves", async () => {
-    const id = (await createReceipt("BOUAKE")).id;
+    const id = await truckToGrn({ warehouse: "BOUAKE", actor: { id: ids.admin! }, bin: "", lbaCode: SUPPLIER, supplierName: "UM Test Supplier", upTo: "weight" });
     createdReceipts.push(id);
-    await setStageFields(id, "n-gate", { "VEHICLE NO.": "QFS-2" });
-    await setStageFields(id, "n-verify", { "LBA CODE": SUPPLIER });
     const grams = { "Sample – Good Kernel (g)": "270", "Sample – Immature (g)": "30", "Sample – Spotted (g)": "20", "Sample – Void (g)": "12" };
     const res = await as(P + "qfs", "POST", `/api/receipts/${id}/submissions`, { values: { "n-qfs": { "Final moisture (%)": "10.3", ...grams } } });
     expect(res.statusCode).toBe(201);
