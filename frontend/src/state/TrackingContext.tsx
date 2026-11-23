@@ -5,6 +5,8 @@ import type { ReceiptRecord } from "../types/receipt";
 import { deriveStatus } from "../domain/receiptStatus";
 import { api, ApiError } from "../repository/api";
 import { useLoaded } from "./useLoaded";
+import { useMe } from "./AuthContext";
+import { canReadWarehouseFeeds } from "@anagroci/contract/data/roles";
 import { removeKey, LEGACY_STATE_KEY } from "../repository/storage";
 import type { LedgerEntries, LedgerRow } from "../repository/juteRepo";
 import type { Masters, Supplier } from "../repository/mastersRepo";
@@ -287,7 +289,9 @@ export function useDryingJobs(warehouse?: string) {
 export function useDeliveryPlans(warehouse?: string) {
   const [plans, setPlans] = useState<import("@anagroci/contract/types/receipt").DeliveryPlan[]>([]);
   const [loading, setLoading] = useState(true);
-  const refetch = useCallback(() => api.listDeliveryPlans(warehouse).then(setPlans).catch(() => {}), [warehouse]);
+  // A role that may not read plans (Branch Manager, QFS Officer) doesn't ask: the answer would only be a 403.
+  const allowed = canReadWarehouseFeeds(useMe().role);
+  const refetch = useCallback(() => (allowed ? api.listDeliveryPlans(warehouse).then(setPlans).catch(() => {}) : Promise.resolve()), [warehouse, allowed]);
   useEffect(() => {
     setLoading(true);
     void refetch().finally(() => setLoading(false));
@@ -351,9 +355,10 @@ export function useWarehouseDispatches(warehouse?: string) {
 export function useDryingBatches(warehouse?: string) {
   const [batches, setBatches] = useState<import("../repository/api").DryingBatch[]>([]);
   const [loading, setLoading] = useState(true);
+  const allowed = canReadWarehouseFeeds(useMe().role);
   const refetch = useCallback(() => {
-    return api.listDryingBatches(warehouse).then(setBatches).catch(() => {});
-  }, [warehouse]);
+    return allowed ? api.listDryingBatches(warehouse).then(setBatches).catch(() => {}) : Promise.resolve();
+  }, [warehouse, allowed]);
   useEffect(() => {
     setLoading(true);
     void refetch().finally(() => setLoading(false));
@@ -549,8 +554,9 @@ export function useReceiptLinks(receiptId: string | undefined) {
   const [links, setLinks] = useState<import("../repository/api").ReceiptLinks | null>(null);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const allowed = canReadWarehouseFeeds(useMe().role);
   useEffect(() => {
-    if (!receiptId) { setLinks(null); setLoading(false); return; }
+    if (!receiptId || !allowed) { setLinks(null); setLoading(false); return; }
     let alive = true;
     setLoading(true);
     api.receiptLinks(receiptId)
@@ -558,7 +564,7 @@ export function useReceiptLinks(receiptId: string | undefined) {
       .catch(() => { if (alive) setLinks(null); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [receiptId, tick]);
+  }, [receiptId, allowed, tick]);
   /** Reads the links again, for after a write that adds a linked row (a drying started from the receipt). */
   const refetch = useCallback(() => setTick((n) => n + 1), []);
   return { links, loading, refetch };

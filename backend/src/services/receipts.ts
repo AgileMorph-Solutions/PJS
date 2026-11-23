@@ -33,6 +33,7 @@ import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/rol
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
 import { planFitProblem } from "./receiptPlanInfo.js";
 import { assertKnownOrigin } from "./masters.js";
+import { assertFicheNotOnAnotherTruck, withChoiceValues } from "./stageValueRules.js";
 import { resolveSite } from "../domain/site.js";
 
 type Tx = Prisma.TransactionClient;
@@ -221,6 +222,10 @@ export async function applyStageFields(
     if (stageId === "n-bin" && (current["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError(BIN_FINALISED_MESSAGE);
     const ruled = isPersonEdit(opts, meta?.source);
     if (ruled) assertStageOpen(stageGate({ stageData: current, branches: await branchesOf(tx, id) }, stageId));
+    if (ruled) {
+      fields = withChoiceValues(stageId, fields, current[stageId], [WAREHOUSE_TYPE]);
+      if (stageId === "n-verify") await assertFicheNotOnAnotherTruck(tx, id, meta?.warehouse, fields, current["n-verify"]);
+    }
     // A field the step carries but the person left blank fills itself (contract data/autoFields.ts), whatever route the write came by.
     if (AUTO_FIELDS[stageId]) fields = { ...fields, ...autoFill(stageId, fields, current[stageId], await autoFillContext(tx, meta, current, opts)) };
     if (stageId === "n-gate") fields = await withWarehouseType(tx, fields, current["n-gate"]);

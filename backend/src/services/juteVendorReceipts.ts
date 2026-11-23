@@ -53,6 +53,15 @@ export async function createVendorReceipt(input: VendorReceiptInput, warehouse: 
     if (!(await tx.warehouse.findUnique({ where: { name: warehouse }, select: { name: true } }))) {
       throw new ValidationError(`Warehouse "${warehouse}" isn't in the warehouse master.`);
     }
+    // A delivery note is the vendor's own number for one delivery: entering it twice counts the same bags into the
+    // warehouse stock twice, and the balance (which the ledgers are reconciled against) goes wrong with it.
+    const vendorName = input.vendorName!.trim();
+    const deliveryNoteNo = input.deliveryNoteNo!.trim();
+    const dup = await tx.juteVendorReceipt.findFirst({
+      where: { vendorName: { equals: vendorName, mode: "insensitive" }, deliveryNoteNo: { equals: deliveryNoteNo, mode: "insensitive" } },
+      select: { movement: { select: { sn: true } } },
+    });
+    if (dup) throw new ValidationError(`Delivery note ${deliveryNoteNo} from ${vendorName} is already recorded (S N ${dup.movement.sn}).`);
     const movement = await tx.juteWarehouseMovement.create({
       data: {
         ...(await nextMovementNumbers(tx)),
@@ -66,8 +75,8 @@ export async function createVendorReceipt(input: VendorReceiptInput, warehouse: 
     const receipt = await tx.juteVendorReceipt.create({
       data: {
         movementId: movement.id,
-        vendorName: input.vendorName!.trim(),
-        deliveryNoteNo: input.deliveryNoteNo!.trim(),
+        vendorName,
+        deliveryNoteNo,
         invoicedQty: parseBags(input.invoicedQty)!,
         remarks: input.remarks?.trim() || null,
         createdById: actorId,

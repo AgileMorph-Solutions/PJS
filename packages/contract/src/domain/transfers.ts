@@ -22,6 +22,26 @@ import type { ReceiptRecord, TransferRequest, TransferStatus, WarehouseMaster } 
 export const TRANSFER_TOLERANCE = { bags: 0, kg: 0 } as const;
 
 /**
+ * How far the loaded weight at dispatch may be from the Lots' own net weights (plus their bags) before it is refused as a
+ * typing mistake: an extra digit, or a truck's tare keyed in. It is NOT the client's discrepancy rule above (that compares
+ * dispatch with arrival); no tolerance has been given for this, so 10% is a working default, kept in one place to change.
+ */
+export const DISPATCH_WEIGHT_TOLERANCE = 0.1;
+
+/**
+ * Why a loaded weight can't be right for the Lots on the BKT, or null. The truck carries the Lots' net plus 1 kg per bag
+ * (BAG_WEIGHT_KG), so a weight far from that is a slip, and recording it would put the wrong stock into the receiving
+ * warehouse. Not checked when any Lot has no planned net or bags to compare with.
+ */
+export function dispatchWeightProblem(grossKg: number, lines: readonly { bags: number | null; netWeightKg: number | null }[]): string | null {
+  if (!lines.length || lines.some((l) => l.bags === null || l.netWeightKg === null)) return null;
+  const expected = lines.reduce((a, l) => a + l.netWeightKg! + l.bags! * BAG_WEIGHT_KG, 0);
+  if (expected <= 0 || Math.abs(grossKg - expected) / expected <= DISPATCH_WEIGHT_TOLERANCE) return null;
+  const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
+  return `The loaded weight ${fmt(grossKg)} kg doesn't fit the Lots on this BKT: their net weight and bags come to ${fmt(expected)} kg (more than ${DISPATCH_WEIGHT_TOLERANCE * 100}% apart). Check the loaded weight, or change the Lots' weight on the BKT first.`;
+}
+
+/**
  * Whether a receipt's own record makes its Lot ready to go on a BKT: it passed quality and the
  * warehouse answered "Yes — transfers out". "No — stays" or no answer yet keeps it off the Transfers
  * page. Being on a BKT already isn't on the receipt, so whoever offers Lots checks that as well.

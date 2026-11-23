@@ -21,7 +21,7 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import type { ReceiptRecord, TransferRequest, TransferStatus } from "@anagroci/contract/types/receipt";
-import { canTransferBetween, formatLotPiece, lotPieceProblem, pieceChanged, suggestedPiece, TRANSFER_DIRECTION_MESSAGE, transferDestinationGroups, transferState, transferVariance, type TransferDestination, type TransferFacts } from "@anagroci/contract/domain/transfers";
+import { canTransferBetween, dispatchWeightProblem, formatLotPiece, lotPieceProblem, pieceChanged, suggestedPiece, TRANSFER_DIRECTION_MESSAGE, transferDestinationGroups, transferState, transferVariance, type TransferDestination, type TransferFacts } from "@anagroci/contract/domain/transfers";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { prisma } from "../db.js";
@@ -340,7 +340,7 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
   const gross = decimal(input.dispatchedGrossKg, "Loaded weight");
 
   const row = await prisma.$transaction(async (tx) => {
-    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { id: true, receiptId: true } } } });
+    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { id: true, receiptId: true, bags: true, netWeightKg: true } } } });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
     if (t.status !== "requested") throw new ValidationError(`Transfer ${id} is already ${t.status}.`);
     await assertTransferDirection(tx, t.fromWarehouse, t.toWarehouse);
@@ -349,6 +349,8 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
       !text(input.transporter) && "transporter", !text(input.driver) && "driver", !text(input.driverPhone) && "driver phone", gross === null && "loaded weight",
     ].filter(Boolean);
     if (missing.length) throw new ValidationError(`Fill in the ${missing.join(", ")} to dispatch the truck.`);
+    const weightProblem = gross === null ? null : dispatchWeightProblem(Number(gross), t.lines.map((l) => ({ bags: l.bags, netWeightKg: num(l.netWeightKg) })));
+    if (weightProblem) throw new ValidationError(weightProblem);
 
     // Every Lot leaves with its quality on the record: re-measured here when given, else its own quality check's result.
     const quality = new Map<number, { moisture: Prisma.Decimal; kor: Prisma.Decimal; nutCount: number | null }>();

@@ -17,12 +17,13 @@
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
 
 describe("warehouse typology", () => {
-  it("the known leftover orphan (YAMOUSSOUKRO) is still present, unclassified", async () => {
+  it.skipIf(!WORKBOOK_DATA)("the known leftover orphan (YAMOUSSOUKRO) is still present, unclassified", async () => {
     // Not asserted as the ONLY unclassified row: `POST /api/masters/warehouses` still allows adding
     // a bare name with no type (an admin can classify it later), so other unclassified rows are a
     // legitimate, expected outcome of normal use — not a regression to guard against here.

@@ -9,7 +9,8 @@ import ExcelJS from "exceljs";
 import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
-import { createReceipt, setStageFields } from "../src/services/receipts.js";
+import { setStageFields } from "../src/services/receipts.js";
+import { ensureBin, truckToGrn } from "./helpers/truckToGrn.js";
 import { downloadWorkbook, previewWorkbook, sectionFor } from "../src/services/workbook.js";
 
 const prisma = new PrismaClient();
@@ -27,6 +28,7 @@ async function cleanup() {
   await prisma.formSubmission.deleteMany({ where: { receipt: { warehouse: SITE } } });
   await prisma.receipt.deleteMany({ where: { warehouse: SITE } });
   await prisma.supplier.deleteMany({ where: { code: { startsWith: "PVX" } } });
+  await prisma.bin.deleteMany({ where: { warehouseName: SITE } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "pvx-" } } });
   await prisma.warehouse.deleteMany({ where: { name: SITE } });
 }
@@ -39,13 +41,10 @@ async function login(key: string, role: string, warehouse: string | null) {
 const call = (who: string, method: "GET" | "POST" | "PUT" | "PATCH", url: string, payload?: unknown) =>
   app.inject({ method, url, payload: payload as object | undefined, headers: { cookie: cookies[who]!, ...(payload ? { "content-type": "application/json" } : {}) } });
 
-/** A weighed, unloaded truck: everything the amount is calculated from except the price. */
+/** A truck ready for its GRN: every phase before it done, as the phase gates require; the weight and price are the GRN's own. */
+let bin: string;
 async function truck(lba: string) {
-  const r = await createReceipt(SITE, "2026-10-02");
-  await setStageFields(r.id, "n-verify", { "LBA CODE": lba, "SUPPLIERS NAME": lba });
-  await setStageFields(r.id, "n-gross", { "Loaded truck weight (kg)": "56300", "Tare / empty truck weight (kg)": "15000" });
-  await setStageFields(r.id, "n-unload", { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", Refraction: "60" });
-  return r.id;
+  return truckToGrn({ warehouse: SITE, actor: { id: ids.admin! }, bin, supplierName: lba, lbaCode: lba });
 }
 const hasMoney = (stageData: Record<string, Record<string, string>>) => Boolean(stageData["n-grn"] && ("PRICE" in stageData["n-grn"] || "AMOUNT" in stageData["n-grn"]));
 
@@ -58,6 +57,7 @@ beforeAll(async () => {
   await login("admin", "admin", null);
   await login("wi", "warehouse_incharge", SITE);
   await login("bm", "branch_manager", SITE);
+  bin = await ensureBin(prisma, SITE);
   await prisma.branchManagerSupplier.create({ data: { userId: ids.bm!, supplierCode: MINE, assignedById: ids.admin! } });
   mine = await truck(MINE);
   notMine = await truck(NOT_MINE);

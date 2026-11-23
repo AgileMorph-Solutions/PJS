@@ -13,6 +13,7 @@ import { DateInput } from "../../components/ui/DateInput";
 import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
 import { UNLISTED_ORIGIN } from "../../components/receipt/originPicker";
 import { isNoFutureDate } from "@anagroci/contract/domain/fieldRules";
+import { fieldChoices } from "@anagroci/contract/data/fieldChoices";
 
 /** A grid row's values, keyed by the stage field label (so it maps straight onto the API payload). */
 type Values = Record<string, string>;
@@ -219,8 +220,6 @@ export function BatchEntryPage() {
         actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
 
-      <datalist id="batch-credit-cash"><option value="CASH" /><option value="CREDIT" /></datalist>
-
       <div className="overflow-x-auto bg-white border border-warmstone-200 rounded-2xl shadow-xs">
         <table ref={tableRef} className="w-full text-[13px] border-collapse">
           <thead>
@@ -270,6 +269,16 @@ export function BatchEntryPage() {
                           {isUnlistedOrigin(r.v[c.key], masters.origins) && <option value={r.v[c.key]}>{r.v[c.key]}</option>}
                           {masters.origins.map((o) => <option key={o} value={o}>{o}</option>)}
                         </select>
+                      ) : fieldChoices("n-gate", c.key) ? (
+                        // A fixed list the server enforces too, so the grid can't offer a free-text box for it.
+                        <select
+                          aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
+                          value={r.v[c.key] ?? ""} onChange={(e) => setValue(r.key, c.key, e.target.value)}
+                          onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
+                        >
+                          <option value="">-</option>
+                          {fieldChoices("n-gate", c.key)!.map((o) => <option key={o} value={o}>{o}</option>)}
+                        </select>
                       ) : c.key === PLAN ? (
                         <PlanCell
                           row={i} supplierCode={r.v["LBA CODE"] ?? ""} value={r.v[PLAN] ?? ""} openPlans={openPlans}
@@ -288,7 +297,6 @@ export function BatchEntryPage() {
                         <input
                           aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
                           type={c.type ?? "text"} value={r.v[c.key] ?? ""}
-                          list={c.key === "CREDIT/CASH" ? "batch-credit-cash" : undefined}
                           onChange={(e) => setValue(r.key, c.key, e.target.value)}
                           onKeyDown={(e) => onEnter(e, i, c.key)}
                           className={cellCls}

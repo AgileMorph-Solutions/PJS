@@ -60,9 +60,9 @@ describe("client feedback audit checks", { timeout: 20_000 }, () => {
   });
 
   it("delivery_plan_missing_store finds a plan with no store, not one that has one or was cancelled", async () => {
-    await createDeliveryPlan({ supplierName: "S", expectedArrivalDate: "2034-02-01", destinationWarehouse: SITE, destinationStore: STORE });
+    await createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "S", expectedArrivalDate: "2034-02-01", destinationWarehouse: SITE, destinationStore: STORE });
     expect(await finding("delivery_plan_missing_store")).toBeUndefined();
-    const bare = await createDeliveryPlan({ supplierName: "S", expectedArrivalDate: "2034-02-02", destinationWarehouse: SITE });
+    const bare = await createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "S", expectedArrivalDate: "2034-02-02", destinationWarehouse: SITE });
     expect((await finding("delivery_plan_missing_store"))!.sampleIds).toEqual([bare.id]);
   });
 

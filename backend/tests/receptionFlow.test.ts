@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { createReceipt, setStageFields, setBranch, getReceipt } from "../src/services/receipts.js";
+import { truckToGrn } from "./helpers/truckToGrn.js";
 import { ValidationError } from "../src/domain/validation.js";
 
 const prisma = new PrismaClient();
@@ -40,7 +41,8 @@ const SAMPLE = { "Sample – Good Kernel (g)": "270", "Sample – Immature (g)":
 describe("KOR from the cut test", () => {
   it("is calculated from the grams as they are recorded, and audited like any other change", async () => {
     const user = await prisma.user.create({ data: { username: "rcpflow-wi", passwordHash: "x", displayName: "Incharge", role: "warehouse_incharge", warehouse: SITE } });
-    const id = (await createReceipt(SITE, D)).id;
+    // Quality opens once arrival and weighing are done (the phase order), so the truck has been through both.
+    const id = await truckToGrn({ warehouse: SITE, actor: { id: user.id }, bin: "", upTo: "weight" });
     await setStageFields(id, "n-qfs", SAMPLE, { actor: { id: user.id, via: "direct" } });
     expect((await getReceipt(id))!.stageData["n-qfs"]["KOR"]).toBe("52.03"); // (270 + ½ × 50) × 0.17637
     const changes = await prisma.stageFieldChange.findMany({ where: { receiptId: id, label: "KOR" } });

@@ -10,6 +10,7 @@ import { PrismaClient } from "@prisma/client";
 import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
+import { GRN_WEIGHT, truckToGrn } from "./helpers/truckToGrn.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -17,6 +18,7 @@ const PW = "test-password-1";
 const A = "DRYF-A";
 const OTHER = "DRYF-B";
 const cookies: Record<string, string> = {};
+let actorId: string;
 
 async function cleanup() {
   await prisma.dryingBatch.deleteMany({ where: { warehouseSite: { in: [A, OTHER] } } });
@@ -34,7 +36,8 @@ beforeAll(async () => {
   await cleanup();
   await prisma.warehouse.create({ data: { name: A, kind: "REGIONAL_CENTRAL", type: "UNIT", code: "DRA" } });
   await prisma.warehouse.create({ data: { name: OTHER, kind: "REGIONAL_CENTRAL", type: "UNIT", code: "DRB" } });
-  await prisma.bin.createMany({ data: [{ code: "DRYF-BIN-1" }, { code: "DRYF-BIN-2" }] });
+  await prisma.bin.createMany({ data: [{ code: "DRYF-BIN-1", warehouseName: A }, { code: "DRYF-BIN-2", warehouseName: A }] });
+  actorId = (await prisma.user.create({ data: { username: "dryf-actor", displayName: "Actor", role: "admin", passwordHash: "x" } })).id;
   await login("wi", "warehouse_incharge", A);
   await login("wiOther", "warehouse_incharge", OTHER);
   await login("bm", "branch_manager", A);
@@ -49,14 +52,17 @@ const call = (who: string, method: "GET" | "POST", url: string, payload?: unknow
   app.inject({ method, url, payload: payload as object | undefined, headers: { cookie: cookies[who]!, ...(payload ? { "content-type": "application/json" } : {}) } });
 const receipt = async (id: string) => (await call("wi", "GET", `/api/receipts/${id}`)).json();
 
-/** An accepted truck with a Lot (quality passed). */
-async function acceptedTruck(warehouse = A) {
-  const r = await createReceipt(warehouse, "2026-09-01");
-  await setStageFields(r.id, "n-gate", { "VEHICLE NO.": "DRYF-1", "WH NO.": "BKE-001" });
-  await setStageFields(r.id, "n-verify", { "LBA CODE": "LBA-DRYF", FICHE: "F-77" });
-  await setBranch(r.id, "n-qfs", "pass");
-  return r.id;
+/**
+ * A truck whose GRN is complete, which is when drying opens (the phase order): every earlier phase done as a person does it,
+ * then the GRN's quantity and price. The truck locks at that point, so a test that still has to write to its quality or other
+ * early stages passes `{ grn: false }` and calls completeGrn itself afterwards.
+ */
+async function acceptedTruck(warehouse = A, o: { grn?: boolean } = {}) {
+  const id = await truckToGrn({ warehouse, actor: { id: actorId }, bin: "DRYF-BIN-1", supplierName: "DRYF SUPPLIER", lbaCode: "LBA-DRYF" });
+  if (o.grn !== false) await completeGrn(id);
+  return id;
 }
+const completeGrn = (id: string) => setStageFields(id, "n-grn", { [GRN_WEIGHT]: "10000", PRICE: "470" });
 const START = { route: "direct", dryType: "SUN DRYING", issuedNetKg: 10000, issuedBags: 200, inputMoisture: 11.8, sourceBin: "DRYF-BIN-1" };
 
 describe("answering No", () => {
@@ -79,23 +85,29 @@ describe("answering Yes: sun drying in rounds", () => {
   let round2: string;
 
   it("issues round 1 with its weight and its own quality before drying, answers the decision, and moves the truck to 'in drying'", async () => {
-    id = await acceptedTruck();
+    id = await acceptedTruck(A, { grn: false });
     // A QFS reception sample exists; the drying form must not copy it (it is a separate measurement).
-    await setStageFields(id, "n-qfs", { "Final moisture (%)": "13.4", KOR: "46.1" });
+    await setStageFields(id, "n-qfs", { "Final moisture (%)": "13.4" });
+    const qfsSample = (await receipt(id)).stageData["n-qfs"];
+    await completeGrn(id);
     const res = await call("wi", "POST", `/api/receipts/${id}/drying`, { ...START, inputNutCount: 182, inputGoodKernelG: 230, inputImmatureG: 13, inputSpottedG: 12, inputKor: 50 });
     expect(res.statusCode).toBe(201);
     const r = res.json();
     expect(r.status).toBe("in_drying");
     expect(r.branches["n-drying"]).toBe("direct");
     expect(r.timeline.at(-1).note).toMatch(/issued for sun drying \(round 1\): 10000 kg at 11.8% moisture/);
-    expect(r.stageData["n-qfs"]).toMatchObject({ "Final moisture (%)": "13.4", KOR: "46.1" }); // QFS untouched
+    expect(r.stageData["n-qfs"]).toEqual(qfsSample); // QFS untouched: the drying form's own readings (11.8%, KOR 50) are not copied into it
 
     const b = await prisma.dryingBatch.findFirstOrThrow({ where: { warehouseSite: A } });
     round1 = b.id;
     expect(b).toMatchObject({
       sn: 1, round: 1, firstBatchId: null, status: "IN DRYING", dryType: "SUN DRYING", source: "entered", sourceBinNo: "DRYF-BIN-1", issuedBags: 200,
-      ficheNoRaw: "F-77", supplierCodeRaw: "LBA-DRYF", warehouse: "BKE-001", startedBy: "wi",
+      supplierCodeRaw: "LBA-DRYF", startedBy: "wi",
     });
+    // The fiche and the store come from the truck itself (its own, as a fiche is one truck's), not from the test.
+    const verify = (await receipt(id)).stageData["n-verify"];
+    expect(b.ficheNoRaw).toBe(verify.FICHE);
+    expect(b.warehouse).toBe((await receipt(id)).stageData["n-gate"]["WH NO."] ?? null);
     expect([Number(b.issuedNetWeightKg), Number(b.inputMoisturePct), Number(b.inputNutCount)]).toEqual([10000, 11.8, 182]);
     // KOR follows the cut test (the typed 50 is ignored once the grams are in), with the same formula as QFS.
     expect(Number(b.inputKor)).toBe(42.77);

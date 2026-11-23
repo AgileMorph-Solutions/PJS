@@ -13,6 +13,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { deriveStatus, computeDashboardCounts } from "@anagroci/contract/domain/receiptStatus";
 import { RECEIPT_INCLUDE, assembleStageData, assembleBranches } from "../src/stageStore.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
@@ -60,7 +61,7 @@ describe("status parity with the pre-normalization data", () => {
     // baseline to stay meaningful.
   });
 
-  it("the GRN-quantity rule leaves every imported receipt where its workbook put it", async () => {
+  it.skipIf(!WORKBOOK_DATA)("the GRN-quantity rule leaves every imported receipt where its workbook put it", async () => {
     // Oct 2026: a receipt is GRN-completed only once its GRN quantity is recorded. The real 2026 Truck
     // Reception sheet has no such column, so most imported receipts have a price and no quantity —
     // applying the rule to them would silently demote them all. They are reported (data quality), not changed.
@@ -73,7 +74,7 @@ describe("status parity with the pre-normalization data", () => {
     }
   });
 
-  it("n-stock is never auto-created — real data confirms zero stock postings today", async () => {
+  it.skipIf(!WORKBOOK_DATA)("n-stock is never auto-created — real data confirms zero stock postings today", async () => {
     const withGrn = await prisma.stageEntry.findMany({
       where: { stageId: "n-grn", receipt: SEED_ONLY }, select: { receiptId: true },
     });
@@ -92,7 +93,7 @@ describe("status parity with the pre-normalization data", () => {
     expect(grnOnly.length).toBe(935);
   });
 
-  it("cross-checks derived status against the real pre-migration live-DB snapshot, matched by " +
+  it.skipIf(!WORKBOOK_DATA)("cross-checks derived status against the real pre-migration live-DB snapshot, matched by " +
      "content (vehicleNo/arrivalDate/supplierName), not by id", async () => {
     // tests/fixtures/pre-migration-status-oracle.json was captured from the live dev DB's 986
     // receipts BEFORE this seed was regenerated from the new sheets — at that point, many receipts

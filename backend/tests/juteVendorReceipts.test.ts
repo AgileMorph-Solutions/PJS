@@ -63,6 +63,19 @@ describe("recording bags received from a vendor", () => {
     expect(rows[0]).toMatchObject({ "Activities type": "JUTE BAGS PURCHASED/UNLOADINGS", "WH location": A, Date: "2026-11-05", "Bags received": "980", Balance: "980" });
   });
 
+  it("refuses the same vendor's delivery note a second time (however it is spelled), and leaves the stock where it was", async () => {
+    const before = await balanceOf(A);
+    const again = await post("wi", { ...GOOD, vendorName: " abc traders ", deliveryNoteNo: "dn-101", receivedQty: "10" });
+    expect(again.statusCode).toBe(422);
+    expect(again.json().error).toMatch(/DN-101|dn-101/);
+    expect(again.json().error).toMatch(/already recorded/);
+    expect(await balanceOf(A)).toBe(before);
+    // another vendor may use the same number
+    expect((await post("wi", { ...GOOD, vendorName: "XYZ Traders", receivedQty: "1" })).statusCode).toBe(201);
+    await prisma.juteVendorReceipt.deleteMany({ where: { vendorName: "XYZ Traders" } });
+    await prisma.juteWarehouseMovement.deleteMany({ where: { whLocation: A, bagsReceived: 1 } });
+  });
+
   it("counts as a receipt in the reconciliation, so the stock can then be issued against it", async () => {
     await post("wi", { ...GOOD, deliveryNoteNo: "DN-102", invoicedQty: "500", receivedQty: "505" });
     expect(await balanceOf(A)).toBe("1485");
