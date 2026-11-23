@@ -14,8 +14,10 @@ const OPEN: StageGate = { open: true, missing: [] };
  */
 export function useFieldRules(receipt: ReceiptRecord | undefined, save: (stageId: string, label: string, value: string) => void, facts: GateFacts = {}) {
   const ctx = useMemo(
-    () => ({ arrivalDate: receipt?.arrivalDate, today: today(), enteredOn: receipt?.createdAt?.slice(0, 10) }),
-    [receipt?.arrivalDate, receipt?.createdAt],
+    // An imported truck's createdAt is the import day, not the day anyone typed it in: leaving it out keeps "a past date"
+    // from firing on every record of the 2026 workbooks.
+    () => ({ arrivalDate: receipt?.arrivalDate, today: today(), enteredOn: receipt?.source === "entered" ? receipt.createdAt?.slice(0, 10) : undefined }),
+    [receipt?.arrivalDate, receipt?.createdAt, receipt?.source],
   );
   const issues = useMemo<FieldIssue[]>(() => (receipt ? recordIssues(receipt.stageData, ctx) : []), [receipt, ctx]);
   const gated = Boolean(receipt) && receipt!.source !== "imported";

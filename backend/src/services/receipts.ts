@@ -33,6 +33,7 @@ import { canChangeRecordedValue, canSeeField, canSetPrice, changesToRecorded, re
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
 import { planFitProblem } from "./receiptPlanInfo.js";
 import { assertKnownOrigin } from "./masters.js";
+import { assertFicheNotOnAnotherTruck, withChoiceValues } from "./stageValueRules.js";
 import { resolveSite } from "../domain/site.js";
 
 type Tx = Prisma.TransactionClient;

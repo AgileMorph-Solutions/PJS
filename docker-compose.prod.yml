@@ -54,6 +54,8 @@ services:
       # Reads the CCA fiche photo on the Verify supplier documents step (services/ficheReader.ts). Unset: the fiche is
       # still kept on the receipt, it just isn't read. Set it in .env.prod, never in this file.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Traefik serves this only over HTTPS, so the session cookie is marked Secure and never travels over plain HTTP.
+      COOKIE_SECURE: "true"
     depends_on:
       db:
         condition: service_healthy

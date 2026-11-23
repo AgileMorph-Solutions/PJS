@@ -45,6 +45,9 @@ export interface ReceiptRecord {
   /** Set once the GRN is complete (contract domain/recordLock.ts): from then on nothing can be changed until an Admin reopens it. */
   lockedAt?: string;
   lockedBy?: string;
+  /** When the row was created. For a truck entered in the app that is the day it was typed in (the field rules compare the
+   * arrival date with it); for an imported one it is the day of the import, so only use it when `source` is "entered". */
+  createdAt?: string;
   stageData: Record<string, Record<string, string>>;
   branches: Record<string, string>;
   timeline: TimelineEntry[];

@@ -14,7 +14,9 @@ let person: { id: string; via: "direct" };
 let upload: { id: string; via: "import" };
 
 const ARRIVAL_GATE = { "DATE OF ARRIVAL": "2026-11-10", "CREDIT/CASH": "CASH", "WH LOCATION": W, "VEHICLE NO.": "827KT01" };
-const ARRIVAL_VERIFY = { "SUPPLIERS NAME": "GATE SUPPLIER", "LBA CODE": "", "FICHE CODE": "0401-0007", FICHE: "72515", ORIGIN: "DIANRA" };
+// A fiche belongs to one truck at a warehouse, so each truck that arrives gets its own.
+let ficheSeq = 72515;
+const arrivalVerify = () => ({ "SUPPLIERS NAME": "GATE SUPPLIER", "LBA CODE": "", "FICHE CODE": "0401-0007", FICHE: String(ficheSeq++), ORIGIN: "DIANRA" });
 
 async function cleanup() {
   await prisma.receipt.deleteMany({ where: { warehouse: W } });
@@ -38,7 +40,7 @@ afterAll(async () => {
 const arrived = async () => {
   const r = await createReceipt(W, "2026-11-10");
   await setStageFields(r.id, "n-gate", ARRIVAL_GATE, { actor: person });
-  await setStageFields(r.id, "n-verify", ARRIVAL_VERIFY, { actor: person });
+  await setStageFields(r.id, "n-verify", arrivalVerify(), { actor: person });
   return r.id;
 };
 
@@ -46,7 +48,7 @@ describe("phase order", () => {
   it("Weight is refused until Arrival is complete, and the message names what is missing", async () => {
     const r = await createReceipt(W, "2026-11-10");
     await setStageFields(r.id, "n-gate", { "VEHICLE NO.": "827KT01" }, { actor: person });
-    await expect(setStageFields(r.id, "n-gross", { "GROSS WT KGS": "41300" }, { actor: person })).rejects.toThrow(/Weight is locked\. Please finish Arrival first: .*ORIGIN/);
+    await expect(setStageFields(r.id, "n-gross", { "Loaded truck weight (kg)": "41300" }, { actor: person })).rejects.toThrow(/Weight is locked\. Please finish Arrival first: .+/);
   });
 
   it("opens step by step once each phase is complete; Pass needs the sample readings", async () => {
@@ -65,7 +67,7 @@ describe("phase order", () => {
 
   it("a Fail needs only the weight, not the sample readings (a reason is still required)", async () => {
     const id = await arrived();
-    await setStageFields(id, "n-gross", { "GROSS WT KGS": "41300" }, { actor: person });
+    await setStageFields(id, "n-gross", { "Loaded truck weight (kg)": "41300", "Tare / empty truck weight (kg)": "14700" }, { actor: person });
     await setBranch(id, "n-qfs", "fail", "High moisture", { actor: person });
   });
 });
@@ -95,7 +97,7 @@ describe("never stopped", () => {
   it("a record imported from the 2026 workbooks isn't gated", async () => {
     const r = await createReceipt(W, "2026-11-10");
     await prisma.receipt.update({ where: { id: r.id }, data: { source: "imported" } });
-    await setStageFields(r.id, "n-gross", { "GROSS WT KGS": "41300" }, { actor: person });
+    await setStageFields(r.id, "n-gross", { "Loaded truck weight (kg)": "41300" }, { actor: person });
   });
 });
 

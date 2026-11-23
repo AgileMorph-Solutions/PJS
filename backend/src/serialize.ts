@@ -34,6 +34,7 @@ export function toReceiptRecord(row: AnyRow): ReceiptRecord & { status: ReceiptS
     ...(row.legacyId ? { legacyId: row.legacyId as string } : {}),
     ...(row.deliveryPlanId ? { deliveryPlanId: row.deliveryPlanId as string } : {}),
     ...(row.lockedAt ? { lockedAt: (row.lockedAt as Date).toISOString(), ...(row.locker?.displayName ? { lockedBy: row.locker.displayName as string } : {}) } : {}),
+    ...(row.createdAt instanceof Date ? { createdAt: row.createdAt.toISOString() } : {}),
     stageData,
     branches,
     timeline: (row.timeline ?? [])

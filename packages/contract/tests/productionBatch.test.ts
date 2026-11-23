@@ -192,7 +192,7 @@ describe("a Lot dried in the app is back once its last round passed", () => {
 
 describe("Lots that arrived on a BKT", () => {
   const line = (receiptId: string, receivedBinCode: string | null, bagsReceived: number | null = null) => ({
-    receiptId, lotNumber: `LOT-BKE-2026-${receiptId}`, supplierName: "S", vehicleNo: "V", fiche: null, bags: 100, netWeightKg: null,
+    id: Number(receiptId), receiptId, lotNumber: `LOT-BKE-2026-${receiptId}`, supplierName: "S", vehicleNo: "V", fiche: null, bags: 100, netWeightKg: null,
     moisture: null, kor: null, nutCount: null, binCode: "BKE-002-BIN-01", receivedBinCode, bagsReceived,
   });
   const bkt = (id: string, status: TransferRequest["status"], lines: TransferRequest["lines"]): TransferRequest => ({

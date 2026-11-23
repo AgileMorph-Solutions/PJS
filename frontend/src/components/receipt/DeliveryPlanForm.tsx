@@ -106,7 +106,7 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
       ))}
       {field("dp-start", "Expected delivery from", <DateInput id="dp-start" required value={form.start} onChange={(d) => set("start", d)} className={inputClass} />)}
       {field("dp-end", "Expected delivery until", <DateInput id="dp-end" value={form.end} min={form.start} onChange={(d) => set("end", d)} className={inputClass} />)}
-      {field("dp-qty", "Expected quantity (kg)", <input id="dp-qty" inputMode="decimal" value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className={inputClass} />)}
+      {field("dp-qty", "Expected quantity (kg)", <input id="dp-qty" inputMode="decimal" required={!editing || form.quantity.trim() !== ""} value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className={inputClass} />)}
       {field("dp-trucks", "Expected number of trucks", <input id="dp-trucks" inputMode="numeric" value={form.trucks} onChange={(e) => set("trucks", e.target.value)} className={inputClass} />)}
       {field("dp-truck", "Expected truck type", <input id="dp-truck" value={form.truckType} onChange={(e) => set("truckType", e.target.value)} className={inputClass} />)}
       {field("dp-funding", "Purchase / funding reference", <input id="dp-funding" value={form.funding} onChange={(e) => set("funding", e.target.value)} className={inputClass} placeholder="If there is one" />)}

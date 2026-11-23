@@ -12,6 +12,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { getReceiptLinks } from "../src/services/receiptLinks.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
@@ -20,7 +21,7 @@ afterAll(() => prisma.$disconnect());
 const renumbered = async (legacyId: string) => (await prisma.receipt.findUniqueOrThrow({ where: { legacyId }, select: { id: true } })).id;
 
 describe("receipt links (Lot or Fiche cross-reference)", () => {
-  it("REC-2026-0025 (Lot 20 at BOUAKE) links to ITS OWN transfer by fiche, not the Lot-20 one", async () => {
+  it.skipIf(!WORKBOOK_DATA)("REC-2026-0025 (Lot 20 at BOUAKE) links to ITS OWN transfer by fiche, not the Lot-20 one", async () => {
     const links = await getReceiptLinks(await renumbered("REC-2026-0025"));
     expect(links.lotNo).toBe("LOT-BKE01-2026-020");
     expect(links.lotWarehouse).toBe("BOUAKE");
@@ -51,7 +52,7 @@ describe("receipt links (Lot or Fiche cross-reference)", () => {
     }
   });
 
-  it("a receipt with a Fiche but no Lot is still linked by that Fiche", async () => {
+  it.skipIf(!WORKBOOK_DATA)("a receipt with a Fiche but no Lot is still linked by that Fiche", async () => {
     // Yakro's receipts never had a Lot assigned, yet their fiche is on the central receiving rows.
     const receipt = await prisma.receipt.findFirst({
       where: { lot: null, warehouse: "YAKRO FACTORY", verify: { fiche: { not: null } } },
@@ -63,7 +64,7 @@ describe("receipt links (Lot or Fiche cross-reference)", () => {
     expect(links.fiche).toBe(receipt!.verify!.fiche!.trim());
   });
 
-  it("coverage across all receipts after the renumber", async () => {
+  it.skipIf(!WORKBOOK_DATA)("coverage across all receipts after the renumber", async () => {
     const receipts = await prisma.receipt.findMany({ select: { id: true } });
     let withTransfer = 0, withDrying = 0, withEither = 0;
     for (const r of receipts) {
@@ -79,7 +80,7 @@ describe("receipt links (Lot or Fiche cross-reference)", () => {
     });
   });
 
-  it("every linked transfer row is confirmed by the fiche — the coincidental Lot matches are gone", async () => {
+  it.skipIf(!WORKBOOK_DATA)("every linked transfer row is confirmed by the fiche — the coincidental Lot matches are gone", async () => {
     // Row-level counts. Before the renumber 412 transfer rows were Lot-matched and only 5 confirmed.
     const receipts = await prisma.receipt.findMany({ select: { id: true } });
     let totalTransferRows = 0, confirmedTransferRows = 0, totalDryingRows = 0, confirmedDryingRows = 0;
@@ -95,14 +96,14 @@ describe("receipt links (Lot or Fiche cross-reference)", () => {
     });
   });
 
-  it("a linked transfer's date is YYYY-MM-DD, never an ISO timestamp or a raw Decimal", async () => {
+  it.skipIf(!WORKBOOK_DATA)("a linked transfer's date is YYYY-MM-DD, never an ISO timestamp or a raw Decimal", async () => {
     const links = await getReceiptLinks(await renumbered("REC-2026-0025"));
     const transfer = links.transfers[0]!;
     expect(transfer.receivedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(typeof transfer.bagsReceived === "number" || transfer.bagsReceived === null).toBe(true);
   });
 
-  it("a linked transfer's idTransfer resolves to a real BtmIntake, once one exists", async () => {
+  it.skipIf(!WORKBOOK_DATA)("a linked transfer's idTransfer resolves to a real BtmIntake, once one exists", async () => {
     // Find any real transfer with a non-blank idTransfer AND a fiche that a receipt carries, insert a
     // disposable BtmIntake for that exact number, and confirm getReceiptLinks resolves it for that
     // receipt — proves the JOIN mechanics, not a measured real count.

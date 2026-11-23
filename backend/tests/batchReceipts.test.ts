@@ -195,12 +195,12 @@ describe("POST /api/receipts/batch with delivery plans", () => {
 
   it("is still all-or-nothing: a row whose plan doesn't fit rejects the whole batch and names the row", async () => {
     const before = (await batchReceipts()).length;
-    const wrongSupplier = await post("wi", { rows: [planned(50), planned(51, "LBA-OTHER")], deliveryPlanIds: [planId, planId] });
+    const wrongSupplier = await post("wi", { rows: [planned(70), planned(71, "LBA-OTHER")], deliveryPlanIds: [planId, planId] });
     expect(wrongSupplier.statusCode).toBe(422);
     expect(wrongSupplier.json().error).toMatch(/^Row 2: Delivery plan .* is for supplier LBA-BATCH, not LBA-OTHER/);
 
     const otherSite = await plan({ destinationWarehouse: "YAKRO FACTORY" });
-    const wrongSite = await post("wi", { rows: [planned(52), planned(53)], deliveryPlanIds: [null, otherSite.id] });
+    const wrongSite = await post("wi", { rows: [planned(72), planned(73)], deliveryPlanIds: [null, otherSite.id] });
     expect(wrongSite.statusCode).toBe(422);
     expect(wrongSite.json().error).toMatch(/^Row 2: Delivery plan .* is for YAKRO FACTORY, not BOUAKE/);
 

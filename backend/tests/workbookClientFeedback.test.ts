@@ -34,6 +34,7 @@ let approver = "";
 
 async function cleanup() {
   await prisma.transferRequest.deleteMany({ where: { fromWarehouse: A } });
+  await prisma.bin.deleteMany({ where: { code: "WBCF-BIN-B" } });
   await prisma.receipt.deleteMany({ where: { warehouse: { in: [A, B] } } });
   await prisma.deliveryPlan.deleteMany({ where: { destinationWarehouse: A } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "wbcf-" } } });
@@ -46,6 +47,7 @@ beforeAll(async () => {
   await prisma.warehouse.create({ data: { name: A, kind: "REGIONAL_CENTRAL", type: "UNIT", code: "WCA" } });
   await prisma.warehouse.create({ data: { name: B, kind: "FACTORY", type: "CENTRAL", code: "WCB" } });
   await prisma.warehouse.create({ data: { name: STORE, site: A } });
+  await prisma.bin.create({ data: { code: "WBCF-BIN-B", warehouseName: B } }); // every Lot received needs the Bin it went into
   const u = await prisma.user.create({ data: { username: "wbcf-a", displayName: "Ama", role: "warehouse_incharge", warehouse: A, passwordHash: hashPassword(PW) } });
   approver = u.id;
   const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "wbcf-a", password: PW } });
@@ -77,7 +79,7 @@ beforeAll(async () => {
   const t = await createTransfer({ transferDate: "2035-05-20", fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: onTruck, bags: 590 }] });
   bkt = t.id;
   await dispatchTransfer(bkt, { whReceiptNo: "9001", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880, transporter: "T", driver: "D", driverPhone: "0", lines: [{ receiptId: onTruck, nutCount: 170 }] });
-  await receiveTransfer(bkt, { whReceiptNo: "8001", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road" });
+  await receiveTransfer(bkt, { whReceiptNo: "8001", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road", lines: [{ receiptId: onTruck, binCode: "WBCF-BIN-B" }] });
 });
 afterAll(async () => {
   await cleanup();

@@ -43,7 +43,7 @@ describe("a truck's origin, typed in the app", () => {
 
 describe("a delivery plan's expected origin", () => {
   const plan = (expectedOrigin?: string) =>
-    createDeliveryPlan({ supplierName: "ORIGTEST SUPPLIER", expectedArrivalDate: D, destinationWarehouse: SITE, expectedOrigin });
+    createDeliveryPlan({ expectedQuantityKg: 1000, supplierName: "ORIGTEST SUPPLIER", expectedArrivalDate: D, destinationWarehouse: SITE, expectedOrigin });
 
   it("is refused when the town isn't in Masters › Origins, on create and on edit", async () => {
     await expect(plan("NO-SUCH-TOWN-XYZ")).rejects.toThrow(/Expected origin "NO-SUCH-TOWN-XYZ" isn't in Masters › Origins/);

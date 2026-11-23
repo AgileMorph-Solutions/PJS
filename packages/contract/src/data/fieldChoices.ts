@@ -1,5 +1,5 @@
-import { WAREHOUSE_KINDS } from "./warehouseKinds";
-import { FINALISED_NEXT_DAY, FINALISED_SAME_DAY, FINALISED_WHEN_LABEL } from "../domain/binFinalise";
+import { WAREHOUSE_KINDS } from "./warehouseKinds.js";
+import { FINALISED_NEXT_DAY, FINALISED_SAME_DAY, FINALISED_WHEN_LABEL } from "../domain/binFinalise.js";
 
 /**
  * Stage fields whose answer is one of a fixed list, picked from a dropdown instead of typed (client, Nov 2026: "if required
@@ -38,3 +38,15 @@ export const STAGE_FIELD_CHOICES: Record<string, Record<string, readonly string[
 };
 
 export const fieldChoices = (stageId: string, label: string): readonly string[] | undefined => STAGE_FIELD_CHOICES[stageId]?.[label];
+
+/**
+ * Whether `value` is one of the field's fixed answers, matched without regard to case or surrounding spaces ("cash" is
+ * CASH). `value` is the answer as the list spells it, ready to store; undefined when the field has no list or the value
+ * isn't on it. A blank is not an answer: nothing is chosen yet, and the caller decides whether that is allowed.
+ */
+export function resolveChoice(stageId: string, label: string, value: string): { options: readonly string[]; value?: string } | undefined {
+  const options = fieldChoices(stageId, label);
+  if (!options) return undefined;
+  const wanted = value.trim().toLowerCase();
+  return { options, value: options.find((o) => o.toLowerCase() === wanted) };
+}

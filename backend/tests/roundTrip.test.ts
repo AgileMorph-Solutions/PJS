@@ -17,6 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { RECEIPT_INCLUDE, assembleStageData } from "../src/stageStore.js";
 import { setStageFields } from "../src/services/receipts.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 afterAll(() => prisma.$disconnect());
@@ -42,7 +43,7 @@ describe("golden seed round-trip", () => {
     });
   });
 
-  it("has the seeded receipts", () => {
+  it.skipIf(!WORKBOOK_DATA)("has the seeded receipts", () => {
     // 986, not 50, since the seed was regenerated from the new sheets' full Truck Reception
     // register — every receipt now comes from prisma/seed.ts, so the golden cohort grew to the
     // entire table, not a 50-row demo sample.
@@ -98,7 +99,7 @@ describe("golden seed round-trip", () => {
    * import's 452 successful lot write-backs (see LotWriteBackResult.written) now lands on a
    * seeded receipt — the golden cohort IS the full receipt table now.
    */
-  it("enrichment is confined to the measured set: 452 seeded receipts, Lot Number only", () => {
+  it.skipIf(!WORKBOOK_DATA)("enrichment is confined to the measured set: 452 seeded receipts, Lot Number only", () => {
     const enriched: string[] = [];
     for (const row of rows) {
       const original = JSON.parse(row.stageDataShadow!) as Record<string, Record<string, string>>;

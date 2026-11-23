@@ -14,6 +14,7 @@ import { buildApp } from "../src/app.js";
 import { hashPassword } from "../src/auth/password.js";
 import { sheetsFor } from "../src/domain/workbook/sheets.js";
 import { setStageFields } from "../src/services/receipts.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -107,7 +108,7 @@ async function removeSentinels() {
 
 describe("round trip: export then upload unchanged writes nothing", { timeout: 60_000 }, () => {
   for (const [who, type] of [["wi", "UNIT"], ["wiY", "CENTRAL"]] as const) {
-    it(`${type} section: no new rows, no changes, no errors, no notices`, async () => {
+    it.skipIf(!WORKBOOK_DATA)(`${type} section: no new rows, no changes, no errors, no notices`, async () => {
       const dl = await get(who, "/api/workbook");
       expect(dl.statusCode).toBe(200);
 
@@ -220,7 +221,7 @@ describe("what the file looks like to a person", { timeout: 60_000 }, () => {
     expect(headersOf(wb.getWorksheet("Jute Bags")!)).toEqual(["Row ID", "No", "Date", "Date (as written)", "Activity Type", "Supplier Code", "Warehouse Location", "Truck No", "Warehouse Receipt No", "Bags Issued", "Bags Received"]);
   });
 
-  it("still shows a hand-typed date that was never a real date, instead of leaving it blank", async () => {
+  it.skipIf(!WORKBOOK_DATA)("still shows a hand-typed date that was never a real date, instead of leaving it blank", async () => {
     const wb = await load((await get("wi", "/api/workbook")).rawPayload);
     const ws = wb.getWorksheet("Activity Ledger")!;
     const written = colOf(ws, "Date (as written)");
@@ -332,7 +333,7 @@ describe("editing and adding through the workbook", { timeout: 60_000 }, () => {
     expect(String((await prisma.warehouseDischarge.findUniqueOrThrow({ where: { id: row.id } })).grossWtRecd)).toBe("13.25");
   });
 
-  it("a Stock Transfers row from Bouaké is 'from' this warehouse without being told", async () => {
+  it.skipIf(!WORKBOOK_DATA)("a Stock Transfers row from Bouaké is 'from' this warehouse without being told", async () => {
     const buf = await edited("wi", (wb) => {
       addRow(wb.getWorksheet("Stock Transfers")!, { "Truck Registration": "WBTEST-TR", "Lot No": "WBTEST-9", "Bags Dispatched": 100 });
     });
@@ -410,7 +411,7 @@ describe("what a bad upload does", { timeout: 60_000 }, () => {
     expect(JSON.stringify(errs)).not.toMatch(/[a-z][A-Z]\w*:|\./); // never a column key like arrivalDate or Table.column
   });
 
-  it("refuses another warehouse's rows, whichever sheet they are on", async () => {
+  it.skipIf(!WORKBOOK_DATA)("refuses another warehouse's rows, whichever sheet they are on", async () => {
     // The FIRST Yakro receipt in export order: the preview shows only the first few errors per sheet,
     // and Yakro has hundreds of receipts, so an arbitrary one would fall outside what it shows.
     const yakro = await prisma.receipt.findFirstOrThrow({ where: { warehouse: "YAKRO FACTORY" }, orderBy: { createdAt: "asc" } });
@@ -445,7 +446,7 @@ describe("what a bad upload does", { timeout: 60_000 }, () => {
     expect(msgs).toMatch(/isn't a valid decision/);
   });
 
-  it("checks suppliers and unique numbers before writing", async () => {
+  it.skipIf(!WORKBOOK_DATA)("checks suppliers and unique numbers before writing", async () => {
     const errs = await errorsOf((wb) => {
       addRow(wb.getWorksheet("Jute Bags")!, { "Activity Type": "ISSUE", "Supplier Code": "NO-SUCH-SUPPLIER", "Bags Issued": 5 });
       const ws = wb.getWorksheet("Stock Transfers")!;
@@ -553,7 +554,7 @@ describe("Unit vs Central, and who may use it", { timeout: 60_000 }, () => {
     expect((await get("admin", "/api/workbook?warehouse=YAMOUSSOUKRO")).statusCode).toBe(422); // no Unit/Central type
   });
 
-  it("narrows dated sheets to a date range and reports rows with no date", async () => {
+  it.skipIf(!WORKBOOK_DATA)("narrows dated sheets to a date range and reports rows with no date", async () => {
     const all = (await get("wi", "/api/receipts")).json() as { arrivalDate: string }[];
     const inRange = all.filter((r) => r.arrivalDate >= "2026-09-01" && r.arrivalDate <= "2026-09-30").length;
     const res = await get("wi", "/api/workbook?from=2026-09-01&to=2026-09-30");

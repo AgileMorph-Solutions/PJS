@@ -8,14 +8,15 @@
  */
 import { describe, it, expect } from "vitest";
 import { getDownstreamStatus } from "../src/services/receiptsDownstream.js";
+import { WORKBOOK_DATA } from "./helpers/workbookData.js";
 
 describe("downstream status", () => {
-  it("covers every receipt exactly once", async () => {
+  it.skipIf(!WORKBOOK_DATA)("covers every receipt exactly once", async () => {
     const status = await getDownstreamStatus();
     expect(status.size).toBe(986);
   });
 
-  it("received (Warehouse Receiving, central site) is measured via resolveSite's alias list, not the literal site name", async () => {
+  it.skipIf(!WORKBOOK_DATA)("received (Warehouse Receiving, central site) is measured via resolveSite's alias list, not the literal site name", async () => {
     const status = await getDownstreamStatus();
     const received = [...status.values()].filter((r) => r.received).length;
     // WarehouseDischarge stores the sheet's own verbatim site name ("YAMOUSSOUKRO"), not the
@@ -30,7 +31,7 @@ describe("downstream status", () => {
     expect(dispatched).toBe(0);
   });
 
-  it("dried and issued are both measured, non-trivial fractions of the receipt population", async () => {
+  it.skipIf(!WORKBOOK_DATA)("dried and issued are both measured, non-trivial fractions of the receipt population", async () => {
     const status = await getDownstreamStatus();
     const rows = [...status.values()];
     expect(rows.filter((r) => r.dried).length).toBe(74);
@@ -39,7 +40,7 @@ describe("downstream status", () => {
     expect(rows.filter((r) => r.issued).length).toBe(43);
   });
 
-  it("scoping by warehouse only ever narrows the result, never changes an individual receipt's flags", async () => {
+  it.skipIf(!WORKBOOK_DATA)("scoping by warehouse only ever narrows the result, never changes an individual receipt's flags", async () => {
     const [all, bouake] = await Promise.all([getDownstreamStatus(), getDownstreamStatus(["BOUAKE"])]);
     expect(bouake.size).toBeLessThan(all.size);
     for (const [id, status] of bouake) expect(all.get(id)).toEqual(status);
