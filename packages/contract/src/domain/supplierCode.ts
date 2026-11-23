@@ -42,3 +42,10 @@ export function suggestLbaCode(name: string, existingCodes: Iterable<string>): s
     if (!taken.has(code)) return code;
   }
 }
+
+/**
+ * The LBA code is the supplier's own code (Supplier.code), always taken from the supplier picked on the step, never typed
+ * (team, 20 Nov 2026). The backend writes it on every save of the supplier (services/receipts.ts withLbaCode); the forms show
+ * it read-only.
+ */
+export const isSupplierLinkedField = (stageId: string, label: string): boolean => stageId === "n-verify" && label === "LBA CODE";

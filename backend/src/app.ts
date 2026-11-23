@@ -8,6 +8,7 @@ import { userRoutes } from "./routes/users.js";
 import { submissionRoutes } from "./routes/submissions.js";
 import { supplierAccessRoutes } from "./routes/supplierAccess.js";
 import { receiptRoutes } from "./routes/receipts.js";
+import { ficheRoutes } from "./routes/fiche.js";
 import { logRoutes } from "./routes/logs.js";
 import { ledgerRoutes } from "./routes/ledgers.js";
 import { masterRoutes } from "./routes/masters.js";
@@ -26,6 +27,7 @@ import { calibrationRoutes } from "./routes/calibration.js";
 import { factoryLotRoutes } from "./routes/factoryLots.js";
 import { warehouseDispatchRoutes } from "./routes/warehouseDispatches.js";
 import { dryingBatchRoutes } from "./routes/dryingBatches.js";
+import { binRoutes } from "./routes/bins.js";
 import { dryingSortingReportRoutes } from "./routes/dryingSortingReports.js";
 import { warehouseActivityLedgerRoutes } from "./routes/warehouseActivityLedger.js";
 import { juteVendorReceiptRoutes } from "./routes/juteVendorReceipts.js";
@@ -96,6 +98,7 @@ export function buildApp() {
   app.register(supplierAccessRoutes);
 
   app.register(receiptRoutes);
+  app.register(ficheRoutes);
   app.register(logRoutes);
   app.register(deliveryPlanRoutes);
   app.register(transferRoutes);
@@ -120,6 +123,7 @@ export function buildApp() {
   app.register(juteEmptyBagReceiptRoutes);
   app.register(juteOpeningBalanceRoutes);
   app.register(dryingBatchRoutes);
+  app.register(binRoutes);
   app.register(dryingSortingReportRoutes);
   app.register(issuedToProductionRoutes);
   app.register(warehouseDischargeRoutes);

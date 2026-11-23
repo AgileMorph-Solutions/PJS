@@ -115,7 +115,9 @@ const OPENS_AFTER: Record<string, readonly Need[]> = {
   "n-bin": [ARRIVAL, WEIGHT, "pass", UNLOADING],
   "n-grn": [ARRIVAL, WEIGHT, "pass", UNLOADING, BIN, QUALITY_FINAL],
   "n-stock": ["grn"],
-  "n-drying": ["grn"],
+  // A truck's own drying is the one straight off the truck onto the drying yard (Sameer, 18 Nov 2026), so it opens once the
+  // truck is unloaded; drying from a Bin is the Bin's (WarehouseActivities), not the truck's.
+  "n-drying": [ARRIVAL, WEIGHT, "pass", UNLOADING],
   "n-otheract": ["grn"],
   "n-ledger": ["grn"],
   "n-xferdec": ["grn"],
@@ -169,13 +171,35 @@ const listOf = (xs: string[]) =>
     ? xs.join(", ")
     : `${xs.slice(0, 4).join(", ")} and ${xs.length - 4} more`;
 
+/** What the record alone can't say, read by the caller from elsewhere. */
+export interface GateFacts {
+  /**
+   * The truck was dried straight off the truck on the yard and sent from there to production (sunDrying's
+   * wentStraightToProduction): it never gets a Bin, so its GRN doesn't wait for the Bin step. Every other truck still does.
+   */
+  straightToProduction?: boolean;
+  /**
+   * The truck's RCN is out on the drying yard (sunDrying's onDryingYard): it is in no Bin until it comes back, so the Bin
+   * step waits (23 Nov 2026 — a Bin chosen while the RCN was on the yard put it in two places at once).
+   */
+  onDryingYard?: boolean;
+}
+
 /** Is this stage open on this record, and if not, what must be done first. */
 export function stageGate(
   r: Pick<ReceiptRecord, "stageData" | "branches">,
   stageId: string,
+  facts: GateFacts = {},
 ): StageGate {
   const title = TITLES[stageId] ?? stageId;
+  if (stageId === "n-bin" && facts.onDryingYard) {
+    return {
+      open: false, waitingFor: "Drying", missing: [],
+      message: "Bin is locked: this truck's RCN is out on the drying yard. Its Bin is chosen when the dried RCN comes back.",
+    };
+  }
   for (const need of OPENS_AFTER[stageId] ?? []) {
+    if (need === BIN && facts.straightToProduction) continue;
     if (need === "pass") {
       if (r.branches["n-qfs"] === "pass") continue;
       return {
@@ -223,8 +247,9 @@ export function decisionGate(
   r: Pick<ReceiptRecord, "stageData" | "branches">,
   stageId: string,
   branchId: string,
+  facts: GateFacts = {},
 ): StageGate {
-  const gate = stageGate(r, stageId);
+  const gate = stageGate(r, stageId, facts);
   if (!gate.open) return gate;
   if (stageId === "n-qfs" && branchId === "pass") {
     const msg = passBlocked(r.stageData);

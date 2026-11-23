@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { FIELD_RULES, checkValue, isNoFutureDate, recordIssues } from "../src/domain/fieldRules";
-import { stageGate, passBlocked, decisionGate } from "../src/domain/phaseGate";
+import { stageGate, passBlocked, decisionGate, PHASES } from "../src/domain/phaseGate";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap";
 import { fieldChoices } from "../src/data/fieldChoices";
 import { autoFill, weekLabel } from "../src/data/autoFields";
@@ -71,8 +71,28 @@ describe("one value on its own", () => {
   });
 });
 
+describe("other warehouse activities (20 Nov 2026)", () => {
+  it("re-bagging and destacking are whole bags, triage metric tons: text or a part bag only warns", () => {
+    expect(checkValue("n-otheract", "Re-bagging (damaged/torn bags)", "abc")?.message).toBe(`"abc" isn't a number.`);
+    expect(checkValue("n-otheract", "Destacking", "12.5")?.message).toBe("Not a whole number.");
+    expect(checkValue("n-otheract", "Destacking", "40")).toBeUndefined();
+    expect(checkValue("n-otheract", "Triage (quality + quantity + moisture check)", "two")?.message).toBe(`"two" isn't a number.`);
+    expect(checkValue("n-otheract", "Triage (quality + quantity + moisture check)", "1.5")).toBeUndefined();
+  });
+});
+
 describe("values that must agree", () => {
   const ids = (sd: Record<string, Record<string, string>>) => recordIssues(sd, ctx).map((i) => i.label);
+  // Team, 23 Nov 2026: closing stock is the old stock plus this truck, so this truck can't add more than it.
+  it("warns when one truck adds more to stock than the closing stock, which includes it", () => {
+    const stock = (added: string, closing: string) => recordIssues({ "n-stock": { "Added to stock from this truck (kg)": added, "Closing stock (kg)": closing } }, ctx);
+    const [w] = stock("1000000", "5000");
+    expect(w).toMatchObject({ stageId: "n-stock", label: "Added to stock from this truck (kg)" });
+    expect(w!.message).toMatch(/more than the closing stock \(5,000 kg\)/);
+    expect(stock("39580", "45000")).toEqual([]);
+    expect(stock("39580", "39580")).toEqual([]); // an empty warehouse before this truck
+    expect(recordIssues({ "n-stock": { "Added to stock from this truck (kg)": "39580" } }, ctx)).toEqual([]); // closing not typed yet
+  });
 
   it("the empty truck can't weigh as much as the loaded one", () => {
     expect(ids({ "n-gross": { "Loaded truck weight (kg)": "15000", "Tare / empty truck weight (kg)": "16000" } }))
@@ -212,11 +232,35 @@ describe("phase order: a phase opens only when the one before is complete", () =
     expect(stageGate({ stageData: finals, branches: { "n-qfs": "pass" } }, "n-grn").open).toBe(true);
   });
 
-  it("Drying, other activities, the ledger and transfer wait for a complete GRN", () => {
-    for (const s of ["n-drying", "n-otheract", "n-ledger", "n-xferdec", "n-stock"]) {
+  it("Other activities, the ledger, transfer and the stock update wait for a complete GRN", () => {
+    for (const s of ["n-otheract", "n-ledger", "n-xferdec", "n-stock"]) {
       expect(stageGate({ stageData: {}, branches: {} }, s).message).toMatch(/locked until the GRN is complete/);
       expect(stageGate({ stageData: { "n-grn": { PRICE: "470", "GRN Weight (kept separate from Gross/Net/Paid)": "40822" } }, branches: {} }, s).open).toBe(true);
     }
+  });
+
+  it("a truck sent from the drying yard straight to production has no Bin, so its GRN doesn't wait for one — every other truck's does", () => {
+    // Every phase the GRN waits for, filled in — except the Bin.
+    const stageData: Record<string, Record<string, string>> = {};
+    for (const phase of [PHASES.ARRIVAL, PHASES.WEIGHT, PHASES.UNLOADING, PHASES.QUALITY_FINAL]) {
+      for (const [stageId, label] of phase.required) (stageData[stageId] ??= {})[label] = "1";
+    }
+    const ALL_BUT_BIN = { stageData, branches: { "n-qfs": "pass" } };
+    const allButBin = stageGate(ALL_BUT_BIN, "n-grn");
+    expect(allButBin.waitingFor).toBe("Bin");
+    expect(stageGate(ALL_BUT_BIN, "n-grn", { straightToProduction: true }).open).toBe(true);
+  });
+
+  it("a truck's own drying — straight onto the drying yard — opens once it has passed quality and is unloaded, before any Bin or GRN", () => {
+    expect(stageGate({ stageData: {}, branches: {} }, "n-drying").open).toBe(false);
+    const unloaded = {
+      "n-gate": { "DATE OF ARRIVAL": "2026-11-20", "CREDIT/CASH": "CASH", "WH LOCATION": "BOUAKE", "VEHICLE NO.": "AB-1" },
+      "n-verify": { "SUPPLIERS NAME": "S", "LBA CODE": "L", "FICHE CODE": "F", FICHE: "1", ORIGIN: "O" },
+      "n-gross": { "GROSS WT KGS": "40000" },
+      "n-unload": { "DATE OF OFFLOADING": "2026-11-20", "SACS (bags)": "600", "BON SACS (good bags)": "600", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "0", Refraction: "0", "Tally Clerk bag count": "600" },
+    };
+    expect(stageGate({ stageData: unloaded, branches: {} }, "n-drying").waitingFor).toBe("Quality");
+    expect(stageGate({ stageData: unloaded, branches: { "n-qfs": "pass" } }, "n-drying").open).toBe(true);
   });
 });
 

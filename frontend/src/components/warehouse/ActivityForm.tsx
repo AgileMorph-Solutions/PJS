@@ -21,16 +21,19 @@ interface Props {
   receipts: ReceiptRecord[];
   /** Stores of this warehouse and known Bins. */
   places: string[];
+  /** The Bin the activity is done on, when recorded from that Bin's page: "Where" (or "Moved from") is then that Bin. */
+  place?: string;
   onSaved: () => void;
 }
 
 /**
- * Records an "other warehouse activity" (stacking, destacking, re-bagging, triage…) against a Lot and a place, in one of the
- * fixed categories (contract data/warehouseActivities.ts). The rules shown here are the ones the server applies (activityProblems),
- * so the form and the server cannot disagree. Triage asks for its own moisture and quantity before and after.
+ * Records an "other warehouse activity" (stacking, destacking, re-bagging, triage…) on a place — a Bin, since 22 Nov 2026 — in
+ * one of the fixed categories (contract data/warehouseActivities.ts); naming a Lot is optional. The rules shown here are the ones
+ * the server applies (activityProblems), so the form and the server cannot disagree. Triage asks for its own moisture and quantity
+ * before and after.
  */
-export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
-  const [v, setV] = useState({ category: "" as ActivityCategoryId | "", date: todayIso(), lotNo: "", locationFrom: "", locationTo: "", bags: "", moisturePct: "", quantityBeforeKg: "", quantityAfterKg: "", remarks: "" });
+export function ActivityForm({ warehouse, receipts, places, place, onSaved }: Props) {
+  const [v, setV] = useState({ category: "" as ActivityCategoryId | "", date: todayIso(), lotNo: "", locationFrom: place ?? "", locationTo: "", bags: "", moisturePct: "", quantityBeforeKg: "", quantityAfterKg: "", remarks: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
     try {
       await api.createActivityEntry({ ...v, warehouse });
       setNotice(`${cat!.label} recorded.`);
-      setV((s) => ({ ...s, lotNo: "", bags: "", moisturePct: "", quantityBeforeKg: "", quantityAfterKg: "", remarks: "" }));
+      setV((s) => ({ ...s, lotNo: "", locationTo: "", bags: "", moisturePct: "", quantityBeforeKg: "", quantityAfterKg: "", remarks: "" }));
       onSaved();
     } catch (err) { setError(err instanceof Error ? err.message : String(err)); } finally { setBusy(false); }
   }
@@ -56,7 +59,7 @@ export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
         {field("Kind of activity *", (
           <select required value={v.category} onChange={(e) => set("category", e.target.value)} className={inputCls}>
             <option value="">Choose…</option>
-            {ACTIVITY_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}{c.useDryingForm ? " (recorded on the truck)" : ""}</option>)}
+            {ACTIVITY_CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}{c.useDryingForm ? " (its own section)" : ""}</option>)}
           </select>
         ))}
         {field("Date", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />, "Today unless you change it")}
@@ -65,15 +68,17 @@ export function ActivityForm({ warehouse, receipts, places, onSaved }: Props) {
             <option value="">{cat?.needsLot ? "Choose the Lot…" : "No Lot"}</option>
             {lots.map((l) => <option key={l.lot} value={l.lot}>{l.label}</option>)}
           </select>
-        ), "The activity stays linked to this Lot's stock")}
-        {field(cat?.needsTwoLocations ? "Moved from *" : "Where *", (
-          <select value={v.locationFrom} onChange={(e) => set("locationFrom", e.target.value)} className={inputCls}>
-            <option value="">Choose a Bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        ))}
+        ), "Only when the work was on one Lot's bags")}
+        {field(cat?.needsTwoLocations ? "Moved from *" : "Where *", place
+          ? <input readOnly value={place} className={`${inputCls} bg-warmstone-100 cursor-default`} />
+          : (
+            <select value={v.locationFrom} onChange={(e) => set("locationFrom", e.target.value)} className={inputCls}>
+              <option value="">Choose a Bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          ))}
         {cat?.needsTwoLocations && field("Moved to *", (
           <select value={v.locationTo} onChange={(e) => set("locationTo", e.target.value)} className={inputCls}>
-            <option value="">Choose a Bin…</option>{places.map((p) => <option key={p} value={p}>{p}</option>)}
+            <option value="">Choose a Bin…</option>{places.filter((p) => p !== place).map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         ))}
         {field("Bags", <input inputMode="numeric" value={v.bags} onChange={(e) => set("bags", e.target.value)} className={inputCls} />)}

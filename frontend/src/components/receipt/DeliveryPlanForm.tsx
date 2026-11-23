@@ -4,6 +4,7 @@ import type { DeliveryPlanPayload } from "../../repository/api";
 import type { DeliveryPlan } from "../../types/receipt";
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../ui/DateInput";
+import { SearchSelect } from "../ui/SearchSelect";
 import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
 import { UNLISTED_ORIGIN } from "./originPicker";
 
@@ -61,7 +62,7 @@ interface Props {
 
 /** The Delivery Plan fields, used to add a plan (list page) and to change one (its own page). */
 export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSubmit, onCancel }: Props) {
-  const { masters } = useTracking();
+  const { masters, refreshMasters } = useTracking();
   const [form, setForm] = useState<PlanFormState>(initial);
   const set = <K extends keyof PlanFormState>(k: K, v: PlanFormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const supplierByName = useMemo(() => new Map(masters.suppliers.map((s) => [s.name, s.code])), [masters.suppliers]);
@@ -92,11 +93,7 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
       {field("dp-code", "Supplier / LBA code", <input id="dp-code" value={form.supplierCode} onChange={(e) => set("supplierCode", e.target.value)} className={inputClass} />)}
       {field("dp-origin", "Expected origin", <>
         {/* Picked from Masters › Origins, never typed (Nov 2026). An older plan's town that the master lacks stays listed first. */}
-        <select id="dp-origin" value={form.origin} onChange={(e) => set("origin", e.target.value)} className={inputClass}>
-          <option value="">Choose an origin…</option>
-          {isUnlistedOrigin(form.origin, masters.origins) && <option value={form.origin}>{form.origin}</option>}
-          {masters.origins.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <SearchSelect id="dp-origin" value={form.origin} options={masters.origins} onOpen={refreshMasters} onChange={(v) => set("origin", v)} placeholder="Choose an origin…" />
         {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[12px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
       </>)}
       {/* Only where old store rows still exist under the warehouse (the workbook's WH NO.); otherwise the plan is simply

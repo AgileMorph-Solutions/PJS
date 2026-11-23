@@ -25,9 +25,10 @@ describe("classifying the real ledger's activity types", () => {
 
 describe("what an activity entry needs", () => {
   const base = { date: "2026-10-16", lotNo: "LOT-BKE-2026-0001", locationFrom: "BKE-001" };
-  it("needs a kind, a Lot and a place, and says which is missing", () => {
+  it("needs a kind and a place, and says which is missing; the Lot is optional, since activities are per Bin", () => {
     expect(activityProblems({})).toEqual(["Choose the kind of activity."]);
-    expect(activityProblems({ category: "stacking" })).toEqual(["Stacking is recorded against a Lot: choose which one.", "Say where in the warehouse it was done (store or bin)."]);
+    expect(activityProblems({ category: "stacking" })).toEqual(["Say where in the warehouse it was done (store or bin)."]);
+    expect(activityProblems({ category: "stacking", locationFrom: "BKE-001" })).toEqual([]);
     expect(activityProblems({ category: "stacking", ...base })).toEqual([]);
   });
   it("a movement needs both ends", () => {
@@ -40,8 +41,8 @@ describe("what an activity entry needs", () => {
     expect(activityProblems({ category: "triage", ...base, moisturePct: 9.5, quantityBeforeKg: 1000, quantityAfterKg: 1100 })).toEqual(["The quantity after triage can't be more than before."]);
     expect(activityProblems({ category: "triage", ...base, moisturePct: 140, quantityBeforeKg: 1, quantityAfterKg: 1 })[0]).toMatch(/between 0 and 100/);
   });
-  it("drying points to the truck's drying form, and 'other' must be described", () => {
-    expect(activityProblems({ category: "drying", ...base })[0]).toMatch(/recorded on the truck itself/);
+  it("drying points to the Bin's drying section, and 'other' must be described", () => {
+    expect(activityProblems({ category: "drying", ...base })[0]).toMatch(/recorded in the Bin's Sun drying section/);
     expect(activityProblems({ category: "other", locationFrom: "BKE-001" })).toEqual(["Describe the activity in the remarks: it doesn't fit a listed kind."]);
     expect(activityProblems({ category: "other", locationFrom: "BKE-001", remarks: "Pest check" })).toEqual([]);
   });

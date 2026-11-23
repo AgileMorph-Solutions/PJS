@@ -25,12 +25,14 @@ import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import { dryingLoss, dryingReturnProblem } from "@anagroci/contract/domain/dryingLoss";
 import { DECISION_BRANCHES } from "@anagroci/contract/domain/decisions";
-import { DRYING_STATUS, dryingKor, dryingPhase, dryingQualityProblem, isOpenRound, type DryingQuality } from "@anagroci/contract/domain/sunDrying";
+import { binDryingProblem, binDryingStockProblem, canSendDryingToProduction, DRYING_TO_PRODUCTION_UNIT_MESSAGE, DRYING_STATUS, dryingKor, dryingPhase, dryingQualityProblem, isOpenRound, truckDryingBlocker, type DryingQuality } from "@anagroci/contract/domain/sunDrying";
+import { binSiteProblem, siteBinStock } from "./binStock.js";
 import { Prisma } from "@prisma/client";
 import { ValidationError, assertDryingJobHasLot } from "../domain/validation.js";
 import { applyBranch, applyStageFields, loadReceiptRow } from "./receipts.js";
 import { toReceiptRecord } from "../serialize.js";
 import { assembleStageData } from "../stageStore.js";
+import { siteOf } from "./ids.js";
 
 type Actor = { id: string; displayName?: string };
 type Tx = Prisma.TransactionClient;
@@ -53,14 +55,23 @@ export interface StartDryingInput extends QualityFields<"input"> {
   issuedBags?: number | string | null;
   issuedNetKg?: number | string | null;
 }
+/** Drying from a Bin: the Bin is the one in the URL, so there is no route and no source to give. */
+export type StartBinDryingInput = Omit<StartDryingInput, "route" | "sourceBin">;
 export interface ReturnDryingInput {
   receivedBags?: number | string | null;
   receivedNetKg?: number | string | null;
   destinationBin?: string;
 }
 export interface CheckDryingInput extends QualityFields<"output"> {
-  /** "pass": the Lot is dry enough. "redry": it goes back out, as the next round. */
+  /**
+   * "pass": dry enough, into its new Bin. "redry": it goes back out, as the next round. "production": the exception — dry,
+   * and sent straight to production from the yard with no new Bin (Sameer, 18 Nov 2026).
+   */
   decision?: string;
+  /** The new Bin, when it wasn't named with what came back. */
+  destinationBin?: string;
+  /** With "production": the BTM it went to production on, when known. */
+  btmNo?: string;
 }
 
 const blank = (v: unknown) => v === null || v === undefined || String(v).trim() === "";
@@ -120,15 +131,85 @@ async function noteOnTimeline(tx: Tx, lotNo: string | null, warehouseSite: strin
  * with what goes out (bags, net kg) and its quality before (moisture required; nut count and the cut test). One open round per
  * Lot; a drying is per Lot, never per Bin, as everywhere else. A Lot whose drying passed can be dried again later: a new round 1.
  */
-export async function startDrying(receiptId: string, input: StartDryingInput, actor: Actor) {
-  const route = input.route ?? "";
-  if (!DECISION_BRANCHES["n-drying"]!.some((b) => b.id === route && b.id !== "none")) throw new ValidationError("Choose how the Lot goes to drying: direct, or via the warehouse.");
+/** What every round 1 needs, wherever it is issued from: a drying type, the net kg that goes out, its quality before, a date. */
+function readStart(input: StartBinDryingInput) {
   if (blank(input.dryType)) throw new ValidationError("Drying type is required.");
   const issuedKg = number(input.issuedNetKg, "Net kg issued for drying", { required: true, min: 0.001 })!;
   const bags = number(input.issuedBags, "Bags issued", { min: 0 });
   const before = readQuality(input as Record<string, unknown>, "input");
   const date = blank(input.date) ? today() : String(input.date).trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00Z`).getTime())) throw new ValidationError("The drying date must be a real date, YYYY-MM-DD.");
+  return { issuedKg, bags, before, date };
+}
+
+/**
+ * Starts sun drying from a Bin (Sameer, 18 Nov 2026): RCN goes from the Bin to the drying yard, and once dry is re-bagged
+ * into a new Bin. The Bin is required — it is the one drying is started from — and must be a Bin of this warehouse; a new
+ * Bin named now can't be that same Bin (contract binDryingProblem). No Lot: the Lots in a Bin can't be told apart. Several
+ * dryings may be out from one Bin at once, each its own quantity.
+ */
+export async function startBinDrying(binCode: string, site: readonly string[], input: StartBinDryingInput, actor: Actor) {
+  const code = binCode.trim().toUpperCase();
+  const problem = binDryingProblem(code, input.destinationBin);
+  if (problem) throw new ValidationError(problem);
+  const { issuedKg, bags, before, date } = readStart(input);
+
+  return prisma.$transaction(async (tx) => {
+    const notHere = await binSiteProblem(site, code);
+    if (notHere) throw new ValidationError(notHere);
+    const bin = (await tx.bin.findUnique({ where: { code }, select: { code: true, warehouseName: true } }))!;
+    await assertBinExists(tx, input.destinationBin, "New Bin");
+    const warehouseSite = (await siteOf(tx, bin.warehouseName!)) ?? bin.warehouseName!;
+    // The Bin's stock as the Warehouse activities page shows it: an empty Bin has nothing to dry, and none can take more out
+    // than it holds (contract binDryingStockProblem).
+    const held = (await siteBinStock(site)).get(code)?.kg ?? 0;
+    const short = binDryingStockProblem(code, held, issuedKg);
+    if (short) throw new ValidationError(short);
+    const sn = await nextDryingSn(tx, warehouseSite, bin.warehouseName);
+    return tx.dryingBatch.create({
+      data: {
+        sn, round: 1, dryingDate: new Date(`${date}T00:00:00Z`), dryingDateRaw: date, warehouseSite, warehouse: bin.warehouseName,
+        sourceBinNo: code, destinationBinNo: blank(input.destinationBin) ? null : input.destinationBin!.trim().toUpperCase(),
+        status: DRYING_STATUS.inDrying, dryType: input.dryType!.trim(),
+        issuedBags: bags === null ? null : Math.round(bags), issuedNetWeightKg: dec(issuedKg),
+        ...qualityColumns(before, "input"),
+        startedBy: actor.displayName ?? null, source: "entered",
+      },
+    });
+  });
+}
+
+/**
+ * The next drying S N. It counts up per site, as the client's sheets do, but the database keeps it unique per `warehouse`
+ * (the store text, schema's @@unique([warehouse, sn])). A store typed the same at two sites ("123" at Bouaké and at Yakro,
+ * 23 Nov 2026) made the site's next number one the other site had already used, and the drying was refused with "That
+ * value is already taken". So the next number is past both: this site's rows and this store's.
+ */
+async function nextDryingSn(tx: Tx, warehouseSite: string | null, warehouse: string | null): Promise<number> {
+  const or = [
+    ...(warehouseSite ? [{ warehouseSite }] : []),
+    ...(warehouse ? [{ warehouse }] : []),
+  ];
+  if (!or.length) return 1;
+  return ((await tx.dryingBatch.aggregate({ where: { OR: or }, _max: { sn: true } }))._max.sn ?? 0) + 1;
+}
+
+/** The Bin a drying chain was taken from: round 1's source. Null for a truck dried straight off the truck (the yard). */
+async function chainSource(tx: Tx, batch: { firstBatchId: string | null; sourceBinNo: string | null; lotNo: string | null }): Promise<string | null> {
+  if (batch.lotNo) return null;
+  if (!batch.firstBatchId) return batch.sourceBinNo;
+  return (await tx.dryingBatch.findUnique({ where: { id: batch.firstBatchId }, select: { sourceBinNo: true } }))?.sourceBinNo ?? batch.sourceBinNo;
+}
+
+/**
+ * Starts sun drying for a truck's Lot. Since 22 Nov 2026 that is the truck unloaded straight onto the drying yard (Sameer,
+ * 18 Nov 2026): it has no Bin yet, so nothing is taken from one. Drying from a Bin is startBinDrying. An older "via the
+ * warehouse" answer is still accepted here, as it was, from its Lot's Bin.
+ */
+export async function startDrying(receiptId: string, input: StartDryingInput, actor: Actor) {
+  const route = input.route ?? "";
+  if (!DECISION_BRANCHES["n-drying"]!.some((b) => b.id === route && b.id !== "none")) throw new ValidationError("Choose how the Lot goes to drying: direct, or via the warehouse.");
+  const { issuedKg, bags, before, date } = readStart(input);
 
   await prisma.$transaction(async (tx) => {
     const row = await loadReceiptRow(receiptId, tx);
@@ -138,16 +219,22 @@ export async function startDrying(receiptId: string, input: StartDryingInput, ac
     const lot = (stages["n-lot"]?.["Lot Number"] ?? "").trim();
     if (deriveStatus(record) === "rejected" || !lot) throw new ValidationError("Only an accepted truck that has a Lot can be dried.");
     assertDryingJobHasLot({ lotNo: lot });
+    // A truck already in a Bin is dried from that Bin, not from the yard (contract truckDryingBlocker): the same RCN can't
+    // go out twice, once as the truck's and once as the Bin's.
+    const rounds = await tx.dryingBatch.findMany({ where: { lotNo: lot }, select: { sn: true, source: true, status: true } });
+    const blocked = truckDryingBlocker(stages["n-bin"]?.["Bin Number"] || record.binNo, rounds);
+    if (blocked) throw new ValidationError(blocked);
     await assertBinExists(tx, input.sourceBin, "Source bin");
     await assertBinExists(tx, input.destinationBin, "Destination bin");
     const open = (await tx.dryingBatch.findMany({ where: { lotNo: lot, warehouseSite: row.warehouse }, select: { status: true } })).some((b) => isOpenRound(b.status));
     if (open) throw new ValidationError(`Lot ${lot} is already in drying. Finish that drying (its return and quality check) first.`);
-    const sn = ((await tx.dryingBatch.aggregate({ where: { warehouseSite: row.warehouse }, _max: { sn: true } }))._max.sn ?? 0) + 1;
+    const sn = await nextDryingSn(tx, row.warehouse, (stages["n-gate"]?.["WH NO."] ?? "").trim() || null);
     await tx.dryingBatch.create({
       data: {
         sn, round: 1, dryingDate: new Date(`${date}T00:00:00Z`), dryingDateRaw: date, warehouseSite: row.warehouse,
         warehouse: (stages["n-gate"]?.["WH NO."] ?? "").trim() || null,
-        sourceBinNo: blank(input.sourceBin) ? (stages["n-bin"]?.["Bin Number"] ?? null) : input.sourceBin!.trim(),
+        // Straight off the truck onto the yard: there is no Bin it was taken from.
+        sourceBinNo: !blank(input.sourceBin) ? input.sourceBin!.trim() : route === "direct" ? null : (stages["n-bin"]?.["Bin Number"] ?? null),
         destinationBinNo: blank(input.destinationBin) ? null : input.destinationBin!.trim(),
         lotNo: lot, ficheNoRaw: (stages["n-verify"]?.["FICHE"] ?? "").trim() || null,
         supplierNameRaw: row.supplierName || null, supplierCodeRaw: row.lbaCode || null,
@@ -189,13 +276,16 @@ export async function returnDrying(batchId: string, input: ReturnDryingInput, ac
     if (problem) throw new ValidationError(problem);
     const bags = number(input.receivedBags, "Bags returned", { min: 0 });
     await assertBinExists(tx, input.destinationBin, "Destination bin");
+    const source = await chainSource(tx, batch);
+    const toBin = blank(input.destinationBin) ? batch.destinationBinNo : input.destinationBin!.trim().toUpperCase();
+    if (source) { const p = binDryingProblem(source, toBin); if (p) throw new ValidationError(p); }
     const loss = dryingLoss(issuedKg, returnedKg, null, null);
     const updated = await tx.dryingBatch.update({
       where: { id: batchId },
       data: {
         status: DRYING_STATUS.qualityCheck, returnedAt: new Date(), returnedBy: actor.displayName ?? null,
         receivedBags: bags === null ? null : Math.round(bags), receivedNetWeightKg: dec(returnedKg),
-        ...(blank(input.destinationBin) ? {} : { destinationBinNo: input.destinationBin!.trim() }),
+        ...(blank(input.destinationBin) ? {} : { destinationBinNo: input.destinationBin!.trim().toUpperCase() }),
         dryingLossKg: dec(loss.lossKg), dryingLossPct: dec(loss.lossPct),
       },
     });
@@ -210,16 +300,37 @@ export async function returnDrying(batchId: string, input: ReturnDryingInput, ac
  */
 export async function checkDrying(batchId: string, input: CheckDryingInput, actor: Actor) {
   const decision = input.decision ?? "";
-  if (decision !== "pass" && decision !== "redry") throw new ValidationError("Choose the result of the check: passed, or dry it again.");
+  if (decision !== "pass" && decision !== "redry" && decision !== "production") throw new ValidationError("Choose the result of the check: passed into a new Bin, dry it again, or sent straight to production.");
   const after = readQuality(input as Record<string, unknown>, "output");
   return prisma.$transaction(async (tx) => {
     const batch = await roundIn(tx, batchId, "quality_check");
+    if (decision === "production") {
+      // Production runs at a Central warehouse; a Unit's RCN goes on to Central on a BKT first (contract canSendDryingToProduction).
+      const site = batch.warehouseSite ? await tx.warehouse.findUnique({ where: { name: batch.warehouseSite }, select: { type: true } }) : null;
+      if (!canSendDryingToProduction(site?.type)) throw new ValidationError(DRYING_TO_PRODUCTION_UNIT_MESSAGE);
+    }
+    const source = await chainSource(tx, batch);
+    // Passed from a Bin, the dried RCN is re-bagged into a NEW Bin: without one it would be in no Bin's stock at all.
+    let destination = batch.destinationBinNo;
+    if (decision === "pass" && !blank(input.destinationBin)) {
+      await assertBinExists(tx, input.destinationBin, "New Bin");
+      destination = input.destinationBin!.trim().toUpperCase();
+    }
+    if (decision === "pass" && source) {
+      if (!destination) throw new ValidationError("Choose the new Bin the dried RCN goes into.");
+      const p = binDryingProblem(source, destination);
+      if (p) throw new ValidationError(p);
+    }
     const moistureLoss = dryingLoss(0, 0, num(batch.inputMoisturePct), after.moisture).moistureLossPct;
+    const status = decision === "pass" ? DRYING_STATUS.passed : decision === "production" ? DRYING_STATUS.toProduction : DRYING_STATUS.redry;
     const checked = await tx.dryingBatch.update({
       where: { id: batchId },
       data: {
         ...qualityColumns(after, "output"), moistureLossPct: dec(moistureLoss),
-        status: decision === "pass" ? DRYING_STATUS.passed : DRYING_STATUS.redry, checkedAt: new Date(), checkedBy: actor.displayName ?? null,
+        status, checkedAt: new Date(), checkedBy: actor.displayName ?? null,
+        ...(decision === "pass" ? { destinationBinNo: destination } : {}),
+        // Straight to production goes into no Bin; the workbook's own "Issued to production" column says when.
+        ...(decision === "production" ? { destinationBinNo: null, issuedToProduction: today(), btmNo: blank(input.btmNo) ? null : input.btmNo!.trim() } : {}),
       },
     });
     const round = batch.round ?? 1;
@@ -227,7 +338,11 @@ export async function checkDrying(batchId: string, input: CheckDryingInput, acto
       await noteOnTimeline(tx, batch.lotNo, batch.warehouseSite, actor.id, `Sun drying passed after round ${round}: moisture ${after.moisture}%`);
       return { checked, next: null };
     }
-    const sn = ((await tx.dryingBatch.aggregate({ where: { warehouseSite: batch.warehouseSite }, _max: { sn: true } }))._max.sn ?? 0) + 1;
+    if (decision === "production") {
+      await noteOnTimeline(tx, batch.lotNo, batch.warehouseSite, actor.id, `Sun drying finished after round ${round} (moisture ${after.moisture}%): sent straight to production${blank(input.btmNo) ? "" : ` on BTM ${input.btmNo!.trim()}`}, no new Bin`);
+      return { checked, next: null };
+    }
+    const sn = await nextDryingSn(tx, batch.warehouseSite, batch.warehouse);
     const next = await tx.dryingBatch.create({
       data: {
         sn, round: round + 1, firstBatchId: batch.firstBatchId ?? batch.id,

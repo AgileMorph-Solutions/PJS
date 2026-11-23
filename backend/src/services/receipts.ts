@@ -12,7 +12,7 @@ import { Prisma } from "@prisma/client";
 import { STAGE_FIELD_MAP } from "@anagroci/contract/generated/stageFieldMap";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
-import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce, staleDerivedFields } from "@anagroci/contract/domain/receiptMath";
+import { DERIVED_RULES, computeDerivedFields, derivedRuleInForce, staleDerivedFields, stockFillOnGrn } from "@anagroci/contract/domain/receiptMath";
 import { RECEIPT_STAGE_MIRRORS, STAGE_TO_RECEIPT_COLUMNS } from "@anagroci/contract/domain/receiptMirror";
 import { currentFormOfSiteId } from "@anagroci/contract/domain/ids";
 import { splitBinNumber } from "@anagroci/contract/domain/binNumber";
@@ -22,14 +22,14 @@ import { BIN_FINALISE_FIELDS, FINALISED_WHEN_LABEL } from "@anagroci/contract/do
 import { BIN_FINALISED_MESSAGE, LOCKED_DECISIONS, LOCKED_MESSAGE, LOCKED_STAGES, isGrnComplete } from "@anagroci/contract/domain/recordLock";
 import { decisionBranchesFor } from "@anagroci/contract/domain/decisions";
 import { productionReadinessGaps } from "@anagroci/contract/domain/productionBatch";
-import { dryingRoundsByLot } from "./dryingRounds.js";
+import { dryingOnYard, dryingRoundsByLot, straightToProduction } from "./dryingRounds.js";
 import { decisionGate, stageGate } from "@anagroci/contract/domain/phaseGate";
 import { supplierNameKey } from "@anagroci/contract/domain/supplierCode";
 import { prisma } from "../db.js";
 import { RECEIPT_INCLUDE, assembleStageData, toColumnPayload, STAGE_MODEL_DELEGATE } from "../stageStore.js";
 import { toReceiptRecord } from "../serialize.js";
 import { assertLotBeforeBin, assertRejectionHasReason, binWithoutWarehouseMessage, ForbiddenError, ValidationError } from "../domain/validation.js";
-import { canSeeField, canSetPrice, type Role } from "@anagroci/contract/data/roles";
+import { canChangeRecordedValue, canSeeField, canSetPrice, changesToRecorded, recordedValueMessage, type Role } from "@anagroci/contract/data/roles";
 import { nextLotNumber, nextReceiptId, siteOf, siteTypeOf } from "./ids.js";
 import { planFitProblem } from "./receiptPlanInfo.js";
 import { assertKnownOrigin } from "./masters.js";
@@ -216,11 +216,21 @@ export async function applyStageFields(
     const inApp = opts.actor?.via === "direct" || opts.actor?.via === "approval";
     const current = await assertCallerMayWrite(tx, id, stageId, fields, opts.actor?.role, inApp ? "app" : "upload");
     before = current;
+    // Once a value is recorded, only the Incharge or an Admin changes it (22 Nov 2026): a lower role writing directly — the
+    // Branch Manager's price — may fill an empty field, never rewrite one.
+    if (opts.actor?.via === "direct" && opts.actor.role && !canChangeRecordedValue(opts.actor.role)) {
+      const conflicts = changesToRecorded(current, { [stageId]: fields });
+      if (conflicts.length) throw new ValidationError(recordedValueMessage(conflicts));
+    }
     const meta = await tx.receipt.findUnique({ where: { id }, select: { arrivalDate: true, lockedAt: true, warehouse: true, source: true } });
     if (meta?.lockedAt && LOCKED_STAGES.has(stageId)) throw new ValidationError(LOCKED_MESSAGE);
     if (stageId === "n-bin" && (current["n-bin"]?.["Bin allocation date"] ?? "").trim()) throw new ValidationError(BIN_FINALISED_MESSAGE);
     const ruled = isPersonEdit(opts, meta?.source);
-    if (ruled) assertStageOpen(stageGate({ stageData: current, branches: await branchesOf(tx, id) }, stageId));
+    // A truck sent from the drying yard straight to production never gets a Bin: its GRN doesn't wait for one.
+    // While the truck's RCN is out on the drying yard it is in no Bin: the Bin step waits for it to come back.
+    const facts = stageId === "n-grn" ? { straightToProduction: await straightToProduction(tx, id) }
+      : stageId === "n-bin" ? { onDryingYard: await dryingOnYard(tx, id) } : {};
+    if (ruled) assertStageOpen(stageGate({ stageData: current, branches: await branchesOf(tx, id) }, stageId, facts));
     // A field the step carries but the person left blank fills itself (contract data/autoFields.ts), whatever route the write came by.
     if (AUTO_FIELDS[stageId]) fields = { ...fields, ...autoFill(stageId, fields, current[stageId], await autoFillContext(tx, meta, current, opts)) };
     if (stageId === "n-gate") fields = await withWarehouseType(tx, fields, current["n-gate"]);
@@ -252,18 +262,21 @@ function assertStageOpen(gate: { open: boolean; message?: string }) {
 }
 
 /**
- * The LBA code belongs to the supplier, so picking a supplier fills it from the Supplier master, and a code that names a
- * different supplier is refused rather than saved beside the wrong name. A name the master doesn't know is left as typed.
+ * The LBA code is the supplier's own code in the Supplier master (Supplier.code), never typed (team, 20 Nov 2026: "LBA code
+ * is always linked to supplier"): picking or changing the supplier writes its code beside it, and clearing the supplier
+ * clears it, so the two can't disagree. A code sent that names a different supplier is refused rather than saved beside the
+ * wrong name. A name the master doesn't know (an older upload's spelling) keeps whatever code it came with.
  */
 async function withLbaCode(tx: Tx, fields: Record<string, string>, stored: Record<string, string> | undefined): Promise<Record<string, string>> {
+  if (!("SUPPLIERS NAME" in fields || "LBA CODE" in fields)) return fields;
   const name = (fields["SUPPLIERS NAME"] ?? stored?.["SUPPLIERS NAME"] ?? "").trim();
-  if (!name || !("SUPPLIERS NAME" in fields || "LBA CODE" in fields)) return fields;
+  if (!name) return "SUPPLIERS NAME" in fields ? { ...fields, "LBA CODE": "" } : fields;
   const key = supplierNameKey(name);
   const match = (await tx.supplier.findMany({ select: { code: true, name: true } })).filter((s) => supplierNameKey(s.name) === key);
   if (match.length !== 1) return fields; // unknown, or two suppliers share the name: nothing safe to fill
   const code = (fields["LBA CODE"] ?? "").trim();
   if (code && code !== match[0]!.code) throw new ValidationError(`LBA code ${code} isn't ${name}'s code (${match[0]!.code}). Pick the supplier from the list.`);
-  return "SUPPLIERS NAME" in fields && !code ? { ...fields, "LBA CODE": match[0]!.code } : fields;
+  return { ...fields, "LBA CODE": match[0]!.code };
 }
 
 const WH_LOCATION = "WH LOCATION";
@@ -334,8 +347,16 @@ async function assertRecordOpen(db: Tx | typeof prisma, id: string) {
  * who completed it; a seeder or import (no validation) never gets here, so existing records are left open.
  */
 async function lockIfGrnComplete(tx: Tx, id: string, opts: WriteOpts) {
-  const row = await loadReceiptRow(id, tx);
+  let row = await loadReceiptRow(id, tx);
   if (!row || row.lockedAt || !isGrnComplete(assembleStageData(row as Record<string, unknown>))) return;
+  // The truck goes into stock with its GRN (contract stockFillOnGrn): written as part of the same save, by the same person,
+  // straight to the stock step — whoever completed the GRN (the Branch Manager's price can) needn't be able to edit that step.
+  const stock = stockFillOnGrn(assembleStageData(row as Record<string, unknown>), true);
+  if (Object.keys(stock).length) {
+    await writeStageFields(tx, id, "n-stock", stock, opts);
+    await refreshDerivedFields(tx, id, opts);
+    row = (await loadReceiptRow(id, tx))!;
+  }
   await tx.receipt.update({ where: { id }, data: { lockedAt: new Date(), lockedById: opts.actor?.id ?? null } });
   await tx.timelineEntry.create({
     data: { receiptId: id, status: deriveStatus(toReceiptRecord(row) as ReceiptRecord), at: new Date().toISOString(), actorId: opts.actor?.id, note: "Record locked: the GRN is complete" },

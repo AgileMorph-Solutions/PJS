@@ -39,7 +39,7 @@ export function registerAuth(app: FastifyInstance) {
     req.user = user;
     // The change log names whoever this request is for (audit/context.ts opened the store before this hook).
     const audit = auditStore.getStore();
-    if (audit) audit.userId = user.id;
+    if (audit) { audit.userId = user.id; audit.userName = user.displayName; }
     if (!isRole(user.role)) return;
     if (!isAllowed(user.role, req.method, path)) throw new ForbiddenError();
     if (isProductionPath(path)) await assertProductionAccess(user as User & { role: Role });

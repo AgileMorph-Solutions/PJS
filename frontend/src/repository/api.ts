@@ -9,6 +9,7 @@ import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SiteFieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
 } from "@anagroci/contract/types/receipt";
 import type { ChangeLogRecord } from "@anagroci/contract/types/changeLog";
+import type { FicheView } from "@anagroci/contract/domain/fiche";
 import type {
   UserView, SubmissionView, BranchManagerView, SupplierRequestView,
 } from "@anagroci/contract/types/user";
@@ -105,6 +106,17 @@ async function postWorkbookFile(path: string, file: File, warehouse?: string): P
   const form = new FormData();
   if (warehouse) form.append("warehouse", warehouse); // fields before the file, so the server has it when it reads the file
   form.append("file", file);
+  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form, credentials: "include" });
+  checkUnauthorized(res, path);
+  if (!res.ok) throw await errorFromResponse(res);
+  return res.json();
+}
+
+/** A truck's fiche photo or scan (multipart field "file"): kept on the receipt and read; answers with what was read. */
+async function postFicheFile(receiptId: string, file: Blob, fileName: string): Promise<FicheView> {
+  const form = new FormData();
+  form.append("file", file, fileName);
+  const path = `/receipts/${encodeURIComponent(receiptId)}/fiche`;
   const res = await fetch(`${BASE}${path}`, { method: "POST", body: form, credentials: "include" });
   checkUnauthorized(res, path);
   if (!res.ok) throw await errorFromResponse(res);
@@ -241,7 +253,19 @@ export const api = {
   /** A sun-drying round's return: what came back from the yard. The weight loss is worked out by the server. */
   returnDrying: (batchId: string, body: DryingReturnPayload) =>
     request<unknown>(`/drying-batches/${encodeURIComponent(batchId)}/return`, { method: "POST", body: JSON.stringify(body) }),
-  /** A round's quality check: passes the Lot, or sends it back as the next round. */
+  /** The Bins of a warehouse with their stock: the Warehouse activities list. */
+  /** This warehouse's Bins; with `unassigned`, the master's Bins with no warehouse instead. */
+  listBins: (warehouse?: string, unassigned = false) =>
+    request<SiteBinSummary[]>(`${withWarehouse("/bins", warehouse)}${unassigned ? `${warehouse ? "&" : "?"}unassigned=1` : ""}`),
+  /** One Bin: its stock and Lots, what moved in and out, its dryings and its activities. */
+  getBin: (code: string, warehouse?: string) => request<SiteBinDetail>(withWarehouse(`/bins/${encodeURIComponent(code)}`, warehouse)),
+  /** Saves fields of one of the Bin's own forms (n-otheract / n-ledger). Returns the Bin as it now stands. */
+  saveBinStage: (code: string, warehouse: string | undefined, stageId: string, fields: Record<string, string>) =>
+    request<SiteBinDetail>(withWarehouse(`/bins/${encodeURIComponent(code)}/stages/${encodeURIComponent(stageId)}`, warehouse), { method: "PUT", body: JSON.stringify({ fields }) }),
+  /** Sun drying from this Bin: round 1. Its return and quality check are returnDrying / checkDrying. */
+  startBinDrying: (code: string, warehouse: string | undefined, body: BinDryingStartPayload) =>
+    request<unknown>(withWarehouse(`/bins/${encodeURIComponent(code)}/drying`, warehouse), { method: "POST", body: JSON.stringify(body) }),
+  /** A round's quality check: into a new Bin, back out as the next round, or straight to production. */
   checkDrying: (batchId: string, body: DryingCheckPayload) =>
     request<unknown>(`/drying-batches/${encodeURIComponent(batchId)}/check`, { method: "POST", body: JSON.stringify(body) }),
   /** The negotiated price per kg: set directly by the Branch Manager (or an Admin). Returns the updated receipt. */
@@ -280,9 +304,9 @@ export const api = {
   transferDestinations: (from: string) => request<TransferDestination[]>(`/transfers/destinations?from=${encodeURIComponent(from)}`),
   createTransfer: (t: {
     transferDate: string; fromWarehouse: string; toWarehouse: string; remarks?: string;
-    lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[];
+    lines: TransferLinePayload[];
   }) => request<TransferRequest>("/transfers", { method: "POST", body: JSON.stringify(t) }),
-  addTransferLines: (id: string, lines: { receiptId: string; bags?: number | null; netWeightKg?: number | string | null }[]) =>
+  addTransferLines: (id: string, lines: TransferLinePayload[]) =>
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/lines`, { method: "POST", body: JSON.stringify({ lines }) }),
   /** The SENDING warehouse sends the truck: one BKT is one truck, so the truck number is required. */
   dispatchTransfer: (id: string, p: DispatchPayload) =>
@@ -301,6 +325,12 @@ export const api = {
    * stores + aliases) — see backend/src/domain/site.ts. Omitted = every site, unfiltered. */
   dryingJobs: (warehouse?: string) => request<DryingJob[]>(withWarehouse("/drying-jobs", warehouse)),
   receiptLinks: (id: string) => request<ReceiptLinks>(`/receipts/${encodeURIComponent(id)}/links`),
+  /** The truck's CCA fiche: its details, what was read off it, and what that offers the Verify supplier documents step. */
+  fiche: (id: string) => request<FicheView>(`/receipts/${encodeURIComponent(id)}/fiche`),
+  uploadFiche: postFicheFile,
+  rereadFiche: (id: string) => request<FicheView>(`/receipts/${encodeURIComponent(id)}/fiche/read`, { method: "POST" }),
+  /** For an <img>/<a>: same-origin, so the session cookie goes with it. `v` changes per upload so a replaced fiche isn't served from cache. */
+  ficheFileUrl: (id: string, v: string) => `${BASE}/receipts/${encodeURIComponent(id)}/fiche/file?v=${encodeURIComponent(v)}`,
   listDownstreamStatus: (warehouse?: string) =>
     request<DownstreamStatus[]>(withWarehouse("/receipts/downstream", warehouse)),
 
@@ -594,7 +624,37 @@ export type DryingStartPayload = DryingQualityPayload<"input"> & {
   issuedBags?: string; issuedNetKg: string;
 };
 export interface DryingReturnPayload { receivedBags?: string; receivedNetKg: string; destinationBin?: string }
-export type DryingCheckPayload = DryingQualityPayload<"output"> & { decision: "pass" | "redry" };
+/** "pass": into its new Bin. "redry": back out as the next round. "production": straight to production, no new Bin. */
+export type DryingCheckPayload = DryingQualityPayload<"output"> & { decision: "pass" | "redry" | "production"; destinationBin?: string; btmNo?: string };
+/** Drying from a Bin: the Bin is in the URL, so there is no route or source bin to send. */
+export type BinDryingStartPayload = Omit<DryingStartPayload, "route" | "sourceBin">;
+
+/** A BKT line: a Bin (how a truck is loaded since 22 Nov 2026) or, on older BKTs, a Lot. */
+export interface TransferLinePayload { receiptId?: string; binCode?: string; bags?: number | null; netWeightKg?: number | string | null }
+
+/** One Bin of a warehouse on the Warehouse activities list (backend services/bins.ts). */
+export interface SiteBinSummary {
+  binCode: string;
+  /** The Bin's warehouse in Masters › Bins; null for a Bin with no warehouse. */
+  store: string | null;
+  kg: number;
+  lotCount: number;
+  lotsWithoutKg: number;
+}
+
+/** One Bin with what was done to it. */
+export interface SiteBinDetail {
+  binCode: string;
+  store: string | null;
+  kg: number;
+  issuedKg: number;
+  lots: import("@anagroci/contract/domain/productionBatch").LotInBin[];
+  movements: import("@anagroci/contract/domain/productionBatch").BinMovement[];
+  dryings: LinkedDryingBatchRow[];
+  activities: (WarehouseActivityLedgerEntry & { recordedBy: string | null })[];
+  /** Its own Other warehouse activities and Activity ledger forms; null for one not filled in yet. */
+  stages: Record<import("@anagroci/contract/domain/warehouseActivityStages").BinStageId, import("@anagroci/contract/domain/warehouseActivityStages").BinStageView | null>;
+}
 
 export interface WorkbookPreview {
   token: string;
@@ -736,6 +796,8 @@ export interface LinkedDryingBatchRow {
   startedBy: string | null;
   returnedBy: string | null;
   checkedBy: string | null;
+  /** The BTM a drying sent straight to production went on, when given. */
+  btmNo: string | null;
 }
 export interface DryingCutGrams { goodKernel: number | null; immature: number | null; spotted: number | null; rejection: number | null; void: number | null; oil: number | null; shell: number | null }
 
@@ -772,8 +834,8 @@ export interface ReceiptLinks {
 export interface DispatchPayload {
   /** The warehouse receipt number the dispatch is recorded against (required). */
   whReceiptNo: string;
-  /** Each Lot's quality as dispatched: prefilled from its own quality check, changed only if it was measured again. */
-  lines?: { receiptId: string; moisture?: string; kor?: string; nutCount?: string }[];
+  /** Each line's quality as dispatched: measured for a Bin; for a Lot, prefilled from its quality check and changed only if re-measured. */
+  lines?: { lineId?: number; receiptId?: string; moisture?: string; kor?: string; nutCount?: string }[];
   truckNo: string; transporter?: string | null; driver?: string | null; driverPhone?: string | null; dispatchedGrossKg?: number | string | null;
 }
 export interface ReceivePayload {
@@ -783,8 +845,8 @@ export interface ReceivePayload {
   bagsReceived?: number | string; receivedGrossKg: number | string; damagedBags?: number | string | null;
   korReceived?: number | string | null; moistureReceived?: number | string | null; nutCountReceived?: number | string | null;
   receivedComment?: string | null; receivedLotNoRaw?: string | null;
-  /** Per Lot: the bin it was unloaded into at this site (required), and optionally the bags of it counted off the truck. */
-  lines: { receiptId: string; binCode: string; bagsReceived?: string }[];
+  /** Per line: the bin it was unloaded into at this site (required), and optionally the bags of it counted off the truck. */
+  lines: { lineId?: number; receiptId?: string; binCode: string; bagsReceived?: string }[];
 }
 
 /** What a plan can be created or corrected with — the writable subset of DeliveryPlan; everything else is derived. */

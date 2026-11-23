@@ -72,11 +72,12 @@ beforeAll(async () => {
   await approveException(offPlan, approver, "Called the supplier");
 
   const onTruck = await truck(undefined, "VAVOUA", "48000", "WBCF-T4"); // the Lot that goes to the other warehouse
+  await setStageFields(onTruck, "n-bin", { "Bin Number": "WBCF-BIN-1" }, { bypassValidation: true }); // A Lot goes on a BKT only from a known Bin (23 Nov 2026).
   await setBranch(onTruck, "n-xferdec", "transfer");
   const t = await createTransfer({ transferDate: "2035-05-20", fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: onTruck, bags: 590 }] });
   bkt = t.id;
-  await dispatchTransfer(bkt, { whReceiptNo: "WR-D", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880, transporter: "T", driver: "D", driverPhone: "0", lines: [{ receiptId: onTruck, nutCount: 170 }] });
-  await receiveTransfer(bkt, { whReceiptNo: "WR-R", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road" });
+  await dispatchTransfer(bkt, { whReceiptNo: "9001", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880, transporter: "T", driver: "D", driverPhone: "0", lines: [{ receiptId: onTruck, nutCount: 170 }] });
+  await receiveTransfer(bkt, { whReceiptNo: "8001", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road" });
 });
 afterAll(async () => {
   await cleanup();
@@ -124,7 +125,7 @@ describe("Truck Reception shows where each truck stands, and never takes it back
       "Planning / Exception Flag": "Origin differs from plan; Over the planned quantity",
     });
     // A truck that has left on a BKT reads as transferred out — the status is a label, not an internal id.
-    expect(rowOf(ws, (await prisma.transferRequestLine.findFirstOrThrow({ where: { transferId: bkt } })).receiptId).cells["Receipt Status"]).toBe("Transferred out");
+    expect(rowOf(ws, (await prisma.transferRequestLine.findFirstOrThrow({ where: { transferId: bkt } })).receiptId!).cells["Receipt Status"]).toBe("Transferred out");
     expect(rowOf(ws, unplanned).cells).toMatchObject({
       "Delivery Plan ID": null, "Reception Type": "Unplanned", "Plan Link Status": "Not planned", "Exception Approval Status": "Pending", "Planning / Exception Flag": "Unplanned; Supplier not in master", // WB test supplier is not in the master
     });

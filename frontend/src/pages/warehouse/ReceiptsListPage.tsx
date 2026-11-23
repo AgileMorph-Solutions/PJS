@@ -9,6 +9,7 @@ import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
 import { useTracking, useDownstreamStatus, useReceiptPlanInfo } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
+import { useSiteReceipts } from "../../state/useSiteReceipts";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { receiptColumns, fiche, storeCode } from "./columns";
@@ -19,7 +20,7 @@ const icon = (name: string) => <span className="material-symbols-outlined">{name
 /** Reception for one warehouse (BOUAKE, YAKRO FACTORY) — one component for every warehouse's /<warehouse>/receipts (see
  * SiteContext's useSite()). The section IS the warehouse; its category (Unit/Central) is the kicker. */
 export function ReceiptsListPage() {
-  const { receipts, refresh } = useTracking();
+  const { refresh } = useTracking();
   const site = useSite();
   const canEdit = useCanEditDirectly();
   const switchSite = useSwitchSite();
@@ -38,12 +39,7 @@ export function ReceiptsListPage() {
   const base = `/${site.slug}/receipts`;
   const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
-  // Every truck of this warehouse: filed under its name, an alias of it, or an old store row under it — so nothing a
-  // database already holds drops out of the list.
-  const siteReceipts = useMemo(() => {
-    const names = new Set([site.warehouseName, ...site.aliases, ...site.stores]);
-    return receipts.filter((r) => names.has(r.warehouse));
-  }, [receipts, site]);
+  const siteReceipts = useSiteReceipts();
 
   const counts = useMemo(() => computeDashboardCounts(siteReceipts), [siteReceipts]);
 

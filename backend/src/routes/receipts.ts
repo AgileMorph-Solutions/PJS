@@ -37,7 +37,7 @@ export function sendError(reply: any, e: unknown) {
  * Every mutating receipt route needs "does this id exist" first — five of them repeated the same
  * lookup-or-404. Centralised so the message and status code can't drift between them.
  */
-async function requireReceipt(id: string, reply: FastifyReply, req: FastifyRequest): Promise<ReceiptRecord | null> {
+export async function requireReceipt(id: string, reply: FastifyReply, req: FastifyRequest): Promise<ReceiptRecord | null> {
   const r = await getReceipt(id);
   if (!r) {
     reply.code(404).send({ error: `Receipt ${id} not found` });

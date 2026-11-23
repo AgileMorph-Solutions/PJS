@@ -61,6 +61,11 @@ export interface DerivedRule {
    * result). The typed fallback is then for uploads alone, whose sheet may hold the result without its inputs.
    */
   calculatedOnlyInApp?: boolean;
+  /**
+   * Calculated only once its target's step has been started. Writing a value into a step creates it, and a step's mere
+   * presence moves the truck's status (deriveStatus: n-stock → "in_stock") — so Net and bags alone must not open the stock step.
+   */
+  onlyInStartedStage?: boolean;
 }
 
 /** 80 lb of kernels per 1000 g sample, as a factor — the client's own constant in their Warehouse Receiving sheet. */
@@ -83,6 +88,9 @@ const GRN_WEIGHT: FieldRef = ["n-grn", "GRN Weight (kept separate from Gross/Net
 const PRICE: FieldRef = ["n-grn", "PRICE"];
 const AMOUNT: FieldRef = ["n-grn", "AMOUNT"];
 const KOR: FieldRef = ["n-qfs", "KOR"];
+const ADDED_TO_STOCK: FieldRef = ["n-stock", "Added to stock from this truck (kg)"];
+const CLOSING_STOCK: FieldRef = ["n-stock", "Closing stock (kg)"];
+const STOCK_AFTER: FieldRef = ["n-stock", "Total warehouse stock after this truck (kg)"];
 const FINAL_KOR: FieldRef = ["n-qfs", "FINAL KOR"];
 const panel = (name: "Sample" | "Final"): FieldRef[] =>
   (["Good Kernel", "Immature", "Spotted"] as const).map((g) => ["n-qfs", `${name} – ${g} (g)`] as const);
@@ -108,6 +116,11 @@ export const DERIVED_RULES: readonly DerivedRule[] = [
   { target: AMOUNT, inputs: [PRICE, PAID], compute: ([p, w]) => p! * w!, formula: "Price × paid weight" },
   korRule(KOR, "Sample"),
   korRule(FINAL_KOR, "Final"),
+  // Closing stock is typed for now (the team will decide later how it is worked out); the total follows from it.
+  {
+    target: STOCK_AFTER, inputs: [CLOSING_STOCK, ADDED_TO_STOCK], compute: ([c, a]) => c! + a!,
+    formula: "Closing stock + added to stock from this truck", onlyInStartedStage: true,
+  },
 ];
 
 /**
@@ -118,17 +131,21 @@ export const DERIVED_RULES: readonly DerivedRule[] = [
  */
 export interface PrefillRule {
   target: FieldRef;
-  /** Added up. Every one must be recorded: a sum missing a part would be offered as if it were the whole. */
+  /** Every one must be recorded: a suggestion missing a part would be offered as if it were the whole. */
   sources: readonly FieldRef[];
   /** Shown beside the suggestion so the person knows where it came from. */
   from: string;
-  /** Turns the sum into the suggestion; the sum itself when absent. */
-  compute?: (sum: number) => number;
+  /** Turns the sources' values, in order, into the suggestion; their sum when absent. */
+  compute?: (values: number[]) => number;
 }
 export const PREFILL_RULES: readonly PrefillRule[] = [
   { target: GRN_WEIGHT, sources: [NET], from: "net weight" },
   // 30 bags to a pallet (the label's own rule), so the pallets needed for the bags unloaded, rounded up.
-  { target: PALLETS, sources: [SACS], from: "bags ÷ 30", compute: (bags) => Math.ceil(bags / 30) },
+  { target: PALLETS, sources: [SACS], from: "bags ÷ 30", compute: ([bags]) => Math.ceil(bags! / 30) },
+  // Nov 2026 team decision: what goes into stock is the net weight less the jute bags, at the same 1 kg a bag. Not locked
+  // (20 Nov 2026: the warehouse may need to put in a different figure); filled in by itself when the GRN completes
+  // (23 Nov 2026, stockFillOnGrn), rather than only offered.
+  { target: ADDED_TO_STOCK, sources: [NET, SACS], from: "net weight − 1 kg per bag", compute: ([net, bags]) => net! - bags! * BAG_WEIGHT_KG },
 ];
 
 /** Suggestions for the empty fields of one stage, as {label: {value, from}}. A field that already has a value gets none. */
@@ -139,8 +156,8 @@ export function prefillSuggestions(stageData: StageData, stageId: string): Recor
     if ((stageData[stageId]?.[r.target[1]] ?? "").trim() !== "") continue; // already has a value, typed or imported
     const parts = r.sources.map(([s, l]) => parseQty(stageData[s]?.[l]));
     if (!parts.every((p) => p !== undefined)) continue;
-    const sum = parts.reduce<number>((a, b) => a + b!, 0);
-    out[r.target[1]] = { value: formatQty(r.compute ? r.compute(sum) : sum), from: r.from };
+    const values = parts as number[];
+    out[r.target[1]] = { value: formatQty(r.compute ? r.compute(values) : values.reduce((a, b) => a + b, 0)), from: r.from };
   }
   return out;
 }
@@ -181,9 +198,10 @@ export function computeDerivedFields(stageData: StageData): Record<string, Recor
   const out: Record<string, Record<string, string>> = {};
 
   for (const rule of DERIVED_RULES) {
+    const [stageId, label] = rule.target;
+    if (rule.onlyInStartedStage && !stageData[stageId]) continue;
     const values = rule.inputs.map(([s, l]) => parseQty(working[s]?.[l]));
     if (values.some((v) => v === undefined)) continue;
-    const [stageId, label] = rule.target;
     const value = formatQty(rule.compute(values as number[]));
     (working[stageId] ??= {})[label] = value;
     (out[stageId] ??= {})[label] = value;
@@ -247,4 +265,16 @@ export function dryingLoss(issuedNetKg: number | undefined, receivedNetKg: numbe
   if (issuedNetKg === undefined || receivedNetKg === undefined || issuedNetKg === 0) return undefined;
   const kg = issuedNetKg - receivedNetKg;
   return { kg, pct: kg / issuedNetKg };
+}
+
+/**
+ * What the stock step gets by itself the moment the truck's GRN is complete (team, 23 Nov 2026: "this should be autofilled,
+ * not just suggested"): Added to stock = net weight − 1 kg per bag, when it is still blank and both are recorded. The stage's
+ * own note says stock increments from the completed GRN, so the truck reads "In stock" from then on. The person may still
+ * change the figure; a value already there (typed, or an upload's) is never replaced. Empty when there is nothing to fill.
+ */
+export function stockFillOnGrn(stageData: StageData, grnComplete: boolean): Record<string, string> {
+  if (!grnComplete) return {};
+  const offered = prefillSuggestions(stageData, ADDED_TO_STOCK[0])[ADDED_TO_STOCK[1]];
+  return offered ? { [ADDED_TO_STOCK[1]]: offered.value } : {};
 }

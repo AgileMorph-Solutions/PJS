@@ -27,7 +27,7 @@ export interface FieldIssue {
   involves: readonly (readonly [stageId: string, label: string])[];
 }
 
-interface NumberRule {
+export interface NumberRule {
   /** Whole numbers only (bags, nut count). */
   integer?: boolean;
   /** Warn below this / above this: outside what can physically be true, most likely a typing slip. */
@@ -109,9 +109,17 @@ export const FIELD_RULES: Record<string, Record<string, Rule>> = {
   },
   "n-stock": {
     "Added to stock from this truck (kg)": KG,
+    "Closing stock (kg)": KG,
   },
   "n-ledger": {
     Quantity: { number: { positive: true } },
+  },
+  // 20 Nov 2026 team: re-bagging and destacking are counted in bags, triage in metric tons. The Bins and the warehouse
+  // code are picked from the masters (frontend warehousePicker.ts), so they need no rule here.
+  "n-otheract": {
+    "Re-bagging (damaged/torn bags)": BAGS,
+    Destacking: BAGS,
+    "Triage (quality + quantity + moisture check)": { number: { positive: true, unit: "MT" } },
   },
 };
 
@@ -121,6 +129,8 @@ export const FIELD_RULES: Record<string, Record<string, Rule>> = {
  */
 const FIELD_NOTES: Record<string, Record<string, string>> = {
   "n-unload": { "BON SACS (good bags)": "Good bags = Total bags − Torn bags" },
+  // Typed now, so the formula its suggestion comes from is said here instead of in a "calculated" hint.
+  "n-stock": { "Added to stock from this truck (kg)": "Net weight − jute bags weight (1 kg per bag)" },
 };
 export const fieldNote = (stageId: string, label: string): string | undefined => FIELD_NOTES[stageId]?.[label];
 
@@ -149,15 +159,27 @@ export function checkValue(stageId: string, label: string, raw: string | undefin
     if (f.pattern.test(value)) return undefined;
     return at(`"${value}" doesn't look right. It should look like ${f.example}.`);
   }
-  const r = rule.number;
+  const problem = numberProblem(rule.number, value);
+  return problem ? at(problem.message) : undefined;
+}
+
+/**
+ * What is wrong with a typed number under one rule, or undefined: the check every numeric field uses, a stage's or not
+ * (sun drying's sample readings reuse it, domain/sunDrying.ts). `soft` marks a warnAbove / warnBelow — likely but possible —
+ * apart from a value that can't be right (not a number, outside min / max). Blank is the caller's: nothing to check.
+ */
+export function numberProblem(r: NumberRule, raw: string | undefined): { message: string; soft: boolean } | undefined {
+  const value = (raw ?? "").trim();
+  if (!value) return undefined;
+  const hard = (message: string) => ({ message, soft: false });
   const n = parseQty(value);
-  if (n === undefined) return at(`"${value}" isn't a number.`);
-  if (r.integer && !Number.isInteger(n)) return at("Not a whole number.");
-  if (r.positive && n <= 0) return at("Should be more than 0.");
-  if (r.min !== undefined && n < r.min) return at(`Below ${withUnit(r.min, r.unit)}. Please check.`);
-  if (r.max !== undefined && n > r.max) return at(`Above ${withUnit(r.max, r.unit)}. Please check.`);
-  if (r.warnAbove && n > r.warnAbove[0]) return at(`Above ${withUnit(r.warnAbove[0], r.unit)}: ${r.warnAbove[1]}.`);
-  if (r.warnBelow && n < r.warnBelow[0]) return at(`Below ${withUnit(r.warnBelow[0], r.unit)}: ${r.warnBelow[1]}.`);
+  if (n === undefined) return hard(`"${value}" isn't a number.`);
+  if (r.integer && !Number.isInteger(n)) return hard("Not a whole number.");
+  if (r.positive && n <= 0) return hard("Should be more than 0.");
+  if (r.min !== undefined && n < r.min) return hard(`Below ${withUnit(r.min, r.unit)}. Please check.`);
+  if (r.max !== undefined && n > r.max) return hard(`Above ${withUnit(r.max, r.unit)}. Please check.`);
+  if (r.warnAbove && n > r.warnAbove[0]) return { message: `Above ${withUnit(r.warnAbove[0], r.unit)}: ${r.warnAbove[1]}.`, soft: true };
+  if (r.warnBelow && n < r.warnBelow[0]) return { message: `Below ${withUnit(r.warnBelow[0], r.unit)}: ${r.warnBelow[1]}.`, soft: true };
   return undefined;
 }
 
@@ -191,7 +213,7 @@ const PALLETS: Ref = ["n-unload", "Pallets used (30 bags/pallet)"];
 const OFFLOADED: Ref = ["n-unload", "DATE OF OFFLOADING"];
 const ARRIVED: Ref = ["n-gate", "DATE OF ARRIVAL"];
 /** Days that can't be in the future (a truck can't arrive or be unloaded tomorrow): their calendar stops at today. */
-const NO_FUTURE_DATES: readonly Ref[] = [ARRIVED, OFFLOADED];
+const NO_FUTURE_DATES: readonly Ref[] = [ARRIVED, OFFLOADED, ["n-ledger", "Date/time"]];
 export const isNoFutureDate = (stageId: string, label: string) => NO_FUTURE_DATES.some(([s, l]) => s === stageId && l === label);
 const NET: Ref = ["n-netwt", "NET WT KGS"];
 const GRN: Ref = ["n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"];
@@ -206,6 +228,8 @@ const QFS_MISMATCH: readonly (readonly [sample: string, final: string, gap: numb
   ["KOR", "FINAL KOR", 3, "lbs"],
   ...CUT_TEST.map((g) => [`Sample – ${g} (g)`, `Final – ${g} (g)`, 50, "g"] as const),
 ];
+const ADDED_TO_STOCK: Ref = ["n-stock", "Added to stock from this truck (kg)"];
+const CLOSING_STOCK: Ref = ["n-stock", "Closing stock (kg)"];
 const MOIST_BEFORE: Ref = ["n-drying", "Moisture % — before drying"];
 const MOIST_AFTER: Ref = ["n-drying", "Moisture % — after drying"];
 
@@ -292,6 +316,14 @@ export const CROSS_CHECKS: readonly Check[] = [
     const grn = get(GRN), net = get(NET);
     return grn !== undefined && net !== undefined && grn > net
       ? issue(GRN, `The GRN quantity (${fmt(grn)} kg) is more than the net weight (${fmt(net)} kg).`)
+      : undefined;
+  },
+  // The warehouse's closing stock is the old stock plus what this truck brought in (team, 23 Nov 2026), so one truck can't
+  // add more than it: 1,000,000 kg added to a 5,000 kg closing stock is a slip in one of the two. A warning; both save.
+  (get) => {
+    const added = get(ADDED_TO_STOCK), closing = get(CLOSING_STOCK);
+    return added !== undefined && closing !== undefined && added > closing
+      ? issue(ADDED_TO_STOCK, `Added to stock (${fmt(added)} kg) is more than the closing stock (${fmt(closing)} kg), which already includes this truck. Please check both.`, CLOSING_STOCK)
       : undefined;
   },
   ...QFS_MISMATCH.map(qfsMismatch),

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, storedFormulaMismatches, staleDerivedFields, KOR_FACTOR,
+  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, stockFillOnGrn, storedFormulaMismatches, staleDerivedFields, KOR_FACTOR,
 } from "../src/domain/receiptMath.js";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap.js";
 
@@ -234,5 +234,49 @@ describe("a calculated value whose input is cleared", () => {
     };
     const after = { ...before, "n-gross": { ...before["n-gross"], "Tare / empty truck weight (kg)": "" } };
     expect(staleDerivedFields(after, before)).toEqual({ "n-gross": { "GROSS WT KGS": "" }, "n-netwt": { "NET WT KGS": "", "PAID WT": "" } });
+  });
+});
+
+describe("warehouse stock step (Nov 2026)", () => {
+  const ready = { "n-netwt": { "NET WT KGS": "40762" }, "n-unload": { "SACS (bags)": "478" } };
+
+  const ADDED = "Added to stock from this truck (kg)";
+
+  it("offers net weight less the jute bags as what is added to stock, and the person may type another figure", () => {
+    expect(prefillSuggestions(ready, "n-stock")[ADDED]).toEqual({ value: "40284", from: "net weight − 1 kg per bag" });
+    expect(derivedRuleInForce({ ...ready, "n-stock": {} }, "n-stock", ADDED)).toBeUndefined();
+    // Once a figure is there, typed or taken, nothing is offered over it.
+    expect(prefillSuggestions({ ...ready, "n-stock": { [ADDED]: "40000" } }, "n-stock")[ADDED]).toBeUndefined();
+  });
+
+  it("totals closing stock with whatever was added, typed or taken from the suggestion", () => {
+    const out = computeDerivedFields({ ...ready, "n-stock": { "Closing stock (kg)": "100000", [ADDED]: "40000" } });
+    expect(out["n-stock"]).toEqual({ "Total warehouse stock after this truck (kg)": "140000" });
+  });
+
+  it("leaves the total blank until closing stock is typed", () => {
+    expect(computeDerivedFields({ ...ready, "n-stock": { [ADDED]: "40284" } })["n-stock"]).toBeUndefined();
+  });
+
+  // Writing into a step creates it, and its presence alone makes the truck "in_stock" — a net weight must not do that.
+  it("never starts the stock step on its own", () => {
+    expect(computeDerivedFields(ready)["n-stock"]).toBeUndefined();
+  });
+
+  it("the total is read-only; closing stock and what was added are typed", () => {
+    expect(derivedRuleInForce({}, "n-stock", "Total warehouse stock after this truck (kg)")).toBeDefined();
+    expect(derivedRuleInForce({}, "n-stock", "Closing stock (kg)")).toBeUndefined();
+  });
+});
+
+describe("stock filled in when the GRN completes (23 Nov 2026)", () => {
+  const data = { "n-netwt": { "NET WT KGS": "40000" }, "n-unload": { "SACS (bags)": "420" } };
+  it("is the net weight less 1 kg a bag, once the GRN is complete", () => {
+    expect(stockFillOnGrn(data, true)).toEqual({ "Added to stock from this truck (kg)": "39580" });
+    expect(stockFillOnGrn(data, false)).toEqual({});
+  });
+  it("never replaces a figure already there, and needs both readings", () => {
+    expect(stockFillOnGrn({ ...data, "n-stock": { "Added to stock from this truck (kg)": "39000" } }, true)).toEqual({});
+    expect(stockFillOnGrn({ "n-netwt": { "NET WT KGS": "40000" } }, true)).toEqual({});
   });
 });

@@ -13,13 +13,21 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select className={inputClass} {...props} />;
 }
 
-/** A label, its control and an optional hint. */
-export function Field({ label, hint, children }: { label: ReactNode; hint?: string; children: ReactNode }) {
+/** What is wrong with a field's value: `soft` is a warning (amber), otherwise it can't be right (red). */
+export interface FieldProblem { message: string; soft: boolean }
+
+/** The line under a field that says what is wrong with its value, in place of its hint. */
+export function ProblemText({ problem }: { problem: FieldProblem }) {
+  return <span role={problem.soft ? "status" : "alert"} className={`block text-[12px] mt-1 ${problem.soft ? "text-ambernut-700" : "text-danger-700"}`}>{problem.message}</span>;
+}
+
+/** A label, its control and an optional hint — or, when its value is wrong, what is wrong with it. */
+export function Field({ label, hint, problem, children }: { label: ReactNode; hint?: string; problem?: FieldProblem; children: ReactNode }) {
   return (
     <label className="block">
       <span className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">{label}</span>
       {children}
-      {hint && <span className="block text-[12px] text-warmstone-500 mt-1">{hint}</span>}
+      {problem ? <ProblemText problem={problem} /> : hint && <span className="block text-[12px] text-warmstone-500 mt-1">{hint}</span>}
     </label>
   );
 }

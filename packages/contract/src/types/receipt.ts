@@ -244,7 +244,13 @@ export interface SiteFieldChangeRecord extends FieldChangeRecord {
 export type TransferStatus = "requested" | "dispatched" | "received";
 
 export interface TransferLine {
-  receiptId: string;
+  /** The line's own id: what the receiving side names it by (a Bin line has no receipt). */
+  id: number;
+  /**
+   * The Lot's receipt, on BKTs made per Lot. Null on a line made per Bin (22 Nov 2026: once RCN is in a Bin the Lots in
+   * it can't be told apart, so a truck is loaded from Bins) — `binCode` is then what was sent.
+   */
+  receiptId: string | null;
   lotNumber: string | null;
   supplierName: string;
   vehicleNo: string;
@@ -255,7 +261,7 @@ export interface TransferLine {
   moisture: number | null;
   kor: number | null;
   nutCount: number | null;
-  /** Where the Lot was loaded from; a truck loading from several Bins shows them all. */
+  /** Where it was loaded from: the Bin of a Bin line (always set), or the Lot's Bin(s) on a Lot line. */
   binCode: string | null;
   /**
    * The receiving warehouse's bin the Lot was unloaded into ("BIN NO." on the client's Bouake RCN

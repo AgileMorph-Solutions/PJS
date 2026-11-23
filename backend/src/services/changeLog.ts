@@ -22,7 +22,7 @@ export async function listChangeLog(site: string[] | undefined, from?: string, t
   return rows.map((r) => {
     const { label, area } = entityLabel(r.entity);
     return {
-      id: r.id, at: r.at.toISOString(), by: r.user?.displayName ?? "Deleted user", via: r.via as ChangeLogRecord["via"],
+      id: r.id, at: r.at.toISOString(), by: r.user?.displayName ?? r.byName ?? "Unknown", via: r.via as ChangeLogRecord["via"],
       action: r.action as ChangeLogRecord["action"], entity: r.entity, entityLabel: label, area,
       recordId: r.recordId, field: r.field, fieldLabel: fieldLabel(r.entity, r.field, r.recordId), oldValue: r.oldValue, newValue: r.newValue,
     };

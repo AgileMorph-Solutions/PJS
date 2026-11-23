@@ -76,7 +76,8 @@ afterAll(async () => {
 
 const bmForm = (extra: Record<string, Record<string, string>> = {}) => ({
   values: {
-    "n-gate": { "VEHICLE NO.": "TRUCK-42" },
+    // The gate already recorded the vehicle (GATE-1): the form carries it unchanged, which changes nothing.
+    "n-gate": { "VEHICLE NO.": "GATE-1" },
     "n-verify": { "SUPPLIERS NAME": "UM Test Supplier", "LBA CODE": SUPPLIER, FICHE: "F-100" },
     // No PRICE: since Oct 2026 the Branch Manager sets it directly (PUT /price), never through this approval form.
     ...extra,
@@ -197,6 +198,19 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     }
   });
 
+  it("can't change a value already recorded on the truck: that is the Incharge's or an Admin's (22 Nov 2026)", async () => {
+    const res = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, bmForm({ "n-gate": { "VEHICLE NO.": "TRUCK-42" } }));
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/Already recorded: VEHICLE NO\. \(GATE-1\).*Warehouse Incharge or an Admin/);
+  });
+
+  // REC-BKE-2026-0706 (23 Nov 2026): a QFS Officer pressed Submit with every value recorded and the one open field blank.
+  it("refuses an empty form with a message that says what to do", async () => {
+    const res = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, { values: { "n-gate": { "VEHICLE NO.": "  " } } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/Nothing to submit: type a value in a field that isn't recorded yet/);
+  });
+
   it("stores a pending submission without touching the receipt", async () => {
     const before = (await as(P + "wi", "GET", `/api/receipts/${receiptA}`)).json();
     const res = await as(P + "bm", "POST", `/api/receipts/${receiptA}/submissions`, bmForm());
@@ -229,15 +243,16 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect(r.stageData["n-verify"]["FICHE"]).toBe("F-100");
     // Approving the Branch Manager's form never hands out a Lot — that happens on quality pass.
     expect(r.lotNo ?? "").toBe("");
-    expect(r).toMatchObject({ lbaCode: SUPPLIER, supplierName: "UM Test Supplier", vehicleNo: "TRUCK-42",
+    expect(r).toMatchObject({ lbaCode: SUPPLIER, supplierName: "UM Test Supplier", vehicleNo: "GATE-1",
       // It never unloaded or passed quality in this test.
       status: "pending_qa" });
 
     const changes = await prisma.stageFieldChange.findMany({ where: { receiptId: receiptA } });
-    expect(changes.length).toBeGreaterThanOrEqual(4);
+    expect(changes.length).toBeGreaterThanOrEqual(3);
     expect(changes.every((c) => c.via === "approval" && c.userId === ids.wi && c.submissionId === submissionId)).toBe(true);
-    // The gate's vehicle number changed GATE-1 -> TRUCK-42, and the audit says so.
-    expect(changes.find((c) => c.label === "VEHICLE NO.")).toMatchObject({ oldValue: "GATE-1", newValue: "TRUCK-42" });
+    // Only what the form added is applied; the vehicle number the gate recorded is untouched.
+    expect(changes.find((c) => c.label === "FICHE")).toMatchObject({ oldValue: null, newValue: "F-100" });
+    expect(changes.some((c) => c.label === "VEHICLE NO.")).toBe(false);
 
     const last = r.timeline[r.timeline.length - 1];
     expect(last.note).toMatch(/Approved/);
@@ -269,7 +284,7 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
     expect(rows.find((r) => r.label === "PRICE")).toMatchObject({ by: "bm", oldValue: null, newValue: "470", via: "direct" });
     expect(rows.find((r) => r.label === "FICHE" && r.newValue === "F-101")).toMatchObject({ by: "wi", oldValue: "F-100", approvedBy: null });
     // An approved form's values are the submitter's, not the approver's: the approver is named separately.
-    expect(rows.find((r) => r.label === "VEHICLE NO.")).toMatchObject({ by: "bm", approvedBy: "wi", via: "approval", newValue: "TRUCK-42" });
+    expect(rows.find((r) => r.label === "FICHE" && r.via === "approval")).toMatchObject({ by: "bm", approvedBy: "wi", via: "approval", newValue: "F-100" });
     expect(rows.map((r) => r.at)).toEqual([...rows.map((r) => r.at)].sort().reverse());
   });
 

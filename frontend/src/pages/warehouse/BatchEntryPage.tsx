@@ -12,7 +12,9 @@ import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
 import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
 import { UNLISTED_ORIGIN } from "../../components/receipt/originPicker";
-import { isNoFutureDate } from "@anagroci/contract/domain/fieldRules";
+import { checkValue, isNoFutureDate } from "@anagroci/contract/domain/fieldRules";
+import { fieldChoices } from "@anagroci/contract/data/fieldChoices";
+import { SearchSelect } from "../../components/ui/SearchSelect";
 
 /** A grid row's values, keyed by the stage field label (so it maps straight onto the API payload). */
 type Values = Record<string, string>;
@@ -61,6 +63,15 @@ const btnSecondary =
   "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-warmstone-200 text-warmstone-700 text-[13px] font-semibold hover:bg-warmstone-50 transition-all";
 
 const today = todayIso;
+
+/** The step each grid column's field lives in, so a typed value gets the same warning as on the truck's page. */
+const STAGE_OF = new Map(BATCH_TRUCK_COLUMNS.map((c) => [c.label, c.stageId]));
+/** A warning for a typed cell (a fiche with letters in it), or nothing. Only warns: the row still saves. */
+const cellWarning = (col: string, value: string | undefined) => {
+  const stageId = STAGE_OF.get(col);
+  return stageId ? checkValue(stageId, col, value)?.message : undefined;
+};
+const Warn = ({ text }: { text?: string }) => (text ? <span className="block mt-1 text-[11px] font-semibold text-ambernut-700">{text}</span> : null);
 const INITIAL_ROWS = 5;
 
 let nextKey = 1;
@@ -219,8 +230,6 @@ export function BatchEntryPage() {
         actions={<Link to={`/${site.slug}/receipts`} className={btnSecondary}>Cancel</Link>}
       />
 
-      <datalist id="batch-credit-cash"><option value="CASH" /><option value="CREDIT" /></datalist>
-
       <div className="overflow-x-auto bg-white border border-warmstone-200 rounded-2xl shadow-xs">
         <table ref={tableRef} className="w-full text-[13px] border-collapse">
           <thead>
@@ -244,14 +253,11 @@ export function BatchEntryPage() {
                     <td key={c.key} className={`px-2 py-1.5 ${c.width}`}>
                       {c.key === SUPPLIER ? (
                         <>
-                        <select
-                          aria-label={`Supplier, row ${i + 1}`} data-row={i} data-col={c.key}
-                          value={r.v["LBA CODE"] ?? ""} onChange={(e) => setValue(r.key, SUPPLIER, e.target.value)}
-                          onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
-                        >
-                          <option value="">-</option>
-                          {masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}{s.status === "suspended" ? " (suspended)" : ""}</option>)}
-                        </select>
+                        <SearchSelect
+                          id={`batch-${r.key}-supplier`} aria-label={`Supplier, row ${i + 1}`} dataAttrs={{ "data-row": i, "data-col": c.key }}
+                          value={r.v["LBA CODE"] ?? ""} onChange={(v) => setValue(r.key, SUPPLIER, v)}
+                          options={masters.suppliers.filter((s) => s.active !== false).map((s) => ({ value: s.code, label: s.name, detail: `${s.code}${s.status === "suspended" ? " · suspended" : ""}` }))}
+                        />
                         {/* Suspended is a warning, not a block (client decision): the truck can still be entered. */}
                         {masters.suppliers.find((s) => s.code === r.v["LBA CODE"])?.status === "suspended" && (
                           <span className="block mt-1 text-[11px] font-semibold text-ambernut-700">Supplier is suspended</span>
@@ -259,22 +265,18 @@ export function BatchEntryPage() {
                         </>
                       ) : c.key === "ORIGIN" ? (
                         // Picked from Masters › Origins, never typed (Nov 2026); a plan's town the master lacks stays listed first.
-                        <select
-                          aria-label={`Origin, row ${i + 1}`} data-row={i} data-col={c.key}
-                          value={r.v[c.key] ?? ""} onChange={(e) => setValue(r.key, c.key, e.target.value)}
-                          onKeyDown={(e) => onEnter(e, i, c.key)}
-                          title={isUnlistedOrigin(r.v[c.key], masters.origins) ? UNLISTED_ORIGIN : undefined}
-                          className={isUnlistedOrigin(r.v[c.key], masters.origins) ? `${cellCls} border-ambernut-500! bg-ambernut-50!` : cellCls}
-                        >
-                          <option value="">-</option>
-                          {isUnlistedOrigin(r.v[c.key], masters.origins) && <option value={r.v[c.key]}>{r.v[c.key]}</option>}
-                          {masters.origins.map((o) => <option key={o} value={o}>{o}</option>)}
-                        </select>
+                        <>
+                        <SearchSelect
+                          id={`batch-${r.key}-origin`} aria-label={`Origin, row ${i + 1}`} dataAttrs={{ "data-row": i, "data-col": c.key }}
+                          value={r.v[c.key] ?? ""} onChange={(v) => setValue(r.key, c.key, v)} options={masters.origins}
+                        />
+                        <Warn text={isUnlistedOrigin(r.v[c.key], masters.origins) ? UNLISTED_ORIGIN : undefined} />
+                        </>
                       ) : c.key === PLAN ? (
                         <PlanCell
                           row={i} supplierCode={r.v["LBA CODE"] ?? ""} value={r.v[PLAN] ?? ""} openPlans={openPlans}
                           createHref={`/${site.slug}/delivery-plans?new=1${r.v["LBA CODE"] ? `&supplier=${encodeURIComponent(r.v["LBA CODE"])}` : ""}`}
-                          onChange={(v) => setValue(r.key, PLAN, v)} onKeyDown={(e) => onEnter(e, i, c.key)}
+                          onChange={(v) => setValue(r.key, PLAN, v)}
                         />
                       ) : (
                         c.type === "date" ? (
@@ -284,15 +286,22 @@ export function BatchEntryPage() {
                             max={isNoFutureDate("n-gate", c.key) ? new Date().toISOString().slice(0, 10) : undefined}
                             onKeyDown={(e) => onEnter(e, i, c.key)} className={cellCls}
                           />
+                        ) : c.key === "CREDIT/CASH" ? (
+                          <SearchSelect
+                            id={`batch-${r.key}-credit`} aria-label={`${c.label}, row ${i + 1}`} dataAttrs={{ "data-row": i, "data-col": c.key }}
+                            value={r.v[c.key] ?? ""} onChange={(v) => setValue(r.key, c.key, v)} options={fieldChoices("n-gate", c.key) ?? []}
+                          />
                         ) : (
+                        <>
                         <input
                           aria-label={`${c.label}, row ${i + 1}`} data-row={i} data-col={c.key}
                           type={c.type ?? "text"} value={r.v[c.key] ?? ""}
-                          list={c.key === "CREDIT/CASH" ? "batch-credit-cash" : undefined}
                           onChange={(e) => setValue(r.key, c.key, e.target.value)}
                           onKeyDown={(e) => onEnter(e, i, c.key)}
                           className={cellCls}
                         />
+                        <Warn text={cellWarning(c.key, r.v[c.key])} />
+                        </>
                         )
                       )}
                     </td>
@@ -341,17 +350,16 @@ type OpenPlan = ReturnType<typeof useDeliveryPlans>["plans"][number];
  * supplier: only that supplier's open plans, the latest first and picked for it — or, when it has none, a plain
  * "no delivery plan for this supplier" with a link to create one; the truck can still be saved as unplanned.
  */
-function PlanCell({ row, supplierCode, value, openPlans, createHref, onChange, onKeyDown }: {
+function PlanCell({ row, supplierCode, value, openPlans, createHref, onChange }: {
   row: number;
   supplierCode: string;
   value: string;
   openPlans: OpenPlan[];
   createHref: string;
   onChange: (value: string) => void;
-  onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
 }) {
   const mine = supplierCode ? supplierOpenPlans(openPlans, supplierCode) : openPlans;
-  const label = (p: OpenPlan) => `${p.id} · ${supplierCode ? `arrival ${formatDate(p.expectedArrivalDate)}` : normalizeSupplierName(p.supplierName)}`;
+  const detail = (p: OpenPlan) => (supplierCode ? `arrival ${formatDate(p.expectedArrivalDate)}` : normalizeSupplierName(p.supplierName));
 
   if (supplierCode && mine.length === 0) {
     return (
@@ -366,12 +374,15 @@ function PlanCell({ row, supplierCode, value, openPlans, createHref, onChange, o
       </div>
     );
   }
+  // A truck can still arrive outside its supplier's plans (an unplanned truck, as the client's workbook records).
+  const options = [
+    ...mine.map((p, i) => ({ value: p.id, label: p.id, detail: `${detail(p)}${supplierCode && i === 0 ? " (latest)" : ""}` })),
+    { value: "", label: supplierCode ? "No plan · unplanned truck" : "No plan" },
+  ];
   return (
-    <select aria-label={`Delivery plan, row ${row + 1}`} data-row={row} data-col={PLAN} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKeyDown} className={cellCls}>
-      {!supplierCode && <option value="">No plan</option>}
-      {mine.map((p, i) => <option key={p.id} value={p.id}>{label(p)}{supplierCode && i === 0 ? " (latest)" : ""}</option>)}
-      {/* A truck can still arrive outside its supplier's plans (an unplanned truck, as the client's workbook records). */}
-      {supplierCode && <option value="">No plan · unplanned truck</option>}
-    </select>
+    <SearchSelect
+      id={`batch-plan-${row}`} aria-label={`Delivery plan, row ${row + 1}`} dataAttrs={{ "data-row": row, "data-col": PLAN }}
+      value={value} onChange={onChange} options={options} clearable={false}
+    />
   );
 }

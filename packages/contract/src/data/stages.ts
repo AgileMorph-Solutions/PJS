@@ -44,7 +44,10 @@ export const stages: Stage[] = [
     fields: [
       { n: "SUPPLIERS NAME", v: "RCN SCOOP IMANE" , col: "suppliersName"},
       { n: "LBA CODE", v: "LBA-006-IMA" , col: "lbaCode"},
-      { n: "FICHE CODE", v: "0401-0007" , col: "ficheCode"},
+      // Shown as "CCA supplier code" (team, 20 Nov 2026): it is the CCA's code for the supplier ("Code de l'acheteur" on the
+      // fiche, "Supplier's Code (CCAK)" in the client's drying report), and "fiche code" read like the fiche's own number.
+      // `n` stays the workbook's column name, which uploads match on.
+      { n: "FICHE CODE", label: "CCA supplier code", v: "0401-0007" , col: "ficheCode"},
       // v: "" — same reasoning as n-gate's RM/FG above: no equivalent column in "Truck Reception".
       { n: "REF.", v: "" , col: "ref"},
       { n: "FICHE", v: "72515" , col: "fiche"},
@@ -193,10 +196,11 @@ export const stages: Stage[] = [
     title: "Add this truck to warehouse stock",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
-    note: "Automatic. Stock ledger increments from the completed GRN row.",
+    note: "Stock ledger increments from the completed GRN row. Nov 2026 team decision: Added to stock = net weight − jute bags weight, filled in by itself when the GRN completes (23 Nov 2026; before that, only offered) and changeable by the warehouse (20 Nov 2026), and Total = Closing stock + Added to stock, calculated (domain/receiptMath.ts). Closing stock is the warehouse's stock before this truck, typed by hand for now — how it should be worked out is still to be decided by the team, so it is a new field with no workbook behind it.",
     fields: [
       { n: "Added to stock from this truck (kg)", v: "" , col: "stockLedgerEntry"},
       { n: "Warehouse type (Village/Regional/Factory)", v: "" , col: "warehouseType"},
+      { n: "Closing stock (kg)", v: "" , col: "closingStock"},
       { n: "Total warehouse stock after this truck (kg)", v: "" , col: "currentStockBalance"},
     ],
   },
@@ -224,12 +228,14 @@ export const stages: Stage[] = [
     kind: "gap",
     note: "Doc §5.4: re-bagging of damaged/torn jute bags, destacking, triage and movement between storage locations should all stay linked to the relevant stock/lot and location. Confirmed clarification: triage/cleaning is not the same as simple drying — both quality and moisture can change during triage, so it needs its own quality, quantity and moisture checks recorded, not just a moisture reading. No workbook covers any of this today.",
     fields: [
-      { n: "Re-bagging (damaged/torn bags)", v: "" , col: "rebagging"},
-      { n: "Destacking", v: "" , col: "destacking"},
-      { n: "Triage (quality + quantity + moisture check)", v: "" , col: "triage"},
-      { n: "Movement between locations", v: "" , col: "movementBetweenLocations"},
-      { n: "Linked stock/lot", v: "" , col: "linkedStockLot"},
-      { n: "Linked location", v: "" , col: "linkedLocation"},
+      // 20 Nov 2026 team: what each one holds. Re-bagging and destacking are a number of bags, triage metric tons; the
+      // movement and the linked stock are a Bin, the linked location a warehouse code (picked, domain/fieldRules.ts).
+      { n: "Re-bagging (damaged/torn bags)", label: "Re-bagging (damaged/torn bags), bags", v: "" , col: "rebagging"},
+      { n: "Destacking", label: "Destacking, bags", v: "" , col: "destacking"},
+      { n: "Triage (quality + quantity + moisture check)", label: "Triage (quality + quantity + moisture check), MT", v: "" , col: "triage"},
+      { n: "Movement between locations", label: "Movement between locations (Bin)", v: "" , col: "movementBetweenLocations"},
+      { n: "Linked stock/lot", label: "Linked stock/lot (Bin)", v: "" , col: "linkedStockLot"},
+      { n: "Linked location", label: "Linked location (warehouse code)", v: "" , col: "linkedLocation"},
     ],
   },
   {
@@ -241,7 +247,8 @@ export const stages: Stage[] = [
     note: "Doc §7: the existing activity records at each warehouse — discharge/unloading, mass/weight, reconditioning, destacking, drying, sèches, triage — should be reflected in the system in the same sequence they actually happen, not as disconnected entries.",
     fields: [
       { n: "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)", v: "" , col: "activityType"},
-      { n: "Date/time", v: "" , col: "occurredAt"},
+      // Date AND time, "YYYY-MM-DD HH:mm" (team, 23 Nov 2026): when it happened — now by default, never in the future.
+      { n: "Date/time", v: "" , col: "occurredAt", format: "datetime"},
       { n: "Quantity", v: "" , col: "quantity"},
       { n: "Location", v: "" , col: "location"},
       { n: "Linked Lot/Bin", v: "" , col: "linkedLotBin"},

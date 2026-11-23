@@ -65,12 +65,18 @@ describe("recording an activity", () => {
     expect([Number(triage.json().moisturePct), Number(triage.json().quantityBeforeKg), Number(triage.json().quantityAfterKg)]).toEqual([9.5, 1000, 940]);
   });
 
-  it("refuses, with the reason: no kind, no Lot, triage without its checks, drying (it has its own form), an unknown Lot or place", async () => {
+  it("records an activity on a place with no Lot: since 22 Nov 2026 activities are per Bin, and a Bin's Lots can't be told apart", async () => {
+    const res = await post("wi", { category: "stacking", locationFrom: STORE1, bags: 40 });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toMatchObject({ activityType: "Stacking", lotNo: null, locationFrom: STORE1 });
+  });
+
+  it("refuses, with the reason: no kind, no place, triage without its checks, drying (it has its own form), an unknown Lot or place", async () => {
     const cases: [object, RegExp][] = [
       [{}, /Choose the kind of activity/],
-      [{ category: "stacking", locationFrom: STORE1 }, /recorded against a Lot/],
+      [{ category: "stacking" }, /Say where in the warehouse/],
       [{ category: "triage", lotNo: lot, locationFrom: STORE1 }, /Triage changes the moisture/],
-      [{ category: "drying", lotNo: lot, locationFrom: STORE1 }, /recorded on the truck itself/],
+      [{ category: "drying", lotNo: lot, locationFrom: STORE1 }, /recorded in the Bin's Sun drying section/],
       [{ ...GOOD, lotNo: "LOT-NOPE-2026-0001" }, /isn't a Lot at ACTV-A/],
       [{ ...GOOD, lotNo: lot, locationFrom: "NOWHERE" }, /isn't a store of ACTV-A or a Bin/],
       [{ ...GOOD, lotNo: lot, date: "30/09/2026" }, /real date/],

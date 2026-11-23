@@ -367,6 +367,7 @@ describe("Transfer Request", () => {
     lotted = (await createReceipt(SITE, `${YEAR}-08-01`)).id;
     await setStageFields(lotted, "n-qfs", { "Final moisture (%)": "10.2", KOR: "47.5" }); // what a dispatch takes unless measured again
     lotNumber = (await setBranch(lotted, "n-qfs", "pass")).lotNo!;
+    await setStageFields(lotted, "n-bin", { "Bin Number": "SIDT-BIN-1" }, { bypassValidation: true }); // A Lot goes on a BKT only from a known Bin (23 Nov 2026).
     await setBranch(lotted, "n-xferdec", "transfer");
   });
 
@@ -401,20 +402,20 @@ describe("Transfer Request", () => {
 
   it("steps requested → dispatched → received, never skipping or going back", async () => {
     const id = `BKT-${YEAR}-001`;
-    await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
+    await expect(receiveTransfer(id, { whReceiptNo: "8001", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
     // Nut count is required at dispatch; this truck's quality check didn't record one.
     const nuts = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, nutCount: 170 }));
-    expect((await dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0", lines: nuts })).status).toBe("dispatched");
-    await expect(dispatchTransfer(id, { whReceiptNo: "WR-D", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
+    expect((await dispatchTransfer(id, { whReceiptNo: "9001", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0", lines: nuts })).status).toBe("dispatched");
+    await expect(dispatchTransfer(id, { whReceiptNo: "9001", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
     await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test" }, update: {} });
     try {
       const lines = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, binCode: "SYSIDS-TEST-BIN" }));
-      expect((await receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300, lines })).status).toBe("received");
+      expect((await receiveTransfer(id, { whReceiptNo: "8001", bagsReceived: 478, receivedGrossKg: 41300, lines })).status).toBe("received");
     } finally {
       await prisma.transferRequestLine.updateMany({ where: { receivedBinCode: "SYSIDS-TEST-BIN" }, data: { receivedBinCode: null } });
       await prisma.bin.delete({ where: { code: "SYSIDS-TEST-BIN" } });
     }
-    await expect(receiveTransfer(id, { whReceiptNo: "WR-R", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/already received/);
+    await expect(receiveTransfer(id, { whReceiptNo: "8001", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/already received/);
     await expect(addTransferLines(id, [{ receiptId: lotted }])).rejects.toThrow(/already received/);
     expect((await getTransfer(id))!.status).toBe("received");
   });

@@ -5,7 +5,8 @@ import type { ReceiptRecord } from "../../types/receipt";
 /**
  * The Branch Manager's price for this truck (Oct 2026: price and amount are hidden from the Warehouse Incharge and set by the
  * Branch Manager directly, with no approval step). The amount follows by itself: price × paid weight. Once the GRN is complete
- * the record locks, and the price with it.
+ * the record locks, and the price with it. Once set, the price is an Admin's to change (22 Nov 2026: a recorded value is
+ * changed only by the Incharge or an Admin, and the Incharge doesn't see prices): the Branch Manager asks an Admin.
  */
 export function PricePanel({ receipt, onSaved }: { receipt: ReceiptRecord; onSaved: () => void }) {
   const stored = receipt.stageData["n-grn"]?.PRICE ?? "";
@@ -14,6 +15,9 @@ export function PricePanel({ receipt, onSaved }: { receipt: ReceiptRecord; onSav
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const locked = Boolean(receipt.lockedAt);
+  // Set once by the Branch Manager; changing it afterwards is an Admin's (the server refuses the same).
+  const alreadySet = stored.trim() !== "";
+  const editable = !locked && !alreadySet;
 
   return (
     <div className="mt-4 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
@@ -30,11 +34,11 @@ export function PricePanel({ receipt, onSaved }: { receipt: ReceiptRecord; onSav
         <label className="block">
           <span className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">Price (XOF per kg)</span>
           <input
-            inputMode="decimal" value={price} disabled={locked} onChange={(e) => setPrice(e.target.value)}
+            inputMode="decimal" value={price} disabled={!editable} onChange={(e) => setPrice(e.target.value)}
             className="w-40 px-3 py-2 rounded-xl border border-warmstone-200 bg-white text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:ring-1 focus:ring-brand-700 disabled:bg-warmstone-100"
           />
         </label>
-        {!locked && (
+        {editable && (
           <button type="submit" disabled={busy || price.trim() === stored.trim()} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50">
             {busy ? "Saving…" : "Save price"}
           </button>
@@ -42,6 +46,7 @@ export function PricePanel({ receipt, onSaved }: { receipt: ReceiptRecord; onSav
         {amount && <span className="text-[13px] text-warmstone-700">Amount: <b className="tabular-nums">{Number(amount).toLocaleString()} XOF</b> <span className="text-warmstone-500">(price × paid weight)</span></span>}
       </form>
       {locked && <p className="mt-2 text-[12px] text-warmstone-500">The record is locked: its GRN is complete.</p>}
+      {!locked && alreadySet && <p className="mt-2 text-[12px] text-warmstone-500">The price is recorded. To change it, ask an Admin.</p>}
       {error && <p role="alert" className="mt-2 text-[13px] text-danger-700">{error}</p>}
     </div>
   );

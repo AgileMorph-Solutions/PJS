@@ -43,6 +43,9 @@ async function cleanup() {
   await prisma.productionBatch.deleteMany({ where: { warehouse: SITE } });
   await prisma.receipt.deleteMany({ where: { warehouse: SITE } });
   await prisma.bin.deleteMany({ where: { code: { startsWith: "FLT-" } } });
+  // The workbook uploads name their uploader: left in place they stopped the users' delete, and with it the warehouse's,
+  // leaving a second Central factory behind that broke every admin production page ("Choose which factory", 23 Nov 2026).
+  await prisma.productionWorkbookUpload.deleteMany({ where: { OR: [{ warehouse: SITE }, { uploadedBy: { username: { startsWith: "flt-" } } }] } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "flt-" } } });
   await prisma.warehouse.deleteMany({ where: { name: SITE } });
 }

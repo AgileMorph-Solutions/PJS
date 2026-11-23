@@ -36,6 +36,9 @@ services:
       # deployed, and change DEMO_PASSWORD if you keep them.
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-true}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-demo-pass-123}
+      # Reads the CCA fiche photo on the Verify supplier documents step (services/ficheReader.ts). Unset: the fiche is
+      # still kept on the receipt, it just isn't read. Put it in the git-ignored .env, never in this file.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       # A save on a Windows/macOS host sends no file-change event into the container: poll, so `tsx watch` sees it.
       CHOKIDAR_USEPOLLING: "true"
     # DEV: same startup as the image (migrate, seed, serve), but the last step is `tsx watch`, so the

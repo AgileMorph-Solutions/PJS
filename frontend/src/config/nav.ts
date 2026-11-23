@@ -56,6 +56,9 @@ export const NAV: NavSection[] = [
       { label: "Delivery plans", sitePath: "delivery-plans", icon: "event_upcoming", roles: ["admin", "warehouse_incharge"] },
       // Procurement's trucks: not the factory's roles, whom the API keeps off them (they carry prices).
       { label: "Reception", sitePath: "receipts", icon: "receipt_long", allow: (me) => !CENTRAL_ONLY_ROLES.includes(me.role) },
+      // What happens inside the warehouse once Reception has put RCN in a Bin (22 Nov 2026): per Bin, since its Lots can't be
+      // told apart — drying, the labour activities, then transfer / production. Between Reception and Transfers, the order it happens in.
+      { label: "Warehouse activities", sitePath: "warehouse-activities", icon: "warehouse", roles: ["admin", "warehouse_incharge"] },
       // Back in the menu (Oct 2026): the DESTINATION warehouse records what arrived on a BKT, and its
       // Lots' own pages are at the other site, so there is nowhere else for it to do that.
       { label: "Transfers", sitePath: "transfers", icon: "local_shipping", roles: ["admin", "warehouse_incharge"] },

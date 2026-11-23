@@ -5,6 +5,7 @@ import { BIN_FINALISE_FIELDS } from "@anagroci/contract/domain/binFinalise";
 import { fieldChoices } from "@anagroci/contract/data/fieldChoices";
 import { fieldNote, isNoFutureDate, isNumericField, type FieldIssue } from "@anagroci/contract/domain/fieldRules";
 import { FieldInput } from "./FieldInput";
+import { isSupplierLinkedField } from "@anagroci/contract/domain/supplierCode";
 
 interface Props {
   stage: Stage;
@@ -17,17 +18,21 @@ interface Props {
   /** Called when a field loses focus, so the caller can flush its coalesced writes. */
   onFieldBlur?: () => void;
   readOnly?: boolean;
+  /** On a read-only form, the fields that stay editable: a Branch Manager's / QFS Officer's own fields still to fill. */
+  editable?: readonly string[];
+  /** A note per field label, in place of the field's usual one (what a submitted value is waiting for). */
+  notes?: Record<string, string>;
   /** Limit the grid to these field labels (a role's form covers only part of a stage). */
   only?: string[];
   /** Field labels this person may not see at all (price and amount for the Warehouse Incharge, contract HIDDEN_FIELDS). */
   hidden?: string[];
   /** What could be filled in from elsewhere, per empty field label — offered, never written. */
   suggestions?: Record<string, { value: string; from: string }>;
-  /** Known values per field label to choose from. */
-  options?: Record<string, string[]>;
-  /** Closed lists per field label that come from a master (WH LOCATION's warehouses): shown as a dropdown. The fixed lists of
+  /** Closed lists per field label that come from a master (WH LOCATION's warehouses, the Bins): a searchable dropdown. The fixed lists of
    * the spec (contract data/fieldChoices.ts) are added by this form itself. */
   choices?: Record<string, readonly string[]>;
+  /** Told when any dropdown in the form opens, so the page can re-read the masters its lists come from. */
+  onChoicesOpen?: () => void;
   /** A caution per field label, shown under the field while it is editable. */
   warnings?: Record<string, string>;
   /** What the field rules say about each value (contract domain/fieldRules.ts): shown as a warning under the field; the value is saved either way. */
@@ -63,12 +68,12 @@ function pairSampleFinal<F extends { n: string }>(fields: F[]) {
  * stamps. Placement only; whether a calculation locks the field right now is decided per render below.
  */
 const isSystemField = (stageId: string, label: string): boolean =>
-  Boolean(derivedRuleFor(stageId, label)) || (stageId === "n-bin" && (BIN_FINALISE_FIELDS as readonly string[]).includes(label));
+  Boolean(derivedRuleFor(stageId, label)) || (stageId === "n-bin" && (BIN_FINALISE_FIELDS as readonly string[]).includes(label)) || isSupplierLinkedField(stageId, label);
 
 /** Generic renderer driven entirely by a Stage's data — adding a stage later is a data change.
  * Presentational: `values` and `onFieldChange` let the same component back either a receipt record
  * field (ReceiptDetailPage) or a scratch draft (the intake wizard). */
-export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly: readOnlyProp, only, hidden, suggestions, options, warnings, choices, issues, lockedMessage }: Props) {
+export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, readOnly: readOnlyProp, editable, notes, only, hidden, suggestions, warnings, choices, onChoicesOpen, issues, lockedMessage }: Props) {
   const readOnly = readOnlyProp || Boolean(lockedMessage);
   const shown = stage.fields.filter((f) => (!only || only.includes(f.n)) && !hidden?.includes(f.n));
   const { single: spec, pairs } = pairSampleFinal(shown);
@@ -91,27 +96,30 @@ export function StageForm({ stage, values, derived, onFieldChange, onFieldBlur, 
           }
         : stage.id === "n-bin" && (BIN_FINALISE_FIELDS as readonly string[]).includes(f.n)
           ? { kind: "issued" as const, hint: "Stamped when the bin allocation is finalised" }
-          : undefined;
+          : isSupplierLinkedField(stage.id, f.n)
+            ? { kind: "issued" as const, hint: "The supplier's own code, from Masters › Suppliers. Change the supplier to change it." }
+            : undefined;
     // A field that fills itself: say so while it is still blank, so nobody wonders why it appears after saving.
     const auto = autoFieldFor(stage.id, f.n);
-    const note = auto && !(values[f.n] ?? "").trim() && !readOnly
+    const fieldReadOnly = readOnly && !(editable?.includes(f.n) && !lockedMessage);
+    const note = notes?.[f.n] ?? (auto && !(values[f.n] ?? "").trim() && !fieldReadOnly
       ? `${AUTO_FIELD_NOTES[auto.from]} You can change it until the record is locked.`
-      : fieldNote(stage.id, f.n);
+      : fieldNote(stage.id, f.n));
     return (
       <FieldInput
         key={f.n}
         field={f}
         value={inForce ? (derived?.[f.n] ?? values[f.n] ?? "") : (values[f.n] ?? "")}
         suggestion={suggestions?.[f.n]}
-        options={options?.[f.n]}
         choices={choices?.[f.n] ?? fieldChoices(stage.id, f.n)}
+        onChoicesOpen={onChoicesOpen}
         warning={warnings?.[f.n] ?? issues?.[f.n]?.message}
         numeric={isNumericField(stage.id, f.n)}
         maxDate={isNoFutureDate(stage.id, f.n) ? new Date().toISOString().slice(0, 10) : undefined}
         onChange={(v) => onFieldChange(f.n, v)}
         onBlur={onFieldBlur}
         idPrefix={stage.id}
-        readOnly={readOnly}
+        readOnly={fieldReadOnly}
         system={system}
         note={note}
       />

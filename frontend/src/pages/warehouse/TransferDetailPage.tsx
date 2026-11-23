@@ -23,7 +23,7 @@ export function TransferDetailPage() {
   const site = useSite();
   const sites = useSites();
   const canEdit = useCanEditDirectly();
-  const { receipts, refresh, masters } = useTracking();
+  const { receipts, refresh, masters, refreshMasters } = useTracking();
   const { transfers, loading, refetch } = useTransfers(site.warehouseName);
   // `link`: another BKT the refusal is about, when this person may open it (the server sends it only then).
   const [error, setError] = useState<{ message: string; link?: { to: string; label: string } } | null>(null);
@@ -35,9 +35,9 @@ export function TransferDetailPage() {
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
 
-  // A Lot's own quality-check result: what each line of a dispatch starts from.
-  const qualityOf = (receiptId: string) => {
-    const q = receipts.find((r) => r.id === receiptId)?.stageData["n-qfs"];
+  // What each line of a dispatch starts from: a Lot's own quality-check result. A Bin mixes Lots, so its quality is measured.
+  const qualityOf = (l: TransferRequest["lines"][number]) => {
+    const q = l.receiptId ? receipts.find((r) => r.id === l.receiptId)?.stageData["n-qfs"] : undefined;
     return { moisture: q?.["Final moisture (%)"] ?? "", kor: q?.["FINAL KOR"] || q?.["KOR"] || "", nutCount: q?.["Final nut count"] ?? "" };
   };
   // This site's own bins only (the server refuses any other): Yakro never sees Bouaké's BKE-… bins, nor they its BIN-….
@@ -45,7 +45,7 @@ export function TransferDetailPage() {
     () => binsAtSite(masters.binInfo ?? [], masters.warehouses, masters.aliases, site.warehouseName),
     [masters.binInfo, masters.warehouses, masters.aliases, site.warehouseName],
   );
-  const lotLink = (l: TransferRequest["lines"][number]) => <TransferLotLink key={l.receiptId} line={l} siteSlug={site.slug} canOpen={visible.has(l.receiptId)} />;
+  const lotLink = (l: TransferRequest["lines"][number]) => <TransferLotLink key={l.id} line={l} siteSlug={site.slug} canOpen={Boolean(l.receiptId && visible.has(l.receiptId))} />;
 
   async function run(action: () => Promise<unknown>) {
     setError(null);
@@ -92,7 +92,7 @@ export function TransferDetailPage() {
         </p>
       )}
       <TransferPanel
-        key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} canSend={siteTypeOf(masters.warehouses, masters.aliases, site.warehouseName) === "UNIT"} saving={saving} lotLink={lotLink} qualityOf={qualityOf} binOptions={binOptions}
+        key={t.id} t={t} siteWarehouse={site.warehouseName} canEdit={canEdit} canSend={siteTypeOf(masters.warehouses, masters.aliases, site.warehouseName) === "UNIT"} saving={saving} lotLink={lotLink} qualityOf={qualityOf} binOptions={binOptions} onBinsOpen={refreshMasters}
         onDispatch={(p) => run(() => api.dispatchTransfer(t.id, p))} onReceive={(p) => run(() => api.receiveTransfer(t.id, p))}
       />
     </div>

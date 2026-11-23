@@ -10,8 +10,9 @@
  * which the client's Stock Transfers sheet follows on both sides — BKT001: 48,880 − 590 bags =
  * 48,290 dispatched, 48,820 − 574 bags = 48,246 at arrival, weight variance −44 kg.
  */
-import { BAG_WEIGHT_KG } from "./receiptMath.js";
+import { BAG_WEIGHT_KG, parseQty } from "./receiptMath.js";
 import { isUsableSite } from "./siteType.js";
+import { isGrnComplete } from "./recordLock.js";
 import type { ReceiptRecord, TransferRequest, TransferStatus, WarehouseMaster } from "../types/receipt.js";
 
 /**
@@ -22,12 +23,34 @@ import type { ReceiptRecord, TransferRequest, TransferStatus, WarehouseMaster } 
 export const TRANSFER_TOLERANCE = { bags: 0, kg: 0 } as const;
 
 /**
- * Whether a receipt's own record makes its Lot ready to go on a BKT: it passed quality and the
- * warehouse answered "Yes — transfers out". "No — stays" or no answer yet keeps it off the Transfers
- * page. Being on a BKT already isn't on the receipt, so whoever offers Lots checks that as well.
+ * Whether a Lot can be picked for a BKT on the Transfers page. The truck is loaded Lot by Lot (team, 22 Nov 2026: the person
+ * picks the Lots that go on the truck), so picking it IS the decision: a Lot that passed quality, has its GRN complete and
+ * sits in a Bin is offered without a separate "transfers out?" answer, and putting it on a BKT records "Yes — transfers out"
+ * on its receipt. A Lot already answered the old way keeps that answer: "Yes" is offered as before, while "No — stays" and
+ * "Ready for production" keep it off the page. Being on a BKT already isn't on the receipt, so the page checks that too.
+ *
+ * Every Lot needs its Bin, the "Yes" ones too: the truck is loaded from where the RCN is stored, so a Lot whose Bin isn't
+ * known can't be sent (team, 23 Nov 2026). Older Lots answered "Yes" before they had a Bin wait for one (transferNeedsBin).
  */
-export function readyForTransfer(r: Pick<ReceiptRecord, "lotNo" | "branches">): boolean {
-  return Boolean(r.lotNo?.trim()) && r.branches["n-qfs"] !== "fail" && r.branches["n-xferdec"] === "transfer";
+export function readyForTransfer(r: Pick<ReceiptRecord, "lotNo" | "branches" | "stageData" | "binNo">): boolean {
+  return readyButForBin(r) && Boolean(lotBinOf(r));
+}
+
+/** A Lot that would be offered for a BKT but has no Bin yet: shown, not pickable, with a way to record its Bin. */
+export function transferNeedsBin(r: Pick<ReceiptRecord, "lotNo" | "branches" | "stageData" | "binNo">): boolean {
+  return readyButForBin(r) && !lotBinOf(r);
+}
+
+/** The Bin a Lot was put in, as its Bin stage (or the older receipt-level field) recorded it; "" when none. */
+export const lotBinOf = (r: Pick<ReceiptRecord, "stageData" | "binNo">): string =>
+  (r.stageData["n-bin"]?.["Bin Number"] || r.binNo || "").trim();
+
+function readyButForBin(r: Pick<ReceiptRecord, "lotNo" | "branches" | "stageData" | "binNo">): boolean {
+  if (!r.lotNo?.trim() || r.branches["n-qfs"] === "fail") return false;
+  const answer = r.branches["n-xferdec"];
+  if (answer === "transfer") return true;
+  if (answer) return false;
+  return r.branches["n-qfs"] === "pass" && isGrnComplete(r.stageData);
 }
 
 /**
@@ -261,4 +284,33 @@ export function transferState(t: TransferFacts): TransferState {
     (v.bagVariance !== null && Math.abs(v.bagVariance) > TRANSFER_TOLERANCE.bags) ||
     (v.weightVarianceKg !== null && Math.abs(v.weightVarianceKg) > TRANSFER_TOLERANCE.kg);
   return off ? "discrepancy" : "closed";
+}
+
+/**
+ * The kinds of value a BKT's dispatch and arrival forms take: a warehouse receipt no. (digits, as the client's sheets write
+ * the W/R No.: 453, 544), a name (the transporter: it needs letters), a number (weights, moisture, KOR; French decimals
+ * allowed) or a whole number (bags, nut count).
+ */
+export type TransferValueKind = "receiptNo" | "name" | "number" | "wholeNumber";
+
+/**
+ * What is wrong with how a value is written, or null. Only the form: a blank is the "required" rule's business, and how
+ * high a reading may go is the server's range check. The forms show this as the value is typed; the server refuses the same,
+ * so a value that slips past the page can't be saved either.
+ */
+export function transferFieldProblem(kind: TransferValueKind, value: string | number | null | undefined): string | null {
+  const v = String(value ?? "").trim();
+  if (!v) return null;
+  switch (kind) {
+    case "receiptNo":
+      return /^\d+$/.test(v) ? null : "Numbers only.";
+    case "name":
+      return /\p{L}/u.test(v) ? null : "Enter a name, not a number.";
+    case "wholeNumber":
+      return /^\d+$/.test(v) ? null : "Whole numbers only.";
+    case "number": {
+      const n = parseQty(v);
+      return n !== undefined && n >= 0 ? null : "Numbers only.";
+    }
+  }
 }

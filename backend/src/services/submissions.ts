@@ -5,12 +5,16 @@
  * Incharge approves it, at which point the values go through the same stage-write code every other
  * edit uses (applyStageFields), in ONE transaction with the status change — so a half-applied
  * submission is impossible. Rejection is terminal: it closes the submission with a reason, and only
- * the Warehouse Incharge can change the data afterwards (direct edits, audited).
+ * the Warehouse Incharge can change the data afterwards (direct edits, audited). After an approval the same form may be
+ * submitted again, for what is still empty (23 Nov 2026, submitAgainBlocker).
+ *
+ * A submission fills empty fields only (22 Nov 2026): a value already recorded on the truck is changed by the Incharge or an
+ * Admin, never by a form. Checked when it is submitted, and again when it is approved, in case the value was recorded in between.
  */
 import type { User } from "@prisma/client";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
-import { formById, formForRole, type Role } from "@anagroci/contract/data/roles";
+import { changesToRecorded, formById, formForRole, recordedValueMessage, submitAgainBlocker, withoutUnchanged, type Role } from "@anagroci/contract/data/roles";
 import { prisma } from "../db.js";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
 import { derivedRuleInForce } from "@anagroci/contract/domain/receiptMath";
@@ -38,7 +42,7 @@ function cleanValues(role: Role, raw: unknown) {
       if (v) (out[stageId] ??= {})[label] = v;
     }
   }
-  if (!Object.keys(out).length) throw new ValidationError("Fill in at least one field before submitting.");
+  if (!Object.keys(out).length) throw new ValidationError("Nothing to submit: type a value in a field that isn't recorded yet. Recorded values are changed by the Warehouse Incharge or an Admin.");
   return { form, values: out };
 }
 
@@ -70,18 +74,19 @@ export async function submitForm(user: User & { role: Role }, receiptId: string,
     }
   }
 
-  // Terminal rejection means ANY earlier submission for this form — pending, approved or rejected —
-  // ends the submitter's part; corrections after that are the Warehouse Incharge's.
-  const existing = await prisma.formSubmission.findFirst({ where: { receiptId, formId: form.id } });
-  if (existing) {
-    throw new ValidationError(
-      existing.status === "rejected"
-        ? "This form was rejected and can't be resubmitted — ask the Warehouse Incharge to correct it."
-        : `This form has already been ${existing.status}.`
-    );
-  }
+  // After an approval the form may be sent again for what is still empty; one waiting, or a rejection, stops it
+  // (contract submitAgainBlocker — the screen asks the same).
+  const earlier = await prisma.formSubmission.findMany({ where: { receiptId, formId: form.id }, select: { status: true } });
+  const blocked = submitAgainBlocker(earlier);
+  if (blocked) throw new ValidationError(blocked);
 
-  return prisma.formSubmission.create({ data: { receiptId, formId: form.id, values, submittedById: user.id } });
+  // What is already recorded is the Incharge's or an Admin's to change; the form only fills what is still empty.
+  const conflicts = changesToRecorded(current, values);
+  if (conflicts.length) throw new ValidationError(recordedValueMessage(conflicts));
+  const fresh = withoutUnchanged(current, values);
+  if (!Object.keys(fresh).length) throw new ValidationError("Nothing new to submit: every value on this form is already recorded.");
+
+  return prisma.formSubmission.create({ data: { receiptId, formId: form.id, values: fresh, submittedById: user.id } });
 }
 
 export interface SubmissionFilter { status?: string; receiptId?: string; site?: string[]; submittedById?: string }
@@ -129,7 +134,14 @@ export async function approveSubmission(reviewer: User, id: string) {
   const form = formById(sub.formId);
 
   await prisma.$transaction(async (tx) => {
-    for (const [stageId, fields] of Object.entries(values)) {
+    // Recorded since it was submitted (the Incharge typed it, or an upload brought it): the form doesn't overwrite it.
+    const current = assembleStageData((await loadReceiptRow(sub.receiptId, tx)) as Record<string, unknown>);
+    const conflicts = changesToRecorded(current, values);
+    if (conflicts.length) {
+      const what = conflicts.map((c) => `${c.label} (now ${c.recorded})`).join(", ");
+      throw new ValidationError(`Since this was submitted, ${what} ${conflicts.length === 1 ? "was" : "were"} recorded on the truck. Reject this submission with a reason, or change the value yourself.`);
+    }
+    for (const [stageId, fields] of Object.entries(withoutUnchanged(current, values))) {
       await applyStageFields(tx, sub.receiptId, stageId, fields, { actor: { id: reviewer.id, via: "approval", submissionId: sub.id } });
     }
 

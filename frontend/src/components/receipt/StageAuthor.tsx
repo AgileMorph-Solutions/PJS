@@ -78,3 +78,23 @@ export function StageAuthor({ changes, values }: { changes: FieldChangeRecord[];
     </>
   );
 }
+
+/**
+ * The same "Entered / Last edit" corner, for a record that stamps who entered it and who last changed it rather than keeping a
+ * change log (a Bin's own forms). Nothing when no one is known.
+ */
+export function AuthorPanel({ entered, edited }: { entered?: { by: string; at: string }; edited?: { by: string; at: string } }) {
+  if (!entered && !edited) return null;
+  const first = entered ?? edited!;
+  const laterEdit = edited && entered && (edited.by !== entered.by || formatDateTime(edited.at) !== formatDateTime(entered.at));
+  return (
+    <div className="hidden sm:flex items-start gap-3 shrink-0 max-w-80 pl-4 border-l border-warmstone-100">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 items-baseline">
+        <Person label={entered ? "Entered" : "Last edit"} who={first.by} at={first.at} />
+        {laterEdit && <Person label="Last edit" who={edited!.by} at={edited!.at} />}
+      </dl>
+      <Avatar name={first.by} size="md" />
+    </div>
+  );
+}
+

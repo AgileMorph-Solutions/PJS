@@ -116,3 +116,35 @@ describe("who sees production past the intake", () => {
     expect(ROLES.filter((r) => canSeeFactory(r.value)).map((r) => r.value)).toEqual(["admin", "production_incharge", "factory_manager"]);
   });
 });
+
+describe("a recorded value is changed only by the Warehouse Incharge or an Admin (22 Nov 2026)", () => {
+  it("lets Admin and the Incharge change it, and nobody else", async () => {
+    const { canChangeRecordedValue } = await import("../src/data/roles");
+    expect(["admin", "warehouse_incharge"].every((r) => canChangeRecordedValue(r as never))).toBe(true);
+    expect(["branch_manager", "qfs_officer", "production_incharge", "factory_manager"].some((r) => canChangeRecordedValue(r as never))).toBe(false);
+  });
+
+  it("finds only real changes: filling a blank field, or sending the same value again, is not one", async () => {
+    const { changesToRecorded, withoutUnchanged } = await import("../src/data/roles");
+    const current = { "n-gate": { "VEHICLE NO.": "AB-123", "WH NO.": "" } };
+    expect(changesToRecorded(current, { "n-gate": { "VEHICLE NO.": " AB-123 ", "WH NO.": "BKE-001" } })).toEqual([]);
+    expect(changesToRecorded(current, { "n-gate": { "VEHICLE NO.": "XY-999" } })).toEqual([{ stageId: "n-gate", label: "VEHICLE NO.", recorded: "AB-123" }]);
+    expect(withoutUnchanged(current, { "n-gate": { "VEHICLE NO.": "AB-123", "WH NO.": "BKE-001" } })).toEqual({ "n-gate": { "WH NO.": "BKE-001" } });
+  });
+
+  it("says whom to ask: a price is an Admin's, since the Incharge never sees it", async () => {
+    const { recordedValueMessage } = await import("../src/data/roles");
+    expect(recordedValueMessage([{ stageId: "n-grn", label: "PRICE", recorded: "470" }])).toMatch(/Already recorded: PRICE \(470\).*only be changed by an Admin/);
+    expect(recordedValueMessage([{ stageId: "n-gate", label: "VEHICLE NO.", recorded: "AB-123" }])).toMatch(/Warehouse Incharge or an Admin/);
+  });
+});
+
+describe("sending a form again", () => {
+  it("is allowed for a first form, and after approvals; a pending one or a rejection stops it", async () => {
+    const { submitAgainBlocker } = await import("../src/data/roles");
+    expect(submitAgainBlocker([])).toBeUndefined();
+    expect(submitAgainBlocker([{ status: "approved" }, { status: "approved" }])).toBeUndefined();
+    expect(submitAgainBlocker([{ status: "approved" }, { status: "submitted" }])).toMatch(/waiting for approval/);
+    expect(submitAgainBlocker([{ status: "approved" }, { status: "rejected" }])).toMatch(/rejected/);
+  });
+});

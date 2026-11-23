@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { lotPieceProblem, lotTransferProgress, pieceChanged, readyForTransfer, suggestedPiece, transferDestinationLabel, TRANSFER_STATE_LABELS, type LotOnBkt, type LotTransferProgress, type TransferDestination } from "@anagroci/contract/domain/transfers";
+import { lotBinOf, lotPieceProblem, lotTransferProgress, pieceChanged, readyForTransfer, suggestedPiece, transferNeedsBin, transferDestinationLabel, TRANSFER_STATE_LABELS, type LotOnBkt, type LotTransferProgress, type TransferDestination } from "@anagroci/contract/domain/transfers";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { formatKg } from "../../components/production/batchUi";
 import { WAREHOUSE_TYPE_LABEL } from "../../data/warehouseTypes";
@@ -8,7 +8,7 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { DataTable, type Column } from "../../components/ui/DataTable";
 import { FilterBar } from "../../components/ui/FilterBar";
-import { MultiSelect } from "../../components/ui/MultiSelect";
+import { MultiSelect, type MultiSelectOption } from "../../components/ui/MultiSelect";
 import { Pill } from "../../components/ui/Pill";
 import { Field, inputClass, n, TRANSFER_TONE, TransferLotLink } from "../../components/transfers/TransferPanel";
 import { TransferLotLine } from "../../components/transfers/TransferLotLine";
@@ -22,6 +22,8 @@ import type { ReceiptRecord, TransferRequest } from "../../types/receipt";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../../components/ui/DateInput";
+import { useSearchParams } from "react-router-dom";
+import { splitBinCodes } from "@anagroci/contract/domain/productionBatch";
 
 const today = todayIso;
 
@@ -43,6 +45,12 @@ function leftLabel(p: LotTransferProgress | undefined, r: ReceiptRecord): string
 }
 
 const qty = (v: string) => parseQty(v) ?? null;
+
+/** The Lot's Bin, for reference: the truck is loaded Lot by Lot, but people find the RCN by its Bin. Every offered Lot has one. */
+const binRef = (r: ReceiptRecord) => `Bin ${lotBinOf(r)}`;
+
+/** The Bins a BKT was loaded from, as each line recorded it. */
+const binsOf = (t: TransferRequest) => [...new Set(t.lines.map((l) => (l.binCode ?? "").trim()).filter(Boolean))].join(", ");
 const asText = (x: number | null) => (x === null ? "" : String(x));
 
 /** "40 bags (1,960 kg)" — one amount, read at a glance; either half is left out when unknown. */
@@ -85,8 +93,9 @@ function lineInfo(r: ReceiptRecord, pieces: readonly LotOnBkt[], pick: Pick): { 
  * Transfers — moving Lots to another warehouse on ONE truck, numbered BKT-<year>-NNN. A line is a Lot:
  * its supplier, fiche and Lot number come from the receipt, and the bags and net weight start as what
  * that receipt recorded, so nothing is typed twice. A Lot bigger than one truck goes on several BKTs: it
- * stays on offer, starting from what is left of it, until all of it is on a truck. A Lot is offered here once its receipt says
- * "Yes — transfers out"; "No — stays" keeps it off this page. RCN only moves from Unit to Central, so a
+ * stays on offer, starting from what is left of it, until all of it is on a truck. A Lot is offered here once it is in its
+ * Bin with its GRN complete, and its Bin is shown beside it for reference; putting it on a BKT records "Yes — transfers
+ * out" on its receipt. A Lot answered "No — stays" the old way stays off this page. RCN only moves from Unit to Central, so a
  * Central warehouse has no new transfer here: this page is where it records what arrives.
  *
  * Two warehouses write two halves, and neither writes the other's: the SENDING one says what left (the
@@ -100,7 +109,7 @@ export function TransfersPage() {
   const canEdit = useCanEditDirectly();
   const { receipts, masters, refresh } = useTracking();
   const { transfers, loading, refetch } = useTransfers(site.warehouseName);
-  const search = useTableSearch(transfers, (t) => [t.id, t.truckNo, t.fromWarehouse, t.toWarehouse, t.toStore, ...t.lines.map((l) => l.lotNumber)]);
+  const search = useTableSearch(transfers, (t) => [t.id, t.truckNo, t.fromWarehouse, t.toWarehouse, t.toStore, ...t.lines.flatMap((l) => [l.lotNumber, l.binCode])]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -120,11 +129,11 @@ export function TransfersPage() {
   }, [canSend, site.warehouseName]);
   // The receipts this site can open; a Lot on an incoming BKT belongs to the OTHER site, so it is shown as text.
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
-  // Marked "Yes" on the receipt says it is ready; only the BKTs themselves say how much of it is already on one.
+  // A Lot in its Bin with its GRN complete is ready (or one marked "Yes" the old way); only the BKTs themselves say how much of it is already on one.
   // Nothing is offered until they have loaded, or a Lot already sent in full would show for a moment.
   const pieces = useMemo(() => {
     const out = new Map<string, LotOnBkt[]>();
-    for (const t of transfers) for (const l of t.lines) (out.get(l.receiptId) ?? out.set(l.receiptId, []).get(l.receiptId)!).push({ transferId: t.id, bags: l.bags, netWeightKg: l.netWeightKg });
+    for (const t of transfers) for (const l of t.lines) if (l.receiptId) (out.get(l.receiptId) ?? out.set(l.receiptId, []).get(l.receiptId)!).push({ transferId: t.id, bags: l.bags, netWeightKg: l.netWeightKg });
     return out;
   }, [transfers]);
   const progress = useMemo(
@@ -137,13 +146,30 @@ export function TransfersPage() {
       .filter((r) => r.warehouse === site.warehouseName && readyForTransfer(r) && !progress.get(r.id)?.fullySent)
       .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1));
   }, [receipts, progress, loading, site.warehouseName]);
-  const lotOptions = useMemo(
-    () => candidates.map((r) => ({
-      value: r.id,
-      label: r.lotNo!,
-      detail: [normalizeSupplierName(r.supplierName) || "-", r.binNo || "no bin", r.vehicleNo, leftLabel(progress.get(r.id), r)].filter(Boolean).join(" · "),
-    })),
-    [candidates, progress]
+  // Lots that would be ready but whose Bin isn't known: listed after the ready ones so nobody wonders where they went, never
+  // pickable, each with a link to its receipt's Bin step. Once the Bin is recorded the Lot becomes a normal candidate.
+  const needBin = useMemo(() => {
+    if (loading) return [];
+    return receipts
+      .filter((r) => r.warehouse === site.warehouseName && transferNeedsBin(r) && !progress.get(r.id)?.fullySent)
+      .sort((a, b) => (a.lotNo! < b.lotNo! ? 1 : -1));
+  }, [receipts, progress, loading, site.warehouseName]);
+  const lotOptions = useMemo<MultiSelectOption[]>(
+    () => [
+      ...candidates.map((r) => ({
+        value: r.id,
+        label: r.lotNo!,
+        detail: [normalizeSupplierName(r.supplierName) || "-", binRef(r), r.vehicleNo, leftLabel(progress.get(r.id), r)].filter(Boolean).join(" · "),
+      })),
+      ...needBin.map((r) => ({
+        value: r.id,
+        label: r.lotNo!,
+        detail: [normalizeSupplierName(r.supplierName) || "-", "no Bin yet, can't be sent", r.vehicleNo].filter(Boolean).join(" · "),
+        disabled: true,
+        action: { label: "Add Bin", to: `/${site.slug}/receipts/${encodeURIComponent(r.id)}?stage=n-bin` },
+      })),
+    ],
+    [candidates, needBin, progress, site.slug]
   );
   // Read back through the candidates, so a Lot that stopped being ready after it was ticked can't be sent unseen.
   const pickedLots = candidates.filter((r) => picked[r.id]);
@@ -162,6 +188,17 @@ export function TransfersPage() {
       return next;
     });
   }
+
+  // A Bin's page ("Send on a transfer") opens this page with ?bin=: the ready Lots in that Bin are ticked once loaded.
+  const [params] = useSearchParams();
+  const fromBin = params.get("bin")?.trim().toUpperCase();
+  const [binApplied, setBinApplied] = useState(false);
+  useEffect(() => {
+    if (!fromBin || binApplied || !candidates.length) return;
+    setBinApplied(true);
+    for (const r of candidates) if (splitBinCodes(r.stageData["n-bin"]?.["Bin Number"] || r.binNo).includes(fromBin)) toggle(r.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromBin, binApplied, candidates]);
 
   async function run(action: () => Promise<unknown>) {
     setError(null);
@@ -187,7 +224,7 @@ export function TransfersPage() {
     if (ok) { setPicked({}); setRemarks(""); }
   }
 
-  const lotLink = (l: TransferRequest["lines"][number]) => <TransferLotLink key={l.receiptId} line={l} siteSlug={site.slug} canOpen={visible.has(l.receiptId)} />;
+  const lotLink = (l: TransferRequest["lines"][number]) => <TransferLotLink key={l.id} line={l} siteSlug={site.slug} canOpen={Boolean(l.receiptId && visible.has(l.receiptId))} />;
 
   const columns: Column<TransferRequest>[] = [
     { label: "BKT", nowrap: true, render: (t) => <span className="font-mono text-[12.5px]">{t.id}</span> },
@@ -195,6 +232,7 @@ export function TransfersPage() {
     { label: "From → To", filter: { value: (t) => `${t.fromWarehouse} → ${transferDestinationLabel(t)}` }, render: (t) => `${t.fromWarehouse} → ${transferDestinationLabel(t)}` },
     { label: "Truck", nowrap: true, render: (t) => t.truckNo ?? <span className="text-warmstone-300">not sent yet</span> },
     { label: "Lots", render: (t) => <span className="flex flex-wrap gap-x-2 gap-y-0.5">{t.lines.map(lotLink)}</span> },
+    { label: "From Bin", filter: { value: (t) => binsOf(t) }, render: (t) => binsOf(t) || "-" },
     { label: "Bags sent", filter: { value: (t) => t.variance.bagsDispatched, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagsDispatched) },
     { label: "Bags received", filter: { value: (t) => t.variance.bagsReceived, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagsReceived) },
     { label: "Bag variance", filter: { value: (t) => t.variance.bagVariance, kind: "number" }, nowrap: true, render: (t) => n(t.variance.bagVariance, true) },
@@ -235,9 +273,11 @@ export function TransfersPage() {
             <Field
               id="tr-lots"
               label={`Lots to send (${pickedLots.length} selected)`}
-              hint={candidates.length ? undefined : "No Lot is ready to send. Choose \"Yes — transfers out\" on a receipt that passed quality, and its Lot will show here."}
+              hint={needBin.length
+                ? `${needBin.length} Lot${needBin.length === 1 ? " has" : "s have"} no Bin yet and can't be sent: use "Add Bin" beside it to record where it is stored.`
+                : candidates.length ? undefined : "No Lot is ready to send. A Lot shows here once it is in its Bin with its GRN complete."}
             >
-              <MultiSelect id="tr-lots" options={lotOptions} selected={pickedLots.map((r) => r.id)} onToggle={toggle} placeholder="Search Lot, supplier or truck, and tick each Lot to send" />
+              <MultiSelect id="tr-lots" options={lotOptions} selected={pickedLots.map((r) => r.id)} onToggle={toggle} placeholder="Search Lot, Bin, supplier or truck, and tick each Lot to send" />
             </Field>
 
             {pickedLots.length > 0 && (
@@ -249,7 +289,7 @@ export function TransfersPage() {
                     <TransferLotLine
                       key={r.id}
                       lotNo={r.lotNo!}
-                      detail={[normalizeSupplierName(r.supplierName) || "-", r.binNo || "no bin"].join(" · ")}
+                      detail={[normalizeSupplierName(r.supplierName) || "-", binRef(r)].join(" · ")}
                       sizeLabel={info.sizeLabel}
                       warning={info.warning}
                       bags={p.bags}

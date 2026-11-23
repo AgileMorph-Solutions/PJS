@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@anagroci/contract": "*",
+    "@anthropic-ai/sdk": "^1.11.0",
     "@fastify/cors": "^11.3.0",
     "@fastify/multipart": "^10.1.2",
     "@prisma/client": "^6.3.0",

@@ -37,6 +37,8 @@ import { DryingJobsPage } from "./pages/warehouse/DryingJobsPage";
 import { DispatchesPage } from "./pages/warehouse/DispatchesPage";
 import { DeliveryPlansPage } from "./pages/warehouse/DeliveryPlansPage";
 import { DeliveryPlanDetailPage } from "./pages/warehouse/DeliveryPlanDetailPage";
+import { WarehouseActivitiesPage } from "./pages/warehouse/WarehouseActivitiesPage";
+import { WarehouseActivityDetailPage } from "./pages/warehouse/WarehouseActivityDetailPage";
 import { TransfersPage } from "./pages/warehouse/TransfersPage";
 import { TransferDetailPage } from "./pages/warehouse/TransferDetailPage";
 import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage";
@@ -133,6 +135,8 @@ function AppRoutes() {
                 <Route path="drying" element={<DryingJobsPage />} />
                 <Route path="delivery-plans" element={<DeliveryPlansPage />} />
                 <Route path="delivery-plans/:id" element={<DeliveryPlanDetailPage />} />
+                <Route path="warehouse-activities" element={<WarehouseActivitiesPage />} />
+                <Route path="warehouse-activities/:binCode" element={<WarehouseActivityDetailPage />} />
                 <Route path="transfers" element={<TransfersPage />} />
                 <Route path="transfers/:id" element={<TransferDetailPage />} />
                 <Route path="logs" element={<LogsPage />} />

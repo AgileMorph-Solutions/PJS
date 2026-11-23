@@ -51,6 +51,9 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SEED_DEMO_USERS: ${SEED_DEMO_USERS:-false}
       DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      # Reads the CCA fiche photo on the Verify supplier documents step (services/ficheReader.ts). Unset: the fiche is
+      # still kept on the receipt, it just isn't read. Set it in .env.prod, never in this file.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy

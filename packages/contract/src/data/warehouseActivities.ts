@@ -8,7 +8,8 @@
  * the workbook said.
  *
  * Per the Sept 2026 clarification, triage / cleaning is not drying: quality, moisture and quantity can all change, so it must
- * record its own checks. Every other activity stays linked to its Lot and location (doc §5.4).
+ * record its own checks. Every activity is linked to its location (doc §5.4): a Bin, since 22 Nov 2026 — once RCN is in a Bin
+ * its Lots can't be told apart (Sameer, 18 Nov 2026), so naming a Lot is optional.
  */
 export type ActivityCategoryId =
   | "offloading" | "stacking" | "destacking" | "reconditioning" | "drying" | "triage" | "bin_work" | "movement" | "other";
@@ -31,13 +32,13 @@ export interface ActivityCategory {
 export const ACTIVITY_CATEGORIES: readonly ActivityCategory[] = [
   // Bin jobs first: "BIN RECONDITION" is work on the bin, not on a Lot's bags.
   { id: "bin_work", label: "Bin rearranging / repair", needsLot: false, needsQuality: false, match: /^\s*bin\b/i },
-  { id: "destacking", label: "Destacking", needsLot: true, needsQuality: false, match: /de-?\s*st(?:a|ac)?king|destak|destack/i },
-  { id: "stacking", label: "Stacking", needsLot: true, needsQuality: false, match: /st(?:a|ac)?king|stack/i },
-  { id: "offloading", label: "Offloading", needsLot: true, needsQuality: false, match: /off-?load|unload|discharg|décharg|decharg/i },
-  { id: "reconditioning", label: "Re-bagging / reconditioning", needsLot: true, needsQuality: false, match: /recondition|re-?bag|stit?ch|repair|mend/i },
-  { id: "drying", label: "Drying", needsLot: true, needsQuality: false, useDryingForm: true, match: /dry|dying|s[eè]ch|sech/i },
-  { id: "triage", label: "Triage / cleaning", needsLot: true, needsQuality: true, match: /triage|clean|sort|nettoy|ramass/i },
-  { id: "movement", label: "Movement between locations", needsLot: true, needsQuality: false, needsTwoLocations: true, match: /\bmov|shift|relocat|d[eé]plac|transfer/i },
+  { id: "destacking", label: "Destacking", needsLot: false, needsQuality: false, match: /de-?\s*st(?:a|ac)?king|destak|destack/i },
+  { id: "stacking", label: "Stacking", needsLot: false, needsQuality: false, match: /st(?:a|ac)?king|stack/i },
+  { id: "offloading", label: "Offloading", needsLot: false, needsQuality: false, match: /off-?load|unload|discharg|décharg|decharg/i },
+  { id: "reconditioning", label: "Re-bagging / reconditioning", needsLot: false, needsQuality: false, match: /recondition|re-?bag|stit?ch|repair|mend/i },
+  { id: "drying", label: "Drying", needsLot: false, needsQuality: false, useDryingForm: true, match: /dry|dying|s[eè]ch|sech/i },
+  { id: "triage", label: "Triage / cleaning", needsLot: false, needsQuality: true, match: /triage|clean|sort|nettoy|ramass/i },
+  { id: "movement", label: "Movement between locations", needsLot: false, needsQuality: false, needsTwoLocations: true, match: /\bmov|shift|relocat|d[eé]plac|transfer/i },
   { id: "other", label: "Other", needsLot: false, needsQuality: false, match: /$^/ },
 ];
 
@@ -74,7 +75,7 @@ export function activityProblems(input: ActivityEntryInput): string[] {
   const cat = ACTIVITY_CATEGORIES.find((c) => c.id === input.category);
   if (!cat) return ["Choose the kind of activity."];
   const out: string[] = [];
-  if (cat.useDryingForm) out.push("Drying is recorded on the truck itself (Does this Lot need drying? Yes), so its moisture and weights are captured there.");
+  if (cat.useDryingForm) out.push("Drying is recorded in the Bin's Sun drying section (or on the truck, when it was unloaded straight onto the drying yard), so its moisture and weights are captured there.");
   if (cat.needsLot && blank(input.lotNo)) out.push(`${cat.label} is recorded against a Lot: choose which one.`);
   if (blank(input.locationFrom)) out.push(cat.needsTwoLocations ? "Say where it moved from." : "Say where in the warehouse it was done (store or bin).");
   if (cat.needsTwoLocations && blank(input.locationTo)) out.push("Say where it moved to.");

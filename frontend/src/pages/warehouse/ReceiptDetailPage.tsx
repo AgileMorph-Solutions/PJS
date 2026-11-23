@@ -1,24 +1,18 @@
-import { Fragment, useMemo, useState } from "react";
-import { useParams, Link, Navigate } from "react-router-dom";
-import { useTracking, useReceiptLinks, useOneReceiptPlanInfo, useDeliveryPlans, useDryingBatches, useFieldChanges } from "../../state/TrackingContext";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { useParams, useSearchParams, Link, Navigate } from "react-router-dom";
+import { useTracking, useOneReceiptPlanInfo } from "../../state/TrackingContext";
 import { useSite } from "../../state/SiteContext";
-import { useCanEditDirectly, useMe } from "../../state/AuthContext";
 import { useSubmissions } from "../../state/userManagement";
 import { SubmissionCard } from "../../components/SubmissionCard";
 import { SubmissionReview } from "../../components/SubmissionReview";
-import { deriveStatus, getStageProgress, isStageBlank } from "../../domain/receiptStatus";
-import { decisionBranchesFor, stageForSite } from "../../domain/decisions";
-import { productionReadinessGaps, productionReadinessNotice } from "@anagroci/contract/domain/productionBatch";
-import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { warehouseFieldChoices } from "../../components/receipt/warehousePicker";
-import { stages, rejectStage, RECEPTION_STEPS } from "../../data/stages";
-import { computeDerivedFields } from "../../domain/receiptMath";
+import { deriveStatus, getStageProgress } from "../../domain/receiptStatus";
+import { stageForSite } from "../../domain/decisions";
+import { rejectStage, RECEPTION_STEPS, stageById } from "../../data/stages";
+import { receptionStages, legacyLotStages, YARD_DRYING_STAGE } from "@anagroci/contract/domain/warehouseActivityStages";
+import { splitBinCodes } from "@anagroci/contract/domain/productionBatch";
 import { StageForm } from "../../components/StageForm";
-import { DecisionBranch } from "../../components/DecisionBranch";
 import { ReceiptStatusPill } from "../../components/ReceiptStatusPill";
 import { LotJourney } from "../../components/receipt/LotJourney.tsx"; // explicit: LotJourney.tsx and lotJourney.ts differ only by case, which a case-insensitive filesystem (macOS) resolves to the wrong one
-import { prefillSuggestions } from "@anagroci/contract/domain/receiptMath";
-import { planPrefill } from "@anagroci/contract/domain/deliveryPlan";
 import { LotOverview } from "../../components/receipt/LotOverview";
 import { ReceiptPlanCard } from "../../components/receipt/ReceiptPlanCard";
 import { TruckSummaryCard } from "../../components/receipt/TruckSummaryCard";
@@ -27,22 +21,15 @@ import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
 import { buildJourney } from "../../components/receipt/lotJourney.ts";
 import { CollapsibleCard } from "../../components/ui/CollapsibleCard";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
-import { LOCKED_DECISIONS, LOCKED_STAGES } from "@anagroci/contract/domain/recordLock";
 import { api } from "../../repository/api";
-import { DryingPanel } from "../../components/receipt/DryingPanel";
 import { FieldHistory } from "../../components/receipt/FieldHistory";
 import { StageAuthor } from "../../components/receipt/StageAuthor";
-import { PricePanel } from "../../components/receipt/PricePanel";
-import { originFieldProps } from "../../components/receipt/originPicker";
-import { binProblemMessage } from "../../components/receipt/binPicker";
-import { binNumberProblems, binsAtSite } from "@anagroci/contract/domain/binNumber";
-import { canSeeField, canSetPrice } from "@anagroci/contract/data/roles";
+import { StageCard } from "../../components/receipt/StageCard";
+import { useStageCards } from "../../components/receipt/useStageCards";
+import { canSeeField } from "@anagroci/contract/data/roles";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
-import { useFieldRules } from "../../components/receipt/useFieldRules";
-import { arrivalFieldChoices } from "../../components/receipt/arrivalPickers";
-import { Pill } from "../../components/ui/Pill";
 import { useOpenPanels } from "../../components/ui/useOpenPanels";
-import { FINALISED_WHEN_LABEL } from "@anagroci/contract/domain/binFinalise";
+import { buttonClass } from "../../components/ui/Button";
 
 /**
  * ONE component for both sites — a receipt is a single record whether it's at Bouaké or Yakro, and
@@ -54,25 +41,18 @@ import { FINALISED_WHEN_LABEL } from "@anagroci/contract/domain/binFinalise";
 export function ReceiptDetailPage() {
   const { id = "" } = useParams();
   const site = useSite();
-  const { receipts, getReceipt, setStageField, setBranch, flushStage, masters, refresh } = useTracking();
+  const { receipts, getReceipt, setStageField, flushStage, refresh } = useTracking();
   const receipt = getReceipt(id);
-  const me = useMe();
-  // Warehouse Incharge/admin edit stages directly; a Branch Manager / QFS Officer sees them
-  // read-only and submits their own form (SubmissionCard) for approval instead.
-  const canEdit = useCanEditDirectly();
-  // Read once for the History tab and every stage card's "who / when". The change log is Warehouse Incharge / admin only
-  // (backend auth/policy.ts keeps it from the narrow roles), so the others don't ask for it.
-  const fieldLog = useFieldChanges(id, canEdit);
-  const changesByStage = useMemo(() => {
-    const by = new Map<string, typeof fieldLog.changes>();
-    for (const c of fieldLog.changes) by.set(c.stageId, [...(by.get(c.stageId) ?? []), c]);
-    return by;
-  }, [fieldLog.changes]);
+  // The field rules, the Bins, the linked records and the change log — the same for every stage card (useStageCards).
+  const ctx = useStageCards(receipt, { withFiche: true });
+  const { me, canEdit, fieldLog, changesByStage, plans, links, linksLoading, siteType } = ctx;
   const submissions = useSubmissions({ receiptId: id });
   const { info: planInfo, refetch: refetchPlanInfo } = useOneReceiptPlanInfo(id, canEdit);
-  const { plans } = useDeliveryPlans(site.warehouseName);
   const [copied, setCopied] = useState(false);
-  const [tab, setTab] = useState<"overview" | "stages" | "history">("overview");
+  // ?stage=<id> (e.g. Transfers' "Add Bin" on a Lot with no Bin) opens straight on that stage, expanded and in view.
+  const [params] = useSearchParams();
+  const focusStage = params.get("stage") ?? undefined;
+  const [tab, setTab] = useState<"overview" | "stages" | "history">(focusStage ? "stages" : "overview");
   const [lockError, setLockError] = useState<string | null>(null);
   const [lockBusy, setLockBusy] = useState(false);
 
@@ -80,75 +60,44 @@ export function ReceiptDetailPage() {
     () => (receipt?.binNo ? receipts.filter((r) => r.binNo === receipt.binNo && r.id !== receipt.id) : []),
     [receipts, receipt?.binNo, receipt?.id]
   );
-  // What the system calculates from the readings as they stand — shown at once, so a net weight
-  // follows the tare weight as it is typed rather than appearing after the server has saved it.
-  const derived = useMemo(() => (receipt ? computeDerivedFields(receipt.stageData) : {}), [receipt]);
-  const { links, loading: linksLoading, refetch: refetchLinks } = useReceiptLinks(receipt?.id);
-  // The drying types already in use at this site, offered as suggestions on the drying form.
-  const { batches: siteDryingBatches } = useDryingBatches(site.warehouseName);
-  const dryTypes = useMemo(() => [...new Set(["SUN DRYING", ...siteDryingBatches.map((d) => (d.dryType ?? "").trim()).filter(Boolean)])], [siteDryingBatches]);
-  // A Bin is a place INSIDE a store (BKE-002-BIN-012), never the store itself, and only one of this truck's own site:
-  // the server refuses any other. The bins of the truck's own store come first.
-  const store = receipt?.stageData["n-gate"]?.["WH NO."]?.trim();
-  const storeNames = useMemo(() => masters.warehouses.filter((w) => w.site).map((w) => w.name), [masters.warehouses]);
-  const binOptions = useMemo(() => {
-    const stores = new Set(storeNames);
-    const bins = binsAtSite(masters.binInfo ?? [], masters.warehouses, masters.aliases, receipt?.warehouse || site.warehouseName).filter((b) => !stores.has(b));
-    if (!store) return bins;
-    const storeOf = new Map((masters.binInfo ?? []).map((b) => [b.code, b.store]));
-    const mine = (b: string) => storeOf.get(b) === store;
-    return [...bins.filter(mine), ...bins.filter((b) => !mine(b))];
-  }, [masters.binInfo, masters.warehouses, masters.aliases, storeNames, store, receipt?.warehouse, site.warehouseName]);
-  // Bin Number as typed but not yet a Bin the server would accept. Every field saves as you type, and the
-  // server refuses a Bin that isn't in the master — so "B", "BK", ... were each refused and the reload put the
-  // empty saved value back over the typing. Held here instead, and saved the moment it names real Bins.
-  const [binDraft, setBinDraft] = useState<{ receiptId: string; value: string } | null>(null);
-  const plan = plans.find((p) => p.id === receipt?.deliveryPlanId);
-  // The field rules and the phase order: impossible values held back in red, later phases locked until earlier ones are complete.
-  const rules = useFieldRules(receipt, (stageId, label, value) => { if (receipt) setStageField(receipt.id, stageId, label, value); });
+  // This page is the reception record: gate entry to GRN and stock. What happens to the Lot in the warehouse after that
+  // (drying, other activities, the ledger, transfer / production) is on its Warehouse activities page.
   // Stage cards stay open while you type in them, though the first value moves "In progress" on to the next stage.
-  const panels = useOpenPanels(receipt ? getStageProgress(receipt).activeStage?.id : undefined);
+  const panels = useOpenPanels(receipt ? getStageProgress(receipt, receptionStages).activeStage?.id : undefined, focusStage);
+  useEffect(() => {
+    if (focusStage) document.getElementById(`stage-${focusStage}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [focusStage, receipt?.id]);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
   const isAdmin = me.role === "admin";
-  const binFinalised = (receipt.stageData["n-bin"]?.["Bin allocation date"] ?? "").trim() !== "";
-  const pendingBin = binDraft?.receiptId === receipt.id ? binDraft.value : undefined;
-  const binWarning = pendingBin !== undefined ? binProblemMessage(binNumberProblems(pendingBin, binOptions, storeNames)) : undefined;
-  const onFieldChange = (stageId: string, fieldName: string, value: string) => {
-    if (stageId === "n-bin" && fieldName === "Bin Number") {
-      if (binNumberProblems(value, binOptions, storeNames).length) { setBinDraft({ receiptId: receipt.id, value }); return; }
-      setBinDraft(null);
-    }
-    rules.change(stageId, fieldName, value);
-  };
   // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
   if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
 
-  // What is already known elsewhere — the plan the truck arrived against, the net weight, the Lot — offered
-  // beside the empty field. Nothing is written until the person takes it.
-  const suggestionsFor = (stageId: string, values: Record<string, string>) => ({
-    ...prefillSuggestions(receipt.stageData, stageId),
-    ...planPrefill(plan, receipt.stageData, stageId),
-    ...(stageId === "n-bin" && receipt.lotNo && !(values["Linked Lot Number(s)"] ?? "").trim()
-      ? { "Linked Lot Number(s)": { value: receipt.lotNo, from: "this receipt's Lot" } }
-      : {}),
-  });
-
   const status = deriveStatus(receipt);
-  const { doneIds, doneCount, activeStage } = getStageProgress(receipt);
-  // The receipt's own site decides its last question and how its journey ends, whichever section it is viewed from.
-  const siteType = siteTypeOf(masters.warehouses, masters.aliases, receipt.warehouse);
+
+  const { doneIds, doneCount, activeStage } = getStageProgress(receipt, receptionStages);
+  // The receipt's own site decides how its journey ends, whichever section it is viewed from.
   const journey = buildJourney(receipt, links, siteType);
-  const readinessGaps = siteType === "CENTRAL" ? productionReadinessGaps(receipt, links?.dryingBatches) : [];
+  // Once Reception has put the Lot in a Bin, its warehouse work carries on on its own page — for the people who record it.
+  // Its Bin's page — or the list, when the Lot was recorded across several Bins.
+  const lotBins = receipt.branches["n-qfs"] === "fail" ? [] : splitBinCodes(receipt.binNo);
+  const activitiesHref = canEdit && lotBins.length
+    ? (lotBins.length === 1 ? `/${site.slug}/warehouse-activities/${encodeURIComponent(lotBins[0]!)}` : `/${site.slug}/warehouse-activities`)
+    : undefined;
+  // The truck's own drying: straight off the truck onto the drying yard, recorded with its unloading (Sameer, 18 Nov 2026).
+  const yardStage = { ...stageById[YARD_DRYING_STAGE]!, title: "Unloaded straight onto the drying yard?" };
+  const yardDone = receipt.stageData[YARD_DRYING_STAGE] !== undefined || receipt.branches[YARD_DRYING_STAGE] !== undefined;
+  // What this Lot recorded per Lot before warehouse activities moved to Bins: kept, and shown for the record.
+  const legacy = legacyLotStages(receipt);
 
   // Once a Lot exists, that's the record's real-world identity from here on — the receipt id
   // stays as the underlying record key, but the page leads with what a warehouse user actually
   // calls it.
   const primaryLabel = receipt.lotNo ? `Lot ${receipt.lotNo}` : receipt.id;
 
-  // The three decision stages sit in their natural position within `stages` (n-qfs between
-  // n-verify and n-gross, etc.), so "the record's current stage is a decision" is exactly "there's
-  // an unmade decision waiting right here" — no separate lookahead needed.
+  // A decision stage sits in its natural position among the stages (n-qfs between n-verify and
+  // n-gross), so "the record's current stage is a decision" is exactly "there's an unmade decision
+  // waiting right here" — no separate lookahead needed.
   const pendingDecision = activeStage?.kind === "decision" ? stageForSite(activeStage, siteType) : undefined;
 
   // The receipt's own site (r.warehouse) may not match the section it's being viewed from — a
@@ -215,19 +164,25 @@ export function ReceiptDetailPage() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold uppercase tracking-wider text-warmstone-500">Current progress</span>
               <span className="text-xs font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2.5 py-0.5 rounded-full">
-                {doneCount} of {stages.length} stages
+                {doneCount} of {receptionStages.length} stages
               </span>
             </div>
             <div className="text-sm font-bold text-warmstone-900 mb-2 flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px] text-brand-700">arrow_forward</span>
-              <span>{activeStage ? activeStage.title : "All stages recorded"}</span>
+              <span>{activeStage ? activeStage.title : "Reception complete"}</span>
             </div>
             <div className="w-full bg-warmstone-200 h-2.5 rounded-full overflow-hidden">
               <div
                 className="bg-gradient-to-r from-brand-500 to-brand-700 h-full rounded-full transition-all duration-500"
-                style={{ width: `${stages.length ? Math.round((doneCount / stages.length) * 100) : 0}%` }}
+                style={{ width: `${receptionStages.length ? Math.round((doneCount / receptionStages.length) * 100) : 0}%` }}
               />
             </div>
+            {activitiesHref && (
+              <Link to={activitiesHref} className="mt-3 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-700 hover:text-brand-800">
+                Next: Warehouse activities
+                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -308,7 +263,7 @@ export function ReceiptDetailPage() {
 
       {tab === "stages" && (
         <div className="space-y-4 max-w-4xl">
-          {!canEdit && <SubmissionCard receipt={receipt} role={me.role} />}
+          {!canEdit && <SubmissionCard submission={ctx.submission} />}
           {pendingDecision && canEdit && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-ambernut-50 border border-ambernut-200 text-[13px] text-ambernut-900">
               <span className="material-symbols-outlined text-[18px]">flag</span>
@@ -316,172 +271,43 @@ export function ReceiptDetailPage() {
             </div>
           )}
 
-          {stages.map((rawStage, stageIndex) => {
-            const stage = stageForSite(rawStage, siteType);
+          {receptionStages.map((stage, stageIndex) => {
             // The reception stages are grouped into the seven steps the team works through
             // (Arrival → Weight → Quality → Unloading → Lot → Bin → GRN); a heading marks where each
-            // starts, and the stages after GRN carry on under their own.
+            // starts, and the stock update after GRN carries on under its own.
             const stepIndex = RECEPTION_STEPS.findIndex((st) => st.stageIds.includes(stage.id));
             const step = stepIndex >= 0 ? RECEPTION_STEPS[stepIndex] : undefined;
             const startsStep = step?.stageIds[0] === stage.id;
             const startsLater =
-              !step && stageIndex > 0 && RECEPTION_STEPS.some((st) => st.stageIds.includes(stages[stageIndex - 1]!.id));
-            const done = doneIds.has(stage.id);
-            const isActive = stage.id === activeStage?.id;
-            const branchOptions = decisionBranchesFor(stage.id, siteType);
-            const chosen = receipt.branches[stage.id];
-            const values = rules.valuesOf(stage.id);
-            const blank = done && isStageBlank(values);
-            const gate = rules.gateOf(stage.id);
-            const lockedMessage = canEdit && !gate.open ? gate.message : undefined;
-
+              !step && stageIndex > 0 && RECEPTION_STEPS.some((st) => st.stageIds.includes(receptionStages[stageIndex - 1]!.id));
             return (
               <Fragment key={stage.id}>
-              {(startsStep || startsLater) && (
-                <h3 className="px-1 pt-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
-                  {startsStep ? `Step ${stepIndex + 1} · ${step!.title}` : "After reception"}
-                </h3>
-              )}
-              <details
-                open={panels.isOpen(stage.id)}
-                onToggle={panels.onToggle(stage.id)}
-                className={`bg-white rounded-2xl overflow-hidden transition-all ${
-                  isActive ? "border-2 border-brand-700 shadow-md shadow-brand-700/10" : "border border-warmstone-200 shadow-xs"
-                }`}
-              >
-                <summary
-                  className={`list-none cursor-pointer p-4.5 flex flex-wrap sm:flex-nowrap items-center gap-3.5 transition-colors ${
-                    isActive ? "bg-gradient-to-r from-brand-50 via-white to-white" : "hover:bg-warmstone-50"
-                  }`}
-                >
-                  <span
-                    className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${
-                      blank
-                        ? "bg-ambernut-100 text-ambernut-700 border border-ambernut-200"
-                        : done
-                          ? "bg-success-100 text-success-700 border border-success-200"
-                          : isActive
-                            ? "bg-brand-700 text-white ring-4 ring-brand-100"
-                            : "bg-warmstone-100 text-warmstone-400"
-                    }`}
-                  >
-                    {blank ? (
-                      <span className="material-symbols-outlined text-[18px]">warning</span>
-                    ) : done ? (
-                      <span className="material-symbols-outlined text-[18px]">check</span>
-                    ) : (
-                      (stage.num ?? "•")
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-bold text-warmstone-900">{stage.title}</span>
-                      {isActive && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-brand-700 text-white text-[11px] font-bold">In progress</span>
-                      )}
-                      {lockedMessage && <Pill tone="system" label={`Locked · finish ${gate.waitingFor} first`} />}
-                      {blank && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-ambernut-100 text-ambernut-800 text-[11px] font-bold">
-                          Reached, not filled in
-                        </span>
-                      )}
-                      {stage.kind === "decision" && chosen && (
-                        <span className="px-2 py-0.5 rounded-full bg-success-100 text-success-800 text-[11px] font-semibold">
-                          {branchOptions?.find((b) => b.id === chosen)?.label ?? chosen}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-warmstone-500 mt-0.5">{stage.phase}</p>
-                  </div>
-                  <StageAuthor changes={changesByStage.get(stage.id) ?? []} values={values} />
-                </summary>
-                <div className="px-5 pb-5 pt-1 border-t border-warmstone-100 bg-warmstone-50/60">
-                  <div className="pt-4">
-                    {stage.id === "n-drying" && lockedMessage ? (
-                      <p role="status" className="flex items-start gap-2 rounded-xl border border-warmstone-200 bg-warmstone-100 px-3 py-2 text-[13px] text-warmstone-800">
-                        <span className="material-symbols-outlined text-[18px] text-warmstone-500">lock</span>
-                        {lockedMessage}
-                      </p>
-                    ) : stage.id === "n-drying" ? (
-                      <DryingPanel
-                        receipt={receipt}
-                        batches={[...(links?.dryingBatches ?? [])].sort((a, b) => a.sn - b.sn)}
-                        dryTypes={dryTypes}
-                        bins={masters.bins}
-                        canEdit={canEdit}
-                        onSayNo={() => setBranch(receipt.id, "n-drying", "none")}
-                        onChanged={() => { void refresh(); refetchLinks(); }}
-                      />
-                    ) : (
-                      <StageForm
-                        stage={stage}
-                        values={stage.id === "n-bin" && pendingBin !== undefined ? { ...values, "Bin Number": pendingBin } : values}
-                        derived={derived[stage.id]}
-                        suggestions={suggestionsFor(stage.id, values)}
-                        options={stage.id === "n-bin" ? { "Bin Number": binOptions } : undefined}
-                        choices={{ ...warehouseFieldChoices(stage.id, masters.warehouses), ...arrivalFieldChoices(stage.id, values, masters), ...originFieldProps(stage.id, values, masters.origins).choices }}
-                        issues={rules.issuesOf(stage.id)}
-                        lockedMessage={lockedMessage}
-                        warnings={stage.id === "n-bin" ? (binWarning ? { "Bin Number": binWarning } : undefined) : originFieldProps(stage.id, values, masters.origins).warnings}
-                        onFieldChange={(fieldName, value) => onFieldChange(stage.id, fieldName, value)}
-                        onFieldBlur={() => flushStage(receipt.id, stage.id)}
-                        readOnly={!canEdit || (Boolean(receipt.lockedAt) && LOCKED_STAGES.has(stage.id)) || (stage.id === "n-bin" && (binFinalised || !receipt.lotNo))}
-                        hidden={stage.fields.filter((f) => !canSeeField(me.role, stage.id, f.n)).map((f) => f.n)}
-                      />
-                    )}
-                    {/* The server refuses a Bin before a Lot (assertLotBeforeBin), and a refused save reloads over the pick —
-                        so the field is locked until the Lot exists, and says why instead of silently emptying. */}
-                    {stage.id === "n-bin" && canEdit && !receipt.lotNo && (
-                      <p className="mt-3 text-[12.5px] text-ambernut-700 font-semibold">
-                        A Bin can only be allocated once this truck has a Lot Number. The Lot is issued when the truck passes the quality check (QFS).
-                      </p>
-                    )}
-                    {/* The Branch Manager sets the price here directly; an Admin edits it in the form above like any field. */}
-                    {stage.id === "n-grn" && canSetPrice(me.role) && !canEdit && (
-                      <PricePanel receipt={receipt} onSaved={() => void refresh()} />
-                    )}
-                    {/* Hidden while a typed Bin is held back: Finalise would close the previously saved Bin, not the one on screen. */}
-                    {stage.id === "n-bin" && canEdit && !binFinalised && !receipt.lockedAt && pendingBin === undefined && Boolean(receipt.lotNo && receipt.stageData["n-bin"]?.["Bin Number"]) && (
-                      <div className="mt-4 flex items-center gap-3">
-                        <button
-                          type="button" disabled={lockBusy || !(receipt.stageData["n-bin"]?.[FINALISED_WHEN_LABEL] ?? "").trim()}
-                          onClick={() => {
-                            setLockBusy(true); setLockError(null);
-                            // The step's own edits (the Same day / Next day just picked) reach the server before Finalise reads them.
-                            flushStage(receipt.id, stage.id)
-                              .then(() => api.finaliseBin(receipt.id)).then(() => refresh())
-                              .catch((e) => setLockError(e instanceof Error ? e.message : String(e))).finally(() => setLockBusy(false));
-                          }}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold shadow-sm disabled:opacity-50"
-                        >
-                          <span className="material-symbols-outlined text-[17px]">task_alt</span>Finalise bin allocation
-                        </button>
-                        <span className="text-[12px] text-warmstone-500">
-                          {(receipt.stageData["n-bin"]?.[FINALISED_WHEN_LABEL] ?? "").trim()
-                            ? "Stamps today's date and your name. After this the bin step is closed until an Admin reopens it."
-                            : "Choose Same day or Next day above first."}
-                        </span>
-                      </div>
-                    )}
-                    {branchOptions && stage.id !== "n-drying" && (
-                      <div className="mt-4">
-                        <DecisionBranch
-                          branches={branchOptions} chosen={chosen} onChoose={(b) => setBranch(receipt.id, stage.id, b)}
-                          readOnly={!canEdit || Boolean(lockedMessage) || (Boolean(receipt.lockedAt) && LOCKED_DECISIONS.has(stage.id))}
-                          unavailable={
-                            stage.id === "n-xferdec" && readinessGaps.length ? ["production"]
-                              : stage.id === "n-qfs" && rules.passBlocked ? ["pass"] : undefined
-                          }
-                          notice={
-                            stage.id === "n-xferdec" && canEdit ? productionReadinessNotice(readinessGaps)
-                              : stage.id === "n-qfs" && canEdit && !lockedMessage ? rules.passBlocked : undefined
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </details>
+                {(startsStep || startsLater) && (
+                  <h3 className="px-1 pt-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">
+                    {startsStep ? `Step ${stepIndex + 1} · ${step!.title}` : "After reception"}
+                  </h3>
+                )}
+                <StageCard
+                  receipt={receipt}
+                  ctx={ctx}
+                  stage={stage}
+                  done={doneIds.has(stage.id)}
+                  isActive={stage.id === activeStage?.id}
+                  open={panels.isOpen(stage.id)}
+                  onToggle={panels.onToggle(stage.id)}
+                />
+                {/* Unloading ends here: a truck unloaded onto the drying yard is dried before it gets a Bin. */}
+                {stage.id === "n-netwt" && (
+                  <StageCard
+                    receipt={receipt}
+                    ctx={ctx}
+                    stage={yardStage}
+                    done={yardDone}
+                    isActive={false}
+                    open={panels.isOpen(YARD_DRYING_STAGE)}
+                    onToggle={panels.onToggle(YARD_DRYING_STAGE)}
+                  />
+                )}
               </Fragment>
             );
           })}
@@ -509,6 +335,45 @@ export function ReceiptDetailPage() {
                 />
               </div>
             </details>
+          )}
+
+          {legacy.length > 0 && (
+            <>
+              <h3 className="px-1 pt-2 text-[11px] font-bold text-warmstone-400 uppercase tracking-wider">Recorded on this Lot before warehouse activities moved to Bins</h3>
+              {legacy.map((stage) => (
+                <StageCard
+                  key={stage.id}
+                  receipt={receipt}
+                  ctx={ctx}
+                  stage={stage}
+                  done
+                  isActive={false}
+                  open={panels.isOpen(stage.id)}
+                  onToggle={panels.onToggle(stage.id)}
+                  readOnly
+                />
+              ))}
+            </>
+          )}
+
+          {activitiesHref && (
+            <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-warmstone-200 bg-white px-5 py-4 shadow-xs">
+              <span className="w-9 h-9 shrink-0 rounded-lg bg-brand-50 text-brand-700 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[20px]">warehouse</span>
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[13px] font-bold text-warmstone-900">
+                  {lotBins.length === 1 ? `This Lot is in Bin ${lotBins[0]}` : `This Lot is in Bins ${lotBins.join(", ")}`}
+                </h3>
+                <p className="text-[12px] text-warmstone-500 mt-0.5">
+                  From here the work is the Bin's: sun drying, the warehouse activities and {siteType === "CENTRAL" ? "sending to production" : "the transfer"} are recorded on {lotBins.length === 1 ? "its" : "each"} Bin's page.
+                </p>
+              </div>
+              <Link to={activitiesHref} className={buttonClass("primary")}>
+                Next: Warehouse activities
+                <span aria-hidden="true" className="material-symbols-outlined text-[18px]">arrow_forward</span>
+              </Link>
+            </div>
           )}
 
           {canEdit && submissions.rows.length > 0 && (

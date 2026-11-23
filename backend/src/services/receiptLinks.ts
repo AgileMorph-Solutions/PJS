@@ -33,6 +33,7 @@
 import { binsOfLot } from "@anagroci/contract/domain/productionBatch";
 import { dryingRoundsByLot } from "./dryingRounds.js";
 import { prisma } from "../db.js";
+import type { Prisma } from "@prisma/client";
 
 // Extended to production: a linked transfer's own `idTransfer` column IS the production BTM
 // number (45 production BTMs were confirmed to match real `idTransfer` values before this was
@@ -151,6 +152,8 @@ export interface LinkedDryingBatchRow {
   startedBy: string | null;
   returnedBy: string | null;
   checkedBy: string | null;
+  /** The BTM a drying sent straight to production went on, when given. */
+  btmNo: string | null;
 }
 export interface DryingCutGrams { goodKernel: number | null; immature: number | null; spotted: number | null; rejection: number | null; void: number | null; oil: number | null; shell: number | null }
 
@@ -234,6 +237,37 @@ function cutGrams(b: Record<string, { toString(): string } | null | unknown>, si
   const g = (k: string) => num(b[`${side}${k}G`] as { toString(): string } | null);
   const out = { goodKernel: g("GoodKernel"), immature: g("Immature"), spotted: g("Spotted"), rejection: g("Rejection"), void: g("Void"), oil: g("Oil"), shell: g("Shell") };
   return Object.values(out).some((v) => v !== null) ? out : null;
+}
+
+/**
+ * A drying round as the pages show it, the same for a truck's drying and a Bin's (services/bins.ts). `ficheAgrees` says
+ * whether its fiche matches the truck it is shown on; a Bin's rounds have no truck, so it is always true there.
+ */
+type DryingRowFields = Pick<Prisma.DryingBatchGetPayload<object>,
+  | "id" | "sn" | "dryingDate" | "dryingDateRaw" | "warehouseSite" | "status" | "dryType" | "sourceBinNo" | "destinationBinNo" | "destinationRaw"
+  | "inputBagsForDrying" | "outputBagsAfterDrying" | "inputMoisturePct" | "outputMoisturePct" | "inputKor" | "outputKor"
+  | "issuedNetWeightKg" | "receivedNetWeightKg" | "dryingLossKg" | "remarks" | "round" | "firstBatchId" | "source" | "issuedBags" | "receivedBags"
+  | "inputNutCount" | "outputNutCount" | "dryingLossPct" | "moistureLossPct" | "returnedAt" | "checkedAt" | "startedBy" | "returnedBy" | "checkedBy" | "btmNo">;
+
+export function toLinkedDryingRow(b: DryingRowFields, ficheAgrees: boolean): LinkedDryingBatchRow {
+  return {
+    id: b.id, sn: b.sn, dryingDate: formatReceivedDate(b.dryingDate, b.dryingDateRaw),
+    warehouseSite: b.warehouseSite, status: b.status, dryType: b.dryType,
+    sourceBinNo: b.sourceBinNo, destinationBinNo: b.destinationBinNo, destinationRaw: b.destinationRaw,
+    inputBags: b.inputBagsForDrying, outputBags: b.outputBagsAfterDrying,
+    inputMoisturePct: num(b.inputMoisturePct), outputMoisturePct: num(b.outputMoisturePct),
+    inputKor: num(b.inputKor), outputKor: num(b.outputKor),
+    issuedNetWeightKg: num(b.issuedNetWeightKg), receivedNetWeightKg: num(b.receivedNetWeightKg),
+    dryingLossKg: num(b.dryingLossKg), remarks: b.remarks,
+    ficheAgrees,
+    round: b.round, firstBatchId: b.firstBatchId, source: b.source, issuedBags: b.issuedBags, receivedBags: b.receivedBags,
+    inputNutCount: num(b.inputNutCount), outputNutCount: num(b.outputNutCount),
+    // The cut-test grams are read by name (input/output + GoodKernelG …), so they come through from whatever was selected.
+    inputGrams: cutGrams(b as Record<string, unknown>, "input"), outputGrams: cutGrams(b as Record<string, unknown>, "output"),
+    dryingLossPct: num(b.dryingLossPct), moistureLossPct: num(b.moistureLossPct),
+    returnedAt: b.returnedAt?.toISOString() ?? null, checkedAt: b.checkedAt?.toISOString() ?? null,
+    startedBy: b.startedBy, returnedBy: b.returnedBy, checkedBy: b.checkedBy, btmNo: b.btmNo,
+  };
 }
 
 /** DATE -> "YYYY-MM-DD"; falls back to the hand-typed original text when the source cell wasn't a
@@ -320,7 +354,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
         inputBagsForDrying: true, outputBagsAfterDrying: true, inputMoisturePct: true, outputMoisturePct: true,
         inputKor: true, outputKor: true, issuedNetWeightKg: true, receivedNetWeightKg: true, dryingLossKg: true, remarks: true,
         round: true, firstBatchId: true, source: true, issuedBags: true, receivedBags: true, inputNutCount: true, outputNutCount: true,
-        dryingLossPct: true, moistureLossPct: true, returnedAt: true, checkedAt: true, startedBy: true, returnedBy: true, checkedBy: true,
+        dryingLossPct: true, moistureLossPct: true, returnedAt: true, checkedAt: true, startedBy: true, returnedBy: true, checkedBy: true, btmNo: true,
         inputGoodKernelG: true, inputImmatureG: true, inputSpottedG: true, inputRejectionG: true, inputVoidG: true, inputOilG: true, inputShellG: true,
         outputGoodKernelG: true, outputImmatureG: true, outputSpottedG: true, outputRejectionG: true, outputVoidG: true, outputOilG: true, outputShellG: true,
       },
@@ -377,23 +411,7 @@ export async function getReceiptLinks(id: string): Promise<ReceiptLinks> {
       arrivalDate: formatReceivedDate(w.arrivalDate, w.arrivalDateRaw), totalRecd: w.totalRecd, truckNo: w.truckNo, netWeight: num(w.netWeight),
       ficheAgrees: ficheAgrees(w.ficheCca),
     })),
-    dryingBatches: dryingBatchRows.map((b) => ({
-      id: b.id, sn: b.sn, dryingDate: formatReceivedDate(b.dryingDate, b.dryingDateRaw),
-      warehouseSite: b.warehouseSite, status: b.status, dryType: b.dryType,
-      sourceBinNo: b.sourceBinNo, destinationBinNo: b.destinationBinNo, destinationRaw: b.destinationRaw,
-      inputBags: b.inputBagsForDrying, outputBags: b.outputBagsAfterDrying,
-      inputMoisturePct: num(b.inputMoisturePct), outputMoisturePct: num(b.outputMoisturePct),
-      inputKor: num(b.inputKor), outputKor: num(b.outputKor),
-      issuedNetWeightKg: num(b.issuedNetWeightKg), receivedNetWeightKg: num(b.receivedNetWeightKg),
-      dryingLossKg: num(b.dryingLossKg), remarks: b.remarks,
-      ficheAgrees: ficheAgrees(b.ficheNoRaw),
-      round: b.round, firstBatchId: b.firstBatchId, source: b.source, issuedBags: b.issuedBags, receivedBags: b.receivedBags,
-      inputNutCount: num(b.inputNutCount), outputNutCount: num(b.outputNutCount),
-      inputGrams: cutGrams(b, "input"), outputGrams: cutGrams(b, "output"),
-      dryingLossPct: num(b.dryingLossPct), moistureLossPct: num(b.moistureLossPct),
-      returnedAt: b.returnedAt?.toISOString() ?? null, checkedAt: b.checkedAt?.toISOString() ?? null,
-      startedBy: b.startedBy, returnedBy: b.returnedBy, checkedBy: b.checkedBy,
-    })),
+    dryingBatches: dryingBatchRows.map((b) => toLinkedDryingRow(b, ficheAgrees(b.ficheNoRaw))),
     issuedToProduction: issuedToProductionRows.map((p) => ({
       id: p.id, btmNo: p.btmNo ?? "", date: p.date, sourceBin: p.sourceBin, dryBin: p.dryBin, binStatus: p.binStatus,
     })),

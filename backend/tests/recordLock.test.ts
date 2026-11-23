@@ -147,6 +147,27 @@ describe("record locking", () => {
     expect((await get(priceFirst)).lockedAt).toBeTruthy();
   });
 
+  // Team, 23 Nov 2026: "Added to stock" is filled in, not only offered, the moment the GRN completes.
+  it("puts the truck into stock with its GRN: net weight − 1 kg per bag, which the warehouse can still change", async () => {
+    const id = await truckToGrn();
+    await setStageFields(id, "n-netwt", { "NET WT KGS": "40000" }, { bypassValidation: true });
+    await setStageFields(id, "n-unload", { "SACS (bags)": "420" }, { bypassValidation: true });
+    await setStageFields(id, "n-grn", { [GRN]: "40000" });
+    expect((await get(id)).stageData["n-stock"]).toBeUndefined(); // the price is still to come: not complete, not in stock
+    await setStageFields(id, "n-grn", { PRICE: "470" });
+    const after = await get(id);
+    expect(after.stageData["n-stock"]["Added to stock from this truck (kg)"]).toBe("39580");
+    expect(after.status).toBe("in_stock");
+    await setStageFields(id, "n-stock", { "Added to stock from this truck (kg)": "39500" });
+    expect((await get(id)).stageData["n-stock"]["Added to stock from this truck (kg)"]).toBe("39500");
+  });
+
+  it("leaves the stock step alone when the GRN completes without the net weight or bags to work it out", async () => {
+    const id = await truckToGrn();
+    await setStageFields(id, "n-grn", { [GRN]: "40000", PRICE: "470" });
+    expect((await get(id)).stageData["n-stock"]).toBeUndefined();
+  });
+
   it("refuses changes to the locked record: its stages, its decision and its own columns", async () => {
     const [{ id }] = await prisma.receipt.findMany({ where: { warehouse: A, lockedAt: { not: null } }, select: { id: true } });
     await expect(setStageFields(id, "n-gate", { "VEHICLE NO.": "CHANGED" })).rejects.toThrow(LOCKED_MESSAGE);
@@ -160,7 +181,7 @@ describe("record locking", () => {
 
   it("leaves the steps after the GRN open: stock, the drying decision, and other activities", async () => {
     const [{ id }] = await prisma.receipt.findMany({ where: { warehouse: A, lockedAt: { not: null } }, select: { id: true } });
-    await setStageFields(id, "n-stock", { "Added to stock from this truck (kg)": "Stock in" });
+    await setStageFields(id, "n-stock", { "Closing stock (kg)": "120000" });
     await setBranch(id, "n-drying", "direct");
     expect((await get(id)).branches["n-drying"]).toBe("direct");
   });
