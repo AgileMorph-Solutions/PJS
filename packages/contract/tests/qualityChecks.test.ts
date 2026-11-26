@@ -17,8 +17,8 @@ describe("the quality sections", () => {
   });
 
   it("gives a Unit warehouse its own checks and the factory's to the Central one", () => {
-    expect(sectionsAt("UNIT")).toEqual(["reception", "unloading", "drying", "triage", "transfer_lot"]);
-    expect(sectionsAt("CENTRAL")).toEqual(["reception", "unloading", "unit_reception", "drying", "triage", "production_intake", "production"]);
+    expect(sectionsAt("UNIT")).toEqual(["reception", "unloading", "drying", "transfer_lot"]);
+    expect(sectionsAt("CENTRAL")).toEqual(["reception", "unloading", "unit_reception", "drying", "production_intake", "production"]);
     expect(sectionsAt(null)).toEqual([]);
   });
 
@@ -57,14 +57,12 @@ describe("a QFS Officer's check, as typed", () => {
 
   it("refuses a value that isn't a number, or one that isn't part of the check", () => {
     expect(qualitySubmissionProblem("drying_before", { inputMoisture: "wet" })).toMatch(/Must be a number/);
-    expect(qualitySubmissionProblem("triage", { moisturePct: "9", price: "400" })).toMatch(/Not part of this check: price/);
+    expect(qualitySubmissionProblem("transfer_lot", { moisture: "9", kor: "47", nutCount: "190", price: "400" })).toMatch(/Not part of this check: price/);
   });
 
-  it("asks a transfer lot for all three readings, and triage for its moisture", () => {
+  it("asks a transfer lot for all three readings", () => {
     expect(qualitySubmissionProblem("transfer_lot", { moisture: "9" })).toMatch(/KOR: Required. Nut count: Required/);
     expect(qualitySubmissionProblem("transfer_lot", { moisture: "9", kor: "48", nutCount: "190" })).toBeUndefined();
-    expect(qualitySubmissionProblem("triage", { moisturePct: "101" })).toMatch(/between 0 and 100/);
-    expect(qualitySubmissionProblem("triage", { moisturePct: "9.5" })).toBeUndefined();
   });
 });
 
@@ -80,10 +78,11 @@ describe("the Incharge's forms leave the quality to the QFS Officer", () => {
     expect(transferLotStatus(false, 500, 0, 0, false)).toBe("waiting_weight");
   });
 
-  it("records a triage without its moisture, and still refuses an impossible one", () => {
+  it("asks a triage for its own moisture again: it is not a QFS check (taken off 26 Nov 2026)", () => {
     const triage = { category: "triage", locationFrom: "BIN-1", quantityBeforeKg: "1000", quantityAfterKg: "980" };
-    expect(activityProblems(triage)).toEqual([]);
-    expect(activityProblems({ ...triage, moisturePct: "140" })).toEqual(["Moisture after triage must be between 0 and 100."]);
+    expect(activityProblems(triage)).toEqual(["Triage changes the moisture: record it, between 0 and 100."]);
+    expect(activityProblems({ ...triage, moisturePct: "9.5" })).toEqual([]);
+    expect(QUALITY_SECTION_ORDER).not.toContain("triage");
   });
 });
 

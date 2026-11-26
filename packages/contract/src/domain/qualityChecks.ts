@@ -7,17 +7,17 @@
  * One registry, read by the QFS Officer's "Quality checks" page, the forms, the Approvals page and the server, so a check is
  * named the same way everywhere and none can be added without saying where it lives and who approves it.
  *
- * The warehouse checks that had no approval step before (drying, a transfer lot's quality, triage) are submitted as a
+ * The warehouse checks that had no approval step before (drying, a transfer lot's quality) are submitted as a
  * QualitySubmission: their readings only, applied to the record on approval through the same service an Incharge's entry uses.
  */
 import type { WarehouseType } from "../data/warehouseTypes.js";
 import type { DryingQuality } from "./sunDrying.js";
 import { dryingQualityProblem } from "./sunDrying.js";
-import { transferNumberProblem, readNumber } from "./transferLot.js";
+import { transferNumberProblem } from "./transferLot.js";
 
 /** The parts of the app a quality check is taken in, in the order RCN goes through them. */
 export type QualitySection =
-  | "reception" | "unloading" | "unit_reception" | "drying" | "triage" | "transfer_lot" | "production_intake" | "production";
+  | "reception" | "unloading" | "unit_reception" | "drying" | "transfer_lot" | "production_intake" | "production";
 
 /** Who approves a QFS Officer's check in this section. */
 export type QualityApprover = "warehouse_incharge" | "production_incharge";
@@ -38,13 +38,12 @@ export const QUALITY_SECTIONS: Record<QualitySection, QualitySectionInfo> = {
   unloading: { label: "Unloading", where: "Reception › the truck › Unloading", icon: "move_to_inbox", approver: "warehouse_incharge", siteTypes: ["UNIT", "CENTRAL"] },
   unit_reception: { label: "Reception from Unit warehouse", where: "Reception › From Unit warehouse › the lot › Quality", icon: "local_shipping", approver: "warehouse_incharge", siteTypes: ["CENTRAL"] },
   drying: { label: "Drying", where: "Sun drying: a truck on the yard, or a Bin in Warehouse activities", icon: "wb_sunny", approver: "warehouse_incharge", siteTypes: ["UNIT", "CENTRAL"] },
-  triage: { label: "Triage / cleaning", where: "Warehouse activity ledger › Triage / cleaning", icon: "filter_alt", approver: "warehouse_incharge", siteTypes: ["UNIT", "CENTRAL"] },
   transfer_lot: { label: "Transfer lot", where: "Transfers › Lots to send", icon: "inventory_2", approver: "warehouse_incharge", siteTypes: ["UNIT"] },
   production_intake: { label: "Production intake", where: "Production runs › the run › Intake › the load", icon: "conveyor_belt", approver: "warehouse_incharge", siteTypes: ["CENTRAL"] },
   production: { label: "Production", where: "Production runs › the run › its stage", icon: "precision_manufacturing", approver: "production_incharge", siteTypes: ["CENTRAL"] },
 };
 
-export const QUALITY_SECTION_ORDER: readonly QualitySection[] = ["reception", "unloading", "unit_reception", "drying", "triage", "transfer_lot", "production_intake", "production"];
+export const QUALITY_SECTION_ORDER: readonly QualitySection[] = ["reception", "unloading", "unit_reception", "drying", "transfer_lot", "production_intake", "production"];
 
 export const APPROVER_LABEL: Record<QualityApprover, string> = { warehouse_incharge: "Warehouse Incharge", production_incharge: "Production Incharge" };
 
@@ -58,9 +57,9 @@ export const sectionsAt = (siteType: WarehouseType | string | null | undefined):
  * drying_before: the quality of a round going onto the yard, when the Incharge started it without one.
  * drying_after: the check after a round came back, with its result (passed / dry again / straight to production).
  * transfer_lot: a transfer lot's moisture, KOR and nut count, weighed without them.
- * triage: the moisture after a triage / cleaning activity recorded without it.
+ * (Triage / cleaning was one too, 26 Nov 2026, and taken off the same day (user): its moisture is the Incharge's again.)
  */
-export const QUALITY_SUBMISSION_KINDS = ["drying_before", "drying_after", "transfer_lot", "triage"] as const;
+export const QUALITY_SUBMISSION_KINDS = ["drying_before", "drying_after", "transfer_lot"] as const;
 export type QualitySubmissionKind = (typeof QUALITY_SUBMISSION_KINDS)[number];
 export const isQualitySubmissionKind = (k: unknown): k is QualitySubmissionKind => QUALITY_SUBMISSION_KINDS.includes(k as QualitySubmissionKind);
 
@@ -68,7 +67,6 @@ export const QUALITY_SUBMISSION_INFO: Record<QualitySubmissionKind, { section: Q
   drying_before: { section: "drying", title: "Quality going onto the yard" },
   drying_after: { section: "drying", title: "Quality check after drying" },
   transfer_lot: { section: "transfer_lot", title: "Transfer lot quality" },
-  triage: { section: "triage", title: "Moisture after triage" },
 };
 
 export type QualitySubmissionStatus = "submitted" | "approved" | "rejected";
@@ -100,7 +98,6 @@ export const QUALITY_SUBMISSION_KEYS: Record<QualitySubmissionKind, readonly str
   drying_before: DRYING_KEYS.map((k) => `input${k}`),
   drying_after: [...DRYING_KEYS.map((k) => `output${k}`), "decision", "destinationBin", "btmNo"],
   transfer_lot: ["moisture", "kor", "nutCount"],
-  triage: ["moisturePct"],
 };
 
 export const DRYING_DECISIONS = ["pass", "redry", "production"] as const;
@@ -148,10 +145,6 @@ export function qualitySubmissionProblem(kind: QualitySubmissionKind, values: Re
         .map((k) => [k, transferNumberProblem(k, values[k], true)] as const)
         .filter(([, p]) => p && !p.soft);
       return out.length ? out.map(([k, p]) => `${k === "nutCount" ? "Nut count" : k === "kor" ? "KOR" : "Moisture"}: ${p!.message}`).join(" ") : undefined;
-    }
-    case "triage": {
-      const m = readNumber(values.moisturePct);
-      return m === null || m < 0 || m > 100 ? "Moisture after triage: enter it, between 0 and 100 %." : undefined;
     }
   }
 }

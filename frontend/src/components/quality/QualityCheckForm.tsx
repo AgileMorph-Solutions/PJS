@@ -20,7 +20,7 @@ interface Props {
 }
 
 /**
- * A QFS Officer's drying, transfer lot or triage check, sent for the Warehouse Incharge's approval (26 Nov 2026). The inputs
+ * A QFS Officer's drying or transfer lot check, sent for the Warehouse Incharge's approval (26 Nov 2026). The inputs
  * are the ones the Incharge's own form has (DryingQualityInputs, the transfer number rules), so both read the same; the
  * server refuses what the contract's qualitySubmissionProblem refuses here.
  */
@@ -84,13 +84,6 @@ export function QualityCheckForm({ kind, targetId, facts = {}, onSent, onCancel 
           {transferBox("moisture", "Moisture (%)")}
           {transferBox("kor", "KOR")}
           {transferBox("nutCount", "Nut count", "Nuts in 1 kg.")}
-        </div>
-      )}
-      {kind === "triage" && (
-        <div className="grid sm:grid-cols-3 gap-4">
-          <Field label="Moisture after triage (%) *">
-            <Input numeric value={values.moisturePct ?? ""} onChange={(e) => set("moisturePct", e.target.value)} />
-          </Field>
         </div>
       )}
       {error && <p role="alert" className="text-[12px] text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}

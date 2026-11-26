@@ -35,9 +35,8 @@ describe("what an activity entry needs", () => {
     expect(activityProblems({ category: "movement", ...base })).toEqual(["Say where it moved to."]);
     expect(activityProblems({ category: "movement", ...base, locationTo: "BKE-002" })).toEqual([]);
   });
-  it("triage records its own quantity before and after, and can't gain weight; its moisture may be left for the QFS Officer", () => {
-    // 26 Nov 2026: the moisture is the QFS Officer's to measure, so only the two quantities are asked for here.
-    expect(activityProblems({ category: "triage", ...base }).length).toBe(2);
+  it("triage records its own moisture and quantity before and after, and can't gain weight", () => {
+    expect(activityProblems({ category: "triage", ...base }).length).toBe(3);
     expect(activityProblems({ category: "triage", ...base, moisturePct: 9.5, quantityBeforeKg: 1000, quantityAfterKg: 940 })).toEqual([]);
     expect(activityProblems({ category: "triage", ...base, moisturePct: 9.5, quantityBeforeKg: 1000, quantityAfterKg: 1100 })).toEqual(["The quantity after triage can't be more than before."]);
     expect(activityProblems({ category: "triage", ...base, moisturePct: 140, quantityBeforeKg: 1, quantityAfterKg: 1 })[0]).toMatch(/between 0 and 100/);

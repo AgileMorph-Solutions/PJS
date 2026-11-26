@@ -16,12 +16,12 @@ import { QualitySectionTag } from "./QualitySectionTag";
 const LABELS: Record<string, string> = {
   Moisture: "Moisture (%)", NutCount: "Nut count", Kor: "KOR", GoodKernelG: "Good kernel (g)", ImmatureG: "Immature (g)", SpottedG: "Spotted (g)",
   RejectionG: "Rejection (g)", VoidG: "Void (g)", OilG: "Oil (g)", ShellG: "Shell (g)",
-  moisture: "Moisture (%)", kor: "KOR", nutCount: "Nut count", moisturePct: "Moisture after triage (%)", destinationBin: "New Bin", btmNo: "BTM",
+  moisture: "Moisture (%)", kor: "KOR", nutCount: "Nut count", destinationBin: "New Bin", btmNo: "BTM",
 };
 const labelOf = (k: string) => LABELS[k] ?? LABELS[k.replace(/^(input|output)/, "")] ?? k;
 
 /**
- * A QFS Officer's drying, transfer lot or triage check, for the Warehouse Incharge to approve or reject (26 Nov 2026). It says
+ * A QFS Officer's drying or transfer lot check, for the Warehouse Incharge to approve or reject (26 Nov 2026). It says
  * which section it is from and what it is about, as the QFS Officer's list does. A drying that passed goes into a new Bin:
  * when the QFS Officer didn't name one, the Incharge chooses it here, since where the RCN goes is the warehouse's decision.
  */

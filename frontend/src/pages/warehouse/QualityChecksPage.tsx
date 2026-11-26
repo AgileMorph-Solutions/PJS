@@ -29,7 +29,7 @@ const GROUPS: { state: QualityCheckItem["state"]; title: string; empty: string }
 /**
  * The QFS Officer's quality checks (26 Nov 2026, user): every check at their warehouse in one list, each named by the section it
  * comes from (Reception, Unloading, Drying, Transfer lot, Triage, Production…) and the record it is about, with what is still
- * to be measured. A check of a truck or a production run opens on that page; a drying, transfer lot or triage check is filled
+ * to be measured. A check of a truck or a production run opens on that page; a drying or transfer lot check is filled
  * here and sent for the Warehouse Incharge's approval. The list is read off the records (services/qualityChecks.ts), never kept.
  */
 export function QualityChecksPage() {

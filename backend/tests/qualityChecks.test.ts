@@ -4,7 +4,7 @@
  * refused them — so the first block proves, for EVERY section, that the routes a QFS Officer uses are open to them. A new
  * section can't be added to the contract without listing its routes here (the Record is exhaustive).
  *
- * Then, through the HTTP routes, on throwaway warehouses: the Incharge records drying, a transfer lot and a triage without
+ * Then, through the HTTP routes, on throwaway warehouses: the Incharge records drying and a transfer lot without
  * their quality; the QFS Officer finds each on their list, sends the readings, and nothing changes until the Incharge approves.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -21,7 +21,6 @@ const ROUTES: Record<QualitySection, [method: string, path: string][]> = {
   unloading: [["POST", "/api/receipts/REC-X/submissions"]],
   unit_reception: [["GET", "/api/receipts/REC-X"], ["POST", "/api/receipts/REC-X/submissions"]],
   drying: [["POST", "/api/quality-submissions"]],
-  triage: [["POST", "/api/quality-submissions"]],
   transfer_lot: [["POST", "/api/quality-submissions"]],
   production_intake: [["GET", "/api/production/rcn-receipts"], ["POST", "/api/production/rcn-receipts/RR-1/moisture-checks"]],
   production: [
@@ -104,7 +103,7 @@ describe("the QFS Officer's list", () => {
   it("names the sections of their warehouse: a Unit warehouse has no production", async () => {
     const view = await list();
     expect(view).toMatchObject({ warehouse: UNIT, siteType: "UNIT" });
-    expect(view.sections).toEqual(["reception", "unloading", "drying", "triage", "transfer_lot"]);
+    expect(view.sections).toEqual(["reception", "unloading", "drying", "transfer_lot"]);
     expect((await list("cqfs")).sections).toContain("production");
   });
 });
@@ -164,19 +163,21 @@ describe("a transfer lot's quality, by the QFS Officer", () => {
   });
 });
 
-describe("the moisture after triage, by the QFS Officer", () => {
-  it("records the triage without it; a rejected reading needs a reason and changes nothing", async () => {
-    const entry = (await call("wi", "POST", "/api/warehouse-activity-ledger", { category: "triage", locationFrom: BIN, quantityBeforeKg: "1000", quantityAfterKg: "970" })).json();
-    expect(entry).toMatchObject({ moisturePct: null });
-    expect(await find((i) => i.key === `triage-${entry.id}`)).toMatchObject({ section: "triage", missing: ["Moisture after triage"] });
-
-    const sent = (await call("qfs", "POST", "/api/quality-submissions", { kind: "triage", targetId: entry.id, values: { moisturePct: "9.1" } })).json();
+describe("a rejected quality check", () => {
+  it("needs a reason, changes nothing, and comes back to its sender as rejected with the check to do again", async () => {
+    const lot = (await call("wi", "POST", "/api/transfer-lots", { warehouse: UNIT, lotDate: "2026-11-21", bins: [{ binCode: BIN, bags: 20 }] })).json();
+    await call("wi", "POST", `/api/transfer-lots/${lot.id}/weighing`, { grossWeightKg: "1620" });
+    const sent = (await call("qfs", "POST", "/api/quality-submissions", { kind: "transfer_lot", targetId: String(lot.id), values: { moisture: "9", kor: "46", nutCount: "185" } })).json();
     expect((await call("wi", "POST", `/api/quality-submissions/${sent.id}/reject`, {})).json().error).toMatch(/reason is required/);
-    expect((await call("wi", "POST", `/api/quality-submissions/${sent.id}/reject`, { reason: "Sample taken before the triage ended" })).statusCode).toBe(200);
-    expect((await prisma.warehouseActivityLedgerEntry.findUnique({ where: { id: entry.id } }))!.moisturePct).toBeNull();
-    // Shown to its sender as rejected, with the reason; the check is to do again.
-    expect(await find((i) => i.key === `quality-${sent.id}`)).toMatchObject({ state: "rejected", note: "Sample taken before the triage ended" });
-    expect(await find((i) => i.key === `triage-${entry.id}`)).toMatchObject({ state: "to_do" });
+    expect((await call("wi", "POST", `/api/quality-submissions/${sent.id}/reject`, { reason: "Sample taken from the wrong bags" })).statusCode).toBe(200);
+    expect((await prisma.transferLot.findUnique({ where: { id: lot.id } }))!.moisture).toBeNull();
+    expect(await find((i) => i.key === `quality-${sent.id}`)).toMatchObject({ state: "rejected", note: "Sample taken from the wrong bags" });
+    expect(await find((i) => i.key === `transfer_lot-${lot.id}`)).toMatchObject({ state: "to_do" });
+  });
+
+  it("triage is no longer a QFS check: its moisture is the Incharge's", async () => {
+    expect((await call("qfs", "POST", "/api/quality-submissions", { kind: "triage", targetId: "x", values: { moisturePct: "9" } })).json().error).toMatch(/Choose which quality check/);
+    expect((await call("wi", "POST", "/api/warehouse-activity-ledger", { category: "triage", locationFrom: BIN, quantityBeforeKg: "1000", quantityAfterKg: "970" })).json().error).toMatch(/Triage changes the moisture/);
   });
 });
 

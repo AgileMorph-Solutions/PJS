@@ -67,7 +67,7 @@ function receptionItems(receipts: ReceiptRecord[], waitingFor: Set<string>): Qua
   return out;
 }
 
-/** The warehouse checks that are submitted on this page (drying, transfer lot, triage), still to take. */
+/** The warehouse checks that are submitted on this page (drying, transfer lot), still to take. */
 async function warehouseFormItems(names: string[], siteType: WarehouseType | null, waiting: Set<string>): Promise<QualityCheckItem[]> {
   const out: QualityCheckItem[] = [];
   const pending = (kind: QualitySubmissionKind, id: string) => waiting.has(`${kind}:${id}`);
@@ -113,15 +113,6 @@ async function warehouseFormItems(names: string[], siteType: WarehouseType | nul
     }
   }
 
-  const triage = await prisma.warehouseActivityLedgerEntry.findMany({ where: { source: "entered", warehouse: { in: names }, moisturePct: null }, orderBy: { createdAt: "asc" } });
-  for (const e of triage.filter((x) => classifyActivity(x.activityType) === "triage")) {
-    if (pending("triage", e.id)) continue;
-    out.push({
-      key: `triage-${e.id}`, section: "triage", title: QUALITY_SUBMISSION_INFO.triage.title, reference: `Triage at ${e.locationFrom ?? "-"} on ${e.activityDateRaw ?? "-"}`, warehouse: e.warehouse ?? "", state: "to_do",
-      context: `${fmt(e.quantityBeforeKg, " kg")} before → ${fmt(e.quantityAfterKg, " kg")} after${e.lotNo ? ` · Lot ${e.lotNo}` : ""}`,
-      missing: ["Moisture after triage"], since: e.createdAt.toISOString(), link: form("triage", e.id),
-    });
-  }
   return out;
 }
 

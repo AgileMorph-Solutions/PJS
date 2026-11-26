@@ -79,7 +79,7 @@ export function ActivityForm({ warehouse, receipts, places, place, onSaved }: Pr
         {field("Bags", <Input numeric inputMode="numeric" value={v.bags} onChange={(e) => set("bags", e.target.value)} />)}
         {cat?.needsQuality && (
           <>
-            {field("Moisture (%)", <Input numeric value={v.moisturePct} onChange={(e) => set("moisturePct", e.target.value)} />, "Leave it blank for the QFS Officer to record")}
+            {field("Moisture (%) *", <Input numeric value={v.moisturePct} onChange={(e) => set("moisturePct", e.target.value)} />, "Triage changes moisture, so it is recorded")}
             {field("Kg before *", <Input numeric value={v.quantityBeforeKg} onChange={(e) => set("quantityBeforeKg", e.target.value)} />)}
             {field("Kg after *", <Input numeric value={v.quantityAfterKg} onChange={(e) => set("quantityAfterKg", e.target.value)} />)}
           </>

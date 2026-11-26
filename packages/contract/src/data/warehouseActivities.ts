@@ -22,7 +22,7 @@ export interface ActivityCategory {
   label: string;
   /** The activity concerns a Lot's stock, so it names the Lot. */
   needsLot: boolean;
-  /** Moisture and the quantity before and after are recorded (triage / cleaning). The moisture may be left for the QFS Officer. */
+  /** Moisture and the quantity before and after are recorded (triage / cleaning). */
   needsQuality: boolean;
   /** Recorded on its own form on the truck, not here. */
   useDryingForm?: boolean;
@@ -89,8 +89,7 @@ export function activityProblems(input: ActivityEntryInput): string[] {
     const m = asNumber(input.moisturePct);
     const before = asNumber(input.quantityBeforeKg);
     const after = asNumber(input.quantityAfterKg);
-    // The moisture is the QFS Officer's to measure (26 Nov 2026): left blank, they send it from their Quality checks page.
-    if (m !== null && (Number.isNaN(m) || m < 0 || m > 100)) out.push("Moisture after triage must be between 0 and 100.");
+    if (m === null || Number.isNaN(m) || m < 0 || m > 100) out.push("Triage changes the moisture: record it, between 0 and 100.");
     if (before === null || Number.isNaN(before) || before < 0) out.push("Triage changes the quantity: record the kg before.");
     if (after === null || Number.isNaN(after) || after < 0) out.push("Triage changes the quantity: record the kg after.");
     if (before !== null && after !== null && !Number.isNaN(before) && !Number.isNaN(after) && after > before) out.push("The quantity after triage can't be more than before.");

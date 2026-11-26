@@ -3,8 +3,7 @@
  * importer, not assumed), so the list is the same flat one for both sections. Activities recorded in the app are new rows beside
  * them: they carry the warehouse, the Lot and the place, and are classified (contract data/warehouseActivities.ts).
  */
-import { ACTIVITY_CATEGORIES, activityProblems, classifyActivity, type ActivityEntryInput } from "@anagroci/contract/data/warehouseActivities";
-import type { Prisma } from "@prisma/client";
+import { ACTIVITY_CATEGORIES, activityProblems, type ActivityEntryInput } from "@anagroci/contract/data/warehouseActivities";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 
@@ -55,16 +54,4 @@ export async function createActivityEntry(input: ActivityEntryInput, warehouse: 
       },
     });
   });
-}
-
-/**
- * The moisture after a triage / cleaning activity, recorded after the activity was (26 Nov 2026): the QFS Officer's reading,
- * written on the Incharge's approval. Only on an in-app triage entry with no moisture yet.
- */
-export async function setTriageMoisture(tx: Prisma.TransactionClient, entryId: string, moisturePct: string | undefined) {
-  const entry = await tx.warehouseActivityLedgerEntry.findUnique({ where: { id: entryId }, select: { activityType: true, moisturePct: true, source: true } });
-  if (!entry) throw Object.assign(new Error("Activity not found"), { code: "P2025" });
-  if (entry.source !== "entered" || classifyActivity(entry.activityType) !== "triage") throw new ValidationError("Only a triage / cleaning activity recorded in the app takes a moisture reading.");
-  if (entry.moisturePct !== null) throw new ValidationError(`This triage already has its moisture (${Number(entry.moisturePct)}%). The Warehouse Incharge or an Admin changes it.`);
-  await tx.warehouseActivityLedgerEntry.update({ where: { id: entryId }, data: { moisturePct: dec(moisturePct) } });
 }

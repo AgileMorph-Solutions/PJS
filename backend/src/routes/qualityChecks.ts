@@ -29,7 +29,7 @@ export async function qualityCheckRoutes(app: FastifyInstance) {
 
   app.get("/api/quality-checks", async (req) => qualityChecks(await listSite(req), currentUser(req).id));
 
-  /** A QFS Officer sends a drying, transfer lot or triage check, at their own warehouse. */
+  /** A QFS Officer sends a drying or transfer lot check, at their own warehouse. */
   app.post("/api/quality-submissions", takers, async (req, reply) => {
     const { kind, targetId, values } = (req.body ?? {}) as { kind?: unknown; targetId?: unknown; values?: unknown };
     await assertWarehouseAccess(req, (await qualityTarget(kind, targetId)).warehouse);

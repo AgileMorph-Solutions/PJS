@@ -1,11 +1,11 @@
 /**
  * The QFS Officer's quality checks on warehouse records that had no approval step of their own (26 Nov 2026, user): a drying
- * round's quality going onto the yard and its check after, a transfer lot's quality, the moisture after triage. The kinds and
+ * round's quality going onto the yard and its check after, a transfer lot's quality. The kinds and
  * their rules are the contract's (domain/qualityChecks.ts).
  *
  * Like a reception form (services/submissions.ts): a submission is only the readings, it changes nothing until the Warehouse
  * Incharge approves, and then the readings go through the same service the Incharge's own entry uses (checkDryingIn,
- * setDryingInputQuality, setTransferLotQuality, setTriageMoisture) in ONE transaction with the status change, so a
+ * setDryingInputQuality, setTransferLotQuality) in ONE transaction with the status change, so a
  * half-applied check is impossible. A rejection is final and needs a reason. A form only fills what is still empty.
  */
 import { Prisma } from "@prisma/client";
@@ -19,7 +19,6 @@ import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
 import { checkDryingIn, dryingRoundName, setDryingInputQuality } from "./dryingBatches.js";
 import { setTransferLotQuality } from "./transferLots.js";
-import { setTriageMoisture } from "./warehouseActivityLedger.js";
 import { siteOf } from "./ids.js";
 
 type Tx = Prisma.TransactionClient;
@@ -59,14 +58,6 @@ async function targetState(db: Db, kind: QualitySubmissionKind, targetId: string
       const reference = `Transfer lot ${lot.lotNo}`;
       if (lot.moisture !== null) return { warehouse: lot.warehouse, reference, blocked: `${reference} already has its quality.` };
       return { warehouse: lot.warehouse, reference };
-    }
-    case "triage": {
-      const e = await db.warehouseActivityLedgerEntry.findUnique({ where: { id: targetId }, select: { activityType: true, activityDateRaw: true, locationFrom: true, warehouse: true, moisturePct: true, source: true } });
-      if (!e || e.source !== "entered" || classifyActivity(e.activityType) !== "triage") throw new ValidationError("That isn't a triage / cleaning activity recorded in the app.");
-      const warehouse = (await siteOf(db as Tx, e.warehouse ?? "")) ?? e.warehouse ?? "";
-      const reference = `Triage at ${e.locationFrom ?? "-"} on ${e.activityDateRaw ?? "-"}`;
-      if (e.moisturePct !== null) return { warehouse, reference, blocked: `${reference} already has its moisture.` };
-      return { warehouse, reference };
     }
   }
 }
@@ -166,9 +157,6 @@ async function applyCheck(tx: Tx, row: { kind: string; targetId: string; values:
     }
     case "transfer_lot":
       await setTransferLotQuality(tx, Number(row.targetId), values);
-      return;
-    case "triage":
-      await setTriageMoisture(tx, row.targetId, values.moisturePct);
       return;
   }
 }
