@@ -30,16 +30,20 @@ export const TRANSFER_TOLERANCE = { bags: 0, kg: 0 } as const;
 export const DISPATCH_WEIGHT_TOLERANCE = 0.1;
 
 /**
- * Why a loaded weight can't be right for the Lots on the BKT, or null. The truck carries the Lots' net plus 1 kg per bag
- * (BAG_WEIGHT_KG), so a weight far from that is a slip, and recording it would put the wrong stock into the receiving
- * warehouse. Not checked when any Lot has no planned net or bags to compare with.
+ * A warning when the loaded weight is far from what the lots on the truck add up to (their net plus 1 kg a bag,
+ * BAG_WEIGHT_KG) — most likely a slip (an extra digit, the truck's tare). Only a warning (user, 24 Nov 2026): the scale is
+ * what was sent, so the truck can still be dispatched; the form shows it under the loaded weight. Null when it fits, or when
+ * a line has no net or bags to compare with.
  */
 export function dispatchWeightProblem(grossKg: number, lines: readonly { bags: number | null; netWeightKg: number | null }[]): string | null {
   if (!lines.length || lines.some((l) => l.bags === null || l.netWeightKg === null)) return null;
-  const expected = lines.reduce((a, l) => a + l.netWeightKg! + l.bags! * BAG_WEIGHT_KG, 0);
+  const net = lines.reduce((a, l) => a + l.netWeightKg!, 0);
+  const bags = lines.reduce((a, l) => a + l.bags!, 0);
+  const expected = net + bags * BAG_WEIGHT_KG;
   if (expected <= 0 || Math.abs(grossKg - expected) / expected <= DISPATCH_WEIGHT_TOLERANCE) return null;
   const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
-  return `The loaded weight ${fmt(grossKg)} kg doesn't fit the Lots on this BKT: their net weight and bags come to ${fmt(expected)} kg (more than ${DISPATCH_WEIGHT_TOLERANCE * 100}% apart). Check the loaded weight, or change the Lots' weight on the BKT first.`;
+  return `The lots on this truck come to ${fmt(expected)} kg (${fmt(net)} kg net + ${fmt(bags * BAG_WEIGHT_KG)} kg of bags). `
+    + `${fmt(grossKg)} kg is ${fmt(Math.abs(grossKg - expected))} kg ${grossKg > expected ? "more" : "less"}. Please check the weight.`;
 }
 
 /**
@@ -130,15 +134,35 @@ export const isTruckOnTheRoad = (d: unknown): d is TruckOnTheRoadDetail =>
   typeof d === "object" && d !== null && (d as { kind?: unknown }).kind === "truck_on_the_road"
   && typeof (d as { transferId?: unknown }).transferId === "string" && Array.isArray((d as { sites?: unknown }).sites);
 
-/** The client's four states. `status` (requested / dispatched / received) is the step; this is what a person reads. */
-export type TransferState = "requested" | "in_transit" | "closed" | "discrepancy";
+/**
+ * The client's four states, plus "receiving" (24 Nov 2026): the truck is at the Central warehouse and its lots are going
+ * through Reception there. `status` (requested / dispatched / received) is the step; this is what a person reads.
+ */
+export type TransferState = "requested" | "in_transit" | "receiving" | "closed" | "discrepancy";
 
 export const TRANSFER_STATE_LABELS: Record<TransferState, string> = {
   requested: "Requested",
   in_transit: "In transit",
+  receiving: "Being received",
   closed: "Closed",
   discrepancy: "Discrepancy",
 };
+
+/**
+ * The same states in the sending warehouse's words (25 Nov 2026: "Being received" read oddly at the Unit warehouse, which
+ * sends the truck — it is the other end receiving it). The receiving warehouse keeps TRANSFER_STATE_LABELS.
+ */
+export const TRANSFER_STATE_LABELS_SENDER: Record<TransferState, string> = {
+  requested: "Not dispatched yet",
+  in_transit: "On the road",
+  receiving: "Arrived, being checked in",
+  closed: "Delivered",
+  discrepancy: "Delivered with a difference",
+};
+
+/** A BKT's state as `warehouse` reads it: in the sender's words when it is the warehouse the truck leaves from. */
+export const transferStateLabel = (t: { state: TransferState; fromWarehouse: string }, warehouse: string): string =>
+  (t.fromWarehouse === warehouse ? TRANSFER_STATE_LABELS_SENDER : TRANSFER_STATE_LABELS)[t.state];
 
 export interface TransferFacts {
   status: TransferStatus;
@@ -149,6 +173,8 @@ export interface TransferFacts {
   /** Entered by the receiving warehouse, on arrival only. */
   bagsReceived: number | null;
   receivedGrossKg: number | null;
+  /** Its lots' reception has started at the receiving warehouse but isn't finished. */
+  receiving?: boolean;
 }
 
 export interface TransferVariance {
@@ -298,7 +324,7 @@ export function lotPieceProblem(lotNo: string, size: LotSize, onBkts: readonly L
  */
 export function transferState(t: TransferFacts): TransferState {
   if (t.status === "requested") return "requested";
-  if (t.status === "dispatched") return "in_transit";
+  if (t.status === "dispatched") return t.receiving ? "receiving" : "in_transit";
   const v = transferVariance(t);
   const off =
     (v.bagVariance !== null && Math.abs(v.bagVariance) > TRANSFER_TOLERANCE.bags) ||
@@ -333,4 +359,54 @@ export function transferFieldProblem(kind: TransferValueKind, value: string | nu
       return n !== undefined && n >= 0 ? null : "Numbers only.";
     }
   }
+}
+
+// ── The truck and its driver, written one way (user, 24 Nov 2026: "normalization consistent") ─────────────────────────────
+
+/**
+ * A truck number as stored: capitals, no spaces or dashes, two plates (truck / trailer) joined by "/". The client's sheets
+ * write the same rig as "1796GC01/3922BB04" and "7957-GN-01/3599-KV-01"; one form means one truck is always one value.
+ */
+export function normalizeTruckNo(raw: string | null | undefined): string {
+  return String(raw ?? "")
+    .toUpperCase()
+    .split("/")
+    .map((plate) => plate.replace(/[\s-]+/g, ""))
+    .filter(Boolean)
+    .join("/");
+}
+
+/** A person's or company's name as stored: trimmed, single spaces, capitals — as the client's dispatch sheet writes them. */
+export const normalizeName = (raw: string | null | undefined): string => String(raw ?? "").trim().replace(/\s+/g, " ").toUpperCase();
+
+/** A phone number as stored: its digits, keeping a leading "+" for a country code. Spaces, dots and dashes go. */
+export function normalizePhone(raw: string | null | undefined): string {
+  const v = String(raw ?? "").trim();
+  return (v.startsWith("+") ? "+" : "") + v.replace(/\D/g, "");
+}
+
+/** Côte d'Ivoire numbers have 10 digits (since 2021); a country code (225) may come before them. */
+export const PHONE_DIGITS = 10;
+
+/**
+ * The driver's phone: 10 digits, or the country code 225 and 10 digits. Spaces, dots, dashes and a "+" are fine, but
+ * letters or another number of digits can't be dispatched with (user, 24 Nov 2026: an invalid number must stop the dispatch).
+ */
+export function driverPhoneProblem(raw: string | null | undefined): { message: string; soft: boolean } | undefined {
+  const v = String(raw ?? "").trim();
+  if (!v) return undefined;
+  if (/[^\d\s+().-]/.test(v)) return { message: "Numbers only.", soft: false };
+  const digits = v.replace(/\D/g, "");
+  if (digits.length === PHONE_DIGITS || (digits.length === PHONE_DIGITS + 3 && digits.startsWith("225"))) return undefined;
+  return { message: `${digits.length} digits: a phone number has ${PHONE_DIGITS} (e.g. 0715347075).`, soft: false };
+}
+
+/** The same driver: their name and phone, each written one way. */
+export const sameDriver = (a: { driver: string | null; driverPhone: string | null }, b: { driver: string | null; driverPhone: string | null }): boolean =>
+  Boolean(a.driver && b.driver) && normalizeName(a.driver) === normalizeName(b.driver) && normalizePhone(a.driverPhone) === normalizePhone(b.driverPhone);
+
+/** What a loaded truck should weigh: its lots' net plus 1 kg a bag. Offered as the loaded weight, which may be changed. */
+export function expectedLoadedKg(lines: readonly { bags: number | null; netWeightKg: number | null }[]): number | null {
+  if (!lines.length || lines.some((l) => l.bags === null || l.netWeightKg === null)) return null;
+  return Math.round(lines.reduce((a, l) => a + l.netWeightKg! + l.bags! * BAG_WEIGHT_KG, 0) * 100) / 100;
 }

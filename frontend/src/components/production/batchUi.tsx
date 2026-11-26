@@ -1,6 +1,5 @@
 import { Pill } from "../ui/Pill";
-import { Link } from "react-router-dom";
-import { BATCH_STATUS_LABELS, type BatchStatus, type LotInBin } from "@anagroci/contract/domain/productionBatch";
+import { BATCH_STATUS_LABELS, type BatchStatus } from "@anagroci/contract/domain/productionBatch";
 import { RCN_RECEIPT_STATUS_LABELS, type RcnReceiptStatus } from "@anagroci/contract/domain/rcnReceipt";
 import { siteSlugFor } from "../../config/sites";
 import { useSites } from "../../state/SiteContext";
@@ -48,39 +47,6 @@ export function useSiteHrefs() {
     /** Where a BKT that brought a Lot to `warehouse` opens. */
     transferHref: (warehouse: string, transferId: string) => `/${slug(warehouse)}/transfers/${encodeURIComponent(transferId)}`,
   };
-}
-
-/**
- * A Lot's truck, as a link: REC-YAK-2026-0315. A Lot that came on a BKT opens the BKT at the receiving warehouse instead,
- * since its truck belongs to the sending site and its weight here is the BKT's arrival weight.
- */
-export function LotTruckLink({ lot }: { lot: LotInBin }) {
-  const { receiptHref, transferHref } = useSiteHrefs();
-  const href = lot.transferId ? transferHref(lot.warehouse, lot.transferId) : receiptHref(lot.warehouse, lot.receiptId);
-  return (
-    <Link to={href} onClick={(e) => e.stopPropagation()} className="font-mono text-brand-700 hover:underline">
-      {lot.transferId ?? lot.receiptId}
-    </Link>
-  );
-}
-
-/**
- * The trucks a bin's stock came from, one per line: the truck's page, or the BKT's for a Lot another warehouse sent
- * ("from BOUAKE"). A Lot that adds no kg says so, so the truck to fix is the one right there.
- */
-export function BinTrucks({ lots }: { lots: LotInBin[] }) {
-  if (lots.length === 0) return <span>-</span>;
-  return (
-    <span className="block space-y-0.5">
-      {lots.map((l, i) => (
-        <span key={`${l.transferId ?? l.receiptId}-${i}`} className="block">
-          <LotTruckLink lot={l} />
-          {l.fromWarehouse && <span className="text-[11px] text-warmstone-500"> · from {l.fromWarehouse}</span>}
-          {l.kg === undefined && <span className="text-[11px] text-danger-700"> · no weight</span>}
-        </span>
-      ))}
-    </span>
-  );
 }
 
 /**

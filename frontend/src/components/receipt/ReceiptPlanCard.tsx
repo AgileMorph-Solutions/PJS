@@ -5,11 +5,13 @@ import { api } from "../../repository/api";
 import { InfoCard, InfoRow } from "../ui/InfoCard";
 import { APPROVAL, LINK_STATUS, PlanFlagList, RECEPTION_TYPE } from "./PlanBadges";
 import { Pill } from "../ui/Pill";
+import { Button } from "../ui/Button";
+import { Field, Input } from "../ui/Input";
+import { SearchSelect } from "../ui/SearchSelect";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 
-const inputClass =
-  "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 outline-none focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
+// The shared box, searchable dropdown and buttons (26 Nov 2026), like every other form.
 
 /**
  * Where this truck stands against its Delivery Plan: planned, planned with an exception, or
@@ -63,26 +65,18 @@ export function ReceiptPlanCard({
 
       {canEdit && info.approval === "pending" && (
         <div className="pt-3 space-y-2">
-          <label htmlFor="exc-note" className="block text-[12.5px] font-semibold text-warmstone-700">Why this arrival is accepted (optional)</label>
-          <input id="exc-note" value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} />
-          <button type="button" disabled={busy} onClick={() => void run(() => api.approveReceiptException(receiptId, note))}
-            className="px-3.5 py-1.5 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[12.5px] font-bold disabled:opacity-50">
-            Approve exception
-          </button>
+          <Field label="Why this arrival is accepted (optional)"><Input id="exc-note" value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <Button disabled={busy} onClick={() => void run(() => api.approveReceiptException(receiptId, note))}>Approve exception</Button>
         </div>
       )}
 
       {canEdit && !info.deliveryPlanId && open.length > 0 && (
         <div className="pt-3 space-y-2">
-          <label htmlFor="link-plan" className="block text-[12.5px] font-semibold text-warmstone-700">Link to a delivery plan</label>
-          <select id="link-plan" value={pick} onChange={(e) => setPick(e.target.value)} className={inputClass}>
-            <option value="">Choose a plan…</option>
-            {open.map((p) => <option key={p.id} value={p.id}>{p.id} · {normalizeSupplierName(p.supplierName)}</option>)}
-          </select>
-          <button type="button" disabled={busy || !pick} onClick={() => void run(() => api.linkReceiptToPlan(receiptId, pick))}
-            className="px-3.5 py-1.5 rounded-xl bg-white border border-warmstone-200 text-warmstone-800 text-[12.5px] font-bold hover:bg-warmstone-50 disabled:opacity-50">
-            Link truck to plan
-          </button>
+          <Field label="Link to a delivery plan">
+            <SearchSelect id="link-plan" value={pick} onChange={setPick} placeholder="Choose a plan…"
+              options={open.map((p) => ({ value: p.id, label: p.id, detail: normalizeSupplierName(p.supplierName) }))} />
+          </Field>
+          <Button variant="secondary" disabled={busy || !pick} onClick={() => void run(() => api.linkReceiptToPlan(receiptId, pick))}>Link truck to plan</Button>
         </div>
       )}
     </InfoCard>

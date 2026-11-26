@@ -4,6 +4,9 @@ import { PageHeader } from "../../components/ui/PageHeader";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { Pill } from "../../components/ui/Pill";
 import { SubmissionReview } from "../../components/SubmissionReview";
+import { QualityApprovalCard } from "../../components/quality/QualityApprovalCard";
+import { QualitySectionTag } from "../../components/quality/QualitySectionTag";
+import { formSubmissionSection } from "@anagroci/contract/domain/qualityChecks";
 import { ProductionApprovalCard } from "../../components/production/ProductionApprovalCard";
 import { useTracking } from "../../state/TrackingContext";
 import { usePendingApprovals } from "../../state/PendingApprovals";
@@ -41,7 +44,7 @@ export function ApprovalsPage() {
 function ProcurementApprovals() {
   const { receipts, masters } = useTracking();
   const sites = useSites();
-  const { submissions: pending, supplierRequests: requests } = usePendingApprovals();
+  const { submissions: pending, supplierRequests: requests, qualityChecks } = usePendingApprovals();
 
   return (
     <>
@@ -53,6 +56,8 @@ function ProcurementApprovals() {
           const slug = siteSlugFor(sites, masters, s.warehouse);
           return (
             <div key={s.id} className="bg-white border border-warmstone-200 rounded-2xl shadow-xs p-5 space-y-3">
+              {/* Which section the form is from, as the QFS Officer's list names it (26 Nov 2026). */}
+              <QualitySectionTag section={formSubmissionSection(Object.keys(s.values), Boolean(receipt?.transfer))} />
               <Link to={`/${slug}/receipts/${s.receiptId}`} className="text-[13px] font-bold text-brand-700 hover:text-brand-800">
                 {receipt?.lotNo ? `Lot ${receipt.lotNo} · ` : ""}{s.receiptId}
               </Link>
@@ -60,6 +65,13 @@ function ProcurementApprovals() {
             </div>
           );
         })}
+      </section>
+
+      {/* The QFS Officer's drying, transfer lot and triage checks (26 Nov 2026): readings that change nothing until approved. */}
+      <section className="space-y-3">
+        <h2 className="text-[11px] font-bold text-warmstone-500 uppercase tracking-wider px-1">Quality checks · {qualityChecks.rows.length}</h2>
+        {qualityChecks.rows.length === 0 && <EmptyState title={qualityChecks.loading ? "Loading…" : "No quality checks waiting"} />}
+        {qualityChecks.rows.map((q) => <QualityApprovalCard key={q.id} submission={q} />)}
       </section>
 
       <section className="space-y-3">

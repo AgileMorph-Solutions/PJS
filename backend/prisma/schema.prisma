@@ -138,6 +138,7 @@ model Warehouse {
   productionBatches ProductionBatch[]
   truckMovements    TruckMovement[]
   boilerReadings    BoilerReading[]
+  transferLots      TransferLot[]  @relation("TransferLotWarehouse")
 
   @@index([kind])
   @@index([type])
@@ -154,6 +155,8 @@ model Bin {
   /// When the Bin was created in the app. NULL = it was already there (imported); no date is invented for those.
   createdAt     DateTime?
   batchBins     ProductionBatchBin[]
+  transferLots  TransferLotBin[]
+  lotReturns    TransferLotReturn[]
 }
 
 model Origin {
@@ -199,6 +202,11 @@ model Receipt {
   /// arrival date, truck and delivery status are read from here, never stored on the plan.
   deliveryPlanId       String?
   deliveryPlan         DeliveryPlan? @relation(fields: [deliveryPlanId], references: [id])
+
+  /// Set when the truck came from the Unit warehouse on a BKT, not from a supplier (24 Nov 2026): this record receives that
+  /// one lot of the truck. It has no supplier or price; what was sent is read through this link, never copied.
+  transferLineId       Int?                 @unique
+  transferLine         TransferRequestLine? @relation("TransferReception", fields: [transferLineId], references: [id], onDelete: Restrict)
   /// Set only when the plan was attached AFTER the receipt existed (a truck that arrived unplanned and
   /// was regularised later). NULL on a truck that arrived against its plan — that is how the two differ.
   deliveryPlanLinkedAt DateTime?
@@ -399,9 +407,79 @@ model TransferRequestLine {
   /// Bags of this Lot counted off the truck at the receiving site. The truck is weighed once, so this is what its
   /// net at arrival is shared by between the Lots on it. Null on BKTs received before it was asked.
   bagsReceived    Int?
+  /// A piece of a transfer lot (24 Nov 2026): `bags` of it are on this truck; its net is the lot's, shared by bags.
+  transferLotId   Int?
+  transferLot     TransferLot? @relation(fields: [transferLotId], references: [id], onDelete: Restrict)
+  /// The reception record at the receiving warehouse for this lot (24 Nov 2026): the same reception as a supplier truck, one
+  /// record per lot on the truck. It holds everything recorded on arrival; nothing about it is copied here.
+  reception       Receipt? @relation("TransferReception")
 
   @@unique([transferId, receiptId])
+  @@unique([transferId, transferLotId])
   @@index([receiptId])
+  @@index([transferLotId])
+}
+
+/// A lot a Unit warehouse makes out of its Bins to send to the Central one (24 Nov 2026). A Bin holds hundreds of tonnes, so
+/// bags are taken out of one or more Bins and weighed together; the lot then goes on one or more trucks (TransferRequestLine).
+/// The client's dispatch sheet has no lot column, so the number comes from the warehouse's own Lot numbers and may be changed.
+/// Its net, each Bin's share and what is left to load are worked out (contract domain/transferLot.ts), never stored.
+model TransferLot {
+  id            Int       @id @default(autoincrement())
+  lotNo         String
+  warehouse     String
+  warehouseRef  Warehouse @relation("TransferLotWarehouse", fields: [warehouse], references: [name])
+  lotDate       String
+  remarks       String?
+  /// What the scale read once the bags were weighed: RCN plus bags. Null until weighed.
+  grossWeightKg Decimal?
+  moisture      Decimal?
+  kor           Decimal?
+  nutCount      Int?
+  weighedAt     DateTime?
+  weighedBy     String?
+  weigher       User?     @relation("TransferLotWeigher", fields: [weighedBy], references: [id])
+  createdAt     DateTime  @default(now())
+  createdBy     String?
+  creator       User?     @relation("TransferLotCreator", fields: [createdBy], references: [id])
+  updatedAt     DateTime  @updatedAt
+  bins          TransferLotBin[]
+  lines         TransferRequestLine[]
+  returns       TransferLotReturn[]
+
+  @@unique([warehouse, lotNo])
+}
+
+/// Bags of a transfer lot put back in a Bin instead of going on a truck (26 Nov 2026): half a lot loaded, the rest stays. Only
+/// bags not on a truck, of a weighed lot; the Bin gets their share of the lot's net by bags (worked out, never stored), into
+/// any Bin of the lot's warehouse — not necessarily one it came from.
+model TransferLotReturn {
+  id         Int         @id @default(autoincrement())
+  lotId      Int
+  lot        TransferLot @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  binCode    String
+  bin        Bin         @relation(fields: [binCode], references: [code])
+  bags       Int
+  returnDate String
+  createdAt  DateTime    @default(now())
+  createdBy  String?
+  creator    User?       @relation("TransferLotReturnCreator", fields: [createdBy], references: [id])
+
+  @@index([lotId])
+  @@index([binCode])
+}
+
+/// The bags a transfer lot took from one Bin. Its share of the lot's weight is by bags.
+model TransferLotBin {
+  id      Int         @id @default(autoincrement())
+  lotId   Int
+  lot     TransferLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  binCode String
+  bin     Bin         @relation(fields: [binCode], references: [code])
+  bags    Int
+
+  @@unique([lotId, binCode])
+  @@index([binCode])
 }
 
 /// The single source of truth for "has this receipt reached this stage?" — the only thing
@@ -497,6 +575,7 @@ model StageGateEntry {
   warehouseType String? /// Warehouse type (Village/Regional/Factory)
   remarks       String? /// REMARKS
   week          String? /// WEEK
+  laissePasserEntree String? /// Laisse-Passer Entree (Yakro)
   receipt       Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
@@ -609,6 +688,7 @@ model StageUnload {
   manpowerContractor  String? /// Manpower contractor / team
   tallyClerkBagCount  String? /// Tally Clerk bag count
   palletsUsed         String? /// Pallets used (30 bags/pallet)
+  newJuteBagsUsed     String? /// New Jute Bag Used
   sacsNum             Decimal? /// typed shadow of sacs, for reporting/DQ only — never round-tripped
   bonSacsNum          Decimal? /// typed shadow of bonSacs, for reporting/DQ only — never round-tripped
   humidSacsNum        Decimal? /// typed shadow of humidSacs, for reporting/DQ only — never round-tripped
@@ -2729,6 +2809,8 @@ model User {
   activityEntries     WarehouseActivityLedgerEntry[] @relation("ActivityEntryAuthor")
   binStagesEntered    BinStageEntry[]         @relation("BinStageEnteredBy")
   binStagesEdited     BinStageEntry[]         @relation("BinStageEditedBy")
+  binActivitiesEntered BinActivityEntry[]     @relation("BinActivityEnteredBy")
+  binActivitiesEdited  BinActivityEntry[]     @relation("BinActivityEditedBy")
   juteVendorReceipts  JuteVendorReceipt[] @relation("JuteVendorReceiptAuthor")
   juteEmptyBagReceipts JuteEmptyBagReceipt[] @relation("JuteEmptyBagReceiptAuthor")
   juteOpeningsCreated JuteOpeningBalance[] @relation("JuteOpeningAuthor")
@@ -2739,6 +2821,9 @@ model User {
   reviewedUploadIssues UploadIssue[]          @relation("UploadIssueReviewer")
   dispatchedTransfers TransferRequest[]       @relation("TransferDispatcher")
   receivedTransfers   TransferRequest[]       @relation("TransferReceiver")
+  createdTransferLots TransferLot[]           @relation("TransferLotCreator")
+  transferLotReturns  TransferLotReturn[]     @relation("TransferLotReturnCreator")
+  weighedTransferLots TransferLot[]           @relation("TransferLotWeigher")
   cancelledPlans      DeliveryPlan[]          @relation("PlanCanceller")
   suppliers           BranchManagerSupplier[] @relation("BmSuppliers")
   assignedSuppliers   BranchManagerSupplier[] @relation("SupplierAssigner")
@@ -2746,6 +2831,8 @@ model User {
   reviewedRequests    SupplierRequest[]       @relation("SupplierReviewer")
   submissions         FormSubmission[]        @relation("SubmissionAuthor")
   reviewedSubmissions FormSubmission[]        @relation("SubmissionReviewer")
+  qualitySubmissions  QualitySubmission[]     @relation("QualitySubmissionAuthor")
+  reviewedQuality     QualitySubmission[]     @relation("QualitySubmissionReviewer")
   fieldChanges        StageFieldChange[]
   changeLogs          ChangeLog[]
   timeline            TimelineEntry[]
@@ -2838,6 +2925,32 @@ model FormSubmission {
 
   @@index([receiptId, formId])
   @@index([status])
+}
+
+/// A QFS Officer's quality check on a warehouse record that had no approval step of its own (26 Nov 2026): a drying round's
+/// quality before or after, a transfer lot's quality, the moisture after triage (contract domain/qualityChecks.ts). Only the
+/// readings are kept here; nothing touches the record until the Warehouse Incharge approves, and then they go through the same
+/// service the Incharge's own entry uses. `targetId` is the record's id as text (a drying round's cuid, a lot's or an activity
+/// entry's number): a soft reference, since the four kinds point at four tables.
+model QualitySubmission {
+  id            Int       @id @default(autoincrement())
+  kind          String
+  targetId      String
+  /// The site it was taken at, for the Incharge's queue and the QFS Officer's list.
+  warehouse     String
+  values        Json
+  /// "submitted" | "approved" | "rejected"
+  status        String    @default("submitted")
+  submittedById String
+  submittedBy   User      @relation("QualitySubmissionAuthor", fields: [submittedById], references: [id])
+  reviewedById  String?
+  reviewedBy    User?     @relation("QualitySubmissionReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime  @default(now())
+
+  @@index([kind, targetId])
+  @@index([warehouse, status])
 }
 
 /// Audit of every stage-field change made by a user: who, when, old -> new.
@@ -2987,4 +3100,22 @@ model BinStageEntry {
   editedBy    User?    @relation("BinStageEditedBy", fields: [editedById], references: [id], onDelete: SetNull)
 
   @@id([binCode, stageId])
+}
+
+/// A Bin's Other warehouse activities and Activity ledger, as a ledger (26 Nov 2026, user): many entries per Bin and form, each
+/// one row of the form's own stages.ts fields by label. Until then each Bin had one of each (BinStageEntry), moved in here as
+/// each Bin's first entry. BinStageEntry keeps only the Bin's "Does this Bin need drying?" answer.
+model BinActivityEntry {
+  id          Int      @id @default(autoincrement())
+  binCode     String
+  stageId     String
+  values      Json
+  enteredAt   DateTime @default(now())
+  enteredById String?
+  enteredBy   User?    @relation("BinActivityEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  editedAt    DateTime @updatedAt
+  editedById  String?
+  editedBy    User?    @relation("BinActivityEditedBy", fields: [editedById], references: [id], onDelete: SetNull)
+
+  @@index([binCode, stageId])
 }

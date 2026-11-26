@@ -41,6 +41,7 @@ import { WarehouseActivitiesPage } from "./pages/warehouse/WarehouseActivitiesPa
 import { WarehouseActivityDetailPage } from "./pages/warehouse/WarehouseActivityDetailPage";
 import { TransfersPage } from "./pages/warehouse/TransfersPage";
 import { TransferDetailPage } from "./pages/warehouse/TransferDetailPage";
+import { FromUnitReceptionPage } from "./pages/warehouse/FromUnitReceptionPage";
 import { IssuedToProductionPage } from "./pages/warehouse/IssuedToProductionPage";
 import { IntakeWizardPage } from "./pages/warehouse/intake/IntakeWizardPage";
 import { LegacyListRedirect, LegacyReceiptDetailRedirect, LegacyIntakeRedirect } from "./pages/LegacyRedirects";
@@ -60,6 +61,7 @@ import { WarehousesPage } from "./pages/masters/WarehousesPage";
 import { BinsPage } from "./pages/masters/BinsPage";
 import { BinDetailPage } from "./pages/masters/BinDetailPage";
 import { OriginsPage } from "./pages/masters/OriginsPage";
+import { QualityChecksPage } from "./pages/warehouse/QualityChecksPage";
 
 /** Everything a Branch Manager / QFS Officer can't reach; the API refuses it for them too. */
 const REVIEWERS: Role[] = ["admin", "warehouse_incharge"];
@@ -127,10 +129,16 @@ function AppRoutes() {
                   header comment and receiptLinks.ts, whose /links route deliberately never accepts
                   ?warehouse=). Only the breadcrumb reads useSite(). */}
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
+              {/* The QFS Officer's list of every quality check at their warehouse, by section (26 Nov 2026). */}
+              <Route element={<RequireRole roles={["qfs_officer", "admin"]} />}>
+                <Route path="quality-checks" element={<QualityChecksPage />} />
+              </Route>
               <Route element={<RequireRole roles={REVIEWERS} />}>
                 {/* Static, so it wins over the open `receipts/:id` above - "batch" is never an id. */}
                 <Route path="receipts/batch" element={<BatchEntryPage />} />
                 <Route path="receipts/new/:id/:stageId" element={<IntakeWizardPage />} />
+                {/* Reception at a Central warehouse: trucks from the Unit warehouse (24 Nov 2026). Static, so it wins over receipts/:id. */}
+                <Route path="receipts/from-unit" element={<FromUnitReceptionPage />} />
                 <Route path="stock" element={<StockPage />} />
                 <Route path="drying" element={<DryingJobsPage />} />
                 <Route path="delivery-plans" element={<DeliveryPlansPage />} />

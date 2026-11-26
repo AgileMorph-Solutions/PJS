@@ -129,11 +129,11 @@ describe("QC-2 sizing check and manual calibration (Phase 2, steps 3–4)", () =
   const sample = { batchCode: BATCH, date: "2026-08-28", point: "Ap", binCode: "CAL-03B", nutCount: "129", sampleG: "1000", grams: { Ap: "162", A: "792", AB: "46" }, decision: "fail" };
   let checkId = 0;
 
-  it("is the production team's: the warehouse team neither sees the silos nor checks them", async () => {
-    for (const who of ["wi", "qfs"]) {
-      expect((await call(who, "GET", `/api/production/batches/${BATCH}/calibration`)).statusCode, who).toBe(403);
-      expect((await call(who, "POST", "/api/production/sizing-checks", sample)).statusCode, who).toBe(403);
-    }
+  it("is the production team's and the QFS Officer's: the Warehouse Incharge neither sees the silos nor checks them", async () => {
+    expect((await call("wi", "GET", `/api/production/batches/${BATCH}/calibration`)).statusCode).toBe(403);
+    expect((await call("wi", "POST", "/api/production/sizing-checks", sample)).statusCode).toBe(403);
+    // 26 Nov 2026: the QFS Officer takes every quality check, QC-2 included, so they read the silos (their check is sent below).
+    expect((await call("qfs", "GET", `/api/production/batches/${BATCH}/calibration`)).statusCode).toBe(200);
   });
 
   it("a check sent for approval waits for the Production Incharge, with the correct-size % and the doc's alert", async () => {

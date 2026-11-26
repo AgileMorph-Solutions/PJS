@@ -6,6 +6,7 @@ import { registerAuditContext } from "./audit/context.js";
 import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/users.js";
 import { submissionRoutes } from "./routes/submissions.js";
+import { qualityCheckRoutes } from "./routes/qualityChecks.js";
 import { supplierAccessRoutes } from "./routes/supplierAccess.js";
 import { receiptRoutes } from "./routes/receipts.js";
 import { ficheRoutes } from "./routes/fiche.js";
@@ -37,6 +38,7 @@ import { issuedToProductionRoutes } from "./routes/issuedToProduction.js";
 import { warehouseDischargeRoutes } from "./routes/warehouseDischarges.js";
 import { deliveryPlanRoutes } from "./routes/deliveryPlans.js";
 import { transferRoutes } from "./routes/transfers.js";
+import { transferLotRoutes } from "./routes/transferLots.js";
 import { ValidationError, UnauthorizedError, ForbiddenError } from "./domain/validation.js";
 import { UnknownStageFieldError } from "./stageStore.js";
 import { ImportRejectedError, ImportTokenError } from "./services/imports.js";
@@ -99,6 +101,7 @@ export function buildApp() {
   app.register(authRoutes);
   app.register(userRoutes);
   app.register(submissionRoutes);
+  app.register(qualityCheckRoutes);
   app.register(supplierAccessRoutes);
 
   app.register(receiptRoutes);
@@ -106,6 +109,7 @@ export function buildApp() {
   app.register(logRoutes);
   app.register(deliveryPlanRoutes);
   app.register(transferRoutes);
+  app.register(transferLotRoutes);
   app.register(ledgerRoutes);
   app.register(masterRoutes);
   app.register(supplierRoutes);

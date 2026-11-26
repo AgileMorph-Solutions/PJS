@@ -8,7 +8,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { UserView } from "../types/user";
 import { api, ApiError, UNAUTHORIZED_EVENT } from "../repository/api";
-import { CENTRAL_ONLY_ROLES, canAccessProduction, canRecordIntake, canRunProduction, canSeeFactory, canWriteStageDirectly, type Role } from "../data/roles";
+import { CENTRAL_ONLY_ROLES, canAccessProduction, canRecordIntake, canRunProduction, canSeeFactory, canTakeFactoryChecks, canCorrectRecords, canWriteStageDirectly, type Role } from "../data/roles";
 import { warehouseSlug } from "../config/sites";
 
 type Status = "loading" | "anonymous" | "authenticated";
@@ -113,16 +113,17 @@ export function useProductionPermissions() {
     intake,
     /** Accept a load, every record after it and its quality checks (Admin / Production Incharge). */
     factory,
-    /** See production past the intake: silos, Lots, every stage (the production team and Admin). */
-    seeFactory: canSeeFactory(role),
+    /** See production past the intake: silos, Lots, every stage (the production team and Admin; the QFS Officer, for their checks). */
+    seeFactory: canSeeFactory(role) || canTakeFactoryChecks(role),
     /** Take a moisture check on a load (the warehouse team's QFS Officer, or its Incharge directly). */
     moistureCheck: intake || isQfs,
-    /** Take a quality check after acceptance (QC-2 onwards): production's own. */
-    factoryCheck: factory,
+    /** Take a quality check after acceptance (QC-2 onwards): the QFS Officer's, approved by the Production Incharge, or theirs directly. */
+    factoryCheck: canTakeFactoryChecks(role),
     /** Download the production workbook: everyone with Production but the QFS Officer, whose checks are on screen. */
     exportWorkbook: !isQfs,
-    /** Admin is the one who may still correct a load production has accepted. */
     isAdmin: role === "admin",
+    /** Who may still correct a load production has accepted: an Admin or the Warehouse Incharge (contract canCorrectRecords). */
+    correctRecords: canCorrectRecords(role),
   };
 }
 
@@ -132,5 +133,7 @@ export function homePathFor(me: UserView): string {
   const site = me.site ?? me.warehouse;
   if (me.role === "admin" || !site) return "/";
   if (CENTRAL_ONLY_ROLES.includes(me.role)) return "/production/runs";
+  // The QFS Officer starts from their list of quality checks, every section's (26 Nov 2026).
+  if (me.role === "qfs_officer") return `/${warehouseSlug(site)}/quality-checks`;
   return `/${warehouseSlug(site)}/receipts`;
 }

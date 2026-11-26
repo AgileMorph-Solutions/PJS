@@ -37,7 +37,7 @@ export async function dryingRoundsByLot(db: Db, lotNos: readonly string[]): Prom
   if (!lots.length) return byLot;
   const rows = await db.dryingBatch.findMany({
     where: { lotNo: { in: lots } },
-    select: { lotNo: true, sn: true, status: true, source: true, receivedNetWeightKg: true, destinationBinNo: true },
+    select: { lotNo: true, sn: true, status: true, source: true, receivedNetWeightKg: true, destinationBinNo: true, outputMoisturePct: true, outputKor: true },
   });
   for (const r of rows) {
     if (!r.lotNo) continue;
@@ -48,6 +48,8 @@ export async function dryingRoundsByLot(db: Db, lotNos: readonly string[]): Prom
       source: r.source,
       receivedNetWeightKg: r.receivedNetWeightKg === null ? null : Number(r.receivedNetWeightKg.toString()),
       destinationBinNo: r.destinationBinNo,
+      outputMoisturePct: r.outputMoisturePct === null ? null : Number(r.outputMoisturePct.toString()),
+      outputKor: r.outputKor === null ? null : Number(r.outputKor.toString()),
     });
     byLot.set(r.lotNo, list);
   }

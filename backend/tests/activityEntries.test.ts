@@ -75,7 +75,8 @@ describe("recording an activity", () => {
     const cases: [object, RegExp][] = [
       [{}, /Choose the kind of activity/],
       [{ category: "stacking" }, /Say where in the warehouse/],
-      [{ category: "triage", lotNo: lot, locationFrom: STORE1 }, /Triage changes the moisture/],
+      // Its moisture may be left for the QFS Officer (26 Nov 2026); the quantities can't.
+      [{ category: "triage", lotNo: lot, locationFrom: STORE1 }, /Triage changes the quantity: record the kg before/],
       [{ category: "drying", lotNo: lot, locationFrom: STORE1 }, /recorded in the Bin's Sun drying section/],
       [{ ...GOOD, lotNo: "LOT-NOPE-2026-0001" }, /isn't a Lot at ACTV-A/],
       [{ ...GOOD, lotNo: lot, locationFrom: "NOWHERE" }, /isn't a store of ACTV-A or a Bin/],

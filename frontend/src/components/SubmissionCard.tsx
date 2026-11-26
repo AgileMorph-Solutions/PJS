@@ -4,6 +4,8 @@ import { Pill } from "./ui/Pill";
 import { Button } from "./ui/Button";
 import { ProgressBar } from "./ui/ProgressBar";
 import type { SubmissionDraft } from "./receipt/useSubmissionDraft";
+import { QualitySectionTag } from "./quality/QualitySectionTag";
+import { formSubmissionSection } from "@anagroci/contract/domain/qualityChecks";
 
 const STATUS: Record<string, { label: string; tone: string }> = {
   submitted: { label: "Waiting for approval", tone: "decision" },
@@ -25,7 +27,7 @@ function goTo(stageId: string) {
  * how far along they are, which step still has boxes to fill (with a jump to it), and submits for the Warehouse Incharge
  * to approve. After an approval what is still empty can be sent again; one waiting holds it; a rejection is final.
  */
-export function SubmissionCard({ submission }: { submission: SubmissionDraft }) {
+export function SubmissionCard({ submission, fromTransfer = false }: { submission: SubmissionDraft; fromTransfer?: boolean }) {
   const { refresh } = useTracking();
   const { form, existing, latest, typed, busy, error } = submission;
   if (!form) return null;
@@ -86,6 +88,8 @@ export function SubmissionCard({ submission }: { submission: SubmissionDraft }) 
                     {s.left > 0 ? "radio_button_unchecked" : "check_circle"}
                   </span>
                   <span className="min-w-0 flex-1 font-medium text-warmstone-900">{s.title}</span>
+                  {/* The QFS Officer's checks name their section, as on their Quality checks page (26 Nov 2026). */}
+                  {form.role === "qfs_officer" && <QualitySectionTag section={formSubmissionSection([s.stageId], fromTransfer)} />}
                   <span className="tabular-nums text-warmstone-600">{s.left > 0 ? `${s.left} to fill` : "Done"}</span>
                   {s.left > 0 && (
                     <button type="button" onClick={() => goTo(s.stageId)} className="text-[12px] font-semibold text-brand-700 hover:text-brand-800">Go to</button>

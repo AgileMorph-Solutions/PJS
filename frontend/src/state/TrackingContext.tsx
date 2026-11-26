@@ -333,6 +333,18 @@ export function useTransfers(warehouse?: string) {
   return { transfers, loading, refetch };
 }
 
+/** The lots a Unit warehouse has made out of its Bins to send (24 Nov 2026). Its own hook, like useTransfers. */
+export function useTransferLots(warehouse?: string) {
+  const [lots, setLots] = useState<import("@anagroci/contract/types/receipt").TransferLot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listTransferLots(warehouse).then(setLots).catch(() => {}), [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { lots, loading, refetch };
+}
+
 /**
  * The dashboard's supplier-wise figures for a period and site. Its own hook, like the others, so TrackingApi stays as it
  * is. A response that arrives after the period or site has changed again is dropped, so a slow answer can never

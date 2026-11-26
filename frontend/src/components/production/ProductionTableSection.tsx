@@ -3,6 +3,7 @@ import { CollapsibleCard } from "../ui/CollapsibleCard";
 import { DataTable, type Column } from "../ui/DataTable";
 import { ProductionRowForm } from "./ProductionRowForm";
 import { PRODUCTION_PAGE_SIZE } from "./columns";
+import { nextSerial } from "@anagroci/contract/data/autoFields";
 
 interface Field { n: string; v: string; col: string }
 interface Row { id?: string; [key: string]: unknown }
@@ -27,6 +28,14 @@ export function ProductionTableBody({ fields, idPrefix, load, onSubmit, submitLa
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // S.No values saved from here since the rows were read: the next row's number counts them too (26 Nov 2026, user).
+  const [added, setAdded] = useState<string[]>([]);
+  const serialFields = fields.filter((f) => f.n === "S.No");
+  const defaults = Object.fromEntries(serialFields.map((f) => [f.n, nextSerial([...rows.map((r) => (r[f.col] == null ? "" : String(r[f.col]))), ...added])]));
+  const submit = async (values: Record<string, string>) => {
+    await onSubmit(values);
+    setAdded((a) => [...a, ...serialFields.map((f) => values[f.n] ?? "")]);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -61,7 +70,7 @@ export function ProductionTableBody({ fields, idPrefix, load, onSubmit, submitLa
       <details className="text-[13px]">
         <summary className="cursor-pointer font-semibold text-warmstone-600 hover:text-brand-700">Add a row</summary>
         <div className="mt-3">
-          <ProductionRowForm idPrefix={idPrefix} fields={fields} submitLabel={submitLabel} onSubmit={onSubmit} />
+          <ProductionRowForm idPrefix={idPrefix} fields={fields} submitLabel={submitLabel} onSubmit={submit} defaults={loading ? undefined : defaults} />
         </div>
       </details>
     </div>

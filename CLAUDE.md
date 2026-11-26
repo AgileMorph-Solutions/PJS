@@ -99,4 +99,6 @@ npm install                  # workspace root — installs contract, backend, fr
 npm test                     # every workspace's test suite
 npm run gen:check            # fails if packages/contract's generated stage map is stale
 docker compose up --build    # full stack from an empty database: migrate, seed, serve
+python tools/derive-field-ranges.py   # regenerate the usual ranges (contract data/fieldRanges.ts, docs/FIELD_RANGES.md)
+                                      # from the workbooks; --check fails when they are stale
 ```

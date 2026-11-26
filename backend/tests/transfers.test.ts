@@ -49,7 +49,9 @@ async function cleanup() {
 }
 
 /** Who drives it: required to dispatch, and the same on every test truck. */
-const CREW = { transporter: "KONE & FILS", driver: "Kone", driverPhone: "0102030405" };
+/** A driver drives one truck at a time (24 Nov 2026), so each test truck gets its own: a fresh 10-digit phone each time it is spread. */
+let phoneSeq = 102030400;
+const CREW = { transporter: "KONE & FILS", driver: "Kone", get driverPhone() { return String(++phoneSeq).padStart(10, "0"); } };
 
 /**
  * Dispatch with the crew filled in, and — unless the test gives one — a loaded weight of 1 kg per bag (0 kg of RCN), which
@@ -122,9 +124,10 @@ describe("a BKT is one truck, sent and then received", () => {
 
   it("records what leaves on the header, and leaves everything about arrival blank", async () => {
     const t = await createTransfer({ transferDate: D, fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: await lot(), bags: 590 }] });
-    const sent = await dispatchTransfer(t.id, { whReceiptNo: "9001", truckNo: "SENT-RIG-1", transporter: "KONE & FILS", driver: "Kone", driverPhone: "0102030405", dispatchedGrossKg: 48880 });
+    const sent = await dispatchTransfer(t.id, { whReceiptNo: "9001", truckNo: "sent-rig 1", transporter: "Kone & Fils", driver: "kone  bakary", driverPhone: "07 00 00 00 01", dispatchedGrossKg: 48880 });
     expect(sent).toMatchObject({
-      status: "dispatched", state: "in_transit", truckNo: "SENT-RIG-1", transporter: "KONE & FILS", dispatchedGrossKg: 48880,
+      // Each written one way (24 Nov 2026): the truck in capitals with no spaces or dashes, names in capitals, the phone's digits.
+      status: "dispatched", state: "in_transit", truckNo: "SENTRIG1", transporter: "KONE & FILS", driver: "KONE BAKARY", driverPhone: "0700000001", dispatchedGrossKg: 48880,
       // The point the client made: nothing about arrival exists at dispatch.
       bagsReceived: null, receivedGrossKg: null, receivedAt: null, damagedBags: null,
       variance: { bagsDispatched: 590, netDispatchedKg: 48290, bagsReceived: null, bagVariance: null, netAtArrivalKg: null, weightVarianceKg: null },
@@ -179,7 +182,7 @@ describe("a BKT is one truck, sent and then received", () => {
     const res = await as("sender", "POST", `/api/transfers/${mine.id}/dispatch`, send);
     expect(res.statusCode).toBe(422);
     expect(res.json().error).toBe(
-      `Truck shared rig can't be dispatched yet: it is still on ${out.id}, which hasn't been received at ${B}. ` +
+      `Truck SHAREDRIG can't be dispatched yet: it is still on ${out.id}, which hasn't been received at ${B}. ` +
       `A truck carries one BKT at a time. Record the arrival on ${out.id} first, or check the truck number.`,
     );
     expect(res.json().detail).toEqual({ kind: "truck_on_the_road", transferId: out.id, sites: [A, B] });
@@ -201,7 +204,7 @@ describe("a BKT is one truck, sent and then received", () => {
     await dispatchTransfer(t.id, { whReceiptNo: "9001", truckNo: "TL-RIG" });
     await receiveTransfer(t.id, { whReceiptNo: "8001", bagsReceived: 10, receivedGrossKg: 10 });
     const notes = (await prisma.timelineEntry.findMany({ where: { receiptId: id }, orderBy: { id: "asc" } })).map((e) => e.note);
-    expect(notes.slice(-3)).toEqual([`Added to transfer ${t.id}`, `Dispatched on ${t.id} (truck TL-RIG)`, `Received at ${B} on ${t.id}, into ${B_BIN}`]);
+    expect(notes.slice(-3)).toEqual([`Added to transfer ${t.id}`, `Dispatched on ${t.id} (truck TLRIG)`, `Received at ${B} on ${t.id}, into ${B_BIN}`]);
   });
 
   it("can't take more Lots once it has left", async () => {
@@ -327,7 +330,8 @@ describe("a truck loaded from Bins (22 Nov 2026: once RCN is in a Bin, the Lot i
     const line = t.lines[0]!;
     const before = (await stockOf(A, A_BIN))?.movements.filter((m) => m.ref === t.id) ?? [];
     expect(before).toEqual([]);
-    await expect(dispatchTransfer(t.id, { whReceiptNo: "9001", truckNo: `BIN-RIG-${t.id}` })).rejects.toThrow(/Enter the moisture of Bin/);
+    // The loaded weight that fits the Bin's 10,000 kg and 200 bags, so it is the missing quality that stops the dispatch.
+    await expect(dispatchTransfer(t.id, { whReceiptNo: "9001", truckNo: `BIN-RIG-${t.id}`, dispatchedGrossKg: 10200 })).rejects.toThrow(/Enter the moisture of Bin/);
     await dispatchTransfer(t.id, { whReceiptNo: "9001", truckNo: `BIN-RIG-${t.id}`, dispatchedGrossKg: 10200, lines: [{ lineId: line.id, moisture: 8.5, kor: 48, nutCount: 190 }] });
     expect((await stockOf(A, A_BIN))!.movements.filter((m) => m.ref === t.id)).toEqual([{ binCode: A_BIN, kg: -10000, kind: "transfer_out", ref: t.id, date: expect.any(String) }]);
     const got = await receiveInto(t.id, { whReceiptNo: "8001", bagsReceived: 200, receivedGrossKg: 10200, lines: [{ lineId: line.id, binCode: B_BIN }] });
@@ -503,14 +507,15 @@ describe("dispatch carries quality and the warehouse receipt number; receiving e
     expect((await getTransfer(t.id))!.status).toBe("dispatched");
   });
 
-  it("receiving needs the receipt number, and a reason whenever what arrived differs from what was sent", async () => {
+  it("receiving needs the receipt number; a difference from what was sent is a discrepancy, not a refusal", async () => {
     const t = await send([{ receiptId: await lot(), bags: 100 }]);
     await dispatchTransfer(t.id, { whReceiptNo: "9005", truckNo: "WR-RIG-5", dispatchedGrossKg: 10100 });
     await expect(receiveTransfer(t.id, { bagsReceived: 100, receivedGrossKg: 10100 })).rejects.toThrow(/warehouse receipt number of this arrival/);
-    await expect(receiveTransfer(t.id, { whReceiptNo: "8003", bagsReceived: 96, receivedGrossKg: 9700 })).rejects.toThrow(/differs from what was sent \(-4 bags, -396 kg\)\. Say why/);
     expect((await getTransfer(t.id))!.status).toBe("dispatched"); // nothing was recorded
-    const got = await receiveTransfer(t.id, { whReceiptNo: "8003", bagsReceived: 96, receivedGrossKg: 9700, receivedComment: "4 torn bags left on the road" });
+    // User, 24 Nov 2026: a mismatch only warns. No comment is required; the BKT still reads as a discrepancy.
+    const got = await receiveTransfer(t.id, { whReceiptNo: "8003", bagsReceived: 96, receivedGrossKg: 9700 });
     expect(got.state).toBe("discrepancy");
+    expect(got.receivedComment).toBeNull();
   });
 });
 

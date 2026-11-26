@@ -26,7 +26,7 @@ const cookies: Record<string, string> = {};
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
 const READING = {
   isCcaTransferFiche: true, ficheNumber: "00076601", buyerCode: "9901-0004 LT-NOVAREA", storeName: "NOVAREA PF3",
-  subPrefecture: "FICHETEST-VILLE", department: "FICHETEST-DEPT", village: "AKPESSEKRO", unclear: "",
+  subPrefecture: "FICHETEST-SP", department: "FICHETEST-DEPT", village: "FICHETEST-VILLE", unclear: "",
 };
 const ORIGIN = "FICHETEST-VILLE";
 const reads: FicheReader = async () => ({ reading: READING, model: "stub" });
@@ -106,7 +106,7 @@ describe("fiche upload", () => {
     // The sub-prefecture is a town in Origins, so it is the Origin; REF. stays the person's.
     expect(verify.ORIGIN).toBe(ORIGIN);
     expect(verify["REF."] ?? "").toBe("");
-    expect(view.originHint?.match).toEqual({ origin: ORIGIN, level: "Sub-prefecture", exact: true });
+    expect(view.originHint?.match).toEqual({ origin: ORIGIN, level: "Village", exact: true });
     // Saved as the uploader's own edit, so the truck's history says who and when.
     expect(await prisma.stageFieldChange.count({ where: { receiptId: truck, stageId: "n-verify", label: "FICHE" } })).toBeGreaterThan(0);
   });

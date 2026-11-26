@@ -212,29 +212,28 @@ function withinOneEdit(a: string, b: string): boolean {
 }
 
 /**
- * Which Origins entry the fiche points to. The sub-prefecture is tried first, then the department, then the village: the 2026
- * workbooks name the town at department or sub-prefecture level (VAVOUA, GBOGUHE), almost never the village (AKPESSEKRO: 0 of
- * 986 trucks). A one-letter-off match counts only when it is the one such town, and only for names of 5+ letters, so two
- * short towns are never confused.
+ * Which Origins entry the fiche points to. Team, 24 Nov 2026: the Origin is the fiche's VILLAGE. The sub-prefecture, then the
+ * department, stand in only when the village is blank, never when the village is just missing from Origins: matching
+ * YAMOUSSOUKRO for a truck from AKPESSEKRO filled the wrong Origin. A village not in Origins is the person's to add (one click).
+ * The other places are still listed, for context. A one-letter-off match counts only when it is the one such town, and only
+ * for names of 5+ letters, so two short towns are never confused.
  */
 export function ficheOriginHint(reading: FicheReading | null | undefined, origins: readonly string[]): FicheOriginHint | null {
   if (!reading?.isCcaTransferFiche) return null;
   const places = ([
-    ["Sub-prefecture", reading.subPrefecture], ["Department", reading.department], ["Village", reading.village],
+    ["Village", reading.village], ["Sub-prefecture", reading.subPrefecture], ["Department", reading.department],
   ] as const).flatMap(([level, name]) => ((name ?? "").trim() ? [{ level, name: name!.trim().toUpperCase() }] : []));
   if (!places.length) return null;
   // The same town written at two levels (YAMOUSSOUKRO department and sub-prefecture) is one place to offer.
   for (let i = places.length - 1; i > 0; i--) if (places.slice(0, i).some((p) => originKey(p.name) === originKey(places[i]!.name))) places.splice(i, 1);
+  const origin = places[0]!;
+  const key = originKey(origin.name);
   const keyed = origins.map((o) => ({ origin: o, key: originKey(o) }));
-  for (const p of places) {
-    const hit = keyed.find((o) => o.key && o.key === originKey(p.name));
-    if (hit) return { places, match: { origin: hit.origin, level: p.level, exact: true } };
-  }
-  for (const p of places) {
-    const key = originKey(p.name);
-    if (key.length < 5) continue;
+  const hit = keyed.find((o) => o.key && o.key === key);
+  if (hit) return { places, match: { origin: hit.origin, level: origin.level, exact: true } };
+  if (key.length >= 5) {
     const close = keyed.filter((o) => o.key.length >= 5 && withinOneEdit(key, o.key));
-    if (close.length === 1) return { places, match: { origin: close[0]!.origin, level: p.level, exact: false } };
+    if (close.length === 1) return { places, match: { origin: close[0]!.origin, level: origin.level, exact: false } };
   }
   return { places };
 }

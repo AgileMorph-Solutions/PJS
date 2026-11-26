@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { BinTrucks, formatTonnes } from "../../components/production/batchUi";
+import { formatTonnes } from "../../components/production/batchUi";
+import { binQualityColumns } from "../../components/production/binQualityColumns";
 import { PageHeader } from "../../components/ui/PageHeader";
 import { DateInput } from "../../components/ui/DateInput";
 import { Button } from "../../components/ui/Button";
@@ -77,8 +78,8 @@ export function NewProductionRunPage() {
       ),
     },
     textCol("Warehouse", (b) => b.store, { mono: true }),
-    // The truck each Lot came on: its page, or the BKT's when another warehouse sent it. Filterable by truck or BKT number.
-    { ...textCol<AvailableBin>("Truck", (b) => b.lots.map((l) => l.transferId ?? l.receiptId).join(" "), { wrap: true }), render: (b) => <BinTrucks lots={b.lots} /> },
+    // The Bin's quality, not its trucks (26 Nov 2026, user): production picks Bins by moisture and KOR.
+    ...binQualityColumns<AvailableBin>((b) => b.lots),
     numCol("Lots", (b) => b.lotCount, { digits: 0 }),
     { ...kgCol("Net stock", (b) => b.kg, { zeroAsDash: true, strong: true }), render: (b) => (b.kg ? <b className="font-semibold">{formatTonnes(b.kg)}</b> : "-") },
     statusCol("Can be taken", (b) => unavailableReason(b) ?? "Yes", (b) => {

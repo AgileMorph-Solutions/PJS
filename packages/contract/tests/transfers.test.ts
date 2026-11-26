@@ -5,7 +5,7 @@ import { siteTypeOf } from "../src/domain/siteType.js";
 import { stageById } from "../src/data/stages.js";
 import { isGrnComplete } from "../src/domain/recordLock.js";
 import { GRN_QUANTITY_LABEL } from "../src/domain/receiptStatus.js";
-import { canTransferBetween, transferFieldProblem, formatLotPiece, lineNetAtArrival, lotPieceProblem, lotTransferProgress, pieceChanged, suggestedPiece, readyForTransfer, transferNeedsBin, transferDestinationLabel, transferDestinations, transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+import { canTransferBetween, transferFieldProblem, formatLotPiece, lineNetAtArrival, lotPieceProblem, lotTransferProgress, pieceChanged, suggestedPiece, readyForTransfer, transferNeedsBin, transferDestinationLabel, transferDestinations, transferVariance, transferState, transferStateLabel, TRANSFER_STATE_LABELS, TRANSFER_STATE_LABELS_SENDER, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
 
 describe("the last decision depends on the site", () => {
   const ids = (type: string | null) => decisionBranchesFor("n-xferdec", type)!.map((b) => b.id);
@@ -291,5 +291,20 @@ describe("how a value on a BKT's dispatch or arrival is written", () => {
     expect(transferFieldProblem("name", "Transport 2000")).toBeNull();
     expect(transferFieldProblem("name", "12345")).toMatch(/name/);
     expect(transferFieldProblem("receiptNo", "  ")).toBeNull();
+  });
+});
+
+// 25 Nov 2026: "Being received" read oddly at the Unit warehouse, which sends the truck. Each end reads the state its own way.
+describe("a BKT's state, as each warehouse reads it", () => {
+  const bkt = { state: "receiving" as const, fromWarehouse: "BOUAKE" };
+
+  it("the sending warehouse reads it in its own words; the receiving one keeps the usual ones", () => {
+    expect(transferStateLabel(bkt, "BOUAKE")).toBe("Arrived, being checked in");
+    expect(transferStateLabel(bkt, "YAKRO FACTORY")).toBe("Being received");
+    expect(transferStateLabel({ state: "in_transit", fromWarehouse: "BOUAKE" }, "BOUAKE")).toBe("On the road");
+  });
+
+  it("has a sender's word for every state", () => {
+    expect(Object.keys(TRANSFER_STATE_LABELS_SENDER).sort()).toEqual(Object.keys(TRANSFER_STATE_LABELS).sort());
   });
 });

@@ -4,6 +4,8 @@ export interface TabItem {
   to: string;
   label: string;
   icon?: string;
+  /** Active only on exactly this path, not on the paths under it (a tab for /receipts beside one for /receipts/from-unit). */
+  end?: boolean;
 }
 
 interface Props {
@@ -20,6 +22,7 @@ export function Tabs({ items }: Props) {
         <NavLink
           key={item.to}
           to={item.to}
+          end={item.end}
           className={({ isActive }) =>
             `inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors ${
               isActive
@@ -28,7 +31,7 @@ export function Tabs({ items }: Props) {
             }`
           }
         >
-          {item.icon && <span className="material-symbols-outlined text-[17px]">{item.icon}</span>}
+          {item.icon && <span aria-hidden="true" className="material-symbols-outlined text-[18px]">{item.icon}</span>}
           {item.label}
         </NavLink>
       ))}

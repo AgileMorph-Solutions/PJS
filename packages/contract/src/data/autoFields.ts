@@ -29,13 +29,17 @@ export type AutoSource =
   /** The arrival date's week, as the 2026 sheet writes it: "W-8 Feb" (ISO week number, then the month). */
   | "arrivalWeek"
   /** The receipt's own Lot, alone. */
-  | "lot";
+  | "lot"
+  /** The next serial number at the receipt's warehouse: the highest S N it has + 1 (26 Nov 2026, user). */
+  | "nextSn";
 
 export interface AutoField { label: string; from: AutoSource }
 
 export const AUTO_FIELDS: Record<string, AutoField[]> = {
   // The gate date is the day the truck arrived: the receipt already has it (today, unless a past arrival was entered).
   "n-gate": [
+    // Each warehouse numbers its own trucks, as each one's workbook did (26 Nov 2026, user: "SN should be auto fill").
+    { label: "S N", from: "nextSn" },
     { label: "DATE OF ARRIVAL", from: "arrival" },
     { label: "WH LOCATION", from: "site" },
     { label: "WEEK", from: "arrivalWeek" },
@@ -65,6 +69,7 @@ export const AUTO_FIELD_NOTES: Record<AutoSource, string> = {
   actor: "Fills itself with your name when this step is saved.",
   arrivalWeek: "Fills itself with the arrival date's week (W-8 Feb) when this step is saved.",
   lot: "Fills itself with this truck's Lot when this step is saved.",
+  nextSn: "Fills itself with the next number at this warehouse when this step is saved.",
 };
 
 /** What the server knows when it fills. A source with no value here (no Lot yet, no kind in the master) stays blank. */
@@ -75,6 +80,8 @@ export interface AutoFillContext {
   lot?: string;
   bin?: string;
   actorName?: string;
+  /** The next S N at the receipt's warehouse (nextSerial below, over the S N it already has). */
+  nextSn?: string;
 }
 
 function valueOf(from: AutoSource, ctx: AutoFillContext): string {
@@ -86,7 +93,20 @@ function valueOf(from: AutoSource, ctx: AutoFillContext): string {
     case "actor": return ctx.actorName ?? "";
     case "arrivalWeek": return weekLabel(ctx.arrivalDate);
     case "lot": return (ctx.lot ?? "").trim();
+    case "nextSn": return ctx.nextSn ?? "";
   }
+}
+
+/**
+ * The next serial number after the ones already used: the highest whole number among them + 1, or 1 for the first. A value
+ * that isn't a whole number (a workbook's "12A", a blank) is skipped, never read as 0 or guessed at.
+ */
+export function nextSerial(used: readonly (string | null | undefined)[]): string {
+  const max = used.reduce<number>((m, v) => {
+    const s = String(v ?? "").trim();
+    return /^\d+$/.test(s) ? Math.max(m, Number(s)) : m;
+  }, 0);
+  return String(max + 1);
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

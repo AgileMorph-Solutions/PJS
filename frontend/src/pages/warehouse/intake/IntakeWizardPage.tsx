@@ -10,6 +10,7 @@ import { useReceiptLinks, useTracking } from "../../../state/TrackingContext";
 import { useSite } from "../../../state/SiteContext";
 import { useMe } from "../../../state/AuthContext";
 import { canSeeField } from "@anagroci/contract/data/roles";
+import { hiddenOnRecord } from "@anagroci/contract/domain/transferReception";
 import { originFieldProps } from "../../../components/receipt/originPicker";
 import { warehouseFieldChoices } from "../../../components/receipt/warehousePicker";
 import { arrivalFieldChoices } from "../../../components/receipt/arrivalPickers";
@@ -128,7 +129,7 @@ export function IntakeWizardPage() {
           lockedMessage={gate.open ? undefined : gate.message}
           onFieldChange={(fieldName, value) => rules.change(stageId, fieldName, value)}
           onFieldBlur={() => flushStage(id, stageId)}
-          hidden={stage.fields.filter((f) => !canSeeField(me.role, stageId, f.n)).map((f) => f.n)}
+          hidden={[...stage.fields.filter((f) => !canSeeField(me.role, stageId, f.n)).map((f) => f.n), ...hiddenOnRecord({}, stageId)]}
         />
         {branchOptions && (
           <div className="mt-4">

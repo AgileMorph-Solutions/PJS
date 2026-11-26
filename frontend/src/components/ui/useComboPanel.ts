@@ -5,6 +5,11 @@ export interface ComboOption {
   label: string;
   /** Muted text after the label. Also searched. */
   detail?: string;
+  /** "emphasis": the detail is the figure to read (a Bin's stock, what is left of a lot), shown in red so it stands out. */
+  detailTone?: "emphasis";
+  /** A number to read and compare down the list (a Bin's stock), right-aligned in its own column: `value` in bold, `note`
+   * muted after it. Not searched. */
+  figure?: { value: string; note?: string };
   /** Shown but can't be picked (MultiSelect greys it and says why through its detail). */
   disabled?: boolean;
 }

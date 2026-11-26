@@ -132,9 +132,38 @@ describe("Lot Number — issued when the truck passes quality", () => {
     expect(parseSiteId(r.lotNo)!.seq).toBeGreaterThan(mine.seq);
   });
 
-  it("nobody can type or change a Lot", async () => {
-    await expect(setStageFields(id, "n-lot", { "Lot Number": "LOT-X-1" })).rejects.toThrow(/issued by the system/);
-    await expect(patchReceipt(id, { lotNo: "LOT-X-1" })).rejects.toThrow(/issued by the system/);
+  // 25 Nov 2026: the Lot is still issued on Pass, and a person may then replace it with a different number.
+  describe("changing an issued Lot", () => {
+    const asPerson = async () => ({ actor: { id: (await prisma.user.findFirstOrThrow({ where: { role: "admin" } })).id, via: "direct" as const, role: "admin" as const } });
+    const lotOf = async (receiptId: string) => (await getReceipt(receiptId))!.lotNo ?? "";
+
+    it("can't be typed before the truck passes quality", async () => {
+      const fresh = (await createReceipt(SITE, `${YEAR}-04-04`)).id;
+      await expect(setStageFields(fresh, "n-lot", { "Lot Number": "MY-LOT-1" }, await asPerson())).rejects.toThrow(/issued when the truck passes quality/);
+    });
+
+    it("takes a different number, keeps who and when it was issued, and the Bin step follows it", async () => {
+      const issued = await lotOf(id);
+      await setStageFields(id, "n-bin", { "Linked Lot Number(s)": issued }); // as an upload would: no phase order
+      const stamp = await prisma.stageLotAssignment.findUniqueOrThrow({ where: { receiptId: id } });
+      await setStageFields(id, "n-lot", { "Lot Number": "SIDT1-CLIENT-LOT-7" }, await asPerson());
+      expect(await lotOf(id)).toBe("SIDT1-CLIENT-LOT-7");
+      const after = await prisma.stageLotAssignment.findUniqueOrThrow({ where: { receiptId: id } });
+      expect(after).toMatchObject({ assignedBy: stamp.assignedBy, assignedAt: stamp.assignedAt, warehouseName: SITE });
+      expect((await getReceipt(id))!.stageData["n-bin"]["Linked Lot Number(s)"]).toBe("SIDT1-CLIENT-LOT-7");
+    });
+
+    it("refuses an empty Lot, the system's own fields, another truck's Lot however spelled, and a sheet or API write", async () => {
+      const person = await asPerson();
+      await expect(setStageFields(id, "n-lot", { "Lot Number": "  " }, person)).rejects.toThrow(/keeps a Lot Number/);
+      await expect(setStageFields(id, "n-lot", { "Assigned by (Warehouse Team)": "Me" }, person)).rejects.toThrow(/filled in by the system/);
+      const other = (await createReceipt(SITE, `${YEAR}-04-05`)).id;
+      const otherLot = (await setBranch(other, "n-qfs", "pass")).lotNo!;
+      await expect(setStageFields(id, "n-lot", { "Lot Number": otherLot.toLowerCase() }, person)).rejects.toThrow(new RegExp(`already the Lot of truck ${other}`));
+      await expect(setStageFields(id, "n-lot", { "Lot Number": "SIDT1-OTHER" })).rejects.toThrow(/change it on the truck's Lot step/);
+      await expect(patchReceipt(id, { lotNo: "SIDT1-OTHER" })).rejects.toThrow(/issued by the system/);
+      expect(await lotOf(id)).toBe("SIDT1-CLIENT-LOT-7");
+    });
   });
 
   it.skipIf(!WORKBOOK_DATA)("continues after the 2026 workbook's own lots, so it can't collide with legacy Lot 1…454", async () => {
@@ -174,9 +203,24 @@ describe("calculated weights, bags and amount", () => {
 
   it("can't be typed", async () => {
     await expect(setStageFields(id, "n-netwt", { "NET WT KGS": "1" })).rejects.toThrow(/is calculated/);
-    await expect(setStageFields(id, "n-unload", { "SACS (bags)": "1" })).rejects.toThrow(/Good \+ damp \+ torn/);
-    await expect(setStageFields(id, "n-unload", { "Tally Clerk bag count": "1" })).rejects.toThrow(/Good bags \+ reconditioned/);
     await expect(setStageFields(id, "n-grn", { AMOUNT: "1" })).rejects.toThrow(/Price × paid weight/);
+  });
+
+  // 25 Nov 2026: the bag totals are filled in from the counts, but a person may type their own, and it stays.
+  it("bag totals: filled in, typed over, kept until a count changes, and handed back to the calculation when cleared", async () => {
+    const r = (await createReceipt(SITE, `${YEAR}-05-04`)).id;
+    const sacs = async () => (await getReceipt(r))!.stageData["n-unload"]["SACS (bags)"];
+    await setStageFields(r, "n-unload", { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" });
+    expect(await sacs()).toBe("478");
+    await setStageFields(r, "n-unload", { "BON SACS (good bags)": "470" }); // still the calculation's: it follows
+    expect(await sacs()).toBe("485");
+    await setStageFields(r, "n-unload", { "SACS (bags)": "500" }); // typed by a person
+    await setStageFields(r, "n-unload", { "DATE OF OFFLOADING": `${YEAR}-05-04` }); // not a count: the typed total stays
+    expect(await sacs()).toBe("500");
+    await setStageFields(r, "n-unload", { "BON SACS (good bags)": "475" }); // a count: the last edit wins
+    expect(await sacs()).toBe("490"); // 475 + 0 + 15
+    await setStageFields(r, "n-unload", { "SACS (bags)": "" });
+    expect(await sacs()).toBe("490");
   });
 
   it("are blanked when one of their inputs is cleared, so no old result stays next to readings that can't give it", async () => {
@@ -406,7 +450,7 @@ describe("Transfer Request", () => {
     await expect(receiveTransfer(id, { whReceiptNo: "8001", bagsReceived: 478, receivedGrossKg: 41300 })).rejects.toThrow(/hasn't been dispatched/);
     // Nut count is required at dispatch; this truck's quality check didn't record one.
     const nuts = (await getTransfer(id))!.lines.map((l) => ({ receiptId: l.receiptId, nutCount: 170 }));
-    expect((await dispatchTransfer(id, { whReceiptNo: "9001", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0", lines: nuts })).status).toBe("dispatched");
+    expect((await dispatchTransfer(id, { whReceiptNo: "9001", truckNo: "STEP-1", dispatchedGrossKg: 41300, transporter: "T", driver: "D", driverPhone: "0700000901", lines: nuts })).status).toBe("dispatched");
     await expect(dispatchTransfer(id, { whReceiptNo: "9001", truckNo: "STEP-1" })).rejects.toThrow(/already dispatched/);
     await prisma.bin.upsert({ where: { code: "SYSIDS-TEST-BIN" }, create: { code: "SYSIDS-TEST-BIN", source: "test", warehouseName: "YAKRO FACTORY" }, update: { warehouseName: "YAKRO FACTORY" } }); // a Bin of the receiving warehouse: one with no warehouse is refused
     try {

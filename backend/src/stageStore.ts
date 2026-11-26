@@ -20,6 +20,15 @@ export const RECEIPT_INCLUDE = {
   stageEntries: true,
   branches: true,
   locker: { select: { displayName: true } },
+  // A truck from the Unit warehouse: its BKT and what was sent of this lot, read for the record (contract TransferOrigin).
+  transferLine: {
+    select: {
+      id: true, bags: true, netWeightKg: true, moisture: true, kor: true, nutCount: true, binCode: true,
+      transferLot: { select: { lotNo: true, grossWeightKg: true, moisture: true, kor: true, nutCount: true, bins: { select: { bags: true } } } },
+      receipt: { select: { lot: { select: { lotNumber: true } } } },
+      transfer: { select: { id: true, fromWarehouse: true, truckNo: true, transporter: true, driver: true, driverPhone: true, dispatchedAt: true } },
+    },
+  },
   ...Object.fromEntries(
     Object.values(STAGE_FIELD_MAP).map((s) => [
       s.relation,

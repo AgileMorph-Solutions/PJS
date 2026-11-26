@@ -177,6 +177,16 @@ export function canChangeRecordedValue(role: Role): boolean {
   return canWriteStageDirectly(role);
 }
 
+/**
+ * Who corrects a record after it was closed or handed on (25 Nov 2026: an Admin; 26 Nov 2026, user: the Warehouse Incharge too,
+ * at their own warehouse): reopen a truck whose GRN is complete, edit a BKT once made, change a transfer lot already on a truck
+ * or undo bags put back in a Bin, correct a load production accepted. The Incharge is held to their own warehouse by the
+ * routes' warehouse check (auth/scope.ts); an Admin reaches every warehouse.
+ */
+export function canCorrectRecords(role: Role | null | undefined): boolean {
+  return role === "admin" || role === "warehouse_incharge";
+}
+
 /** A value someone tried to change after it was recorded. */
 export interface RecordedConflict {
   stageId: string;
@@ -260,8 +270,18 @@ export function canRunProduction(role: Role): boolean {
 }
 
 /**
+ * Who takes the factory's quality checks (QC-2 silo checks, QC-4 to QC-7, QTY-1): the QFS Officer, whose checks wait for the
+ * Production Incharge (26 Nov 2026, user: the QFS Officer does every quality check), and the Production Incharge or Admin,
+ * whose own are approved as saved.
+ */
+export function canTakeFactoryChecks(role: Role): boolean {
+  return canRunProduction(role) || role === "qfs_officer";
+}
+
+/**
  * Who sees production past the intake (team decision, 18 Nov 2026: "the warehouse guy will not see the entire production
- * process"): the production team and Admin. The warehouse team sees its loads, nothing after them.
+ * process"): the production team and Admin. The warehouse team sees its loads, nothing after them — except the QFS Officer,
+ * who reads the stages their checks are taken in (canTakeFactoryChecks), and changes nothing else there.
  */
 export function canSeeFactory(role: Role): boolean {
   return canRunProduction(role) || role === "factory_manager";

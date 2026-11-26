@@ -7,6 +7,7 @@ import { ReceiptStatusPill } from "../ReceiptStatusPill";
 import { Pill } from "../ui/Pill";
 import { normalizeSupplierName } from "@anagroci/contract/domain/supplierCode";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { formatMoney } from "@anagroci/contract/domain/currency";
 import { DRYING_PHASE_LABELS, dryingPhase } from "@anagroci/contract/domain/sunDrying";
 
 const v = (r: ReceiptRecord, stage: string, label: string) => {
@@ -129,8 +130,8 @@ export function LotOverview({
         <InfoRow label="Paid weight" value={kg(v(receipt, "n-netwt", "PAID WT"))} />
         <InfoRow label="GRN quantity" strong value={kg(v(receipt, "n-grn", "GRN Weight (kept separate from Gross/Net/Paid)"))} />
         <InfoRow label="Bags (good / damp / torn)" value={v(receipt, "n-unload", "SACS (bags)") ? `${v(receipt, "n-unload", "SACS (bags)")} (${v(receipt, "n-unload", "BON SACS (good bags)") ?? 0} / ${v(receipt, "n-unload", "HUMID SACS (damp bags)") ?? 0} / ${v(receipt, "n-unload", "Sacs déchirés (torn bags)") ?? 0})` : undefined} />
-        {showPrice && <InfoRow label="Price / kg" value={v(receipt, "n-grn", "PRICE")} />}
-        {showPrice && <InfoRow label="GRN amount" value={v(receipt, "n-grn", "AMOUNT") ? `${Number(v(receipt, "n-grn", "AMOUNT")).toLocaleString()} XOF` : undefined} strong />}
+        {showPrice && <InfoRow label="Price (per kg)" value={formatMoney(v(receipt, "n-grn", "PRICE")) || undefined} />}
+        {showPrice && <InfoRow label="GRN amount" value={formatMoney(v(receipt, "n-grn", "AMOUNT")) || undefined} strong />}
       </InfoCard>
 
       <InfoCard icon="local_shipping" title="Supplier & delivery">

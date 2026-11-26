@@ -51,7 +51,6 @@ const COLUMNS: { key: string; label: string; type?: string; width: string }[] = 
   { key: BATCH_REQUIRED_LABEL, label: "Vehicle no.", width: "w-40" },
   { key: SUPPLIER, label: "Supplier", width: "w-64" },
   { key: PLAN, label: "Delivery plan", width: "w-56" },
-  { key: "FICHE", label: "Fiche no.", width: "w-32" },
   { key: "CREDIT/CASH", label: "Credit / cash", width: "w-32" },
   { key: "ORIGIN", label: "Origin", width: "w-40" },
   { key: "REMARKS", label: "Remarks", width: "w-56" },
@@ -66,7 +65,7 @@ const today = todayIso;
 
 /** The step each grid column's field lives in, so a typed value gets the same warning as on the truck's page. */
 const STAGE_OF = new Map(BATCH_TRUCK_COLUMNS.map((c) => [c.label, c.stageId]));
-/** A warning for a typed cell (a fiche with letters in it), or nothing. Only warns: the row still saves. */
+/** A warning for a typed cell, or nothing. Only warns: the row still saves. */
 const cellWarning = (col: string, value: string | undefined) => {
   const stageId = STAGE_OF.get(col);
   return stageId ? checkValue(stageId, col, value)?.message : undefined;
@@ -164,7 +163,7 @@ export function BatchEntryPage() {
   // New rows copy the previous row's date: trucks in one sitting usually arrived the same day.
   const addRows = (n: number) => setRows((prev) => [...prev, ...Array.from({ length: n }, () => newRow(lastDate(prev)))]);
   const duplicate = (key: number) =>
-    setRows((prev) => prev.flatMap((r) => (r.key === key ? [r, { key: nextKey++, v: { ...r.v, "VEHICLE NO.": "", FICHE: "" } }] : [r])));
+    setRows((prev) => prev.flatMap((r) => (r.key === key ? [r, { key: nextKey++, v: { ...r.v, "VEHICLE NO.": "" } }] : [r])));
   const remove = (key: number) => setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.key !== key) : prev));
 
   /** Enter moves down the column (adding a row at the bottom), like a spreadsheet. */
@@ -307,7 +306,7 @@ export function BatchEntryPage() {
                     </td>
                   ))}
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    <button type="button" onClick={() => duplicate(r.key)} title="Duplicate row (keeps supplier, date and the rest; clears vehicle and fiche)" aria-label={`Duplicate row ${i + 1}`} className="p-1 rounded-md text-warmstone-400 hover:text-brand-700 hover:bg-warmstone-100">
+                    <button type="button" onClick={() => duplicate(r.key)} title="Duplicate row (keeps supplier, date and the rest; clears vehicle)" aria-label={`Duplicate row ${i + 1}`} className="p-1 rounded-md text-warmstone-400 hover:text-brand-700 hover:bg-warmstone-100">
                       <span className="material-symbols-outlined text-[18px]">content_copy</span>
                     </button>
                     <button type="button" onClick={() => remove(r.key)} disabled={rows.length === 1} title="Remove row" aria-label={`Remove row ${i + 1}`} className="p-1 rounded-md text-warmstone-400 hover:text-danger-700 hover:bg-warmstone-100 disabled:opacity-30">

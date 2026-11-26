@@ -5,7 +5,8 @@
  *
  * Labels are the exact `n` strings from stages.ts; contract's test asserts each still exists. S N,
  * WEEK, WH LOCATION and the other gate columns are deliberately not here — a row is the minimum to
- * open a truck, and the rest can be filled on the receipt.
+ * open a truck, and the rest can be filled on the receipt. FICHE is left out too: it comes from the
+ * uploaded fiche on the receipt, so typing it here would only be overwritten or contradict it.
  */
 export interface BatchColumn {
   stageId: "n-gate" | "n-verify";
@@ -19,7 +20,6 @@ export const BATCH_TRUCK_COLUMNS: BatchColumn[] = [
   { stageId: "n-gate", label: "REMARKS" },
   { stageId: "n-verify", label: "SUPPLIERS NAME" },
   { stageId: "n-verify", label: "LBA CODE" },
-  { stageId: "n-verify", label: "FICHE" },
   { stageId: "n-verify", label: "ORIGIN" },
 ];
 

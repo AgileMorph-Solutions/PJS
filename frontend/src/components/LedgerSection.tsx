@@ -6,6 +6,8 @@ import { Pagination } from "./ui/Pagination";
 import { FilterBar } from "./ui/FilterBar";
 import { DateRangeInputs } from "./ui/DateRangeInputs";
 import { DateInput } from "./ui/DateInput";
+import { SearchSelect } from "./ui/SearchSelect";
+import { inputClass } from "./ui/Input";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { DERIVED_COLUMNS } from "@anagroci/contract/domain/jute";
 import { useDateRangeFilter } from "./ui/useDateRangeFilter";
@@ -17,8 +19,8 @@ import { useDateRangeFilter } from "./ui/useDateRangeFilter";
 type Row = Record<string, string>;
 
 // A handful of real, observed movement categories from BOUAKE WAREHOUSE JUTE BAGS MOVEMENT
-// REPORT.xlsx — offered as suggestions, not a closed list, since the real sheet also uses this
-// same column to hold a supplier name for issue-to-supplier rows.
+// REPORT.xlsx. The real sheet also uses this same column to hold a supplier name for issue-to-supplier rows, so the
+// dropdown offers both: these categories, then the supplier master's names (26 Nov 2026: the shared searchable dropdown).
 const KNOWN_ACTIVITY_TYPES = [
   "JUTE BAGS PURCHASED/UNLOADINGS",
   "REBAGGING DURING UNLOADING",
@@ -35,8 +37,7 @@ function blankRow(columns: JuteLedgerColumn[]): Row {
   return Object.fromEntries(columns.filter((c) => !DERIVED_COLUMNS.has(c.label)).map((c) => [c.label, ""]));
 }
 
-const inputCls =
-  "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
+const inputCls = inputClass;
 
 interface Props {
   ledger: JuteLedger;
@@ -83,6 +84,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
     () => masters.suppliers.filter((s) => s.active !== false).sort((a, b) => a.name.localeCompare(b.name)),
     [masters.suppliers],
   );
+  const activityTypes = useMemo(() => [...KNOWN_ACTIVITY_TYPES, ...supplierChoices.map((s) => s.name)], [supplierChoices]);
   const inputColumns = ledger.columns.filter((c) => !DERIVED_COLUMNS.has(c.label) || c.label === calculatedField?.column);
   const [draft, setDraft] = useState<Row>(() => blankRow(ledger.columns));
   const [saving, setSaving] = useState(false);
@@ -110,6 +112,11 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    // The warehouse is required, as the plain dropdown's `required` made it before the searchable one (26 Nov 2026).
+    if (warehouse && !warehouse.selected && !(draft[warehouse.column] ?? "").trim()) {
+      setSaveError("Choose the warehouse.");
+      return;
+    }
     // "S N" and "Balance" are assigned by the server: computing them here raced whenever two
     // people added a row at once, and the balance is now a SQL window function with no column to
     // drift. The row that comes back is what gets displayed.
@@ -156,7 +163,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
               return (
                 <div key={c.label}>
                   <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <label htmlFor={id} className="text-[12.5px] font-semibold text-warmstone-700">
+                    <label htmlFor={id} className="text-[12px] font-semibold text-warmstone-700">
                       {c.label}
                     </label>
                   </div>
@@ -176,45 +183,24 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                     warehouse.selected ? (
                       <input id={id} readOnly value={warehouse.selected} className={`${inputCls} cursor-not-allowed`} />
                     ) : (
-                      <select
-                        id={id}
-                        required
-                        value={draft[c.label] ?? ""}
-                        onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
-                        className={inputCls}
-                      >
-                        <option value="">Choose a warehouse…</option>
-                        {warehouse.options.map((w) => <option key={w} value={w}>{w}</option>)}
-                      </select>
+                      <SearchSelect
+                        id={id} value={draft[c.label] ?? ""} options={warehouse.options} clearable={false} placeholder="Choose a warehouse…"
+                        onChange={(w) => setDraft((d) => ({ ...d, [c.label]: w }))}
+                      />
                     )
                   ) : c.label === SUPPLIER_CODE_COLUMN ? (
                     // docs/Procurement Auto Populate Fields.xlsx rows 9-10: picked from the supplier master, not typed. Optional:
                     // a purchase or a transfer row has no supplier.
-                    <select
-                      id={id}
-                      value={draft[c.label] ?? ""}
-                      onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
-                      className={inputCls}
-                    >
-                      <option value="">No supplier</option>
-                      {supplierChoices.map((s) => <option key={s.code} value={s.code}>{s.code} · {s.name}</option>)}
-                    </select>
+                    <SearchSelect
+                      id={id} value={draft[c.label] ?? ""} placeholder="No supplier"
+                      options={supplierChoices.map((s) => ({ value: s.code, label: s.code, detail: s.name }))}
+                      onChange={(code) => setDraft((d) => ({ ...d, [c.label]: code }))}
+                    />
                   ) : c.label === "Activities type" ? (
-                    <>
-                      <input
-                        id={id}
-                        list="jute-activity-types"
-                        value={draft[c.label] ?? ""}
-                        onChange={(e) => setDraft((d) => ({ ...d, [c.label]: e.target.value }))}
-                        placeholder="Movement category, or a supplier name"
-                        className={inputCls}
-                      />
-                      <datalist id="jute-activity-types">
-                        {KNOWN_ACTIVITY_TYPES.map((t) => (
-                          <option value={t} key={t} />
-                        ))}
-                      </datalist>
-                    </>
+                    <SearchSelect
+                      id={id} value={draft[c.label] ?? ""} options={activityTypes} placeholder="Movement category, or a supplier name"
+                      onChange={(t) => setDraft((d) => ({ ...d, [c.label]: t }))}
+                    />
                   ) : c === dateColumn ? (
                     <DateInput id={id} value={draft[c.label] ?? ""} onChange={(d) => setDraft((prev) => ({ ...prev, [c.label]: d }))} className={inputCls} />
                   ) : (
@@ -227,7 +213,7 @@ export function LedgerSection({ ledger, rows: rowsOverride, onEntryAdded, aboveE
                     />
                   )}
                   {c.label === calculatedField?.column && (
-                    <p id={`${id}-hint`} className="mt-1.5 text-[11.5px] leading-snug text-warmstone-500">
+                    <p id={`${id}-hint`} className="mt-1 text-[12px] leading-snug text-warmstone-500">
                       {calculatedField.hint}
                       {draft[c.label] !== undefined && draft[c.label].trim() !== calculated && (
                         <>

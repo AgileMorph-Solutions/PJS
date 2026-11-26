@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { getSiteBin, listSiteBins } from "../services/bins.js";
 import { startBinDrying, type StartBinDryingInput } from "../services/dryingBatches.js";
-import { setBinStageFields } from "../services/binStages.js";
+import { addBinActivityEntry, setBinDryingDecision, updateBinActivityEntry } from "../services/binStages.js";
 import { currentUser } from "../auth/plugin.js";
 import { scopedSite } from "../auth/scope.js";
 import { sendError } from "./receipts.js";
@@ -32,14 +32,36 @@ export async function binRoutes(app: FastifyInstance) {
     return bin ?? reply.code(404).send({ error: "That Bin isn't one of this warehouse's." });
   });
 
-  // One of the Bin's own forms (Other warehouse activities, Activity ledger): { fields: { label: value } }.
-  app.put("/api/bins/:code/stages/:stageId", async (req, reply) => {
+  // "Does this Bin need drying?": { answer: "yes" | "no" }. Answers the Bin as it now stands.
+  app.put("/api/bins/:code/drying-decision", async (req, reply) => {
+    const names = await site(req, reply);
+    if (!names) return;
+    const { code } = req.params as { code: string };
+    try {
+      await setBinDryingDecision(names, code, ((req.body ?? {}) as { answer?: unknown }).answer, currentUser(req));
+      return await getSiteBin(names, code);
+    } catch (e) { return sendError(reply, e); }
+  });
+
+  // A new entry in one of the Bin's ledgers (Other warehouse activities, Activity ledger): { fields: { label: value } }.
+  app.post("/api/bins/:code/stages/:stageId/entries", async (req, reply) => {
     const names = await site(req, reply);
     if (!names) return;
     const { code, stageId } = req.params as { code: string; stageId: string };
     try {
-      await setBinStageFields(names, code, stageId, ((req.body ?? {}) as { fields?: Record<string, unknown> }).fields ?? {}, currentUser(req));
-      return await getSiteBin(names, code);
+      const entry = await addBinActivityEntry(names, code, stageId, ((req.body ?? {}) as { fields?: Record<string, unknown> }).fields ?? {}, currentUser(req));
+      return reply.code(201).send(entry);
+    } catch (e) { return sendError(reply, e); }
+  });
+
+  // Changes one entry of the Bin's ledgers: { fields: { label: value } }, only the ones that change.
+  app.patch("/api/bins/:code/entries/:id", async (req, reply) => {
+    const names = await site(req, reply);
+    if (!names) return;
+    const { code, id } = req.params as { code: string; id: string };
+    if (!/^\d+$/.test(id)) return reply.code(404).send({ error: "No such entry." });
+    try {
+      return await updateBinActivityEntry(names, code, Number(id), ((req.body ?? {}) as { fields?: Record<string, unknown> }).fields ?? {}, currentUser(req));
     } catch (e) { return sendError(reply, e); }
   });
 

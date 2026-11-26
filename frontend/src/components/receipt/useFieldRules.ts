@@ -29,6 +29,6 @@ export function useFieldRules(receipt: ReceiptRecord | undefined, save: (stageId
     /** Whether a stage is open yet, and the sentence to show when it isn't. */
     gateOf: (stageId: string): StageGate => (gated && receipt ? stageGate(receipt, stageId, facts) : OPEN),
     /** Why Pass can't be chosen yet, if it can't. */
-    passBlocked: gated ? passBlocked(receipt!.stageData) : undefined,
+    passBlocked: gated ? passBlocked(receipt!.stageData, receipt!) : undefined,
   };
 }

@@ -11,6 +11,7 @@ import { Pill } from "../ui/Pill";
 import { api, ApiError } from "../../repository/api";
 import { STREAMS, TRUCK_STATUS_LABELS, boilerError, streamLabel, truckError, truckNetKg, type StoreBalance } from "@anagroci/contract/domain/byProducts";
 import { formatDate, todayIso } from "@anagroci/contract/domain/dateFormat";
+import { MoneyInput } from "../MoneyInput";
 import type { BatchLots, BoilerInput, BoilerReadingView, TruckInput, TruckView } from "@anagroci/contract/types/lots";
 import { PRODUCTION_PAGE_SIZE, dateCol, kgCol, numCol, statusCol, textCol } from "./columns";
 import { IconButton } from "../ui/IconButton";
@@ -179,7 +180,7 @@ function TruckForm({ truck, stores, onSaved }: { truck: TruckView | null; stores
       <div className="grid sm:grid-cols-2 gap-3">
         <Field label="Buyer or vendor"><Input value={v.buyer ?? ""} onChange={set("buyer")} /></Field>
         <Field label="Category (optional)"><Input value={v.category ?? ""} onChange={set("category")} /></Field>
-        <Field label="Price (optional)"><Input numeric value={v.price ?? ""} onChange={set("price")} /></Field>
+        <Field label="Price (optional)"><MoneyInput value={v.price ?? ""} onChange={(price) => setV((f) => ({ ...f, price }))} /></Field>
         <Field label="Gate pass / Sortie no" hint="Filling this in closes the truck: its net weight leaves the store."><Input value={v.gatePassNo ?? ""} onChange={set("gatePassNo")} /></Field>
       </div>
       {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}

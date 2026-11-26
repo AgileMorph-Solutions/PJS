@@ -31,12 +31,13 @@ async function cleanup() {
   await prisma.changeLog.deleteMany({ where: { user: { username: { startsWith: "bdry-" } } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "bdry-" } } });
   await prisma.binStageEntry.deleteMany({ where: { binCode: { startsWith: "BDRY-" } } });
+  await prisma.binActivityEntry.deleteMany({ where: { binCode: { startsWith: "BDRY-" } } });
   await prisma.bin.deleteMany({ where: { code: { startsWith: "BDRY-" } } });
   await prisma.warehouse.deleteMany({ where: { site: { in: [SITE, OTHER] } } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [SITE, OTHER] } } });
 }
 
-const call = (who: string, method: "GET" | "POST" | "PUT", url: string, payload?: unknown) =>
+const call = (who: string, method: "GET" | "POST" | "PUT" | "PATCH", url: string, payload?: unknown) =>
   app.inject({ method, url, payload: payload as object | undefined, headers: { cookie: cookies[who]!, ...(payload ? { "content-type": "application/json" } : {}) } });
 const bin = async (code: string) => (await call("wi", "GET", `/api/bins/${code}`)).json();
 
@@ -84,9 +85,40 @@ describe("the warehouse's Bins", () => {
   });
 });
 
+// 25 Nov 2026: the Bin's page asks "Does this Bin need drying?", Yes or No, as a truck's drying was asked per Lot before.
+describe("does this Bin need drying?", () => {
+  const answer = (who: string, code: string, a: unknown) => call(who, "PUT", `/api/bins/${code}/drying-decision`, { answer: a });
+
+  it("is unanswered at first, keeps a No, and can be changed to Yes", async () => {
+    expect((await bin(NEW_BIN)).dryingDecision).toBeNull();
+    const no = await answer("wi", NEW_BIN, "no");
+    expect(no.statusCode, no.body).toBe(200);
+    expect(no.json().dryingDecision).toMatchObject({ answer: "no", by: "wi" });
+    expect((await answer("wi", NEW_BIN, "yes")).json().dryingDecision.answer).toBe("yes");
+    expect((await bin(NEW_BIN)).dryingDecision.answer).toBe("yes");
+    // Each answer is in the change log.
+    expect(await prisma.changeLog.count({ where: { entity: "BinStageEntry", recordId: { contains: NEW_BIN } } })).toBeGreaterThan(0);
+  });
+
+  it("takes only yes or no, only for the warehouse's own Bins, and not from a Branch Manager", async () => {
+    expect((await answer("wi", NEW_BIN, "maybe")).json().error).toMatch(/"yes" or "no"/);
+    expect((await answer("wi", FOREIGN_BIN, "no")).statusCode).toBe(422);
+    expect((await answer("bm", NEW_BIN, "no")).statusCode).toBe(403);
+  });
+});
+
 describe("drying from a Bin", () => {
   it("refuses a Bin of another warehouse, and a new Bin that is the same Bin", async () => {
     expect((await call("wi", "POST", `/api/bins/${FOREIGN_BIN}/drying`, { dryType: "SUN DRYING", issuedNetKg: "100", ...QUALITY_BEFORE })).json().error).toMatch(/isn't a Bin of this warehouse/);
+    // 26 Nov 2026 (user): the dried RCN goes into one of this warehouse's own Bins, never another warehouse's.
+    const elsewhere = await call("wi", "POST", `/api/bins/${BIN}/drying`, { dryType: "SUN DRYING", issuedNetKg: "100", destinationBin: FOREIGN_BIN, ...QUALITY_BEFORE });
+    expect(elsewhere.statusCode).toBe(422);
+    expect(elsewhere.json().error).toMatch(/BDRY-BIN-99 isn't a Bin of this warehouse/);
+    // 26 Nov 2026 (user): the drying date can't be in the future.
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const future = await call("wi", "POST", `/api/bins/${BIN}/drying`, { dryType: "SUN DRYING", issuedNetKg: "100", date: tomorrow, ...QUALITY_BEFORE });
+    expect(future.statusCode).toBe(422);
+    expect(future.json().error).toMatch(/is in the future/);
     const same = await call("wi", "POST", `/api/bins/${BIN}/drying`, { dryType: "SUN DRYING", issuedNetKg: "100", destinationBin: BIN, ...QUALITY_BEFORE });
     expect(same.statusCode).toBe(422);
     expect(same.json().error).toMatch(/new Bin: choose a Bin other than BDRY-BIN-01/);
@@ -256,28 +288,56 @@ describe("the truck's yard drying and its Bin can't both have the RCN", () => {
   });
 });
 
-// 23 Nov 2026: the Bin's own "Other warehouse activities" and "Activity ledger" forms, each saved on its own.
-describe("the Bin's own forms", () => {
-  const save = (stageId: string, fields: Record<string, string>, code = BIN) => call("wi", "PUT", `/api/bins/${code}/stages/${stageId}`, { fields });
+// 23 Nov 2026: the Bin's own "Other warehouse activities" and "Activity ledger", each kept on its own. 26 Nov 2026: each is a
+// ledger of many entries, not one form.
+describe("the Bin's own ledgers", () => {
+  const add = (stageId: string, fields: Record<string, string>, code = BIN) => call("wi", "POST", `/api/bins/${code}/stages/${stageId}/entries`, { fields });
+  const ACTIVITY = "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)";
 
-  it("saves Other warehouse activities on the Bin, with who entered it", async () => {
-    const res = await save("n-otheract", { "Re-bagging (damaged/torn bags)": "3", "Movement between locations": NEW_BIN, "Linked location": "BDRY" });
-    expect(res.statusCode, res.body).toBe(200);
-    expect(res.json().stages["n-otheract"]).toMatchObject({ values: { "Re-bagging (damaged/torn bags)": "3", "Movement between locations": NEW_BIN, "Linked location": "BDRY" }, enteredBy: "wi" });
-    expect(res.json().stages["n-ledger"]).toBeNull(); // the two forms aren't tied together
+  it("adds Other warehouse activities entries on the Bin, each its own row, with who entered it", async () => {
+    const first = await add("n-otheract", { "Re-bagging (damaged/torn bags)": "3", "Movement between locations": NEW_BIN, "Linked location": "BDRY" });
+    expect(first.statusCode, first.body).toBe(201);
+    expect(first.json()).toMatchObject({ stageId: "n-otheract", values: { "Re-bagging (damaged/torn bags)": "3", "Linked location": "BDRY" }, enteredBy: "wi" });
+    expect((await add("n-otheract", { Destacking: "12" })).statusCode).toBe(201);
+    const entries = (await bin(BIN)).entries;
+    // Most recent first; the two ledgers aren't tied together.
+    expect(entries["n-otheract"].map((e: { values: Record<string, string> }) => e.values)).toEqual([
+      { Destacking: "12" },
+      { "Re-bagging (damaged/torn bags)": "3", "Movement between locations": NEW_BIN, "Linked location": "BDRY" },
+    ]);
+    expect(entries["n-ledger"]).toEqual([]);
   });
 
-  it("fills the ledger's date, place, Bin and who when they are left blank", async () => {
-    const res = await save("n-ledger", { "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)": "Discharge", Quantity: "41669" });
-    expect(res.json().stages["n-ledger"].values).toMatchObject({
+  it("fills the ledger's date, place, Bin and who when they are left blank, on each entry", async () => {
+    const res = await add("n-ledger", { [ACTIVITY]: "Discharge", Quantity: "41669" });
+    expect(res.json().values).toMatchObject({
       Quantity: "41669", "Date/time": new Date().toISOString().slice(0, 10), Location: SITE, "Linked Lot/Bin": BIN, "Performed by": "wi",
     });
+    // What a person picks stays theirs: another warehouse as the Location.
+    const picked = await add("n-ledger", { [ACTIVITY]: "Weight", Location: OTHER });
+    expect(picked.json().values).toMatchObject({ Location: OTHER, "Linked Lot/Bin": BIN });
+    expect((await bin(BIN)).entries["n-ledger"]).toHaveLength(2);
+  });
+
+  it("changes one entry and leaves the others; a field can be emptied", async () => {
+    const [latest, older] = (await bin(BIN)).entries["n-otheract"] as { id: number }[];
+    const res = await call("wi", "PATCH", `/api/bins/${BIN}/entries/${latest!.id}`, { fields: { Destacking: "15", "Triage (quality + quantity + moisture check)": "" } });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().values).toEqual({ Destacking: "15", "Triage (quality + quantity + moisture check)": "" });
+    const after = (await bin(BIN)).entries["n-otheract"] as { id: number; values: Record<string, string> }[];
+    expect(after.find((e) => e.id === older!.id)!.values["Re-bagging (damaged/torn bags)"]).toBe("3");
+    // An entry of another Bin isn't reachable through this one.
+    expect((await call("wi", "PATCH", `/api/bins/${NEW_BIN}/entries/${latest!.id}`, { fields: { Destacking: "1" } })).json().error).toMatch(/isn't one of Bin/);
+  });
+
+  it("won't add an empty entry", async () => {
+    expect((await add("n-otheract", { Destacking: "  " })).json().error).toMatch(/Nothing to save/);
   });
 
   // 23 Nov 2026: a Bin with no warehouse waits until an admin gives it one — it is found under "Bins with no warehouse".
   it("refuses a Bin with no warehouse, and lists it under the Bins with no warehouse", async () => {
     await prisma.bin.create({ data: { code: "BDRY-BIN-NOWH", source: "test" } });
-    expect((await save("n-otheract", { Destacking: "4" }, "BDRY-BIN-NOWH")).json().error).toMatch(/has no warehouse yet/);
+    expect((await add("n-otheract", { Destacking: "4" }, "BDRY-BIN-NOWH")).json().error).toMatch(/has no warehouse yet/);
     const mine = (await call("wi", "GET", "/api/bins")).json() as { binCode: string }[];
     expect(mine.some((b) => b.binCode === "BDRY-BIN-NOWH")).toBe(false);
     const none = (await call("wi", "GET", "/api/bins?unassigned=1")).json() as { binCode: string; store: string | null }[];
@@ -285,9 +345,9 @@ describe("the Bin's own forms", () => {
   });
 
   it("refuses a field that isn't the form's, and another warehouse's Bin", async () => {
-    expect((await save("n-otheract", { PRICE: "1" })).json().error).toMatch(/isn't part of Other warehouse activities/);
-    expect((await save("n-otheract", { Destacking: "4" }, FOREIGN_BIN)).json().error).toMatch(/isn't a Bin of this warehouse/);
-    expect((await save("n-grn", { PRICE: "1" })).json().error).toMatch(/isn't one of a Bin's forms/);
+    expect((await add("n-otheract", { PRICE: "1" })).json().error).toMatch(/isn't part of Other warehouse activities/);
+    expect((await add("n-otheract", { Destacking: "4" }, FOREIGN_BIN)).json().error).toMatch(/isn't a Bin of this warehouse/);
+    expect((await add("n-grn", { PRICE: "1" })).json().error).toMatch(/isn't one of a Bin's forms/);
   });
 });
 
@@ -312,6 +372,6 @@ describe("a Bin of another warehouse holding this site's RCN", () => {
     await setStageFields(r.id, "n-grn", { [GRN]: "500", PRICE: "470" }, { bypassValidation: true });
     expect((await call("wi", "GET", "/api/bins")).json().some((b: { binCode: string }) => b.binCode === FOREIGN_BIN)).toBe(false);
     expect((await call("wi", "GET", `/api/bins/${FOREIGN_BIN}`)).statusCode).toBe(404);
-    expect((await call("wi", "PUT", `/api/bins/${FOREIGN_BIN}/stages/n-otheract`, { fields: { Destacking: "2" } })).json().error).toMatch(/isn't a Bin of this warehouse/);
+    expect((await call("wi", "POST", `/api/bins/${FOREIGN_BIN}/stages/n-otheract/entries`, { fields: { Destacking: "2" } })).json().error).toMatch(/isn't a Bin of this warehouse/);
   });
 });

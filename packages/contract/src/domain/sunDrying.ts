@@ -7,7 +7,8 @@
  * One round is one DryingBatch row; later rounds point at the first (`firstBatchId`) and carry `round` 2, 3 …
  */
 import { korFromGrams } from "./receiptMath.js";
-import { numberProblem, type NumberRule } from "./fieldRules.js";
+import { CUT_TEST_USUAL, numberProblem, type NumberRule } from "./fieldRules.js";
+import { USUAL_RANGES as U } from "../data/fieldRanges.js";
 
 export const DRYING_STATUS = {
   inDrying: "IN DRYING",
@@ -152,26 +153,60 @@ export function dryingQualityProblem(q: DryingQuality, when: "before" | "after")
  * too (dryingQualityProblem, services/dryingBatches.ts); still-wet moisture after drying is only a warning.
  */
 const MOISTURE_RULE: NumberRule = { min: 0, max: 100, unit: "%" };
+/** The cut-test grams by the drying form's key, with each part's usual range (fieldRules CUT_TEST_USUAL). */
+const GRAM_PARTS = { GoodKernelG: "Good Kernel", ImmatureG: "Immature", SpottedG: "Spotted", RejectionG: "Rejection", VoidG: "Void", OilG: "Oil", ShellG: "Shell" } as const;
+/**
+ * The hard limits are physical (moisture 0–100 %, a 1,000 g sample); the usual ranges (26 Nov 2026) are the drying rounds of the
+ * 2026 Drying Batch sheet, and the readings every sheet shares (data/fieldRanges.ts). Outside a usual range only warns.
+ */
 const DRYING_RULES: Record<string, NumberRule> = {
-  inputMoisture: MOISTURE_RULE,
+  inputMoisture: { ...MOISTURE_RULE, usual: U.moistureBeforeDrying },
   // 10 % is the trade standard (fieldRules MOISTURE): dried RCN above it is likely still too wet.
-  outputMoisture: { ...MOISTURE_RULE, warnAbove: [10, "still too wet, consider drying it again"] },
-  inputNutCount: { integer: true, min: 0 },
-  outputNutCount: { integer: true, min: 0 },
-  inputKor: { min: 0, max: 80, unit: "lbs" },
-  outputKor: { min: 0, max: 80, unit: "lbs" },
-  issuedNetKg: { positive: true, unit: "kg" },
-  receivedNetKg: { positive: true, unit: "kg" },
-  issuedBags: { integer: true, min: 0 },
-  receivedBags: { integer: true, min: 0 },
+  outputMoisture: { ...MOISTURE_RULE, warnAbove: [10, "still too wet, consider drying it again"], usual: U.moistureAfterDrying },
+  inputNutCount: { integer: true, min: 0, unit: "nuts per kg", usual: U.nutCount },
+  outputNutCount: { integer: true, min: 0, unit: "nuts per kg", usual: U.nutCount },
+  inputKor: { min: 0, max: 80, unit: "lbs", usual: U.kor },
+  outputKor: { min: 0, max: 80, unit: "lbs", usual: U.kor },
+  issuedNetKg: { positive: true, unit: "kg", usual: U.dryingKg },
+  receivedNetKg: { positive: true, unit: "kg", usual: U.dryingKg },
+  issuedBags: { integer: true, min: 0, unit: "bags", usual: U.dryingBags },
+  receivedBags: { integer: true, min: 0, unit: "bags", usual: U.dryingBags },
   ...Object.fromEntries(["input", "output"].flatMap((p) =>
-    ["GoodKernelG", "ImmatureG", "SpottedG", "RejectionG", "VoidG", "OilG", "ShellG"].map((g) => [`${p}${g}`, { min: 0, max: 1000, unit: "g" } as NumberRule]))),
+    Object.entries(GRAM_PARTS).map(([g, part]) => [`${p}${g}`, { min: 0, max: 1000, unit: "g", usual: CUT_TEST_USUAL[part] } as NumberRule]))),
 };
+
+/** What a warning calls each drying field, so it says which one it is about ("Shell is above 1,000 g"). */
+const DRYING_NAMES: Record<string, string> = {
+  Moisture: "Moisture", NutCount: "Nut count", Kor: "KOR",
+  GoodKernelG: "Good kernel", ImmatureG: "Immature", SpottedG: "Spotted", RejectionG: "Rejection", VoidG: "Void", OilG: "Oil", ShellG: "Shell",
+  issuedNetKg: "Net kg issued", receivedNetKg: "Net kg returned", issuedBags: "Bags issued", receivedBags: "Bags returned",
+};
+const dryingName = (key: string) => DRYING_NAMES[key] ?? DRYING_NAMES[key.replace(/^(input|output)/, "")];
 
 /** The problem with one drying field as typed, or undefined; `soft` is a warning only. */
 export function dryingFieldProblem(key: string, raw: string | undefined) {
   const rule = DRYING_RULES[key];
-  return rule ? numberProblem(rule, raw) : undefined;
+  return rule ? numberProblem(rule, raw, dryingName(key)) : undefined;
+}
+
+/**
+ * The average weight of one bag of this RCN, from pieces that recorded both a net weight and a bag count: a truck's own net and
+ * bags, or every Lot's in a Bin. Null when none did, so no estimate is made up from nothing.
+ */
+export function averageKgPerBag(pieces: readonly { netKg?: number | null; bags?: number | null }[]): number | null {
+  const known = pieces.filter((p) => (p.netKg ?? 0) > 0 && (p.bags ?? 0) > 0);
+  const bags = known.reduce((a, p) => a + p.bags!, 0);
+  return bags > 0 ? known.reduce((a, p) => a + p.netKg!, 0) / bags : null;
+}
+
+/**
+ * "Weight before drying" estimated from the bags issued (26 Nov 2026, user): bags × the RCN's average kg per bag, rounded to the
+ * kg. Only an estimate the form fills in: the person can type the weighed figure over it. Undefined when either is missing.
+ */
+export function estimatedIssuedKg(bagsRaw: string | undefined, kgPerBag: number | null): string | undefined {
+  const bags = Number(String(bagsRaw ?? "").trim());
+  if (!kgPerBag || !String(bagsRaw ?? "").trim() || !Number.isInteger(bags) || bags <= 0) return undefined;
+  return String(Math.round(bags * kgPerBag));
 }
 
 /** The cut test is of a 1000 g sample: grams adding up to more can't be right (the server refuses it, dryingQualityProblem). */

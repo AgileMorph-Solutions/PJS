@@ -7,9 +7,10 @@ import { DateRangeInputs } from "../../components/ui/DateRangeInputs";
 import { WorkbookModal } from "../../components/WorkbookModal";
 import { SiteSwitcher } from "../../components/SiteSwitcher";
 import { KpiTile } from "../../components/ui/KpiTile";
+import { ReceptionSourceTabs } from "../../components/receipt/ReceptionSourceTabs";
+import { useReceptionSources } from "../../state/useReceptionSources";
 import { useTracking, useDownstreamStatus, useReceiptPlanInfo } from "../../state/TrackingContext";
 import { useSite, useSwitchSite } from "../../state/SiteContext";
-import { useSiteReceipts } from "../../state/useSiteReceipts";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { deriveStatus, computeDashboardCounts, ALL_STATUSES, STATUS_LABELS } from "../../domain/receiptStatus";
 import { receiptColumns, fiche, storeCode } from "./columns";
@@ -39,7 +40,9 @@ export function ReceiptsListPage() {
   const base = `/${site.slug}/receipts`;
   const dateRange = { from: params.get("from") ?? "", to: params.get("to") ?? "" };
 
-  const siteReceipts = useSiteReceipts();
+  // At a Central warehouse, trucks from the Unit warehouse have their own tab (FromUnitReceptionPage): this one is the suppliers'.
+  const sources = useReceptionSources();
+  const siteReceipts = sources.suppliers;
 
   const counts = useMemo(() => computeDashboardCounts(siteReceipts), [siteReceipts]);
 
@@ -107,6 +110,8 @@ export function ReceiptsListPage() {
           </div>
         }
       />
+
+      <ReceptionSourceTabs site={site} counts={sources.counts} unitFrom={sources.unitFrom} />
 
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
         <KpiTile icon={icon("local_shipping")} label="Trucks arrived" value={counts.totalReceived} to={base} />

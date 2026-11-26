@@ -1,10 +1,11 @@
 /**
  * The stock of a warehouse's Bins, worked out (never stored) from everything that put RCN in or took it out: the Lots
- * reception put there, Lots that arrived on a BKT made per Lot, drying from a Bin, trucks loaded from a Bin, and the loads
- * production accepted. One function for the Warehouse activities pages and for production's choice of Bins, so the two
+ * reception put there, Lots that arrived on a BKT made per Lot, drying from a Bin, trucks loaded from a Bin, lots made out of
+ * Bins to send (once weighed), and the loads production accepted. One function for the Warehouse activities pages and for production's choice of Bins, so the two
  * can never show different stock for the same Bin (contract's warehouseBinStock).
  */
-import { arrivedLots, binDryingMovements, binTransferMovements, lotsSentOnBkts, warehouseBinStock, type BinDryingRoundFacts, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { arrivedLots, binDryingMovements, binLotMovements, binTransferMovements, lotLinesSentOnBkts, lotsSentOnBkts, warehouseBinStock, type BinDryingRoundFacts, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { listTransferLots } from "./transferLots.js";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { prisma } from "../db.js";
 import { listReceipts } from "./receipts.js";
@@ -17,10 +18,10 @@ const num = (d: { toString(): string } | null) => (d === null ? null : Number(d.
 export async function binDryingRounds(names: readonly string[]): Promise<BinDryingRoundFacts[]> {
   const rows = await prisma.dryingBatch.findMany({
     where: { source: "entered", lotNo: null, sourceBinNo: { not: null }, warehouseSite: { in: [...names] } },
-    select: { id: true, firstBatchId: true, round: true, status: true, sourceBinNo: true, destinationBinNo: true, issuedNetWeightKg: true, receivedNetWeightKg: true, dryingDate: true },
+    select: { id: true, sn: true, firstBatchId: true, round: true, status: true, sourceBinNo: true, destinationBinNo: true, issuedNetWeightKg: true, receivedNetWeightKg: true, dryingDate: true },
   });
   return rows.map((r) => ({
-    id: r.id, firstBatchId: r.firstBatchId, round: r.round, status: r.status,
+    id: r.id, sn: r.sn, firstBatchId: r.firstBatchId, round: r.round, status: r.status,
     sourceBinNo: r.sourceBinNo, destinationBinNo: r.destinationBinNo,
     issuedNetWeightKg: num(r.issuedNetWeightKg), receivedNetWeightKg: num(r.receivedNetWeightKg),
     date: r.dryingDate?.toISOString().slice(0, 10) ?? "",
@@ -28,22 +29,29 @@ export async function binDryingRounds(names: readonly string[]): Promise<BinDryi
 }
 
 /**
- * Stock of every Bin at a site (`names`: the site, its stores and aliases — domain/site.ts). `productionSite` is the site
- * whose production runs take loads out of these Bins; only a Central site has any.
+ * Stock of every Bin at a site (`names`: the site, its stores and aliases — domain/site.ts), less the loads production runs
+ * held there accepted out of them (only a Central site has any). `productionSite` narrows those runs to one site name.
+ * Without it the runs are found by the site's own names: the Warehouse activities pages and the drying check used to leave
+ * production's loads out, so a Bin read more there than on production's pages (25 Nov 2026: Yakro BIN-10, BIN-16).
  */
 export async function siteBinStock(names: readonly string[], productionSite?: string): Promise<Map<string, WarehouseBinStock>> {
-  const [receipts, transfers, binRounds, accepted] = await Promise.all([
+  const [receipts, transfers, binRounds, accepted, transferLots] = await Promise.all([
     listReceipts([...names]),
     listTransfers([...names]),
     binDryingRounds(names),
-    productionSite
-      ? prisma.rcnReceipt.findMany({ where: { acceptedAt: { not: null }, batch: { warehouse: productionSite } }, select: { binCode: true, pallets: true, emptyPallets: true } })
-      : Promise.resolve([]),
+    prisma.rcnReceipt.findMany({
+      where: { acceptedAt: { not: null }, batch: { warehouse: productionSite ?? { in: [...names] } } },
+      select: { id: true, acceptedAt: true, binCode: true, pallets: true, emptyPallets: true },
+    }),
+    listTransferLots(names),
   ]);
   const lotRounds = await dryingRoundsByLot(prisma, receipts.filter((r) => r.stageData["n-drying"]).map((r) => r.lotNo ?? ""));
-  const issued = accepted.map((r) => ({ binCode: r.binCode, netKg: weighingTotals(r.pallets, { emptyPallets: r.emptyPallets }).netKg }));
-  const movements = [...binDryingMovements(binRounds), ...binTransferMovements(transfers, names)];
-  return warehouseBinStock(receipts, arrivedLots(transfers.filter((t) => names.includes(t.toWarehouse))), lotRounds, issued, movements, lotsSentOnBkts(transfers, names));
+  const issued = accepted.map((r) => ({
+    binCode: r.binCode, netKg: weighingTotals(r.pallets, { emptyPallets: r.emptyPallets }).netKg,
+    date: r.acceptedAt?.toISOString().slice(0, 10) ?? "", ref: r.id,
+  }));
+  const movements = [...binDryingMovements(binRounds), ...binTransferMovements(transfers, names), ...binLotMovements(transferLots)];
+  return warehouseBinStock(receipts, arrivedLots(transfers.filter((t) => names.includes(t.toWarehouse))), lotRounds, issued, movements, lotsSentOnBkts(transfers, names), lotLinesSentOnBkts(transfers, names));
 }
 
 /**

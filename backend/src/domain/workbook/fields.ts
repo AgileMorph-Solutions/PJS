@@ -119,6 +119,8 @@ const RECEIPT: Pair[] = [
   ["StageUnload.humidSacs", "Humid Bags"],
   ["StageUnload.sacsDechires", "Torn Bags"],
   ["StageUnload.refraction", "Refraction (kg)"],
+  // CFA, as the team writes it (26 Nov 2026; contract domain/currency.ts). Sheets exported with the ISO code XOF, between
+  // 25 and 26 Nov 2026, still upload (aka below).
   ["StageGrn.price", "Price (CFA/kg)"],
   ["StageGrn.amount", "Amount (CFA)"],
   ["StageGrn.grnWeight", "GRN Quantity (kg)"],
@@ -269,7 +271,10 @@ const same = (pairs: Pair[]) => () => defs(pairs);
 /** Keyed by the internal sheet id (the table name, or "Receipt"). Order = the order sheets appear in the file. */
 export const SHEET_FIELDS: Record<string, SheetFields> = {
   // "GRN Weight (kg)" is what this column was called before the client's wording ("GRN Quantity") replaced it.
-  Receipt: { title: "Truck Reception", idLabel: "Receipt ID", fields: () => withAka(defs(RECEIPT), "StageGrn.grnWeight", ["GRN Weight (kg)"]) },
+  Receipt: {
+    title: "Truck Reception", idLabel: "Receipt ID",
+    fields: () => withAka(withAka(withAka(defs(RECEIPT), "StageGrn.grnWeight", ["GRN Weight (kg)"]), "StageGrn.price", ["Price (XOF/kg)"]), "StageGrn.amount", ["Amount (XOF)"]),
+  },
   DeliveryPlan: { title: "Delivery Plan", idLabel: "Delivery Plan ID", fields: same(DELIVERY_PLAN) },
   TransferRequest: { title: "BKT Transfers", idLabel: "BKT", fields: same(BKT) },
   WarehouseDischarge: {

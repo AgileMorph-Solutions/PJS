@@ -93,20 +93,21 @@ describe("origin hint", () => {
   const origins = ["DALOA", "GBOGUHE", "VAVOUA", "YAMOUSSOUKRO", "M'BAHIAKRO", "KONG", "KANI"];
   const places = (subPrefecture: string, department: string, village: string): FicheReading => ({ ...sample, subPrefecture, department, village });
 
-  it("matches the sample fiche's sub-prefecture, not its village — the village is not an origin anyone uses", () => {
+  // Team, 24 Nov 2026: the Origin is the village. The bug this guards: the sample fiche (village AKPESSEKRO, sub-prefecture
+  // YAMOUSSOUKRO) filled YAMOUSSOUKRO.
+  it("takes the village as the Origin, never a sub-prefecture that is in Origins instead", () => {
     expect(ficheOriginHint(places("YAMOUSSOUKRO", "YAMOUSSOUKRO", "AKPESSEKRO"), origins)).toEqual({
       places: [
-        { level: "Sub-prefecture", name: "YAMOUSSOUKRO" },
         { level: "Village", name: "AKPESSEKRO" },
+        { level: "Sub-prefecture", name: "YAMOUSSOUKRO" },
       ],
-      match: { origin: "YAMOUSSOUKRO", level: "Sub-prefecture", exact: true },
     });
+    expect(ficheOriginHint(places("YAMOUSSOUKRO", "YAMOUSSOUKRO", "AKPESSEKRO"), [...origins, "AKPESSEKRO"])!.match)
+      .toEqual({ origin: "AKPESSEKRO", level: "Village", exact: true });
   });
-  it("prefers the sub-prefecture over the department when both are towns in Origins", () => {
-    expect(ficheOriginHint(places("GBOGUHE", "DALOA", "X"), origins)!.match).toEqual({ origin: "GBOGUHE", level: "Sub-prefecture", exact: true });
-  });
-  it("falls back to the department when the sub-prefecture isn't in Origins", () => {
-    expect(ficheOriginHint(places("NOWHERE", "VAVOUA", ""), origins)!.match).toEqual({ origin: "VAVOUA", level: "Department", exact: true });
+  it("falls back to the sub-prefecture, then the department, only when the village is blank", () => {
+    expect(ficheOriginHint(places("GBOGUHE", "DALOA", ""), origins)!.match).toEqual({ origin: "GBOGUHE", level: "Sub-prefecture", exact: true });
+    expect(ficheOriginHint(places("", "VAVOUA", ""), origins)!.match).toEqual({ origin: "VAVOUA", level: "Department", exact: true });
   });
   it("treats the master's spelling variants as the same town (doubled letters, apostrophes, accents)", () => {
     expect(ficheOriginHint(places("YAMOUSOUKRO", "", ""), origins)!.match).toMatchObject({ origin: "YAMOUSSOUKRO", exact: true });
@@ -129,10 +130,10 @@ describe("origin hint", () => {
 
 describe("auto-fill on upload", () => {
   const offered = ficheSuggestions(sample, "SCOOP IMANE");
-  const yamoussoukro = ficheOriginHint({ ...sample, subPrefecture: "YAMOUSSOUKRO", department: "YAMOUSSOUKRO", village: "AKPESSEKRO" }, ["YAMOUSSOUKRO"]);
-  it("fills every field the fiche gives, Origin too when its place is a town in Origins", () => {
+  const yamoussoukro = ficheOriginHint({ ...sample, subPrefecture: "YAMOUSSOUKRO", department: "YAMOUSSOUKRO", village: "AKPESSEKRO" }, ["AKPESSEKRO"]);
+  it("fills every field the fiche gives, Origin too when its village is in Origins", () => {
     expect(ficheFill(offered, yamoussoukro, undefined)).toEqual({
-      fill: { FICHE: "76601", "FICHE CODE": "0201-0004", "SUPPLIERS NAME": "SCOOP IMANE", ORIGIN: "YAMOUSSOUKRO" },
+      fill: { FICHE: "76601", "FICHE CODE": "0201-0004", "SUPPLIERS NAME": "SCOOP IMANE", ORIGIN: "AKPESSEKRO" },
       replaced: {},
     });
   });
@@ -157,6 +158,6 @@ describe("auto-fill on upload", () => {
     expect(fill).not.toHaveProperty("REF.");
   });
   it("offers a town written at two levels once", () => {
-    expect(yamoussoukro!.places.map((p) => p.name)).toEqual(["YAMOUSSOUKRO", "AKPESSEKRO"]);
+    expect(yamoussoukro!.places.map((p) => p.name)).toEqual(["AKPESSEKRO", "YAMOUSSOUKRO"]);
   });
 });

@@ -6,7 +6,8 @@ import { Pill } from "../../components/ui/Pill";
 import { Card, CardTitle } from "../../components/ui/Card";
 import { SheetRef } from "../../components/ui/SheetRef";
 import { StepNav, type StepItem, type StepState } from "../../components/ui/StepNav";
-import { PRODUCTION_STAGES, BatchStatusPill, BinTrucks, formatTonnes, LotTruckLink, useSiteHrefs, type ProductionStageId } from "../../components/production/batchUi";
+import { PRODUCTION_STAGES, BatchStatusPill, formatTonnes, useSiteHrefs, type ProductionStageId } from "../../components/production/batchUi";
+import { binQualityColumns, lotQualityColumns } from "../../components/production/binQualityColumns";
 import { IntakeStage } from "../../components/production/IntakeStage";
 import { CalibrationSection } from "../../components/production/CalibrationSection";
 import { CookingSection } from "../../components/production/CookingSection";
@@ -250,10 +251,8 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
     { ...kgCol<BatchBinView>("Accepted by production", (b) => b.issuedKg), render: (b) => formatTonnes(b.issuedKg) },
     { ...kgCol<BatchBinView>("In bin now", (b) => b.currentKg), render: (b) => formatTonnes(b.currentKg) },
     numCol("Lots", (b) => b.lots.length, { digits: 0 }),
-    {
-      ...textCol<BatchBinView>("Truck", (b) => b.lots.map((l) => l.transferId ?? l.receiptId).join(" "), { wrap: true }),
-      render: (b) => <BinTrucks lots={b.lots} />,
-    },
+    // The Bin's quality, not its trucks (26 Nov 2026, user).
+    ...binQualityColumns<BatchBinView>((b) => b.lots),
   ];
   const lotColumns: Column<LotRow>[] = [
     {
@@ -267,7 +266,7 @@ function BinsAndLots({ run }: { run: BatchDetail }) {
         </span>
       ),
     },
-    { ...textCol<LotRow>("Truck", (l) => l.transferId ?? l.receiptId, { mono: true }), render: (l) => <LotTruckLink lot={l} /> },
+    ...lotQualityColumns<LotRow>(),
     textCol("Bin", (l) => l.binCode, { mono: true }),
     textCol("Supplier", (l) => l.supplierName, { wrap: true }),
     dateCol("Arrived", (l) => l.arrivalDate),

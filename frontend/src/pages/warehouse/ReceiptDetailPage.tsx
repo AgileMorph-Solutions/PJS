@@ -16,6 +16,7 @@ import { LotJourney } from "../../components/receipt/LotJourney.tsx"; // explici
 import { LotOverview } from "../../components/receipt/LotOverview";
 import { ReceiptPlanCard } from "../../components/receipt/ReceiptPlanCard";
 import { TruckSummaryCard } from "../../components/receipt/TruckSummaryCard";
+import { TransferSentCard } from "../../components/receipt/TransferSentCard";
 import { UploadIssuesCard } from "../../components/receipt/UploadIssuesCard";
 import { DownstreamRecords } from "../../components/receipt/DownstreamRecords";
 import { buildJourney } from "../../components/receipt/lotJourney.ts";
@@ -26,7 +27,7 @@ import { FieldHistory } from "../../components/receipt/FieldHistory";
 import { StageAuthor } from "../../components/receipt/StageAuthor";
 import { StageCard } from "../../components/receipt/StageCard";
 import { useStageCards } from "../../components/receipt/useStageCards";
-import { canSeeField } from "@anagroci/contract/data/roles";
+import { canCorrectRecords, canSeeField } from "@anagroci/contract/data/roles";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { useOpenPanels } from "../../components/ui/useOpenPanels";
 import { buttonClass } from "../../components/ui/Button";
@@ -69,7 +70,7 @@ export function ReceiptDetailPage() {
   }, [focusStage, receipt?.id]);
 
   if (!receipt) return <Navigate to={`/${site.slug}/receipts`} replace />;
-  const isAdmin = me.role === "admin";
+  const canReopen = canCorrectRecords(me.role);
   // Opened by an old REC-2026-NNNN id (a bookmark, an export, a printed form): carry on at the new one.
   if (receipt.id !== id) return <Navigate to={`/${site.slug}/receipts/${receipt.id}`} replace />;
 
@@ -103,7 +104,8 @@ export function ReceiptDetailPage() {
   // The receipt's own site (r.warehouse) may not match the section it's being viewed from — a
   // linked/cross-site view is by design (see this page's own header comment), so the breadcrumb
   // names whichever section this URL actually belongs to, not a guess from the record itself.
-  const backHref = `/${site.slug}/receipts`;
+  // A truck from the Unit warehouse is listed on Reception's own tab for those trucks.
+  const backHref = receipt.transfer ? `/${site.slug}/receipts/from-unit` : `/${site.slug}/receipts`;
 
 
   return (
@@ -154,7 +156,9 @@ export function ReceiptDetailPage() {
               <ReceiptStatusPill status={status} />
             </h1>
             <p className="text-sm text-warmstone-500">
-              {normalizeSupplierName(receipt.supplierName) || "No supplier yet"} · {receipt.vehicleNo ? `vehicle ${receipt.vehicleNo}` : "no vehicle no."}
+              {receipt.transfer
+                ? `From ${receipt.transfer.fromWarehouse} · ${receipt.transfer.transferId} · sent as ${receipt.transfer.sentAs}`
+                : normalizeSupplierName(receipt.supplierName) || "No supplier yet"} · {receipt.vehicleNo ? `vehicle ${receipt.vehicleNo}` : "no vehicle no."}
               {receipt.lotNo && ` · from receipt ${receipt.id}`}
               {receipt.binNo && ` · Bin ${receipt.binNo}`}
             </p>
@@ -191,7 +195,8 @@ export function ReceiptDetailPage() {
         </div>
       </div>
 
-      {/* A complete GRN locks the reception record; a finalised bin closes that step. Only an Admin reopens, with a reason. */}
+      {/* A complete GRN locks the reception record; a finalised bin closes that step. The Warehouse Incharge or an Admin reopens it,
+          with a reason (contract canCorrectRecords, 26 Nov 2026). */}
       {(receipt.lockedAt || (receipt.stageData["n-bin"]?.["Bin allocation date"] ?? "").trim()) && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ambernut-200 bg-ambernut-50 px-4 py-3 text-[13px] text-ambernut-900">
           <span className="material-symbols-outlined text-[19px] text-ambernut-700">lock</span>
@@ -199,9 +204,9 @@ export function ReceiptDetailPage() {
             {receipt.lockedAt
               ? <>This record is <b>locked</b> since {formatDate(receipt.lockedAt)}{receipt.lockedBy ? ` (${receipt.lockedBy})` : ""}: its GRN is complete. Stock, drying and transfers can still go ahead.</>
               : <>The bin allocation was <b>finalised</b> on {receipt.stageData["n-bin"]?.["Bin allocation date"]}{receipt.stageData["n-bin"]?.["Finalised by"] ? ` by ${receipt.stageData["n-bin"]["Finalised by"]}` : ""}.</>}
-            {!isAdmin && " An Admin can reopen it with a reason."}
+            {!canReopen && " The Warehouse Incharge or an Admin can reopen it with a reason."}
           </span>
-          {isAdmin && (
+          {canReopen && (
             <button
               type="button" disabled={lockBusy}
               onClick={() => {
@@ -243,14 +248,18 @@ export function ReceiptDetailPage() {
 
       {tab === "overview" && (
         <div className="space-y-6">
+          {receipt.transfer && (
+            <TransferSentCard receipt={receipt} transfer={receipt.transfer} bktHref={canEdit ? `/${site.slug}/transfers/${encodeURIComponent(receipt.transfer.transferId)}` : undefined} />
+          )}
           <TruckSummaryCard receipt={receipt} />
           {canEdit && <UploadIssuesCard receiptId={receipt.id} />}
-          {canEdit && (
+          {/* A delivery plan is a supplier's: a truck from the Unit warehouse has none. */}
+          {canEdit && !receipt.transfer && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               <ReceiptPlanCard receiptId={receipt.id} info={planInfo} plans={plans} siteSlug={site.slug} canEdit={canEdit} onChanged={() => void refetchPlanInfo()} />
             </div>
           )}
-          <LotOverview receipt={receipt} links={links} othersInBin={otherInSameBin} siteSlug={site.slug} showPrice={canSeeField(me.role, "n-grn", "PRICE")} />
+          <LotOverview receipt={receipt} links={links} othersInBin={otherInSameBin} siteSlug={site.slug} showPrice={canSeeField(me.role, "n-grn", "PRICE") && !receipt.transfer} />
           <div>
             <h2 className="text-base font-bold text-warmstone-900 flex items-center gap-2 mb-3 px-1">
               <span className="material-symbols-outlined text-[19px] text-brand-700">account_tree</span>
@@ -263,7 +272,7 @@ export function ReceiptDetailPage() {
 
       {tab === "stages" && (
         <div className="space-y-4 max-w-4xl">
-          {!canEdit && <SubmissionCard submission={ctx.submission} />}
+          {!canEdit && <SubmissionCard submission={ctx.submission} fromTransfer={Boolean(receipt.transfer)} />}
           {pendingDecision && canEdit && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-ambernut-50 border border-ambernut-200 text-[13px] text-ambernut-900">
               <span className="material-symbols-outlined text-[18px]">flag</span>

@@ -30,6 +30,10 @@ export const stages: Stage[] = [
       // see truckReception.ts's parser).
       { n: "REMARKS", v: "" , col: "remarks"},
       { n: "WEEK", v: "" , col: "week"},
+      // "Bouake RCN Receiving at Factory Report.xlsx" › Bouake Stock Reciving, column "Laisse-Passer Entree (Yakro)" (269 of 415
+      // rows, e.g. 153): the entry pass of a truck from the Unit warehouse. Only a truck received off a BKT asks for it, and it
+      // is optional (user, 24 Nov 2026; contract domain/transferReception.ts TRANSFER_ONLY_FIELDS).
+      { n: "Laisse-Passer Entree (Yakro)", v: "153" , col: "laissePasserEntree"},
     ],
   },
   {
@@ -127,6 +131,9 @@ export const stages: Stage[] = [
       { n: "Manpower contractor / team", v: "" , col: "manpowerContractor"},
       { n: "Tally Clerk bag count", v: "" , col: "tallyClerkBagCount"},
       { n: "Pallets used (30 bags/pallet)", v: "" , col: "palletsUsed"},
+      // The same sheet's "New Jute Bag Used" (82 of 415 rows, e.g. 11): new bags put on at unloading a truck from the Unit
+      // warehouse. Optional, and only on such a truck (user, 24 Nov 2026).
+      { n: "New Jute Bag Used", v: "11" , col: "newJuteBagsUsed"},
     ],
   },
   {
@@ -137,7 +144,7 @@ export const stages: Stage[] = [
     kind: "system",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "System-derived, never typed (domain/receiptMath.ts): NET = Gross − 1 kg per bag, PAID = Net − Refraction — both hold on every one of the real sheet's rows (728/728, 716/716). Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Oct 2026 team feedback (\"automatically calculating Net Weight…\") supersedes the Sept 30 request for the Branch Manager to type NET WT KGS.",
+    note: "Filled in by the system (domain/receiptMath.ts); since 26 Nov 2026 the warehouse may type over either figure, as with the bag totals: NET = Gross − 1 kg per bag, PAID = Net − Refraction — both hold on every one of the real sheet's rows (728/728, 716/716). Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Oct 2026 team feedback (\"automatically calculating Net Weight…\") supersedes the Sept 30 request for the Branch Manager to type NET WT KGS.",
     fields: [
       { n: "NET WT KGS", v: "40822" , col: "netWtKgs"},
       { n: "PAID WT", v: "40762" , col: "paidWt"},
@@ -185,8 +192,10 @@ export const stages: Stage[] = [
     sheet: "Truck Reception · 28 columns",
     note: "By this point the row is complete — it is the GRN. Doc §3 also wants the system to show, for any period: total trucks received, accepted & unloaded, GRN completed, pending QA, pending unload after QA, and rejected (with reason). Sept 30 clarification: PRICE is the price the Branch Manager negotiated, submitted via the bm-reception form (data/roles.ts) and applied on Warehouse Incharge approval. AMOUNT is calculated as PRICE × PAID WT (715/715 real rows).",
     fields: [
-      { n: "PRICE", v: "470" , col: "price"},
-      { n: "AMOUNT", v: "19158140" , col: "amount"},
+      // Prices are in West African CFA francs (ISO XOF), per kg — client-confirmed 24 Nov 2026; the workbooks print no
+      // currency. Written "CFA" (26 Nov 2026, user; domain/currency.ts).
+      { n: "PRICE", label: "PRICE (CFA per kg)", v: "470" , col: "price"},
+      { n: "AMOUNT", label: "AMOUNT (CFA)", v: "19158140" , col: "amount"},
       { n: "GRN Weight (kept separate from Gross/Net/Paid)", v: "" , col: "grnWeight"},
     ],
   },

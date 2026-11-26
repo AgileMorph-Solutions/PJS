@@ -29,7 +29,8 @@ const RECEIPT_SELECT = {
 type Db = Prisma.TransactionClient | typeof prisma;
 
 async function build(where: Prisma.ReceiptWhereInput, db: Db): Promise<ReceiptPlanInfo[]> {
-  const receipts = await db.receipt.findMany({ where, select: RECEIPT_SELECT, orderBy: { createdAt: "asc" } });
+  // A truck from the Unit warehouse is no supplier's delivery (24 Nov 2026): no plan is made for it, so it is never "unplanned".
+  const receipts = await db.receipt.findMany({ where: { AND: [where, { transferLineId: null }] }, select: RECEIPT_SELECT, orderBy: { createdAt: "asc" } });
   const planIds = [...new Set(receipts.flatMap((r) => (r.deliveryPlanId ? [r.deliveryPlanId] : [])))];
 
   // A truck is judged against ALL its plan's trucks, not just the ones in this list: "over the
@@ -109,8 +110,9 @@ export function planFitProblem(
 }
 
 export async function linkReceiptToPlan(receiptId: string, planId: string): Promise<ReceiptPlanInfo> {
-  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, select: { warehouse: true, lbaCode: true, deliveryPlanId: true } });
+  const receipt = await prisma.receipt.findUnique({ where: { id: receiptId }, select: { warehouse: true, lbaCode: true, deliveryPlanId: true, transferLineId: true } });
   if (!receipt) throw Object.assign(new Error("Receipt not found"), { code: "P2025" });
+  if (receipt.transferLineId) throw new ValidationError("A truck from the Unit warehouse isn't a supplier's delivery, so it has no delivery plan.");
   if (receipt.deliveryPlanId) throw new ValidationError(`This truck is already linked to ${receipt.deliveryPlanId}.`);
   const plan = await prisma.deliveryPlan.findUnique({ where: { id: planId } });
   if (!plan) throw new ValidationError(`Delivery plan ${planId} doesn't exist.`);

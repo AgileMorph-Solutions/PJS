@@ -103,7 +103,7 @@ async function namesOfSite(tx: Tx, site: string): Promise<string[]> {
  */
 async function highestLotSeq(tx: Tx, site: string, prefix: string, year: number) {
   const names = await namesOfSite(tx, site);
-  const [assigned, discharged] = await Promise.all([
+  const [assigned, discharged, transferLots] = await Promise.all([
     tx.stageLotAssignment.findMany({
       where: { OR: [{ lotNumber: { startsWith: prefix } }, { warehouseName: { in: names } }] },
       select: { lotNumber: true, receipt: { select: { arrivalDate: true } } },
@@ -112,6 +112,9 @@ async function highestLotSeq(tx: Tx, site: string, prefix: string, year: number)
       where: { OR: [{ lotNo: { startsWith: prefix } }, { warehouseSite: { in: names } }] },
       select: { lotNo: true, arrivalDate: true, dischargeDate: true },
     }),
+    // Lots made out of Bins to send (24 Nov 2026) are the same warehouse's Lot numbers, so one sequence covers them and the
+    // trucks' Lots. A lot received off a BKT is a reception like any other: its Lot is in StageLotAssignment above.
+    tx.transferLot.findMany({ where: { OR: [{ lotNo: { startsWith: prefix } }, { warehouse: { in: names } }] }, select: { lotNo: true, lotDate: true } }),
   ]);
   const inYear = (d: Date | string | null | undefined) => yearOf(typeof d === "string" ? d : d?.toISOString()) === year;
   const lotInYear = sameKindYear("LOT", year);
@@ -126,8 +129,31 @@ async function highestLotSeq(tx: Tx, site: string, prefix: string, year: number)
   return Math.max(
     0,
     ...assigned.map((a) => seqOf(a.lotNumber, inYear(a.receipt.arrivalDate)) ?? 0),
-    ...discharged.map((d) => seqOf(d.lotNo, inYear(d.arrivalDate ?? d.dischargeDate)) ?? 0)
+    ...discharged.map((d) => seqOf(d.lotNo, inYear(d.arrivalDate ?? d.dischargeDate)) ?? 0),
+    ...transferLots.map((l) => seqOf(l.lotNo, inYear(l.lotDate)) ?? 0)
   );
+}
+
+/**
+ * Where `lotNo` is already a Lot at `warehouse`'s site, or null when it is free: a truck's Lot (a supplier's, or one received
+ * from the Unit warehouse), an imported discharge row, or a transfer lot. A typed Lot number is checked here because the issued
+ * ones can't clash (highestLotSeq counts them all), but a person may change one. `except` leaves out the record being edited.
+ */
+export async function lotNumberInUse(
+  tx: Tx, warehouse: string, lotNo: string, except: { transferLotId?: number } = {},
+): Promise<string | null> {
+  const site = (await siteOf(tx, warehouse)) ?? warehouse;
+  const names = await namesOfSite(tx, site);
+  const same = { equals: lotNo, mode: "insensitive" as const };
+  const [receipt, discharge, transferLot] = await Promise.all([
+    tx.stageLotAssignment.findFirst({ where: { lotNumber: same, warehouseName: { in: names } }, select: { receiptId: true } }),
+    tx.warehouseDischarge.findFirst({ where: { lotNo: same, warehouseSite: { in: names } }, select: { lotNo: true } }),
+    tx.transferLot.findFirst({ where: { lotNo: same, warehouse: { in: names }, ...(except.transferLotId ? { id: { not: except.transferLotId } } : {}) }, select: { id: true } }),
+  ]);
+  if (receipt) return `the Lot of truck ${receipt.receiptId}`;
+  if (discharge) return "a Lot in the imported discharge sheet";
+  if (transferLot) return "another transfer lot";
+  return null;
 }
 
 async function highestDeliveryPlanSeq(tx: Tx, site: string, year: number) {
@@ -177,11 +203,16 @@ export async function nextReceiptId(tx: Tx, warehouse: string, arrivalDate: stri
   return (await receiptIdAllocator(tx, warehouse, arrivalDate)).next();
 }
 
-export async function nextLotNumber(tx: Tx, warehouse: string, arrivalDate: string): Promise<string> {
+/** Lot numbers at `warehouse` for `date`'s year, drawn one after another: a truck with two lots needs two. */
+export async function lotNumberAllocator(tx: Tx, warehouse: string, date: string, what = "The date"): Promise<IdAllocator> {
   const code = await warehouseCodeFor(tx, warehouse);
   const site = (await siteOf(tx, warehouse))!;
-  const year = requireYear(arrivalDate, "The arrival date");
-  return formatLotNumber(code, year, (await highestLotSeq(tx, site, siteIdPrefix("LOT", code, year), year)) + 1);
+  const year = requireYear(date, what);
+  return allocator(await highestLotSeq(tx, site, siteIdPrefix("LOT", code, year), year), (s) => formatLotNumber(code, year, s));
+}
+
+export async function nextLotNumber(tx: Tx, warehouse: string, arrivalDate: string): Promise<string> {
+  return (await lotNumberAllocator(tx, warehouse, arrivalDate, "The arrival date")).next();
 }
 
 export async function nextDeliveryPlanId(tx: Tx, warehouse: string, expectedArrivalDate: string): Promise<string> {

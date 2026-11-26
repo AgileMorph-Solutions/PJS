@@ -130,6 +130,13 @@ describe("what the app works out is shown, never written", () => {
     expect(grn.aka).toEqual(["GRN Weight (kg)"]);
   });
 
+  // Prices are written CFA (26 Nov 2026): a sheet exported while the headers said XOF must still upload.
+  it("price and amount say CFA, and an export with the XOF headers still finds them", () => {
+    const fields = SHEETS[0].fields("UNIT");
+    expect(fields.find((f) => f.key === "StageGrn.price")).toMatchObject({ label: "Price (CFA/kg)", aka: ["Price (XOF/kg)"] });
+    expect(fields.find((f) => f.key === "StageGrn.amount")).toMatchObject({ label: "Amount (CFA)", aka: ["Amount (XOF)"] });
+  });
+
   it("the cut-test grams and the loaded weight are columns, so KOR can be recorded from them", () => {
     const labels = SHEETS[0].fields("UNIT").map((f) => f.label);
     for (const l of ["Loaded Truck Weight (kg)", "Sample – Good Kernel (g)", "Sample – Immature (g)", "Sample – Spotted (g)", "Final – Good Kernel (g)", "Final – Shell (g)"]) {

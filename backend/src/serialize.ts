@@ -8,6 +8,7 @@
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
 import type { ReceiptRecord, ReceiptStatus } from "@anagroci/contract/types/receipt";
 import { assembleStageData, assembleBranches } from "./stageStore.js";
+import { transferOrigin } from "./services/transferOrigin.js";
 
 type AnyRow = Record<string, any>;
 
@@ -37,6 +38,8 @@ export function toReceiptRecord(row: AnyRow): ReceiptRecord & { status: ReceiptS
     ...(row.createdAt instanceof Date ? { createdAt: row.createdAt.toISOString() } : {}),
     stageData,
     branches,
+    // Only a truck from the Unit warehouse has one, so every other record serializes exactly as before.
+    ...(row.transferLine ? { transfer: transferOrigin(row.transferLine) } : {}),
     timeline: (row.timeline ?? [])
       .slice()
       .sort((a: AnyRow, b: AnyRow) => a.id - b.id)

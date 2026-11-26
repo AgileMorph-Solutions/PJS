@@ -1,8 +1,11 @@
+import { useState, type ReactNode } from "react";
+import { formatAmount } from "@anagroci/contract/domain/currency";
 import type { StageField } from "../types/stage";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import { DateTimeInput, nowStamp } from "./ui/DateTimeInput";
 import { DateInput } from "./ui/DateInput";
 import { SearchSelect } from "./ui/SearchSelect";
+import { LeadBox } from "./ui/Input";
 
 interface Props {
   field: StageField;
@@ -31,19 +34,23 @@ interface Props {
   choices?: readonly string[];
   /** Told when the choices dropdown opens (the page re-reads its masters then). */
   onChoicesOpen?: () => void;
+  /** Shown inside the box before the value: the currency of a price or an amount. The figure then reads as on a bill
+   * ("CFA 19,158,140") except while it is being typed, when it is the plain number that is stored. */
+  lead?: string;
 }
 
 /** One field row: label + an optional system/calculated badge + a controlled input. The displayed
  * value always comes from the record itself via `value`, never from the generic sample (`field.v`)
  * in the field dictionary, so one receipt's blank field can't show another receipt's sample data.
  * Purely presentational — the caller owns where the value lives. */
-export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, warning, numeric, choices, onChoicesOpen, maxDate }: Props) {
+export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly, system, note, suggestion, warning, numeric, choices, onChoicesOpen, maxDate, lead }: Props) {
   const locked = readOnly || Boolean(system);
+  const [typing, setTyping] = useState(false);
   const id = `field-${idPrefix ?? ""}-${field.col}`.replace(/\s+/g, "-");
   // A locked box gets no focus ring: the orange "typing here" border on a calculated value made people think they could change it.
   const inputClass = `w-full px-3 py-2 rounded-xl border border-warmstone-200 text-[13px] placeholder-warmstone-400 outline-none transition-all ${
     locked ? "bg-warmstone-100 text-warmstone-600 cursor-not-allowed" : "bg-warmstone-50 text-warmstone-900 focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700"
-  }`;
+  }${lead ? " pl-12" : ""}`;
 
   return (
     <div>
@@ -66,18 +73,21 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
         // Saved on pick, not on blur: a pick is a whole answer, unlike a half-typed number.
         <SearchSelect id={id} value={value} options={choices} onOpen={onChoicesOpen} onChange={(v) => { onChange(v); onBlur?.(); }} />
       ) : (
+      <MaybeLead lead={lead}>
       <input
         id={id}
         // A date or timestamp that cannot be edited here is still shown in the app's one date format.
-        value={field.format === "datetime" ? formatDateTime(value) : field.format === "date" ? formatDate(value) : value}
+        value={field.format === "datetime" ? formatDateTime(value) : field.format === "date" ? formatDate(value) : lead && !typing ? formatAmount(value) : value}
         onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
+        onFocus={() => setTyping(!locked)}
+        onBlur={() => { setTyping(false); onBlur?.(); }}
         readOnly={locked}
         inputMode={numeric ? "decimal" : undefined}
         aria-describedby={system ? `${id}-hint` : undefined}
         placeholder={value ? "" : system ? (system.kind === "calculated" ? "Calculated automatically" : "Issued automatically") : "Not recorded yet"}
         className={inputClass}
       />
+      </MaybeLead>
       )}
       {system && (
         <p id={`${id}-hint`} className="mt-1 text-[11.5px] text-warmstone-500">
@@ -98,4 +108,9 @@ export function FieldInput({ field, value, onChange, onBlur, idPrefix, readOnly,
       )}
     </div>
   );
+}
+
+/** The box as it is, or with its lead text (the currency) inside its left edge. */
+function MaybeLead({ lead, children }: { lead?: string; children: ReactNode }) {
+  return lead ? <LeadBox lead={lead}>{children}</LeadBox> : <>{children}</>;
 }

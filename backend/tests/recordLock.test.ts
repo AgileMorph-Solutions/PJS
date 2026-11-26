@@ -1,7 +1,7 @@
 /**
  * Client review, Oct 2026: dates fill themselves, the bin allocation date is stamped when the bin is finalised, and a
  * record locks once its GRN is complete. The properties that matter: the lock covers the reception record and NOT the
- * steps after the GRN; Admin alone reopens, with a reason; and nothing that already existed is locked behind anyone's back.
+ * steps after the GRN; an Admin or the warehouse's own Incharge reopens (26 Nov 2026), with a reason; and nothing that already existed is locked behind anyone's back.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
@@ -23,7 +23,7 @@ async function cleanup() {
   await prisma.receipt.deleteMany({ where: { warehouse: A } });
   await prisma.bin.deleteMany({ where: { code: { startsWith: "LOCK-BIN" } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: "lock-" } } });
-  await prisma.warehouse.deleteMany({ where: { name: { in: [A, "LOCK-FACTORY"] } } });
+  await prisma.warehouse.deleteMany({ where: { name: { in: [A, "LOCK-FACTORY", "LOCK-OTHER"] } } });
 }
 async function login(key: string, role: string) {
   await prisma.user.create({ data: { username: `lock-${key}`, displayName: key, role, warehouse: role === "admin" ? null : A, passwordHash: hashPassword(PW) } });
@@ -37,6 +37,10 @@ beforeAll(async () => {
   await prisma.bin.create({ data: { code: "LOCK-BIN-1", warehouseName: A } });
   await login("admin", "admin");
   await login("wi", "warehouse_incharge");
+  // Another warehouse's Incharge: reopening is for the record's own warehouse.
+  await prisma.warehouse.create({ data: { name: "LOCK-OTHER", kind: "REGIONAL_CENTRAL", type: "UNIT", code: "LCO" } });
+  await prisma.user.create({ data: { username: "lock-otherwi", displayName: "otherwi", role: "warehouse_incharge", warehouse: "LOCK-OTHER", passwordHash: hashPassword(PW) } });
+  cookies.otherwi = String((await app.inject({ method: "POST", url: "/api/auth/login", payload: { username: "lock-otherwi", password: PW } })).headers["set-cookie"]).split(";")[0]!;
 });
 afterAll(async () => {
   await cleanup();
@@ -122,8 +126,8 @@ describe("bin finalised", () => {
     // The person's answer is part of the bin step: closed with it.
     await expect(setStageFields(id, "n-bin", { "Finalised (same day / next day)": "Same day" })).rejects.toThrow(/finalised/);
 
-    expect((await call("wi", "POST", `/api/receipts/${id}/reopen`, { reason: "x" })).statusCode).toBe(403);
-    expect((await call("admin", "POST", `/api/receipts/${id}/reopen`, {})).statusCode).toBe(422);
+    expect((await call("otherwi", "POST", `/api/receipts/${id}/reopen`, { reason: "x" })).statusCode).toBe(403);
+    expect((await call("wi", "POST", `/api/receipts/${id}/reopen`, {})).statusCode).toBe(422);
     const ok = await call("admin", "POST", `/api/receipts/${id}/reopen`, { reason: "Wrong bin chosen" });
     // Reopen clears what Finalise stamped; the person's own answer stays for them to change.
     expect(ok.json().stageData["n-bin"]).toMatchObject({ "Bin allocation date": "", "Finalised by": "", "Finalised (same day / next day)": "Next day" });
@@ -192,13 +196,13 @@ describe("record locking", () => {
     expect((await get(id)).branches["n-drying"]).toBe("direct");
   });
 
-  it("only an Admin can reopen it, with a reason; the reason stays on the timeline, and it locks again when the GRN is completed again", async () => {
+  it("the warehouse's Incharge or an Admin reopens it, with a reason; the reason stays on the timeline, and it locks again when the GRN is completed again", async () => {
     const [{ id }] = await prisma.receipt.findMany({ where: { warehouse: A, lockedAt: { not: null } }, select: { id: true } });
-    expect((await call("wi", "POST", `/api/receipts/${id}/reopen`, { reason: "typo" })).statusCode).toBe(403);
-    const res = await call("admin", "POST", `/api/receipts/${id}/reopen`, { reason: "Price typed wrong" });
+    expect((await call("otherwi", "POST", `/api/receipts/${id}/reopen`, { reason: "typo" })).statusCode).toBe(403);
+    const res = await call("wi", "POST", `/api/receipts/${id}/reopen`, { reason: "Price typed wrong" });
     expect(res.statusCode).toBe(200);
     expect(res.json().lockedAt).toBeUndefined();
-    expect(res.json().timeline.at(-1).note).toMatch(/Reopened by admin: Price typed wrong/);
+    expect(res.json().timeline.at(-1).note).toMatch(/Reopened by wi: Price typed wrong/);
     await setStageFields(id, "n-grn", { PRICE: "480" });
     expect((await get(id)).lockedAt).toBeTruthy();
     expect((await call("admin", "POST", `/api/receipts/${id}/reopen`, { reason: "again" })).statusCode).toBe(200);

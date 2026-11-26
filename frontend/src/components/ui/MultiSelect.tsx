@@ -44,7 +44,13 @@ export function MultiSelect({ id, options, selected, onToggle, placeholder }: Pr
                   {o.disabled ? "block" : on ? "check_box" : "check_box_outline_blank"}
                 </span>
                 <span className="font-medium shrink-0">{o.label}</span>
-                {o.detail && <span className="min-w-0 truncate text-warmstone-500">{o.detail}</span>}
+                {o.detail && <span className={`min-w-0 truncate ${o.detailTone === "emphasis" ? "font-medium text-danger-700" : "text-warmstone-500"}`}>{o.detail}</span>}
+                {o.figure && (
+                  <span className="ml-auto shrink-0 tabular-nums text-right">
+                    <span className="font-semibold text-warmstone-900">{o.figure.value}</span>
+                    {o.figure.note && <span className="ml-2 text-[12px] text-warmstone-500">{o.figure.note}</span>}
+                  </span>
+                )}
                 {o.action && (
                   <Link to={o.action.to} className="ml-auto shrink-0 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-700 hover:text-brand-800">
                     {o.action.label}

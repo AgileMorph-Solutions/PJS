@@ -11,6 +11,9 @@
  * record its own checks. Every activity is linked to its location (doc §5.4): a Bin, since 22 Nov 2026 — once RCN is in a Bin
  * its Lots can't be told apart (Sameer, 18 Nov 2026), so naming a Lot is optional.
  */
+import { numberProblem, type NumberRule } from "../domain/fieldRules.js";
+import { USUAL_RANGES } from "./fieldRanges.js";
+
 export type ActivityCategoryId =
   | "offloading" | "stacking" | "destacking" | "reconditioning" | "drying" | "triage" | "bin_work" | "movement" | "other";
 
@@ -19,7 +22,7 @@ export interface ActivityCategory {
   label: string;
   /** The activity concerns a Lot's stock, so it names the Lot. */
   needsLot: boolean;
-  /** Moisture and the quantity before and after are recorded (triage / cleaning). */
+  /** Moisture and the quantity before and after are recorded (triage / cleaning). The moisture may be left for the QFS Officer. */
   needsQuality: boolean;
   /** Recorded on its own form on the truck, not here. */
   useDryingForm?: boolean;
@@ -86,10 +89,30 @@ export function activityProblems(input: ActivityEntryInput): string[] {
     const m = asNumber(input.moisturePct);
     const before = asNumber(input.quantityBeforeKg);
     const after = asNumber(input.quantityAfterKg);
-    if (m === null || Number.isNaN(m) || m < 0 || m > 100) out.push("Triage changes the moisture: record it, between 0 and 100.");
+    // The moisture is the QFS Officer's to measure (26 Nov 2026): left blank, they send it from their Quality checks page.
+    if (m !== null && (Number.isNaN(m) || m < 0 || m > 100)) out.push("Moisture after triage must be between 0 and 100.");
     if (before === null || Number.isNaN(before) || before < 0) out.push("Triage changes the quantity: record the kg before.");
     if (after === null || Number.isNaN(after) || after < 0) out.push("Triage changes the quantity: record the kg after.");
     if (before !== null && after !== null && !Number.isNaN(before) && !Number.isNaN(after) && after > before) out.push("The quantity after triage can't be more than before.");
   }
   return out;
+}
+
+/**
+ * What looks unusual on an activity entry: a number outside its usual range in the 2026 workbooks (26 Nov 2026, user; the
+ * ranges are data/fieldRanges.ts, the same the truck's forms use). Only warnings: the entry still saves.
+ */
+export function activityWarnings(input: ActivityEntryInput): string[] {
+  const cat = ACTIVITY_CATEGORIES.find((c) => c.id === input.category);
+  if (!cat) return [];
+  const bagsUsual = cat.id === "reconditioning" ? USUAL_RANGES.rebaggedBags : cat.id === "destacking" ? USUAL_RANGES.destackedBags : undefined;
+  const checks: [NumberRule, unknown, string][] = [
+    ...(bagsUsual ? [[{ integer: true, min: 0, unit: "bags", usual: bagsUsual }, input.bags, "Bags"] as [NumberRule, unknown, string]] : []),
+    ...(cat.needsQuality ? [
+      [{ min: 0, max: 100, unit: "%", usual: USUAL_RANGES.moisture }, input.moisturePct, "Moisture"],
+      [{ min: 0, unit: "kg", usual: USUAL_RANGES.dryingKg }, input.quantityBeforeKg, "Kg before"],
+      [{ min: 0, unit: "kg", usual: USUAL_RANGES.dryingKg }, input.quantityAfterKg, "Kg after"],
+    ] as [NumberRule, unknown, string][] : []),
+  ];
+  return checks.map(([rule, raw, name]) => numberProblem(rule, blank(raw) ? undefined : String(raw), name)).filter((p) => p?.soft).map((p) => p!.message);
 }

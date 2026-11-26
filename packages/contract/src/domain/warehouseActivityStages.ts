@@ -36,16 +36,28 @@ export const legacyLotStages = (r: Recorded): Stage[] =>
   warehouseActivityStages.filter((s) => s.id !== YARD_DRYING_STAGE && stageRecorded(r, s.id));
 
 /**
- * The two steps a Bin fills in on its own Warehouse activities page (team, 23 Nov 2026): "Other warehouse activities" and
- * "Activity ledger (sequence of record)" — the same forms a truck's Lot had, independent of each other. Since warehouse
- * activities moved to Bins (22 Nov 2026) new entries are made here; what a truck recorded before stays on its record.
+ * The two ledgers a Bin keeps on its own Warehouse activities page (team, 23 Nov 2026): "Other warehouse activities" and
+ * "Activity ledger (sequence of record)" — the same fields a truck's Lot had, independent of each other. Since warehouse
+ * activities moved to Bins (22 Nov 2026) new entries are made here; what a truck recorded before stays on its record. Each
+ * holds many entries (26 Nov 2026, user), not one form.
  */
 export const BIN_STAGE_IDS = ["n-otheract", "n-ledger"] as const;
 export type BinStageId = (typeof BIN_STAGE_IDS)[number];
 export const isBinStage = (stageId: string): stageId is BinStageId => (BIN_STAGE_IDS as readonly string[]).includes(stageId);
 
-/** One of a Bin's steps as the page reads it: the values by label, and who entered and last changed them. */
-export interface BinStageView {
+/**
+ * "Does this Bin need drying?" (25 Nov 2026): asked on the Bin's page, Yes or No, as a truck's drying was asked per Lot before.
+ * Yes leads into sun drying from the Bin; No is kept, and can be changed to Yes. Stored beside the Bin's forms under its own
+ * key, which isn't one of them (BIN_STAGE_IDS), so no form draws it.
+ */
+export type BinDryingAnswer = "yes" | "no";
+export const BIN_DRYING_DECISION_KEY = "drying-decision";
+export interface BinDryingDecision { answer: BinDryingAnswer; by: string | null; at: string }
+
+/** One entry of a Bin's ledger as the page reads it: the values by label, and who entered and last changed it. */
+export interface BinActivityEntryView {
+  id: number;
+  stageId: BinStageId;
   values: Record<string, string>;
   enteredBy: string | null;
   enteredAt: string;

@@ -86,8 +86,14 @@ export function SearchSelect({ id, value, options, onChange, placeholder = "Choo
                 className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer text-[13px] text-warmstone-800 ${i === c.active ? "bg-warmstone-100" : ""}`}
               >
                 <span className={`shrink-0 ${on ? "font-bold text-brand-700" : "font-medium"}`}>{o.label}</span>
-                {o.detail && <span className="min-w-0 truncate text-warmstone-500">{o.detail}</span>}
-                {on && <span aria-hidden="true" className="material-symbols-outlined ml-auto text-[16px] text-brand-700">check</span>}
+                {o.detail && <span className={`min-w-0 truncate ${o.detailTone === "emphasis" ? "font-medium text-danger-700" : "text-warmstone-500"}`}>{o.detail}</span>}
+                {o.figure && (
+                  <span className="ml-auto shrink-0 tabular-nums text-right">
+                    <span className="font-semibold text-warmstone-900">{o.figure.value}</span>
+                    {o.figure.note && <span className="ml-2 text-[12px] text-warmstone-500">{o.figure.note}</span>}
+                  </span>
+                )}
+                {on && <span aria-hidden="true" className={`material-symbols-outlined text-[16px] text-brand-700 ${o.figure ? "" : "ml-auto"}`}>check</span>}
               </li>
             );
           })}

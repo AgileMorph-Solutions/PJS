@@ -7,12 +7,15 @@ import { api } from "../repository/api";
 import { canAccessProduction } from "../data/roles";
 import { productionApprovalKinds, type ProductionApproval } from "@anagroci/contract/domain/productionApprovals";
 import type { SubmissionView, SupplierRequestView } from "../types/user";
+import type { QualitySubmissionView } from "@anagroci/contract/domain/qualityChecks";
 
 interface PendingApprovals {
   /** Form submissions waiting on this reviewer — the same list ApprovalsPage renders. */
   submissions: Loaded<SubmissionView>;
   /** Supplier requests waiting on this reviewer — the same list ApprovalsPage renders. */
   supplierRequests: Loaded<SupplierRequestView>;
+  /** The QFS Officer's drying, transfer lot and triage checks waiting on this reviewer (contract domain/qualityChecks.ts). */
+  qualityChecks: Loaded<QualitySubmissionView>;
   /** Production's queue for this person: loads to accept, checks to approve (contract domain/productionApprovals.ts). */
   production: Loaded<ProductionApproval>;
   /** Which queues this person has at all; a page shows only these. */
@@ -25,7 +28,7 @@ interface PendingApprovals {
 
 const empty = { rows: [], loading: false, error: null, refetch: async () => {} };
 const Ctx = createContext<PendingApprovals>({
-  submissions: empty, supplierRequests: empty, production: empty, reviews: { procurement: false, production: false }, count: null, refresh: () => {},
+  submissions: empty, supplierRequests: empty, qualityChecks: empty, production: empty, reviews: { procurement: false, production: false }, count: null, refresh: () => {},
 });
 
 const POLL_MS = 60_000;
@@ -49,16 +52,18 @@ export function PendingApprovalsProvider({ children }: { children: ReactNode }) 
   // Re-read on each navigation, so the count is fresh whichever page the reviewer lands on.
   const submissions = useSubmissions({ status: "submitted" }, { enabled: reviews.procurement, reloadOn: pathname });
   const supplierRequests = useSupplierRequests("pending", { enabled: reviews.procurement, reloadOn: pathname });
+  const qualityChecks = useLoaded(() => api.listQualitySubmissions({ status: "submitted" }), [], { enabled: reviews.procurement, reloadOn: pathname });
   const production = useLoaded(() => api.listProductionApprovals(), [], { enabled: reviews.production, reloadOn: pathname });
   const { refetch: refetchSubs } = submissions;
   const { refetch: refetchReqs } = supplierRequests;
   const { refetch: refetchProduction } = production;
+  const { refetch: refetchQuality } = qualityChecks;
   const any = reviews.procurement || reviews.production;
 
   const refresh = useCallback(() => {
     if (!any) return;
-    void Promise.all([refetchSubs(), refetchReqs(), refetchProduction()]);
-  }, [any, refetchSubs, refetchReqs, refetchProduction]);
+    void Promise.all([refetchSubs(), refetchReqs(), refetchProduction(), refetchQuality()]);
+  }, [any, refetchSubs, refetchReqs, refetchProduction, refetchQuality]);
 
   useEffect(() => {
     if (!any) return;
@@ -68,10 +73,10 @@ export function PendingApprovalsProvider({ children }: { children: ReactNode }) 
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", onVisible); };
   }, [any, refresh]);
 
-  const settled = !submissions.loading && !supplierRequests.loading && !production.loading;
-  const count = any && settled ? submissions.rows.length + supplierRequests.rows.length + production.rows.length : null;
+  const settled = !submissions.loading && !supplierRequests.loading && !production.loading && !qualityChecks.loading;
+  const count = any && settled ? submissions.rows.length + supplierRequests.rows.length + production.rows.length + qualityChecks.rows.length : null;
 
-  return <Ctx.Provider value={{ submissions, supplierRequests, production, reviews, count, refresh }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ submissions, supplierRequests, qualityChecks, production, reviews, count, refresh }}>{children}</Ctx.Provider>;
 }
 
 export const usePendingApprovals = () => useContext(Ctx);

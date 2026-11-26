@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DRYING_STATUS, binDryingStockProblem, canSendDryingToProduction, dryingFieldProblem, dryingGramsTotalProblem, dryingKor, dryingPhase, dryingQualityProblem, isOpenRound, onDryingYard, truckDryingBlocker, type DryingQuality } from "../src/domain/sunDrying";
+import { DRYING_STATUS, averageKgPerBag, estimatedIssuedKg, binDryingStockProblem, canSendDryingToProduction, dryingFieldProblem, dryingGramsTotalProblem, dryingKor, dryingPhase, dryingQualityProblem, isOpenRound, onDryingYard, truckDryingBlocker, type DryingQuality } from "../src/domain/sunDrying";
 import { stageGate } from "../src/domain/phaseGate";
 
 const q = (over: Partial<DryingQuality> = {}): DryingQuality => ({
@@ -76,14 +76,14 @@ describe("the truck's yard drying and a Bin's drying are exclusive", () => {
 // 23 Nov 2026: the drying form took anything; it now checks each field with the rules a truck's fields use.
 describe("what the drying form checks", () => {
   it("wants numbers, in range, with a whole nut count and bags", () => {
-    expect(dryingFieldProblem("inputMoisture", "abc")).toEqual({ message: `"abc" isn't a number.`, soft: false });
-    expect(dryingFieldProblem("inputMoisture", "140")!.message).toMatch(/Above 100 %/);
+    expect(dryingFieldProblem("inputMoisture", "abc")).toEqual({ message: `Moisture must be a number, not "abc".`, soft: false });
+    expect(dryingFieldProblem("inputMoisture", "140")!.message).toBe("Moisture is above 100 %. Please check.");
     expect(dryingFieldProblem("inputMoisture", "13")).toBeUndefined(); // wet before drying is why it is dried
     expect(dryingFieldProblem("outputMoisture", "13")).toMatchObject({ soft: true, message: expect.stringMatching(/still too wet/) });
-    expect(dryingFieldProblem("outputNutCount", "180.5")!.message).toBe("Not a whole number.");
-    expect(dryingFieldProblem("inputKor", "1100")!.message).toMatch(/Above 80/);
-    expect(dryingFieldProblem("outputGoodKernelG", "-3")!.message).toMatch(/Below 0/);
-    expect(dryingFieldProblem("issuedNetKg", "0")!.message).toBe("Should be more than 0.");
+    expect(dryingFieldProblem("outputNutCount", "180.5")!.message).toBe("Nut count must be a whole number.");
+    expect(dryingFieldProblem("inputKor", "1100")!.message).toMatch(/^KOR is above 80/);
+    expect(dryingFieldProblem("outputGoodKernelG", "-3")!.message).toBe("Good kernel is below 0 g. Please check.");
+    expect(dryingFieldProblem("issuedNetKg", "0")!.message).toBe("Net kg issued should be more than 0.");
     expect(dryingFieldProblem("issuedNetKg", "")).toBeUndefined(); // blank is the "required" rule's
   });
   it("adds up the cut test against its 1000 g sample", () => {
@@ -97,3 +97,21 @@ describe("what the drying form checks", () => {
   });
 });
 
+// 26 Nov 2026 (user): weight before drying is estimated from the bags issued.
+describe("weight before drying, estimated from the bags issued", () => {
+  it("averages kg per bag over the pieces that recorded both", () => {
+    expect(averageKgPerBag([{ netKg: 40822, bags: 478 }])).toBeCloseTo(85.4, 1);
+    // A Bin's Lots: one with no bag count is left out rather than counted as 0 bags.
+    expect(averageKgPerBag([{ netKg: 8000, bags: 100 }, { netKg: 9000, bags: 100 }, { netKg: 5000, bags: null }])).toBe(85);
+    expect(averageKgPerBag([{ netKg: 5000 }])).toBeNull();
+    expect(averageKgPerBag([])).toBeNull();
+  });
+  it("is bags × kg per bag, to the kg; nothing without both", () => {
+    expect(estimatedIssuedKg("120", 85)).toBe("10200");
+    expect(estimatedIssuedKg("478", 40822 / 478)).toBe("40822"); // the whole truck gives back its net
+    expect(estimatedIssuedKg("", 85)).toBeUndefined();
+    expect(estimatedIssuedKg("12.5", 85)).toBeUndefined();
+    expect(estimatedIssuedKg("0", 85)).toBeUndefined();
+    expect(estimatedIssuedKg("120", null)).toBeUndefined();
+  });
+});

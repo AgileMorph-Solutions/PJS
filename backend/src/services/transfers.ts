@@ -23,9 +23,12 @@
 import { Prisma } from "@prisma/client";
 import { yearOf } from "@anagroci/contract/domain/ids";
 import type { ReceiptRecord, TransferRequest, TransferStatus } from "@anagroci/contract/types/receipt";
-import { canTransferBetween, dispatchWeightProblem, transferFieldProblem, formatLotPiece, lotPieceProblem, pieceChanged, suggestedPiece, TRANSFER_DIRECTION_MESSAGE, transferDestinationGroups, transferState, transferVariance, type TransferDestination, type TransferFacts, type TransferValueKind } from "@anagroci/contract/domain/transfers";
+import { canTransferBetween, driverPhoneProblem, normalizeName, normalizePhone, normalizeTruckNo, sameDriver, transferFieldProblem, formatLotPiece, lotPieceProblem, pieceChanged, suggestedPiece, TRANSFER_DIRECTION_MESSAGE, transferDestinationGroups, transferState, transferVariance, type TransferDestination, type TransferValueKind } from "@anagroci/contract/domain/transfers";
 import { parseQty } from "@anagroci/contract/domain/receiptMath";
+import { lotLeft, lotNetKg, lotPieceProblem as transferLotPieceProblem, pieceNetKg, pieceWeightProblem, readNumber } from "@anagroci/contract/domain/transferLot";
+import { isGrnComplete } from "@anagroci/contract/domain/recordLock";
 import { deriveStatus } from "@anagroci/contract/domain/receiptStatus";
+import { canCorrectRecords } from "@anagroci/contract/data/roles";
 import { prisma } from "../db.js";
 import { binWithoutWarehouseMessage, ValidationError } from "../domain/validation.js";
 import { toReceiptRecord } from "../serialize.js";
@@ -35,8 +38,12 @@ import { resolveSite } from "../domain/site.js";
 
 type Tx = Prisma.TransactionClient;
 
-/** A Bin line (binCode, no receiptId) — how a truck is loaded now — or a Lot line (receiptId), as BKTs were made before. */
+/**
+ * A piece of a transfer lot (transferLotId + bags) — how a truck is loaded since 24 Nov 2026 — or, as BKTs were made before,
+ * a Bin line (binCode, no receiptId) or a Lot line (receiptId).
+ */
 export interface TransferLineInput {
+  transferLotId?: number | string | null;
   receiptId?: string | null;
   bags?: number | null;
   netWeightKg?: number | string | null;
@@ -45,11 +52,11 @@ export interface TransferLineInput {
 }
 
 /** Which line of a BKT a per-line value is for: by its id, or — on a Lot line — by its receipt, as older clients send. */
-interface LineRef {
+export interface LineRef {
   lineId?: number | null;
   receiptId?: string | null;
 }
-const refersTo = (g: LineRef, l: { id: number; receiptId: string | null }) =>
+export const refersTo = (g: LineRef, l: { id: number; receiptId: string | null }) =>
   (g.lineId !== undefined && g.lineId !== null && Number(g.lineId) === l.id) || (Boolean(g.receiptId) && g.receiptId === l.receiptId);
 
 export interface TransferInput {
@@ -97,7 +104,22 @@ export interface ReceiveInput {
   lines?: (LineRef & { binCode?: string | null; bagsReceived?: number | string | null })[];
 }
 
-const INCLUDE = {
+/** What a lot line needs of its transfer lot: its number, its weighing to share by bags, and the quality it was weighed with. */
+export const LOT_OF_LINE = { select: { id: true, lotNo: true, grossWeightKg: true, moisture: true, kor: true, nutCount: true, bins: { select: { bags: true, binCode: true } } } } as const;
+
+/** What a BKT reads of each lot's reception at the receiving warehouse: how far it got, and what was counted and weighed. */
+const RECEPTION_OF_LINE = {
+  select: {
+    id: true, lockedAt: true,
+    lot: { select: { lotNumber: true } },
+    branches: { where: { stageId: "n-qfs" }, select: { branchId: true } },
+    unload: { select: { sacs: true } },
+    gross: { select: { grossWtKgs: true } },
+    grn: { select: { grnWeight: true } },
+  },
+} as const;
+
+export const INCLUDE = {
   dispatcher: { select: { displayName: true } },
   receiver: { select: { displayName: true } },
   lines: {
@@ -110,38 +132,71 @@ const INCLUDE = {
           verify: { select: { fiche: true } },
         },
       },
+      transferLot: LOT_OF_LINE,
+      // The lot's reception at the receiving warehouse (24 Nov 2026): what arrived is read from it, never copied here.
+      reception: RECEPTION_OF_LINE,
     },
   },
 } as const;
 
 type TransferRow = Prisma.TransferRequestGetPayload<{ include: typeof INCLUDE }>;
+type LotOfLine = Prisma.TransferLotGetPayload<typeof LOT_OF_LINE>;
 
 const num = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
 
-function toWire(t: TransferRow): TransferRequest {
+/**
+ * A line's net kg. A piece of a transfer lot is its share of the lot's weighing by bags, unless a weight was entered for it
+ * (user, 24 Nov 2026: shown worked out, but it may be changed); older lines kept the net typed on them.
+ */
+function lineNetKg(l: { bags: number | null; netWeightKg: Prisma.Decimal | null; transferLot?: LotOfLine | null }): number | null {
+  if (!l.transferLot || l.netWeightKg !== null) return num(l.netWeightKg);
+  const lotBags = l.transferLot.bins.reduce((a, b) => a + b.bags, 0);
+  return pieceNetKg(lotNetKg(num(l.transferLot.grossWeightKg), lotBags), lotBags, l.bags ?? 0);
+}
+
+export function toWire(t: TransferRow): TransferRequest {
   const lines = t.lines.map((l) => ({
     id: l.id,
+    transferLotId: l.transferLotId,
+    transferLotNo: l.transferLot?.lotNo ?? null,
+    transferLotBins: (l.transferLot?.bins ?? []).map((b) => b.binCode),
     receiptId: l.receiptId,
     lotNumber: l.receipt?.lot?.lotNumber ?? null,
     supplierName: l.receipt?.supplierName ?? "",
     vehicleNo: l.receipt?.vehicleNo ?? "",
     fiche: l.receipt?.verify?.fiche ?? null,
     bags: l.bags,
-    netWeightKg: num(l.netWeightKg),
-    moisture: num(l.moisture),
-    kor: num(l.kor),
-    nutCount: l.nutCount,
+    netWeightKg: lineNetKg(l),
+    // A lot line leaves with its lot's weighed quality unless dispatch measured it again: shown from the lot until then.
+    moisture: num(l.moisture ?? l.transferLot?.moisture ?? null),
+    kor: num(l.kor ?? l.transferLot?.kor ?? null),
+    nutCount: l.nutCount ?? l.transferLot?.nutCount ?? null,
     binCode: l.binCode,
     receivedBinCode: l.receivedBinCode,
     bagsReceived: l.bagsReceived,
+    receptionId: l.reception?.id ?? null,
+    receivedLotNo: l.reception?.lot?.lotNumber ?? null,
   }));
+  // Received on the Reception page (24 Nov 2026): the BKT is "being received" while any of its lots' receptions is open, and
+  // received once each has its GRN (or was rejected). What arrived is then the receptions' own bags and gross, added up.
+  const receptions = t.lines.map((l) => l.reception);
+  const started = receptions.some(Boolean);
+  const finished = (r: (typeof receptions)[number]) =>
+    Boolean(r) && (r!.branches.some((b) => b.branchId === "fail") || isGrnComplete({ "n-grn": { "GRN Weight (kept separate from Gross/Net/Paid)": r!.grn?.grnWeight ?? "" } }, false));
+  const allFinished = started && receptions.every(finished);
+  const total = (pick: (r: NonNullable<(typeof receptions)[number]>) => string | null | undefined) => {
+    const xs = receptions.map((r) => (r ? parseQty(pick(r) ?? undefined) : undefined));
+    return xs.every((x) => x !== undefined) ? xs.reduce<number>((a, x) => a + x!, 0) : null;
+  };
   const facts = {
-    status: t.status as TransferStatus,
+    status: (started ? (allFinished ? "received" : "dispatched") : t.status) as TransferStatus,
+    receiving: started && !allFinished,
     lines,
     dispatchedGrossKg: num(t.dispatchedGrossKg),
-    bagsReceived: t.bagsReceived,
-    receivedGrossKg: num(t.receivedGrossKg),
+    bagsReceived: started ? total((r) => r.unload?.sacs) : t.bagsReceived,
+    receivedGrossKg: started ? total((r) => r.gross?.grossWtKgs) : num(t.receivedGrossKg),
   };
+  const lastReception = receptions.filter((r) => r?.lockedAt).map((r) => r!.lockedAt!.toISOString()).sort().pop() ?? null;
   return {
     id: t.id,
     transferDate: t.transferDate,
@@ -160,7 +215,7 @@ function toWire(t: TransferRow): TransferRequest {
     dispatchedGrossKg: facts.dispatchedGrossKg,
     dispatchedAt: t.dispatchedAt?.toISOString() ?? null,
     dispatchedBy: t.dispatcher?.displayName ?? null,
-    bagsReceived: t.bagsReceived,
+    bagsReceived: facts.bagsReceived,
     damagedBags: t.damagedBags,
     receivedGrossKg: facts.receivedGrossKg,
     korReceived: num(t.korReceived),
@@ -168,7 +223,7 @@ function toWire(t: TransferRow): TransferRequest {
     nutCountReceived: t.nutCountReceived,
     receivedComment: t.receivedComment,
     receivedLotNoRaw: t.receivedLotNoRaw,
-    receivedAt: t.receivedAt?.toISOString() ?? null,
+    receivedAt: t.receivedAt?.toISOString() ?? (allFinished ? lastReception : null),
     receivedBy: t.receiver?.displayName ?? null,
     state: transferState(facts),
     variance: transferVariance(facts),
@@ -191,24 +246,24 @@ export async function getTransfer(id: string) {
   return row ? toWire(row) : null;
 }
 
-function decimal(v: string | number | null | undefined, what: string): Prisma.Decimal | null {
+export function decimal(v: string | number | null | undefined, what: string): Prisma.Decimal | null {
   if (v === null || v === undefined || String(v).trim() === "") return null;
   const n = parseQty(v);
   if (n === undefined || n < 0) throw new ValidationError(`${what} "${v}" isn't a number.`);
   return new Prisma.Decimal(n);
 }
 
-function whole(v: string | number | null | undefined, what: string): number | null {
+export function whole(v: string | number | null | undefined, what: string): number | null {
   if (v === null || v === undefined || String(v).trim() === "") return null;
   const n = Number(String(v).trim());
   if (!Number.isInteger(n) || n < 0) throw new ValidationError(`${what} "${v}" isn't a whole number.`);
   return n;
 }
 
-const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
+export const text = (v: string | null | undefined) => (v?.trim() ? v.trim() : null);
 
 /** The form checks the dispatch and arrival forms show as they are typed (contract transferFieldProblem); numbers are decimal()/whole()'s. */
-function formCheck(values: [TransferValueKind, string, string | null | undefined][]) {
+export function formCheck(values: [TransferValueKind, string, string | null | undefined][]) {
   for (const [kind, label, value] of values) {
     const problem = transferFieldProblem(kind, value);
     if (problem) throw new ValidationError(`${label} "${value}": ${problem}`);
@@ -216,7 +271,7 @@ function formCheck(values: [TransferValueKind, string, string | null | undefined
 }
 
 /** Unit to Central only. Checked again at dispatch, so a BKT created before this rule can't leave either. */
-async function assertTransferDirection(tx: Tx, from: string, to: string) {
+export async function assertTransferDirection(tx: Tx, from: string, to: string) {
   if (!canTransferBetween(await siteTypeOf(tx, from), await siteTypeOf(tx, to))) throw new ValidationError(TRANSFER_DIRECTION_MESSAGE);
 }
 
@@ -247,17 +302,55 @@ async function addBinLine(tx: Tx, transferId: string, from: string, line: Transf
 }
 
 /**
- * Each line is a Lot, or a Bin (addBinLine). A Lot must be at the sending warehouse, actually have a Lot (passed quality),
+ * A piece of a transfer lot (services/transferLots.ts): `bags` of it go on this truck. The lot must be the sending warehouse's,
+ * weighed (its net is what the piece's weight is shared from, and its quality is what leaves with it), and still have that
+ * many bags left: putting more of it on trucks than it holds would send stock that isn't there.
+ */
+async function addLotLine(tx: Tx, transferId: string, from: string, line: TransferLineInput) {
+  const id = Number(line.transferLotId);
+  if (!Number.isInteger(id)) throw new ValidationError(`"${line.transferLotId}" isn't a transfer lot.`);
+  const lot = await tx.transferLot.findUnique({ where: { id }, include: { bins: { select: { bags: true } }, lines: { select: { transferId: true, bags: true } }, returns: { select: { bags: true } } } });
+  if (!lot) throw new ValidationError("That transfer lot doesn't exist.");
+  if ((await siteOf(tx, lot.warehouse)) !== from) throw new ValidationError(`Lot ${lot.lotNo} is at ${lot.warehouse}, not ${from}.`);
+  if (lot.grossWeightKg === null) throw new ValidationError(`Lot ${lot.lotNo} hasn't been weighed yet. Record its weight, then it can go on a truck.`);
+  if (lot.moisture === null || lot.kor === null || lot.nutCount === null) {
+    throw new ValidationError(`Lot ${lot.lotNo} has no quality yet (moisture, KOR, nut count): the QFS Officer records it, then it can go on a truck.`);
+  }
+  if (lot.lines.some((l) => l.transferId === transferId)) throw new ValidationError(`Lot ${lot.lotNo} is already on this transfer.`);
+  // Bags put back in a Bin (26 Nov 2026) can't go on a truck too.
+  const { leftBags } = lotLeft(lot.bins.reduce((a, b) => a + b.bags, 0), null, lot.lines.map((l) => ({ bags: l.bags ?? 0 })), lot.returns);
+  const problem = transferLotPieceProblem(line.bags ?? "", leftBags);
+  if (problem) throw new ValidationError(`Bags of Lot ${lot.lotNo}: ${problem.message}`);
+  const bags = readNumber(line.bags)!;
+  // The weight starts as the lot's share by bags; one entered is kept (a warning on the form when far off, never refused).
+  // Left blank, it stays worked out from the lot, so it follows the lot rather than freezing a copy.
+  const given = line.netWeightKg === null || line.netWeightKg === undefined || String(line.netWeightKg).trim() === "" ? null : line.netWeightKg;
+  let netWeightKg: Prisma.Decimal | null = null;
+  if (given !== null) {
+    const lotBags = lot.bins.reduce((a, b) => a + b.bags, 0);
+    const weightProblem = pieceWeightProblem(given, pieceNetKg(lotNetKg(num(lot.grossWeightKg), lotBags), lotBags, bags));
+    if (weightProblem && !weightProblem.soft) throw new ValidationError(`Weight of Lot ${lot.lotNo}: ${weightProblem.message}`);
+    netWeightKg = new Prisma.Decimal(readNumber(given)!);
+  }
+  await tx.transferRequestLine.create({ data: { transferId, transferLotId: id, bags, netWeightKg } });
+}
+
+/**
+ * Each line is a piece of a transfer lot (addLotLine), or on older BKTs a Lot or a Bin (addBinLine). A Lot must be at the sending warehouse, actually have a Lot (passed quality),
  * not be rejected, be in a Bin with its GRN complete (picking it marks "Yes — transfers out" on its receipt) or already
  * marked so, and still have something left to send: a Lot can go on several BKTs, but never more of it than it holds
  * (lotPieceProblem).
  */
 async function addLines(tx: Tx, transferId: string, from: string, lines: TransferLineInput[], opts: WriteOpts) {
-  const ids = lines.flatMap((l) => (l.receiptId ? [l.receiptId] : []));
+  const isLot = (l: TransferLineInput) => l.transferLotId !== undefined && l.transferLotId !== null && String(l.transferLotId).trim() !== "";
+  const lots = lines.filter(isLot).map((l) => String(l.transferLotId).trim());
+  if (new Set(lots).size !== lots.length) throw new ValidationError("The same lot is listed twice on this transfer: put all its bags on one line.");
+  const ids = lines.flatMap((l) => (l.receiptId && !isLot(l) ? [l.receiptId] : []));
   if (new Set(ids).size !== ids.length) throw new ValidationError("The same Lot is listed twice on this transfer.");
-  const bins = lines.flatMap((l) => (l.receiptId ? [] : [text(l.binCode)?.toUpperCase() ?? ""]));
+  const bins = lines.flatMap((l) => (l.receiptId || isLot(l) ? [] : [text(l.binCode)?.toUpperCase() ?? ""]));
   if (new Set(bins).size !== bins.length) throw new ValidationError("The same Bin is listed twice on this transfer.");
   for (const line of lines) {
+    if (isLot(line)) { await addLotLine(tx, transferId, from, line); continue; }
     if (!line.receiptId) { await addBinLine(tx, transferId, from, line); continue; }
     const receiptId = line.receiptId;
     const receipt = await tx.receipt.findUnique({
@@ -308,7 +401,7 @@ async function addLines(tx: Tx, transferId: string, from: string, lines: Transfe
   }
 }
 
-async function timeline(tx: Tx, receiptId: string, note: string, opts: WriteOpts) {
+export async function timeline(tx: Tx, receiptId: string, note: string, opts: WriteOpts) {
   const fresh = await loadReceiptRow(receiptId, tx);
   await tx.timelineEntry.create({
     data: { receiptId, status: deriveStatus(toReceiptRecord(fresh!) as ReceiptRecord), at: new Date().toISOString(), actorId: opts.actor?.id, note },
@@ -319,7 +412,7 @@ export async function createTransfer(input: TransferInput, opts: WriteOpts = {})
   const date = input.transferDate?.trim();
   if (!date || yearOf(date) === undefined) throw new ValidationError("A transfer needs a date (YYYY-MM-DD).");
   if (!input.fromWarehouse?.trim() || !input.toWarehouse?.trim()) throw new ValidationError("A transfer needs a sending and a receiving warehouse.");
-  if (!input.lines?.length) throw new ValidationError("A transfer needs at least one Bin.");
+  if (!Array.isArray(input.lines) || !input.lines.length) throw new ValidationError("A transfer needs at least one lot on the truck.");
 
   const row = await prisma.$transaction(async (tx) => {
     const from = await siteOf(tx, input.fromWarehouse!.trim());
@@ -342,13 +435,22 @@ export async function createTransfer(input: TransferInput, opts: WriteOpts = {})
   return toWire(row);
 }
 
-/** More Lots can be added only while the request hasn't left yet. */
+/**
+ * More lots can be added while the truck hasn't left. After that only an Admin or the sending Warehouse Incharge adds one
+ * (25–26 Nov 2026: they correct records, contract canCorrectRecords; the route holds the Incharge to the sending side), and only a lot made to send, while nothing on the truck has arrived: a lot then leaves with its own weighing.
+ */
 export async function addTransferLines(id: string, lines: TransferLineInput[], opts: WriteOpts = {}) {
-  if (!lines.length) throw new ValidationError("Add at least one Bin.");
+  if (!lines.length) throw new ValidationError("Add at least one lot.");
   const row = await prisma.$transaction(async (tx) => {
-    const t = await tx.transferRequest.findUnique({ where: { id } });
+    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { reception: { select: { id: true } } } } } });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
-    if (t.status !== "requested") throw new ValidationError(`Transfer ${id} is already ${t.status} — nothing can be added now.`);
+    if (t.status !== "requested") {
+      const arrived = t.status === "received" || t.lines.some((l) => l.reception);
+      if (!canCorrectRecords(opts.actor?.role) || arrived) throw new ValidationError(`Transfer ${id} is already ${arrived ? "received" : t.status} — nothing can be added now.`);
+      if (lines.some((l) => l.transferLotId === undefined || l.transferLotId === null || String(l.transferLotId).trim() === "")) {
+        throw new ValidationError(`Transfer ${id} has left: only a lot made to send (weighed, with its quality) can be added to it now.`);
+      }
+    }
     await assertTransferDirection(tx, t.fromWarehouse, t.toWarehouse);
     await addLines(tx, id, t.fromWarehouse, lines, opts);
     return tx.transferRequest.findUniqueOrThrow({ where: { id }, include: INCLUDE });
@@ -381,7 +483,28 @@ export async function transferSites(t: { fromWarehouse: string; toWarehouse: str
 }
 
 /** "1796 GC 01 / 3922-BB-04" and "1796GC01/3922BB04" are the same rig. */
-const rig = (truck: string) => truck.toUpperCase().replace(/[\s-]+/g, "");
+export const rig = (truck: string) => truck.toUpperCase().replace(/[\s-]+/g, "");
+
+/**
+ * A truck carries one BKT at a time, and a driver drives one truck at a time (user, 24 Nov 2026: unique by driver name +
+ * number): neither may still be out on another BKT. On the road means dispatched and not yet arrived — its reception
+ * hasn't started at the receiving warehouse (24 Nov 2026; before, a reception never changed the BKT's own status, so a truck
+ * stayed "out" for good). Checked at dispatch and when an Admin corrects a BKT's truck or driver.
+ */
+export async function assertTruckAndDriverFree(
+  tx: Tx, id: string, fromWarehouse: string, truckNo: string, driver: { driver: string | null; driverPhone: string | null },
+) {
+  const out = await tx.transferRequest.findMany({
+    where: { status: "dispatched", id: { not: id }, lines: { none: { reception: { isNot: null } } } },
+    select: { id: true, truckNo: true, driver: true, driverPhone: true, fromWarehouse: true, toWarehouse: true, toStore: true },
+  });
+  const clash = out.find((o) => o.truckNo && rig(o.truckNo) === rig(truckNo));
+  if (clash) throw new TruckOnTheRoadError(truckNo, clash);
+  const busy = out.find((o) => sameDriver(o, driver));
+  if (busy) {
+    throw new ValidationError(`Driver ${driver.driver} (${driver.driverPhone}) is still driving another truck that hasn't arrived${busy.fromWarehouse === fromWarehouse ? ` (${busy.id})` : ""}. Check the driver, or wait for that truck to be received.`);
+  }
+}
 
 /**
  * The sending warehouse sends the truck. One BKT is one truck / voyage, so the truck is required and
@@ -389,15 +512,29 @@ const rig = (truck: string) => truck.toUpperCase().replace(/[\s-]+/g, "");
  * decision, Nov 2026): the truck, who drives it, the loaded weight, and each Lot's moisture, KOR and nut count.
  */
 export async function dispatchTransfer(id: string, input: DispatchInput, opts: WriteOpts = {}) {
-  const truckNo = text(input.truckNo);
+  // Each written one way (contract normalizeTruckNo / normalizeName / normalizePhone), so one truck or driver is one value.
+  const truckNo = normalizeTruckNo(input.truckNo);
   if (!truckNo) throw new ValidationError("A transfer needs its truck number to be dispatched — one BKT is one truck.");
   const whReceiptNo = text(input.whReceiptNo);
   if (!whReceiptNo) throw new ValidationError("Enter the warehouse receipt number: a dispatch is recorded against it.");
   formCheck([["receiptNo", "Warehouse receipt no.", whReceiptNo], ["name", "Transporter", input.transporter]]);
+  const phoneProblem = driverPhoneProblem(input.driverPhone);
+  if (phoneProblem && !phoneProblem.soft) throw new ValidationError(`Driver phone: ${phoneProblem.message}`);
+  const driver = { driver: normalizeName(input.driver) || null, driverPhone: normalizePhone(input.driverPhone) || null };
   const gross = decimal(input.dispatchedGrossKg, "Loaded weight");
 
   const row = await prisma.$transaction(async (tx) => {
-    const t = await tx.transferRequest.findUnique({ where: { id }, include: { lines: { select: { id: true, receiptId: true, binCode: true, bags: true, netWeightKg: true } } } });
+    const t = await tx.transferRequest.findUnique({
+      where: { id },
+      include: {
+        lines: {
+          select: {
+            id: true, receiptId: true, binCode: true, bags: true, netWeightKg: true,
+            transferLot: LOT_OF_LINE,
+          },
+        },
+      },
+    });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
     if (t.status !== "requested") throw new ValidationError(`Transfer ${id} is already ${t.status}.`);
     await assertTransferDirection(tx, t.fromWarehouse, t.toWarehouse);
@@ -406,11 +543,13 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
       !text(input.transporter) && "transporter", !text(input.driver) && "driver", !text(input.driverPhone) && "driver phone", gross === null && "loaded weight",
     ].filter(Boolean);
     if (missing.length) throw new ValidationError(`Fill in the ${missing.join(", ")} to dispatch the truck.`);
-    const weightProblem = gross === null ? null : dispatchWeightProblem(Number(gross), t.lines.map((l) => ({ bags: l.bags, netWeightKg: num(l.netWeightKg) })));
-    if (weightProblem) throw new ValidationError(weightProblem);
+    if (gross !== null && Number(gross) <= 0) throw new ValidationError("Loaded weight: Should be more than 0.");
+    // A loaded weight far from what the lots add up to (contract dispatchWeightProblem) only warns, on the form: the scale is
+    // what was sent (user, 24 Nov 2026), so it never stops the dispatch.
 
-    // Everything leaves with its quality on the record. A Bin's is measured at dispatch: the Bin mixes Lots, so no one quality
-    // check speaks for it. A Lot line takes its own quality check's result unless re-measured here.
+    // Everything leaves with its quality on the record. A transfer lot's was measured when it was weighed; a Bin's is measured
+    // at dispatch (the Bin mixes Lots, so no one quality check speaks for it); a Lot line takes its own quality check's result.
+    // Each can be measured again here.
     const quality = new Map<number, { moisture: Prisma.Decimal; kor: Prisma.Decimal; nutCount: number | null }>();
     for (const l of t.lines) {
       const given = input.lines?.find((x) => refersTo(x, l));
@@ -420,31 +559,30 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
           select: { lot: { select: { lotNumber: true } }, qfs: { select: { finalMoistureNum: true, korNum: true, finalKorNum: true, finalNutCountNum: true } } },
         })
         : null;
-      const name = l.receiptId ? `Lot ${r?.lot?.lotNumber ?? l.receiptId}` : `Bin ${l.binCode}`;
-      const moisture = decimal(given?.moisture, "Moisture") ?? r?.qfs?.finalMoistureNum ?? null;
-      const kor = decimal(given?.kor, "KOR") ?? r?.qfs?.finalKorNum ?? r?.qfs?.korNum ?? null;
-      const nutCount = whole(given?.nutCount, "Nut count") ?? (r?.qfs?.finalNutCountNum === null || r?.qfs?.finalNutCountNum === undefined ? null : Math.round(Number(r.qfs.finalNutCountNum)));
+      const lot = l.transferLot;
+      const name = lot ? `Lot ${lot.lotNo}` : l.receiptId ? `Lot ${r?.lot?.lotNumber ?? l.receiptId}` : `Bin ${l.binCode}`;
+      const moisture = decimal(given?.moisture, "Moisture") ?? lot?.moisture ?? r?.qfs?.finalMoistureNum ?? null;
+      const kor = decimal(given?.kor, "KOR") ?? lot?.kor ?? r?.qfs?.finalKorNum ?? r?.qfs?.korNum ?? null;
+      const nutCount = whole(given?.nutCount, "Nut count") ?? lot?.nutCount
+        ?? (r?.qfs?.finalNutCountNum === null || r?.qfs?.finalNutCountNum === undefined ? null : Math.round(Number(r.qfs.finalNutCountNum)));
       const absent = moisture === null ? "moisture" : kor === null ? "KOR" : nutCount === null ? "nut count" : null;
       if (absent) {
         throw new ValidationError(l.receiptId
           ? `${name} has no ${absent} on record from its quality check. Enter the ${absent} for the dispatch.`
           : `Enter the ${absent} of ${name} for the dispatch.`);
       }
+      if (nutCount !== null && nutCount <= 0) throw new ValidationError(`${name}: nut count must be more than 0.`);
       if (Number(moisture) < 0 || Number(moisture) > 100) throw new ValidationError(`${name}: moisture must be between 0 and 100.`);
       if (Number(kor) < 0 || Number(kor) > 80) throw new ValidationError(`${name}: KOR must be between 0 and 80.`);
       quality.set(l.id, { moisture: moisture!, kor: kor!, nutCount });
     }
 
-    const out = await tx.transferRequest.findMany({
-      where: { status: "dispatched", id: { not: id } }, select: { id: true, truckNo: true, fromWarehouse: true, toWarehouse: true, toStore: true },
-    });
-    const clash = out.find((o) => o.truckNo && rig(o.truckNo) === rig(truckNo));
-    if (clash) throw new TruckOnTheRoadError(truckNo, clash);
+    await assertTruckAndDriverFree(tx, id, t.fromWarehouse, truckNo, driver);
 
     await tx.transferRequest.update({
       where: { id },
       data: {
-        status: "dispatched", truckNo, transporter: text(input.transporter), driver: text(input.driver), driverPhone: text(input.driverPhone),
+        status: "dispatched", truckNo, transporter: normalizeName(input.transporter) || null, ...driver,
         dispatchedGrossKg: gross, dispatchWhReceiptNo: whReceiptNo, dispatchedAt: new Date(), dispatchedBy: opts.actor?.id ?? null,
       },
     });
@@ -461,9 +599,9 @@ export async function dispatchTransfer(id: string, input: DispatchInput, opts: W
  * of master bins) of the receiving site. A bin with no warehouse yet is refused until an admin sets one: Bouaké's and
  * Yakro's bins are separate sets, and accepting unowned ones let a truck at Yakro be put in a Bouaké bin.
  */
-type ReceivedLine = { id: number; receiptId: string | null; binCode: string | null; receipt: { lot: { lotNumber: string | null } | null } | null };
+export type ReceivedLine = { id: number; receiptId: string | null; binCode: string | null; receipt: { lot: { lotNumber: string | null } | null } | null };
 
-async function receivingBins(
+export async function receivingBins(
   tx: Tx, toWarehouse: string,
   lines: ReceivedLine[],
   given: (LineRef & { binCode?: string | null })[],
@@ -486,6 +624,12 @@ async function receivingBins(
 }
 
 const NO_BAGS = "Enter the bags received — it is what the transfer is checked against.";
+
+/** Only a truck on the road can be received or rejected, and only once. */
+function assertReceivable(t: { id: string; status: string }) {
+  if (t.status === "requested") throw new ValidationError(`Transfer ${t.id} hasn't been dispatched yet — there is nothing to receive.`);
+  if (t.status === "received") throw new ValidationError(`Transfer ${t.id} was already received.`);
+}
 
 /**
  * The bags of each Lot counted off the truck, and the truck's total. Counted per Lot, the total is their sum (one
@@ -531,21 +675,16 @@ export async function receiveTransfer(id: string, input: ReceiveInput, opts: Wri
       include: { lines: { select: { id: true, receiptId: true, binCode: true, bags: true, netWeightKg: true, receipt: { select: { lot: { select: { lotNumber: true } } } } } } },
     });
     if (!t) throw Object.assign(new Error("Transfer not found"), { code: "P2025" });
-    if (t.status === "requested") throw new ValidationError(`Transfer ${id} hasn't been dispatched yet — there is nothing to receive.`);
-    if (t.status === "received") throw new ValidationError(`Transfer ${id} was already received.`);
+    assertReceivable(t);
+    // Being received on the Reception page, lot by lot: a whole-truck arrival here would record it twice.
+    if (await tx.receipt.count({ where: { transferLine: { transferId: id } } })) {
+      throw new ValidationError(`${id} is being received on the Reception page (From Unit warehouse). Record its arrival there.`);
+    }
     const binOf = await receivingBins(tx, t.toWarehouse, t.lines, input.lines ?? []);
     const { perLot, total: bags } = bagsPerLot(t.lines, givenPerLot, givenTotal);
     if (damaged !== null && damaged > bags) throw new ValidationError("More damaged bags than bags received.");
-    // What arrived has to match what left, or the receiving warehouse says why: the reason is what a discrepancy is reviewed by.
-    const arrival: TransferFacts = {
-      status: "received", lines: t.lines.map((l) => ({ bags: l.bags, netWeightKg: num(l.netWeightKg) })),
-      dispatchedGrossKg: num(t.dispatchedGrossKg), bagsReceived: bags, receivedGrossKg: Number(gross),
-    };
-    if (transferState(arrival) === "discrepancy" && !text(input.receivedComment)) {
-      const v = transferVariance(arrival);
-      const parts = [v.bagVariance ? `${v.bagVariance > 0 ? "+" : ""}${v.bagVariance} bags` : null, v.weightVarianceKg ? `${v.weightVarianceKg > 0 ? "+" : ""}${v.weightVarianceKg} kg` : null].filter(Boolean);
-      throw new ValidationError(`What arrived differs from what was sent (${parts.join(", ")}). Say why in the comment: damaged bags, a short load, a weighing difference…`);
-    }
+    // What arrived differing from what left only warns (user, 24 Nov 2026): the BKT reads as a discrepancy, and the comment
+    // is where the warehouse says why, but nothing is held back for want of one.
 
     await tx.transferRequest.update({
       where: { id },

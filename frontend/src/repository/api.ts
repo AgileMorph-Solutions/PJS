@@ -4,9 +4,10 @@
  * Same-origin /api in both dev and prod — vite proxies it, nginx proxies it — so the browser never
  * needs CORS and there is no API base URL to configure per environment.
  */
+import type { QualityChecksView, QualitySubmissionKind, QualitySubmissionView } from "@anagroci/contract/domain/qualityChecks";
 import type { TransferDestination } from "@anagroci/contract/domain/transfers";
 import type {
-  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SiteFieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest,
+  ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SiteFieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest, TransferLot,
 } from "@anagroci/contract/types/receipt";
 import type { ChangeLogRecord } from "@anagroci/contract/types/changeLog";
 import type { FicheView } from "@anagroci/contract/domain/fiche";
@@ -39,8 +40,19 @@ export class ApiError extends Error {
 
 /** Reads a fetch Response's {error, detail?} body, falling back to the status line for a
  * non-JSON error — shared by the JSON request() path and the raw multipart upload below. */
+/** No connection to the server: the browser's own words for it ("Failed to fetch") say nothing a person can act on. */
+const NO_CONNECTION = "Couldn't reach the server. Check the internet connection and try again.";
+
+/** What a failed answer means, in words, when the server didn't say why itself (a proxy's page, a crash). */
+function plainHttpError(status: number, statusText: string): string {
+  if (status === 413) return "The file is too big to upload. Take the photo again at a lower size, or scan it as a PDF.";
+  if (status === 502 || status === 503 || status === 504) return `The server isn't answering right now (${status}). Try again in a moment.`;
+  if (status >= 500) return `The server had a problem (${status}) and nothing was changed. Try again in a moment.`;
+  return `The request was refused (${status}${statusText ? ` ${statusText}` : ""}).`;
+}
+
 async function errorFromResponse(res: Response): Promise<ApiError> {
-  let message = `${res.status} ${res.statusText}`;
+  let message = plainHttpError(res.status, res.statusText);
   let detail: unknown;
   try {
     const body = await res.json();
@@ -62,8 +74,18 @@ function checkUnauthorized(res: Response, path: string) {
   if (res.status === 401 && path !== "/auth/login") window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
 }
 
+/** fetch(), with no connection turned into an ApiError (status 0) that says so plainly. */
+async function send(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new ApiError(NO_CONNECTION, 0);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await send(`${BASE}${path}`, {
     ...init,
     // The session is an httpOnly cookie; same-origin sends it by default, this covers `vite dev`
     // against a backend on another port.
@@ -88,7 +110,7 @@ const withWarehouse = (path: string, warehouse?: string) =>
 /** Downloads a workbook file. Returns it for the caller to save rather than pointing a link at the URL,
  * so a 401/403 shows as a message instead of JSON in a new tab. */
 async function fetchWorkbookFile(path: string): Promise<{ blob: Blob; filename: string; exported: number; withoutDate: number }> {
-  const res = await fetch(`${BASE}${path}`, { credentials: "include" });
+  const res = await send(`${BASE}${path}`, { credentials: "include" });
   checkUnauthorized(res, path);
   if (!res.ok) throw await errorFromResponse(res);
   const filename = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "ANAGROCI workbook.xlsx";
@@ -106,21 +128,51 @@ async function postWorkbookFile(path: string, file: File, warehouse?: string): P
   const form = new FormData();
   if (warehouse) form.append("warehouse", warehouse); // fields before the file, so the server has it when it reads the file
   form.append("file", file);
-  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form, credentials: "include" });
+  const res = await send(`${BASE}${path}`, { method: "POST", body: form, credentials: "include" });
   checkUnauthorized(res, path);
   if (!res.ok) throw await errorFromResponse(res);
   return res.json();
 }
 
+/** How long a file upload may take before it is given up on: a slow warehouse connection, plus the server reading the fiche. */
+const UPLOAD_TIMEOUT_MS = 3 * 60 * 1000;
+
+/**
+ * Sends a file (multipart) and reports how much of it has gone, which fetch() can't: `onSent` gets 0…1 as the bytes leave,
+ * then 1 once the server has them all and is working on its answer. Every way it can fail ends in an ApiError with a message
+ * a person can act on: no connection, too slow, too big, the server's own reason, or a server fault.
+ */
+function uploadWithProgress<T>(path: string, form: FormData, onSent?: (fraction: number) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BASE}${path}`);
+    xhr.withCredentials = true;
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && e.total > 0) onSent?.(e.loaded / e.total); };
+    xhr.upload.onload = () => onSent?.(1);
+    xhr.onerror = () => reject(new ApiError(`${NO_CONNECTION} Nothing was uploaded.`, 0));
+    xhr.ontimeout = () => reject(new ApiError("The upload took too long and was stopped. Check the connection, or try a smaller photo or scan.", 0));
+    xhr.onabort = () => reject(new ApiError("The upload was stopped before it finished. Try again.", 0));
+    xhr.onload = () => {
+      if (xhr.status === 401 && path !== "/auth/login") window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+      let body: { error?: string; detail?: unknown } | null = null;
+      try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { /* a proxy's HTML error page */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (body === null) reject(new ApiError("The server's answer couldn't be read. Reload the page to see whether the file was kept.", xhr.status));
+        else resolve(body as T);
+        return;
+      }
+      reject(new ApiError(body?.error ?? plainHttpError(xhr.status, xhr.statusText), xhr.status, body?.detail));
+    };
+    xhr.send(form);
+  });
+}
+
 /** A truck's fiche photo or scan (multipart field "file"): kept on the receipt and read; answers with what was read. */
-async function postFicheFile(receiptId: string, file: Blob, fileName: string): Promise<FicheView> {
+async function postFicheFile(receiptId: string, file: Blob, fileName: string, onSent?: (fraction: number) => void): Promise<FicheView> {
   const form = new FormData();
   form.append("file", file, fileName);
-  const path = `/receipts/${encodeURIComponent(receiptId)}/fiche`;
-  const res = await fetch(`${BASE}${path}`, { method: "POST", body: form, credentials: "include" });
-  checkUnauthorized(res, path);
-  if (!res.ok) throw await errorFromResponse(res);
-  return res.json();
+  return uploadWithProgress<FicheView>(`/receipts/${encodeURIComponent(receiptId)}/fiche`, form, onSent);
 }
 
 /** The factory an admin chose on Production (state/productionFactory.tsx); undefined = the caller's own. */
@@ -153,6 +205,16 @@ export const api = {
     if (q.receiptId) p.set("receiptId", q.receiptId);
     return request<SubmissionView[]>(`/submissions${p.toString() ? `?${p}` : ""}`);
   },
+  /** The QFS Officer's list: every quality check at the warehouse, by section (contract domain/qualityChecks.ts). */
+  qualityChecks: (warehouse?: string) => request<QualityChecksView>(withWarehouse("/quality-checks", warehouse)),
+  /** A QFS Officer's drying, transfer lot or triage check, sent for the Warehouse Incharge's approval. */
+  submitQualityCheck: (kind: QualitySubmissionKind, targetId: string, values: Record<string, string>) =>
+    request<QualitySubmissionView>("/quality-submissions", { method: "POST", body: JSON.stringify({ kind, targetId, values }) }),
+  listQualitySubmissions: (q: { status?: string } = {}) => request<QualitySubmissionView[]>(`/quality-submissions${q.status ? `?status=${encodeURIComponent(q.status)}` : ""}`),
+  approveQualityCheck: (id: number, body: { destinationBin?: string } = {}) =>
+    request<{ ok: boolean }>(`/quality-submissions/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
+  rejectQualityCheck: (id: number, reason: string) =>
+    request<{ ok: boolean }>(`/quality-submissions/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   approveSubmission: (id: string) => request<{ ok: boolean }>(`/submissions/${encodeURIComponent(id)}/approve`, { method: "POST" }),
   rejectSubmission: (id: string, reason: string) =>
     request<{ ok: boolean }>(`/submissions/${encodeURIComponent(id)}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
@@ -259,9 +321,15 @@ export const api = {
     request<SiteBinSummary[]>(`${withWarehouse("/bins", warehouse)}${unassigned ? `${warehouse ? "&" : "?"}unassigned=1` : ""}`),
   /** One Bin: its stock and Lots, what moved in and out, its dryings and its activities. */
   getBin: (code: string, warehouse?: string) => request<SiteBinDetail>(withWarehouse(`/bins/${encodeURIComponent(code)}`, warehouse)),
-  /** Saves fields of one of the Bin's own forms (n-otheract / n-ledger). Returns the Bin as it now stands. */
-  saveBinStage: (code: string, warehouse: string | undefined, stageId: string, fields: Record<string, string>) =>
-    request<SiteBinDetail>(withWarehouse(`/bins/${encodeURIComponent(code)}/stages/${encodeURIComponent(stageId)}`, warehouse), { method: "PUT", body: JSON.stringify({ fields }) }),
+  /** "Does this Bin need drying?" — yes or no; answers the Bin as it now stands. */
+  setBinDryingDecision: (code: string, warehouse: string | undefined, answer: "yes" | "no") =>
+    request<SiteBinDetail>(withWarehouse(`/bins/${encodeURIComponent(code)}/drying-decision`, warehouse), { method: "PUT", body: JSON.stringify({ answer }) }),
+  /** A new entry in one of the Bin's ledgers (n-otheract / n-ledger). */
+  addBinEntry: (code: string, warehouse: string | undefined, stageId: string, fields: Record<string, string>) =>
+    request<BinActivityEntryView>(withWarehouse(`/bins/${encodeURIComponent(code)}/stages/${encodeURIComponent(stageId)}/entries`, warehouse), { method: "POST", body: JSON.stringify({ fields }) }),
+  /** Changes the given fields of one entry of the Bin's ledgers. */
+  updateBinEntry: (code: string, warehouse: string | undefined, id: number, fields: Record<string, string>) =>
+    request<BinActivityEntryView>(withWarehouse(`/bins/${encodeURIComponent(code)}/entries/${id}`, warehouse), { method: "PATCH", body: JSON.stringify({ fields }) }),
   /** Sun drying from this Bin: round 1. Its return and quality check are returnDrying / checkDrying. */
   startBinDrying: (code: string, warehouse: string | undefined, body: BinDryingStartPayload) =>
     request<unknown>(withWarehouse(`/bins/${encodeURIComponent(code)}/drying`, warehouse), { method: "POST", body: JSON.stringify(body) }),
@@ -311,9 +379,32 @@ export const api = {
   /** The SENDING warehouse sends the truck: one BKT is one truck, so the truck number is required. */
   dispatchTransfer: (id: string, p: DispatchPayload) =>
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/dispatch`, { method: "POST", body: JSON.stringify(p) }),
+  /** An Admin corrects a BKT once made (25 Nov 2026). Only what is sent changes; the server checks it as when first entered. */
+  editTransfer: (id: string, p: TransferEditPayload) =>
+    request<TransferRequest>(`/transfers/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(p) }),
   /** The DESTINATION warehouse records what actually arrived; the variance is worked out from it. */
   receiveTransfer: (id: string, p: ReceivePayload) =>
     request<TransferRequest>(`/transfers/${encodeURIComponent(id)}/receive`, { method: "POST", body: JSON.stringify(p) }),
+  /** A truck from the Unit warehouse arrives: its reception starts, one record per lot on it, the same as a supplier truck's. */
+  startTransferReceptions: (id: string) =>
+    request<{ receiptIds: string[] }>(`/transfers/${encodeURIComponent(id)}/receptions`, { method: "POST" }),
+  // Transfer lots: what a Unit warehouse makes out of its Bins to send (24 Nov 2026).
+  listTransferLots: (warehouse?: string) => request<TransferLot[]>(withWarehouse("/transfer-lots", warehouse)),
+  createTransferLot: (p: TransferLotPayload & { warehouse: string }) =>
+    request<TransferLot>("/transfer-lots", { method: "POST", body: JSON.stringify(p) }),
+  updateTransferLot: (id: number, p: Partial<TransferLotPayload>) =>
+    request<TransferLot>(`/transfer-lots/${id}`, { method: "PATCH", body: JSON.stringify(p) }),
+  weighTransferLot: (id: number, p: { grossWeightKg: string; moisture: string; kor: string; nutCount: string }) =>
+    request<TransferLot>(`/transfer-lots/${id}/weighing`, { method: "POST", body: JSON.stringify(p) }),
+  deleteTransferLot: (id: number) => request<void>(`/transfer-lots/${id}`, { method: "DELETE" }),
+  /** Bags of a lot not on a truck put back in a Bin of its warehouse. */
+  putBackTransferLot: (id: number, p: { binCode: string; bags: string; date: string }) =>
+    request<unknown>(`/transfer-lots/${id}/put-back`, { method: "POST", body: JSON.stringify(p) }),
+  /** An Admin undoes a put-back made by mistake. */
+  undoPutBack: (id: number, returnId: number) => request<unknown>(`/transfer-lots/${id}/put-back/${returnId}`, { method: "DELETE" }),
+  /** The next Lot numbers at a warehouse, to show before saving. Nothing is reserved. */
+  previewLotNumbers: (warehouse: string, date: string, count: number) =>
+    request<{ lotNos: string[] }>(`/lot-numbers/next?warehouse=${encodeURIComponent(warehouse)}&date=${encodeURIComponent(date)}&count=${count}`),
   /** A new Bin in a store; refuses a duplicate or a bad code with a plain reason. */
   createBin: (code: string, warehouseName: string) => request<unknown>("/masters/bins", { method: "POST", body: JSON.stringify({ code, warehouseName }) }),
   /** Admin: which warehouse a Bin is in — for the bins imported with none. */
@@ -629,8 +720,12 @@ export type DryingCheckPayload = DryingQualityPayload<"output"> & { decision: "p
 /** Drying from a Bin: the Bin is in the URL, so there is no route or source bin to send. */
 export type BinDryingStartPayload = Omit<DryingStartPayload, "route" | "sourceBin">;
 
-/** A BKT line: a Bin (how a truck is loaded since 22 Nov 2026) or, on older BKTs, a Lot. */
-export interface TransferLinePayload { receiptId?: string; binCode?: string; bags?: number | null; netWeightKg?: number | string | null }
+/** A BKT line: a piece of a transfer lot (how a truck is loaded since 24 Nov 2026) or, on older BKTs, a Bin or a Lot. */
+export interface TransferLinePayload { transferLotId?: number; receiptId?: string; binCode?: string; bags?: number | string | null; netWeightKg?: number | string | null }
+
+/** A lot made out of Bins: the bags from each. Blank lotNo: the server issues the next one. */
+export interface TransferLotPayload { lotDate: string; lotNo?: string; remarks?: string; bins: { binCode: string; bags: string }[] }
+
 
 /** One Bin of a warehouse on the Warehouse activities list (backend services/bins.ts). */
 export interface SiteBinSummary {
@@ -642,6 +737,20 @@ export interface SiteBinSummary {
   lotsWithoutKg: number;
 }
 
+/** What an Admin may correct on a BKT (backend services/transferEdits.ts); anything left out stays as it is. */
+export interface TransferEditPayload {
+  transferDate?: string;
+  remarks?: string;
+  truckNo?: string;
+  transporter?: string;
+  driver?: string;
+  driverPhone?: string;
+  dispatchedGrossKg?: string;
+  dispatchWhReceiptNo?: string;
+  lines?: { lineId: number; bags?: string; netWeightKg?: string; moisture?: string; kor?: string; nutCount?: string }[];
+  removeLines?: number[];
+}
+
 /** One Bin with what was done to it. */
 export interface SiteBinDetail {
   binCode: string;
@@ -650,11 +759,17 @@ export interface SiteBinDetail {
   issuedKg: number;
   lots: import("@anagroci/contract/domain/productionBatch").LotInBin[];
   movements: import("@anagroci/contract/domain/productionBatch").BinMovement[];
+  /** "Does this Bin need drying?", null until someone answers (25 Nov 2026). */
+  dryingDecision: import("@anagroci/contract/domain/warehouseActivityStages").BinDryingDecision | null;
+  /** Everything ever put in or taken out, most recent first (contract warehouseBinStock). */
+  history: import("@anagroci/contract/domain/productionBatch").BinHistoryEntry[];
   dryings: LinkedDryingBatchRow[];
   activities: (WarehouseActivityLedgerEntry & { recordedBy: string | null })[];
-  /** Its own Other warehouse activities and Activity ledger forms; null for one not filled in yet. */
-  stages: Record<import("@anagroci/contract/domain/warehouseActivityStages").BinStageId, import("@anagroci/contract/domain/warehouseActivityStages").BinStageView | null>;
+  /** Its own Other warehouse activities and Activity ledger entries, most recent first. */
+  entries: Record<import("@anagroci/contract/domain/warehouseActivityStages").BinStageId, BinActivityEntryView[]>;
 }
+
+export type BinActivityEntryView = import("@anagroci/contract/domain/warehouseActivityStages").BinActivityEntryView;
 
 export interface WorkbookPreview {
   token: string;

@@ -14,6 +14,8 @@ import { legacyLotSeq, parseSiteId } from "@anagroci/contract/domain/ids";
 /** The number inside a lot, whether system-format (LOT-BKE-2026-0017) or still the workbook's bare 17. */
 const lotSeq = (lot: string) => parseSiteId(lot)?.seq ?? legacyLotSeq(lot) ?? lot;
 import { RECEIPT_INCLUDE, assembleStageData } from "../../stageStore.js";
+import { siteBinStock } from "../../services/binStock.js";
+import { resolveSite } from "../site.js";
 
 export const CHECKS: Check[] = [
   {
@@ -1203,6 +1205,31 @@ export const CHECKS: Check[] = [
           `${incomplete.length} active or suspended supplier${incomplete.length === 1 ? " is" : "s are"} missing a required register field (zone, ` +
           `manager, primary phone, RCCM, bank details), and ${sample} carr${sample === 1 ? "ies" : "y"} demo "sample" details rather than the ` +
           "client's. Saving is never blocked for an existing supplier; each one's page lists what is missing.",
+      };
+    },
+  },
+  {
+    // 25 Nov 2026 (team): a Bin below zero is shown as it is and reported here, never reset to 0. Measured that day: Yakro
+    // BIN-10 −2,890.25 kg and BIN-16 −6,370.75 kg, both drawn by production.
+    id: "bin_stock_below_zero",
+    async run({ prisma }) {
+      const sites = await prisma.warehouse.findMany({ where: { site: null }, select: { name: true } });
+      const below: string[] = [];
+      for (const { name } of sites) {
+        for (const b of (await siteBinStock(await resolveSite(name))).values()) {
+          if (b.kg < 0) below.push(`${name} ${b.binCode} (${b.kg.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg)`);
+        }
+      }
+      if (!below.length) return null;
+      return {
+        id: "bin_stock_below_zero", severity: "warning",
+        title: "Bins whose stock is below zero",
+        entity: "Bin", affectedCount: below.length, sampleIds: below.slice(0, 5),
+        evidence:
+          "A Bin's stock is worked out from what went in (its Lots' GRN weights, RCN back from drying, trucks arriving) less what " +
+          "went out (drying, lots made to send, trucks sent, loads production accepted). Below zero, more left than the records " +
+          "put in: a Lot with no GRN weight, a different scale, or a load taken from the wrong Bin. It is shown as it is, never " +
+          "reset to 0. Production can't take a load bigger than a Bin's stock in the app; a workbook upload of past loads can.",
       };
     },
   },

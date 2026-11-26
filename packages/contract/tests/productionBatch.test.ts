@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planBatch, suggestBatchCode, warehouseBinStock, splitBinCodes, arrivedLots, productionReadinessGaps, binDryingMovements, binTransferMovements, lotsSentOnBkts, type DryingRoundFacts, type BinDryingRoundFacts } from "../src/domain/productionBatch";
+import { planBatch, suggestBatchCode, warehouseBinStock, splitBinCodes, arrivedLots, productionReadinessGaps, binDryingMovements, binTransferMovements, lotsSentOnBkts, lotLinesSentOnBkts, productionLoadStockProblem, type DryingRoundFacts, type BinDryingRoundFacts } from "../src/domain/productionBatch";
 import { GRN_QUANTITY_LABEL } from "../src/domain/receiptStatus";
 import type { ReceiptRecord, TransferRequest } from "../src/types/receipt";
 
@@ -86,10 +86,36 @@ describe("warehouse bin stock, as procurement left it", () => {
     expect(bin.kg).toBe(43780);
   });
 
+  // 25 Nov 2026: "what is in the Bin" listed only the Lots still there. The Bin's history lists every Lot ever put in, with
+  // what it brought, and each thing that left — without changing the Bin's kg, which still comes from the same facts.
+  it("the Bin's history keeps every Lot put in, even once it left, and lists what left and production took, newest first", () => {
+    // Dated by the unloading, not by when the Bin allocation was finalised (24 Nov 2026 on every real truck).
+    const inBin = (d: string) => ({ "n-unload": { "DATE OF OFFLOADING": d }, "n-bin": { "Bin Number": "BIN-03B", "Bin allocation date": "2026-11-24" }, ...grn("39800") });
+    const transfers = [
+      { id: "BKT-1", status: "dispatched", fromWarehouse: "S", transferDate: "2026-06-05", dispatchedAt: "2026-06-06T08:00:00Z", lines: [{ receiptId: "GONE", netWeightKg: 39800 }] },
+      { id: "BKT-2", status: "requested", fromWarehouse: "S", transferDate: "2026-06-07", dispatchedAt: null, lines: [{ receiptId: "STAYS", netWeightKg: 39800 }] },
+    ] as unknown as TransferRequest[];
+    const stock = warehouseBinStock(
+      [receipt("GONE", inBin("2026-06-02"), { lotNo: "LOT-1" }), receipt("STAYS", inBin("2026-06-03"), { lotNo: "LOT-2" })],
+      [], new Map(), [{ binCode: "BIN-03B", netKg: 1000, date: "2026-06-08", ref: "RR-1" }], [],
+      lotsSentOnBkts(transfers, ["S"]), lotLinesSentOnBkts(transfers, ["S"]),
+    );
+    const bin = stock.get("BIN-03B")!;
+    expect(bin.lots.map((l) => l.receiptId)).toEqual(["STAYS"]); // now: the one that left is gone
+    expect(bin.kg).toBe(38800); // 39,800 still here − 1,000 to production: the history changes nothing
+    expect(bin.history.map((e) => [e.date, e.kind, e.lotNo ?? e.ref, e.kg])).toEqual([
+      ["2026-06-08", "production", "RR-1", -1000],
+      ["2026-06-06", "lot_sent", "LOT-1", -39800], // BKT-2 isn't dispatched: nothing left on it yet
+      ["2026-06-03", "lot_in", "LOT-2", 39800],
+      ["2026-06-02", "lot_in", "LOT-1", 39800], // still listed, with all it brought
+    ]);
+    expect(bin.history[1]!.ref).toBe("BKT-1");
+  });
+
   it("takes RCN dried from a Bin out of it when issued, and puts what came back into the new Bin only once the drying passed", () => {
     const lots = [receipt("A", { "n-bin": { "Bin Number": "BIN-01" }, ...grn("10000") })];
     const round = (o: Partial<BinDryingRoundFacts>): BinDryingRoundFacts => ({
-      id: "R1", firstBatchId: null, round: 1, status: "IN DRYING", sourceBinNo: "BIN-01", destinationBinNo: null,
+      id: "R1", sn: 7, firstBatchId: null, round: 1, status: "IN DRYING", sourceBinNo: "BIN-01", destinationBinNo: null,
       issuedNetWeightKg: 4000, receivedNetWeightKg: null, date: "2026-11-20", ...o,
     });
     const out = warehouseBinStock(lots, [], new Map(), [], binDryingMovements([round({})]));
@@ -102,14 +128,16 @@ describe("warehouse bin stock, as procurement left it", () => {
     ];
     const back = warehouseBinStock(lots, [], new Map(), [], binDryingMovements(chain));
     expect(back.get("BIN-01")!.kg).toBe(6000);
-    expect(back.get("BIN-20")).toMatchObject({ kg: 3850, lots: [], movements: [{ kind: "drying_back", kg: 3850, ref: "R1" }] });
+    expect(back.get("BIN-20")).toMatchObject({ kg: 3850, lots: [], movements: [{ kind: "drying_back", kg: 3850, ref: "Drying #7 · after round 2" }] });
     // Sent straight to production from the yard: it leaves the Bin and comes back to none.
     const toProduction = binDryingMovements([round({ status: "SENT TO PRODUCTION", receivedNetWeightKg: 3800 })]);
-    expect(toProduction).toEqual([{ binCode: "BIN-01", kg: -4000, kind: "drying_out", ref: "R1", date: "2026-11-20" }]);
+    expect(toProduction).toEqual([{ binCode: "BIN-01", kg: -4000, kind: "drying_out", ref: "Drying #7", date: "2026-11-20" }]);
+    // Named by its S.No, never the database id (26 Nov 2026, user: the history showed the primary key).
+    expect([...toProduction, ...binDryingMovements(chain)].every((m) => !m.ref.includes("R1"))).toBe(true);
   });
 
   it("moves a truck loaded from a Bin out of it at dispatch, and into the receiving Bin on arrival — never at creation", () => {
-    const line = { id: 1, receiptId: null, lotNumber: null, supplierName: "", vehicleNo: "", fiche: null, bags: 500, netWeightKg: 25000, moisture: 8, kor: 48, nutCount: 190, binCode: "BIN-01", receivedBinCode: null, bagsReceived: null };
+    const line = { id: 1, receiptId: null, lotNumber: null, supplierName: "", vehicleNo: "", fiche: null, bags: 500, netWeightKg: 25000, moisture: 8, kor: 48, nutCount: 190, binCode: "BIN-01", receivedBinCode: null, bagsReceived: null, transferLotId: null, transferLotNo: null, transferLotBins: [], receptionId: null, receivedLotNo: null };
     const t = (o: Partial<TransferRequest>) => ({ id: "BKT-2026-001", transferDate: "2026-11-20", fromWarehouse: "BOUAKE", toWarehouse: "YAKRO", status: "requested", lines: [line], dispatchedGrossKg: null, bagsReceived: null, receivedGrossKg: null, dispatchedAt: null, receivedAt: null, ...o }) as unknown as TransferRequest;
     expect(binTransferMovements([t({})], ["BOUAKE"])).toEqual([]);
     expect(binTransferMovements([t({ status: "dispatched", dispatchedAt: "2026-11-21T08:00:00Z" })], ["BOUAKE"])).toEqual([
@@ -250,5 +278,17 @@ describe("Lots that arrived on a BKT", () => {
       ["BKT-2026-007", "0008", "BIN-03G", 3980],
       ["BKT-2026-007", "0009", "BIN-03G", 15920],
     ]);
+  });
+});
+
+// 25 Nov 2026 (team): production can't take more out of a Bin than it holds, not even by a kilo.
+describe("a production load and its Bin's stock", () => {
+  it("is allowed up to exactly what the Bin holds, and refused beyond it", () => {
+    expect(productionLoadStockProblem("BIN-03B", 5000, 5000)).toBeNull();
+    expect(productionLoadStockProblem("BIN-03B", 5000, 5000.01)).toMatch(/^Bin BIN-03B holds 5,000 kg, less than this load's 5,000.01 kg\./);
+  });
+
+  it("says so when the Bin is already below zero, and never claims it holds less than nothing", () => {
+    expect(productionLoadStockProblem("BIN-10", -2890.25, 100)).toMatch(/^Bin BIN-10 holds 0 kg \(its stock is already -2,890.25 kg\)/);
   });
 });

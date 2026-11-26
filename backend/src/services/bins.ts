@@ -6,7 +6,7 @@
 import type { WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
 import { prisma } from "../db.js";
 import { siteBinStock } from "./binStock.js";
-import { binStages } from "./binStages.js";
+import { binActivityEntries, binDryingDecision } from "./binStages.js";
 import { toLinkedDryingRow } from "./receiptLinks.js";
 
 export interface SiteBinSummary {
@@ -71,12 +71,15 @@ export async function getSiteBin(names: readonly string[], binCode: string) {
   return {
     binCode: code,
     store: bin.warehouseName ?? null,
-    // Its own Other warehouse activities and Activity ledger forms (services/binStages.ts).
-    stages: await binStages(code),
+    // Its own Other warehouse activities and Activity ledger entries, most recent first (services/binStages.ts).
+    entries: await binActivityEntries(code),
+    // "Does this Bin need drying?" — null until answered (25 Nov 2026).
+    dryingDecision: await binDryingDecision(code),
     kg: s?.kg ?? 0,
     issuedKg: s?.issuedKg ?? 0,
     lots: s?.lots ?? [],
     movements: s?.movements ?? [],
+    history: s?.history ?? [],
     dryings: dryings.map((d) => toLinkedDryingRow(d, true)),
     activities: recorded,
   };

@@ -164,11 +164,15 @@ describe("Cooking (Phase 3)", () => {
     // 40,000 − 19.5 − 2,000 − 1,258 = 36,722.5 kg into the silos, but 40,000 kg are already cooked.
     const load = (await call("pi", "GET", `/rcn-receipts?batch=${BATCH}`)).json()[0];
     const lower = { grossKg: "40000", bags: "30", factoryBin: "ANA-01" };
-    // Accepted, the load is closed to the warehouse; an Admin's correction still meets the silo rule.
-    expect((await call("wi", "PUT", `/rcn-pallets/${load.pallets[0].id}`, lower)).json().error).toMatch(/Production has accepted/);
-    const res = await call("admin", "PUT", `/rcn-pallets/${load.pallets[0].id}?warehouse=${SITE}`, lower);
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error).toMatch(/silo stock at -3,277.5 kg: the run has already cooked more than that/);
+    // Accepted, the load is corrected only by the Warehouse Incharge or an Admin (26 Nov 2026), and either's correction still
+    // meets the silo rule.
+    for (const res of [
+      await call("wi", "PUT", `/rcn-pallets/${load.pallets[0].id}`, lower),
+      await call("admin", "PUT", `/rcn-pallets/${load.pallets[0].id}?warehouse=${SITE}`, lower),
+    ]) {
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toMatch(/silo stock at -3,277.5 kg: the run has already cooked more than that/);
+    }
     expect(await silos()).toBe(IN_SILOS - 40_000);
   });
 
@@ -265,11 +269,13 @@ describe("Shelling (Phase 4)", () => {
   });
 
   // 18 Nov 2026: the warehouse team sees its loads, nothing after them; the production team sees all of it.
-  it("the Factory Manager reads the Lots and the stores; the warehouse team can't, nor a QFS Officer enter anything", async () => {
+  it("the Factory Manager reads the Lots and the stores; the Warehouse Incharge can't, and the QFS Officer reads them for their checks only", async () => {
     const res = await call("fm", "GET", `/batches/${BATCH}/lots`);
     expect(res.statusCode).toBe(200);
     expect(res.json().lots.map((l: { code: string }) => l.code).slice(0, 2)).toEqual(["ANG26G16", "ANG26G18"]);
-    for (const who of ["wi", "qfs"]) expect((await call(who, "GET", `/batches/${BATCH}/lots`)).statusCode, who).toBe(403);
+    expect((await call("wi", "GET", `/batches/${BATCH}/lots`)).statusCode).toBe(403);
+    // 26 Nov 2026: the QFS Officer takes the Lots' QC checks, so reads them; the floor's records stay closed to them.
+    expect((await call("qfs", "GET", `/batches/${BATCH}/lots`)).statusCode).toBe(200);
     expect((await call("qfs", "POST", "/trucks", { stream: "shell", date: "2026-07-21", truckNo: "X" })).statusCode).toBe(403);
     expect((await call("fm", "POST", "/trucks", { stream: "shell", date: "2026-07-21", truckNo: "X" })).statusCode).toBe(403);
   });

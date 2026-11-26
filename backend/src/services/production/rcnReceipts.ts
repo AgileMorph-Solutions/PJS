@@ -4,7 +4,7 @@
  * acceptance (acceptRcnReceipt): the warehouse's side of the load ends there.
  */
 import type { Prisma } from "@prisma/client";
-import { canRecordIntake, type Role } from "@anagroci/contract/data/roles";
+import { canCorrectRecords, canRecordIntake, type Role } from "@anagroci/contract/data/roles";
 import { isIsoDate } from "@anagroci/contract/domain/dateFormat";
 import {
   CUT_TEST_GRAMS, acceptanceProblem, canTakeMoistureCheck, cropYearError, moistureCheckError, moistureKor, rcnReceiptStatus,
@@ -15,7 +15,9 @@ import { SILO_SIZE_KEYS, type SizeValues } from "@anagroci/contract/domain/calib
 import { prisma } from "../../db.js";
 import { ValidationError } from "../../domain/validation.js";
 import { nextRcnReceiptId } from "../ids.js";
-import { runLabel, runWhere } from "./batches.js";
+import { procurementBinStock, runLabel, runWhere } from "./batches.js";
+import { productionLoadStockProblem } from "@anagroci/contract/domain/productionBatch";
+import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 
 const INCLUDE = {
   createdBy: { select: { displayName: true } },
@@ -180,11 +182,12 @@ export const blankToNull = (v: string | undefined) => ((v ?? "").trim() === "" ?
 
 /**
  * Once production accepts a load, its quantity and quality are what left the warehouse bin and went into the silos: a
- * later change would move both behind production's back. Only Admin, who settles a disagreement, changes it after that.
+ * later change moves both, so only those who correct records change it after that — an Admin, or the warehouse's own
+ * Incharge (26 Nov 2026, contract canCorrectRecords). The change log says who did.
  */
 export function assertNotAccepted(row: Pick<Row, "id" | "acceptedAt">, actor: Actor): void {
-  if (row.acceptedAt && actor.role !== "admin") {
-    throw new ValidationError(`Production has accepted ${row.id}: its weighing and quality can't change now. Ask an Admin to correct it.`);
+  if (row.acceptedAt && !canCorrectRecords(actor.role)) {
+    throw new ValidationError(`Production has accepted ${row.id}: its weighing and quality can't change now. Ask the Warehouse Incharge or an Admin to correct it.`);
   }
 }
 
@@ -196,10 +199,23 @@ export async function acceptRcnReceipt(site: string, actor: Actor, receiptId: st
   return toView(await prisma.$transaction((tx) => acceptRcnReceiptIn(tx, site, actor, receiptId)));
 }
 
-export async function acceptRcnReceiptIn(tx: Prisma.TransactionClient, site: string, actor: Actor, receiptId: string): Promise<Row> {
+export async function acceptRcnReceiptIn(
+  tx: Prisma.TransactionClient, site: string, actor: Actor, receiptId: string,
+  /** fromUpload: a production workbook recording loads that already happened. Not held back by the Bin's stock, which
+   * would make real history unimportable; a Bin it takes below zero is reported instead (data quality). */
+  opts: { fromUpload?: boolean } = {},
+): Promise<Row> {
   const receipt = await receiptAt(tx, site, receiptId);
   const problem = acceptanceProblem(toView(receipt).status);
   if (problem) throw new ValidationError(`${receipt.id} can't be accepted yet. ${problem}`);
+  if (!opts.fromUpload) {
+    // Not more than the Bin holds (25 Nov 2026): the same stock the Bin's own page shows, before this load is taken off it.
+    const held = (await procurementBinStock(site)).get(receipt.binCode.trim().toUpperCase())?.kg ?? 0;
+    const loadKg = weighingTotals(receipt.pallets, { emptyPallets: receipt.emptyPallets }).netKg;
+    const short = productionLoadStockProblem(receipt.binCode, held, loadKg);
+    // Named, since "accept all ready loads" stops at the first one refused.
+    if (short) throw new ValidationError(`${receipt.id}: ${short}`);
+  }
   await tx.rcnReceipt.update({ where: { id: receipt.id }, data: { acceptedById: actor.id, acceptedAt: new Date() } });
   return receiptAt(tx, site, receipt.id);
 }

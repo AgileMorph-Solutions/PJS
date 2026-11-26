@@ -47,7 +47,7 @@ export function useSubmissionDraft(receipt: ReceiptRecord | undefined, role: Rol
     // The LBA code follows the supplier (the server sets it on approval), like a calculation: nobody types it.
     if (isSupplierLinkedField(stageId, label)) return true;
     const rule = derivedRuleFor(stageId, label);
-    return Boolean(rule && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived[stageId]?.[label] !== undefined));
+    return Boolean(rule && !rule.editable && (!rule.fallbackToTyped || rule.calculatedOnlyInApp || derived[stageId]?.[label] !== undefined));
   };
   /** The fields of this stage this person may still type: on their form, not recorded, not calculated, not yet submitted. */
   const editableIn = (stageId: string) => (existing ? [] : labelsOn(stageId).filter((l) => !recorded(stageId, l) && !calculated(stageId, l)));

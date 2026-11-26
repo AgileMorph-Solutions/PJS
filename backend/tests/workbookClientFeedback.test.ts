@@ -78,7 +78,7 @@ beforeAll(async () => {
   await setBranch(onTruck, "n-xferdec", "transfer");
   const t = await createTransfer({ transferDate: "2035-05-20", fromWarehouse: A, toWarehouse: B, lines: [{ receiptId: onTruck, bags: 590 }] });
   bkt = t.id;
-  await dispatchTransfer(bkt, { whReceiptNo: "9001", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880, transporter: "T", driver: "D", driverPhone: "0", lines: [{ receiptId: onTruck, nutCount: 170 }] });
+  await dispatchTransfer(bkt, { whReceiptNo: "9001", truckNo: "WBCF-RIG-1", dispatchedGrossKg: 48880, transporter: "T", driver: "D", driverPhone: "0700000902", lines: [{ receiptId: onTruck, nutCount: 170 }] });
   await receiveTransfer(bkt, { whReceiptNo: "8001", bagsReceived: 574, receivedGrossKg: 48820, receivedComment: "16 bags short on the road", lines: [{ receiptId: onTruck, binCode: "WBCF-BIN-B" }] });
 });
 afterAll(async () => {
@@ -201,7 +201,7 @@ describe("Delivery Plan and BKT Transfers are sheets for reading", () => {
   it("the BKT Transfers sheet is one row per truck, with what left, what arrived and the difference", async () => {
     const ws = (await exported()).getWorksheet("BKT Transfers")!;
     expect(rowOf(ws, bkt).cells).toMatchObject({
-      "From Warehouse": A, "To Warehouse": B, "Truck Registration": "WBCF-RIG-1", "Transfer Status": "Discrepancy",
+      "From Warehouse": A, "To Warehouse": B, "Truck Registration": "WBCFRIG1", "Transfer Status": "Discrepancy",
       "Bags Dispatched": 590, "Bags Received": 574, "Bag Variance": -16, "Net Weight Dispatched (kg)": 48290, "Net Weight at Arrival (kg)": 48246, "Weight Variance (kg)": -44,
     });
   });

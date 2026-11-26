@@ -3,14 +3,23 @@ import type { FicheOriginHint, FichePlaceLevel, FicheSuggestion, FicheView } fro
 import { FICHE_FILLED_FIELDS, FICHE_GUESSED_FIELDS } from "@anagroci/contract/domain/fiche";
 import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import { Button } from "../ui/Button";
-import type { FicheBusy } from "../../state/useFiche";
+import { IconButton } from "../ui/IconButton";
+import { ProgressBar } from "../ui/ProgressBar";
+import type { FicheBusy, FicheError, FicheProgress } from "../../state/useFiche";
 
 interface Props {
   view: FicheView | null;
   /** The URL the kept file is served at (api.ficheFileUrl), or undefined when none is kept. */
   fileUrl?: string;
   busy: FicheBusy;
-  error: string | null;
+  /** Where an upload has got to, while one is going. */
+  progress: FicheProgress | null;
+  /** False until the fiche has been asked for: nothing is offered over a fiche not seen yet. */
+  loaded: boolean;
+  error: FicheError | null;
+  /** Does again what failed (the same file, the read, or loading the fiche). */
+  onRetry: () => void;
+  onDismissError: () => void;
   /** Upload / replace / use values. False shows the kept fiche only (a locked record, or someone who can't edit the step). */
   canEdit: boolean;
   /** The step's current values, compared with what the fiche says. */
@@ -33,7 +42,7 @@ type RowState = "match" | "different" | "empty" | "unread";
  * upload); where that changed a value, the old one is shown with "Put back". A place not in Masters › Origins is only added
  * there by the person's own click (contract domain/fiche.ts).
  */
-export function FichePanel({ view, fileUrl, busy, error, canEdit, values, onUpload, onReread, onUse, onAddOrigin }: Props) {
+export function FichePanel({ view, fileUrl, busy, progress, loaded, error, onRetry, onDismissError, canEdit, values, onUpload, onReread, onUse, onAddOrigin }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const doc = view?.document ?? null;
   const reading = doc?.reading ?? null;
@@ -48,7 +57,20 @@ export function FichePanel({ view, fileUrl, busy, error, canEdit, values, onUplo
     />
   );
 
+  const problem = error && <ErrorNotice error={error} canRetry={canEdit || error.retry === "load"} busy={busy !== null} onRetry={onRetry} onDismiss={onDismissError} />;
+
+  if (!loaded) {
+    return canEdit ? (
+      <p role="status" className="mb-4 flex items-center gap-2 text-[12px] text-warmstone-500">
+        <span aria-hidden="true" className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+        Loading the fiche…
+      </p>
+    ) : null;
+  }
+
   if (!doc) {
+    // The fiche couldn't be loaded: say so, rather than offer to upload over one that may be there.
+    if (error?.retry === "load") return <div className="mb-4">{problem}</div>;
     if (!canEdit) return null;
     return (
       <div className="mb-4 flex flex-wrap items-center gap-4 p-4 border border-dashed border-warmstone-300 rounded-2xl bg-warmstone-50/60">
@@ -58,10 +80,11 @@ export function FichePanel({ view, fileUrl, busy, error, canEdit, values, onUplo
           <h4 className="text-[13px] font-bold text-warmstone-900">Upload the CCA fiche</h4>
           <p className="text-[12px] text-warmstone-500 mt-0.5">A photo or a PDF scan. The form is filled in from it: fiche number, CCA supplier code, supplier and origin.</p>
         </div>
-        <Button variant="secondary" icon="upload" disabled={busy !== null} onClick={() => input.current?.click()}>
-          {busy === "upload" ? "Reading the fiche…" : "Upload fiche"}
-        </Button>
-        {error && <p role="alert" className="basis-full text-[12px] text-danger-700">{error}</p>}
+        {busy === null && (
+          <Button variant="secondary" icon="upload" onClick={() => input.current?.click()}>Upload fiche</Button>
+        )}
+        {progress && <div className="basis-full"><UploadProgress progress={progress} /></div>}
+        {problem && <div className="basis-full">{problem}</div>}
       </div>
     );
   }
@@ -95,7 +118,10 @@ export function FichePanel({ view, fileUrl, busy, error, canEdit, values, onUplo
         <FilePreview url={fileUrl} mimeType={doc.mimeType} fileName={doc.fileName} />
 
         <div className="min-w-0 space-y-3">
-          {busy !== null ? (
+          {problem}
+          {progress ? (
+            <UploadProgress progress={progress} />
+          ) : busy === "read" ? (
             <p role="status" className="flex items-center gap-2 text-[13px] text-warmstone-700">
               <span aria-hidden="true" className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
               Reading the fiche…
@@ -175,7 +201,6 @@ export function FichePanel({ view, fileUrl, busy, error, canEdit, values, onUplo
             </>
           )}
 
-          {error && <p role="alert" className="text-[12px] text-danger-700">{error}</p>}
         </div>
       </div>
     </div>
@@ -288,14 +313,18 @@ function OriginRow({ hint, inForm, canFix, was, onUse, onPutBack, onAdd }: {
                 Did you mean {m.origin}? Use it
               </button>
             )}
-            {canFix && hint.places.map((p) => (
-              <button
-                key={p.name} type="button" disabled={adding !== null} onClick={() => add(p.name)}
-                className="block text-left text-[12px] font-semibold text-brand-700 hover:text-brand-800 disabled:opacity-50"
-              >
-                {adding === p.name ? `Adding ${p.name}…` : `Add ${p.name} to Origins and use it`}
-              </button>
-            ))}
+            {/* Only the place that is the Origin (the village, or what stands in for a blank one) — see ficheOriginHint. */}
+            {canFix && (() => {
+              const name = hint.places[0]!.name;
+              return (
+                <button
+                  type="button" disabled={adding !== null} onClick={() => add(name)}
+                  className="block text-left text-[12px] font-semibold text-brand-700 hover:text-brand-800 disabled:opacity-50"
+                >
+                  {adding === name ? `Adding ${name}…` : `Add ${name} to Origins and use it`}
+                </button>
+              );
+            })()}
             {addError && <p role="alert" className="text-[12px] text-danger-700">{addError}</p>}
           </div>
         )}
@@ -311,6 +340,44 @@ function Notice({ text, action }: { text: string; action?: ReactNode }) {
         <span aria-hidden="true" className="material-symbols-outlined text-[16px]">info</span>{text}
       </p>
       {action}
+    </div>
+  );
+}
+
+/** How far along each step of an upload is, as a share of the whole bar: reading the fiche takes the last stretch. */
+const PROGRESS_STEPS: Record<FicheProgress["phase"], { label: string; from: number; to: number }> = {
+  preparing: { label: "Getting the photo ready…", from: 0, to: 5 },
+  sending: { label: "Uploading", from: 5, to: 80 },
+  reading: { label: "Uploaded. Reading the fiche… this can take up to a minute.", from: 85, to: 85 },
+};
+
+/** The upload's progress bar (26 Nov 2026, user): measured while the file is sent, then held while the server reads it. */
+function UploadProgress({ progress }: { progress: FicheProgress }) {
+  const step = PROGRESS_STEPS[progress.phase];
+  const sent = progress.phase === "sending" ? progress.sent : 0;
+  const pct = Math.round(step.from + (step.to - step.from) * sent);
+  return (
+    <div role="status" className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-[12px] text-warmstone-700">
+        <span className="flex items-center gap-1.5">
+          <span aria-hidden="true" className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+          {progress.phase === "sending" ? `${step.label}… ${Math.round(sent * 100)}%` : step.label}
+        </span>
+        <span className="tabular-nums text-warmstone-500">{pct}%</span>
+      </div>
+      <ProgressBar value={pct} max={100} label="Fiche upload" />
+    </div>
+  );
+}
+
+/** What went wrong, with "Try again" when doing it again can help (not for a file of the wrong kind: another file is the fix). */
+function ErrorNotice({ error, canRetry, busy, onRetry, onDismiss }: { error: FicheError; canRetry: boolean; busy: boolean; onRetry: () => void; onDismiss: () => void }) {
+  return (
+    <div role="alert" className="flex flex-wrap items-start gap-3 rounded-xl border border-danger-200 bg-danger-50 px-3 py-2.5">
+      <span aria-hidden="true" className="material-symbols-outlined text-[18px] text-danger-700">error</span>
+      <p className="min-w-[12rem] flex-1 text-[12px] text-danger-700">{error.message}</p>
+      {error.retry && canRetry && <Button variant="secondary" icon="refresh" disabled={busy} onClick={onRetry}>Try again</Button>}
+      <IconButton icon="close" label="Dismiss this message" onClick={onDismiss} />
     </div>
   );
 }

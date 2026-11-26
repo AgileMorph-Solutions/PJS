@@ -53,6 +53,15 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
     { method: "GET", path: /^\/api\/production\/batches(\/[^/]+)?$/ },
     { method: "GET", path: /^\/api\/production\/rcn-receipts$/ },
     { method: "POST", path: /^\/api\/production\/rcn-receipts\/[^/]+\/moisture-checks$/ },
+    // Every quality check is theirs (26 Nov 2026): the factory's QC checks too — read the run's silos and Lots, send a
+    // check for the Production Incharge's approval. The routes' own requireRole keeps the floor's records off them.
+    { method: "GET", path: /^\/api\/production\/batches\/[^/]+\/(lots|calibration)$/ },
+    { method: "POST", path: /^\/api\/production\/sizing-checks$/ },
+    { method: "POST", path: /^\/api\/production\/factory-lots\/[^/]+\/entries$/ },
+    // Their list of checks across every section, and the warehouse checks they send for approval (drying, transfer lot, triage).
+    { method: "GET", path: /^\/api\/quality-checks$/ },
+    { method: "GET", path: /^\/api\/quality-submissions$/ },
+    { method: "POST", path: /^\/api\/quality-submissions$/ },
   ],
   // The factory's two roles (Nov 2026) see Production, not procurement: no receipts (and so no prices), no ledgers. They
   // must stay listed — an unlisted role falls through to "everything" below.
