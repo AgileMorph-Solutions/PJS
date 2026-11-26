@@ -30,26 +30,40 @@ const Stack = ({ main, sub, mono }: { main: string; sub?: string; mono?: boolean
   </div>
 );
 
-const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
+// Every column filters (26 Nov 2026, user): a checklist, searchable once it is long (ColumnFilterMenu), so even a column
+// with a value per truck (Receipt ID, Fiche, Vehicle) can be narrowed to the ones wanted.
+const idColumn: Column<ReceiptRecord> = { label: "Receipt ID", filter: { value: (r) => r.id, kind: "select" }, nowrap: true, render: (r) => <span className="font-mono text-[12.5px]">{r.id}</span> };
 const arrivalColumn: Column<ReceiptRecord> = { label: "Arrived", filter: { value: (r) => r.arrivalDate, kind: "date" }, nowrap: true, render: (r) => formatDate(r.arrivalDate) || "-" };
-const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", render: (r) => <Stack main={normalizeSupplierName(r.supplierName)} sub={r.lbaCode} /> };
+const supplierColumn: Column<ReceiptRecord> = { label: "Supplier", filter: { value: (r) => normalizeSupplierName(r.supplierName), kind: "select" }, render: (r) => <Stack main={normalizeSupplierName(r.supplierName)} sub={r.lbaCode} /> };
+/** A truck from the Unit warehouse has no supplier: where it came from, its BKT, and the lot it was sent as. */
+const fromColumn: Column<ReceiptRecord> = {
+  label: "From", filter: { value: (r) => (r.transfer ? `${r.transfer.fromWarehouse} · ${r.transfer.transferId}` : ""), kind: "select" },
+  render: (r) => <Stack main={r.transfer ? `${r.transfer.fromWarehouse} · ${r.transfer.transferId}` : "-"} sub={r.transfer?.sentAs} />,
+};
 const ficheColumn: Column<ReceiptRecord> = {
-  label: "Fiche", 
+  label: "Fiche", filter: { value: fiche, kind: "select" },
   nowrap: true,
   render: (r) => <Stack mono main={fiche(r)} sub={[verifyField(r, "FICHE CODE"), verifyField(r, "REF.")].filter(Boolean).join(" · ")} />,
 };
 const vehicleColumn = (withStore: boolean): Column<ReceiptRecord> => ({
-  label: withStore ? "Vehicle / WH NO." : "Vehicle", 
+  label: withStore ? "Vehicle / WH NO." : "Vehicle",
+  filter: { value: (r) => [r.vehicleNo, withStore ? storeCode(r) : ""].filter(Boolean).join(" · "), kind: "select" },
   nowrap: true,
   render: (r) => <Stack main={r.vehicleNo} sub={withStore ? storeCode(r) : undefined} />,
 });
+
+/** The downstream chips' words, in their order: "Dispatched · Dried"; blank when nothing happened yet. */
+const downstreamLabels = (s: DownstreamStatus | undefined) =>
+  s ? ([["Dispatched", s.dispatched], ["Received", s.received], ["Dried", s.dried], ["Issued", s.issued]] as const).filter(([, on]) => on).map(([l]) => l).join(" · ") : "";
 
 /** One column per site, built with the current downstream-status map — everything that used to be
  * its own sidebar page (Dispatch to Central, Receiving from Unit, Issue to Production) is visible
  * here instead. A factory rather than a static column list because the map is only known at render
  * time (see DownstreamStatusChips's own header). */
 const downstreamColumn = (status: Map<string, DownstreamStatus>): Column<ReceiptRecord> => ({
-  label: "Downstream", 
+  label: "Downstream",
+  // What happened to the truck after it: the chips' words, so "Dried" finds every dried truck (alone or with others).
+  filter: { value: (r) => downstreamLabels(status.get(r.id)), kind: "select" },
   render: (r) => <DownstreamStatusChips status={status.get(r.id)} />,
 });
 
@@ -74,7 +88,7 @@ const sourceColumn: Column<ReceiptRecord> = {
 };
 
 const tailColumns: Column<ReceiptRecord>[] = [
-  { label: "Lot / Bin", nowrap: true, render: (r) => <Stack mono main={r.lotNo ?? ""} sub={r.binNo} /> },
+  { label: "Lot / Bin", filter: { value: (r) => [r.lotNo, r.binNo].filter(Boolean).join(" · "), kind: "select" }, nowrap: true, render: (r) => <Stack mono main={r.lotNo ?? ""} sub={r.binNo} /> },
   { label: "Status", filter: { value: (r) => STATUS_LABELS[deriveStatus(r)], kind: "select" }, nowrap: true, render: (r) => <ReceiptStatusPill status={deriveStatus(r)} /> },
 ];
 
@@ -90,16 +104,17 @@ const tailColumns: Column<ReceiptRecord>[] = [
  * there. A site with one store or none would show a constant, so it doesn't get the column. Which
  * sites have stores comes from the Warehouses master, not from a fixed site list.
  */
-export function receiptColumns(withStore: boolean, downstreamStatus: Map<string, DownstreamStatus>, planInfo?: Map<string, ReceiptPlanInfo>): Column<ReceiptRecord>[] {
+export function receiptColumns(withStore: boolean, downstreamStatus: Map<string, DownstreamStatus>, planInfo?: Map<string, ReceiptPlanInfo>, fromUnit = false): Column<ReceiptRecord>[] {
   // Downstream comes right after Status — it is the reason that column exists (everything Dispatch
   // to Central / Receiving from Unit / Issue to Production used to show on their own pages).
+  // `fromUnit`: trucks from the Unit warehouse (24 Nov 2026), the same table but for what has no meaning without a supplier.
   return [
     idColumn,
     arrivalColumn,
-    supplierColumn,
+    fromUnit ? fromColumn : supplierColumn,
     ficheColumn,
     vehicleColumn(withStore),
-    ...(planInfo ? [planColumn(planInfo)] : []),
+    ...(planInfo && !fromUnit ? [planColumn(planInfo)] : []),
     ...tailColumns,
     downstreamColumn(downstreamStatus),
     sourceColumn,

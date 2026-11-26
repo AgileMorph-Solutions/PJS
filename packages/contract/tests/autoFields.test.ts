@@ -3,7 +3,7 @@
  * suggested, and which are picked from a list. One case per row of the sheet, so a row that stops working is named.
  */
 import { describe, it, expect } from "vitest";
-import { AUTO_FIELDS, autoFill, isAutoField } from "../src/data/autoFields";
+import { AUTO_FIELDS, autoFill, isAutoField, nextSerial } from "../src/data/autoFields";
 import { BIN_FINALISE_FIELDS, FINALISED_WHEN_LABEL } from "../src/domain/binFinalise";
 import { prefillSuggestions } from "../src/domain/receiptMath";
 import { fieldChoices } from "../src/data/fieldChoices";
@@ -72,5 +72,26 @@ describe("dropdowns instead of text", () => {
     expect(fieldChoices("n-gate", "Warehouse type (Village/Regional/Factory)")).toEqual(["Village", "Regional Central", "Factory"]);
     expect(fieldChoices("n-ledger", "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)")).toHaveLength(7);
     expect(fieldChoices("n-gate", "VEHICLE NO.")).toBeUndefined();
+  });
+});
+
+// 26 Nov 2026 (user): "SN should be auto fill everywhere".
+describe("S N fills itself with the next number", () => {
+  const ctx = { today: "2026-11-26", arrivalDate: "2026-11-26", site: "BOUAKE", nextSn: "987" };
+  it("is the highest whole number used + 1, or 1 for the first", () => {
+    expect(nextSerial(["1", "2", "986"])).toBe("987");
+    expect(nextSerial(["3", "1", "2"])).toBe("4");
+    expect(nextSerial([])).toBe("1");
+    // A workbook's odd value isn't read as a number, nor a blank as 0.
+    expect(nextSerial(["12A", "", null, undefined, " 7 "])).toBe("8");
+    expect(nextSerial(["12A"])).toBe("1");
+  });
+  it("fills a blank S N at the gate, never over one typed or stored", () => {
+    expect(isAutoField("n-gate", "S N")).toBe(true);
+    expect(autoFill("n-gate", { "VEHICLE NO.": "827KT01" }, {}, ctx)["S N"]).toBe("987");
+    expect(autoFill("n-gate", { "S N": "12" }, {}, ctx)["S N"]).toBeUndefined();
+    expect(autoFill("n-gate", { "VEHICLE NO.": "827KT01" }, { "S N": "5" }, ctx)["S N"]).toBeUndefined();
+    // Cleared on purpose: the person's.
+    expect(autoFill("n-gate", { "S N": "" }, { "S N": "5" }, ctx)["S N"]).toBeUndefined();
   });
 });

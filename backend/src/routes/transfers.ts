@@ -6,7 +6,9 @@ import {
 } from "../services/transfers.js";
 import type { TruckOnTheRoadDetail } from "@anagroci/contract/domain/transfers";
 import { assertWarehouseAccess, scopedSite, scopedWarehouse } from "../auth/scope.js";
-import { currentUser } from "../auth/plugin.js";
+import { startTransferReceptions } from "../services/transferReceptions.js";
+import { editHalves, editTransfer, type TransferEdit } from "../services/transferEdits.js";
+import { currentUser, requireRole } from "../auth/plugin.js";
 import { ForbiddenError, ValidationError } from "../domain/validation.js";
 import { resolveScope } from "../domain/site.js";
 
@@ -24,7 +26,8 @@ async function assertTransferAccess(req: FastifyRequest, t: TransferEnds) {
   if (!(await canSeeTransfer(req, t))) throw new ForbiddenError("That transfer isn't to or from your warehouse.");
 }
 
-const actorOf = (req: FastifyRequest) => ({ actor: { id: currentUser(req).id, via: "direct" as const } });
+// The role travels with the actor: some corrections are an Admin's only (services/transferEdits.ts, addTransferLines).
+const actorOf = (req: FastifyRequest) => ({ actor: { id: currentUser(req).id, via: "direct" as const, role: currentUser(req).role } });
 
 export async function transferRoutes(app: FastifyInstance) {
   app.get("/api/transfers", async (req) => {
@@ -63,6 +66,27 @@ export async function transferRoutes(app: FastifyInstance) {
     return addTransferLines(id, lines ?? [], actorOf(req));
   });
 
+  // A BKT corrected once made: by an Admin (25 Nov 2026), or by the Warehouse Incharge for their own warehouse's half — the
+  // sending one what left and where it goes, the receiving one a whole-truck arrival (26 Nov 2026, editHalves).
+  app.patch("/api/transfers/:id", { preHandler: requireRole("admin", "warehouse_incharge") }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const t = await getTransfer(id);
+    if (!t) return reply.code(404).send({ error: "Transfer not found" });
+    const input = (req.body ?? {}) as TransferEdit;
+    if (currentUser(req).role !== "admin") {
+      const halves = editHalves(input);
+      if (halves.sending) scopedWarehouse(req, t.fromWarehouse);
+      if (halves.receiving) scopedWarehouse(req, t.toWarehouse);
+    }
+    try {
+      return await editTransfer(id, input, actorOf(req));
+    } catch (err) {
+      if (!(err instanceof TruckOnTheRoadError)) throw err;
+      const detail: TruckOnTheRoadDetail = { kind: "truck_on_the_road", transferId: err.clash.id, sites: await transferSites(err.clash) };
+      throw new ValidationError(err.message, detail);
+    }
+  });
+
   // The two halves of a BKT, each written only by its own warehouse. The sending side says what left;
   // the destination says what arrived — neither can fill in the other's.
   app.post("/api/transfers/:id/dispatch", async (req, reply) => {
@@ -82,6 +106,7 @@ export async function transferRoutes(app: FastifyInstance) {
     }
   });
 
+  // The whole-truck arrival BKTs were received with before 24 Nov 2026; trucks are now received on the Reception page (/receptions).
   app.post("/api/transfers/:id/receive", async (req, reply) => {
     const { id } = req.params as { id: string };
     const t = await getTransfer(id);
@@ -89,5 +114,15 @@ export async function transferRoutes(app: FastifyInstance) {
     // Sent to one store: only that store (or an account over its whole site) receives it, never a sibling store.
     await assertWarehouseAccess(req, t.toStore ?? t.toWarehouse);
     return receiveTransfer(id, (req.body ?? {}) as ReceiveInput, actorOf(req));
+  });
+
+  // A truck from the Unit warehouse arrives: its reception starts — the same reception as a supplier truck, one record per
+  // lot on it (24 Nov 2026). Answers the records' ids, in the order the lots were loaded.
+  app.post("/api/transfers/:id/receptions", async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const t = await getTransfer(id);
+    if (!t) return reply.code(404).send({ error: "Transfer not found" });
+    await assertWarehouseAccess(req, t.toStore ?? t.toWarehouse);
+    return reply.code(201).send({ receiptIds: await startTransferReceptions(id, actorOf(req)) });
   });
 }

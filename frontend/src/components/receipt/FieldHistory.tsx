@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { FieldChangeRecord, SiteFieldChangeRecord } from "@anagroci/contract/types/receipt";
 import { checkValue } from "@anagroci/contract/domain/fieldRules";
 import type { StageField } from "@anagroci/contract/types/stage";
+import { formatMoney, isMoneyField } from "@anagroci/contract/domain/currency";
 import { formatDate, formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import { stages, rejectStage } from "../../data/stages";
 import { DataTable, type Column } from "../ui/DataTable";
@@ -23,9 +24,12 @@ export const VIA: Record<FieldChangeRecord["via"] | "system", { label: string; t
 };
 
 /** Dates are stored ISO; show them the one way the app shows dates. Empty means the field was blank. */
-export function Value({ value, format, strike }: { value: string | null; format?: StageField["format"]; strike?: boolean }) {
+/** How a changed value reads: a date, a date and time, or money as on a bill ("CFA 19,158,140"). */
+export type ValueFormat = StageField["format"] | "money";
+
+export function Value({ value, format, strike }: { value: string | null; format?: ValueFormat; strike?: boolean }) {
   if (value === null || value === "") return <span className="italic text-warmstone-400">empty</span>;
-  const shown = format === "date" ? formatDate(value) : format === "datetime" ? formatDateTime(value) : value;
+  const shown = format === "date" ? formatDate(value) : format === "datetime" ? formatDateTime(value) : format === "money" ? formatMoney(value) || value : value;
   return <span className={strike ? "text-warmstone-500 line-through decoration-warmstone-300" : "font-semibold text-warmstone-900"}>{shown}</span>;
 }
 
@@ -92,7 +96,7 @@ export function FieldHistory({ changes, loading, error, truckHref }: Props) {
     {
       label: "Change",
       render: (c) => {
-        const format = fieldOf(c)?.format;
+        const format: ValueFormat = isMoneyField(c.stageId, c.label) ? "money" : fieldOf(c)?.format;
         return (
           <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <Value value={c.oldValue} format={format} strike={c.oldValue !== null && c.oldValue !== ""} />

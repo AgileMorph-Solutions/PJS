@@ -168,6 +168,85 @@ export function canWriteStageDirectly(role: Role): boolean {
 }
 
 /**
+ * Who may change a value once it is recorded (22 Nov 2026): Admin and the Warehouse Incharge. Everyone else — the Branch
+ * Manager, the QFS Officer — fills an empty field only. To correct what is already there they ask the Incharge or an Admin,
+ * who changes it in the app, where the change is logged under their name. Letting anyone rewrite a recorded value would let
+ * the data be quietly changed after the fact.
+ */
+export function canChangeRecordedValue(role: Role): boolean {
+  return canWriteStageDirectly(role);
+}
+
+/**
+ * Who corrects a record after it was closed or handed on (25 Nov 2026: an Admin; 26 Nov 2026, user: the Warehouse Incharge too,
+ * at their own warehouse): reopen a truck whose GRN is complete, edit a BKT once made, change a transfer lot already on a truck
+ * or undo bags put back in a Bin, correct a load production accepted. The Incharge is held to their own warehouse by the
+ * routes' warehouse check (auth/scope.ts); an Admin reaches every warehouse.
+ */
+export function canCorrectRecords(role: Role | null | undefined): boolean {
+  return role === "admin" || role === "warehouse_incharge";
+}
+
+/** A value someone tried to change after it was recorded. */
+export interface RecordedConflict {
+  stageId: string;
+  label: string;
+  recorded: string;
+}
+
+type StageValues = Record<string, Record<string, string> | undefined>;
+
+/**
+ * The values in `incoming` that would change one already recorded in `current`. A blank field isn't recorded, and sending
+ * the value that is already there changes nothing, so neither is a conflict.
+ */
+export function changesToRecorded(current: StageValues, incoming: Record<string, Record<string, string>>): RecordedConflict[] {
+  const out: RecordedConflict[] = [];
+  for (const [stageId, fields] of Object.entries(incoming)) {
+    for (const [label, value] of Object.entries(fields)) {
+      const recorded = (current[stageId]?.[label] ?? "").trim();
+      if (recorded && recorded !== String(value ?? "").trim()) out.push({ stageId, label, recorded });
+    }
+  }
+  return out;
+}
+
+/** incoming without the values already recorded exactly as sent: re-sending them is not new information. */
+export function withoutUnchanged(current: StageValues, incoming: Record<string, Record<string, string>>): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const [stageId, fields] of Object.entries(incoming)) {
+    for (const [label, value] of Object.entries(fields)) {
+      if ((current[stageId]?.[label] ?? "").trim() !== String(value ?? "").trim()) (out[stageId] ??= {})[label] = value;
+    }
+  }
+  return out;
+}
+
+/** Who can change this field once recorded: the Incharge doesn't see prices, so a price is an Admin's to change. */
+export function whoChangesRecorded(stageId: string, label: string): string {
+  return canSeeField("warehouse_incharge", stageId, label) ? "the Warehouse Incharge or an Admin" : "an Admin";
+}
+
+/**
+ * Why this person can't submit their form for a truck again, or undefined when they can. A form is sent more than once when
+ * it was filled in a part at a time (23 Nov 2026: a QFS Officer sent moisture first, the cut-test grams later): after an
+ * approval a new submission may fill what is still empty. One still waiting is decided first; a rejection stays final — the
+ * Warehouse Incharge corrects the data after that.
+ */
+export function submitAgainBlocker(earlier: readonly { status: string }[]): string | undefined {
+  if (earlier.some((s) => s.status === "rejected")) return "This form was rejected and can't be resubmitted — ask the Warehouse Incharge to correct it.";
+  if (earlier.some((s) => s.status === "submitted")) return "This form is already waiting for approval. Once the Warehouse Incharge approves it, you can send what is still empty.";
+  return undefined;
+}
+
+/** The plain refusal: which values are already recorded, as what, and whom to ask. */
+export function recordedValueMessage(conflicts: readonly RecordedConflict[]): string {
+  const what = conflicts.map((c) => `${c.label} (${c.recorded})`).join(", ");
+  const who = conflicts.some((c) => whoChangesRecorded(c.stageId, c.label) === "an Admin") ? "an Admin" : "the Warehouse Incharge or an Admin";
+  return `Already recorded: ${what}. Once a value is entered it can only be changed by ${who} — ask them to change it.`;
+}
+
+/**
  * The roles with work in Production. The warehouse sends a load and the factory accepts it (Lokesh, 16 Nov 2026, "Option
  * 1": "Warehouse page, they will update the details of quantity and quality. Then operations will accept"), so the work
  * splits at that acceptance. The warehouse team — the Warehouse Incharge, with the QFS Officer's moisture check — records,
@@ -191,8 +270,18 @@ export function canRunProduction(role: Role): boolean {
 }
 
 /**
+ * Who takes the factory's quality checks (QC-2 silo checks, QC-4 to QC-7, QTY-1): the QFS Officer, whose checks wait for the
+ * Production Incharge (26 Nov 2026, user: the QFS Officer does every quality check), and the Production Incharge or Admin,
+ * whose own are approved as saved.
+ */
+export function canTakeFactoryChecks(role: Role): boolean {
+  return canRunProduction(role) || role === "qfs_officer";
+}
+
+/**
  * Who sees production past the intake (team decision, 18 Nov 2026: "the warehouse guy will not see the entire production
- * process"): the production team and Admin. The warehouse team sees its loads, nothing after them.
+ * process"): the production team and Admin. The warehouse team sees its loads, nothing after them — except the QFS Officer,
+ * who reads the stages their checks are taken in (canTakeFactoryChecks), and changes nothing else there.
  */
 export function canSeeFactory(role: Role): boolean {
   return canRunProduction(role) || role === "factory_manager";

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { SiteFieldChangeRecord } from "@anagroci/contract/types/receipt";
 import type { ChangeLogRecord } from "@anagroci/contract/types/changeLog";
 import { checkValue } from "@anagroci/contract/domain/fieldRules";
+import { isMoneyField } from "@anagroci/contract/domain/currency";
 import { formatDateTime } from "@anagroci/contract/domain/dateFormat";
 import { stages, rejectStage } from "../../data/stages";
 import { DataTable, type Column } from "../ui/DataTable";
@@ -29,7 +30,7 @@ interface Row {
   fieldSub: string;
   oldValue: string | null;
   newValue: string | null;
-  format?: "date" | "datetime";
+  format?: "date" | "datetime" | "money";
   /** Only a truck's step values have field rules to check. */
   check?: string;
 }
@@ -58,7 +59,7 @@ function fromTruck(c: SiteFieldChangeRecord, siteSlug: string): Row {
     key: `t${c.id}`, at: c.at, by: c.by, approvedBy: c.approvedBy, via: c.via, area: "Truck steps",
     record: c.receiptId, recordSub: c.vehicleNo, href: `/${siteSlug}/receipts/${encodeURIComponent(c.receiptId)}`,
     field: c.label, fieldSub: STAGES.get(c.stageId)?.title ?? c.stageId, oldValue: c.oldValue, newValue: c.newValue,
-    format: field?.format === "date" || field?.format === "datetime" ? field.format : undefined, check: issue?.message,
+    format: isMoneyField(c.stageId, c.label) ? "money" : field?.format === "date" || field?.format === "datetime" ? field.format : undefined, check: issue?.message,
   };
 }
 

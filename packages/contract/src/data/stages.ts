@@ -30,6 +30,10 @@ export const stages: Stage[] = [
       // see truckReception.ts's parser).
       { n: "REMARKS", v: "" , col: "remarks"},
       { n: "WEEK", v: "" , col: "week"},
+      // "Bouake RCN Receiving at Factory Report.xlsx" › Bouake Stock Reciving, column "Laisse-Passer Entree (Yakro)" (269 of 415
+      // rows, e.g. 153): the entry pass of a truck from the Unit warehouse. Only a truck received off a BKT asks for it, and it
+      // is optional (user, 24 Nov 2026; contract domain/transferReception.ts TRANSFER_ONLY_FIELDS).
+      { n: "Laisse-Passer Entree (Yakro)", v: "153" , col: "laissePasserEntree"},
     ],
   },
   {
@@ -44,7 +48,10 @@ export const stages: Stage[] = [
     fields: [
       { n: "SUPPLIERS NAME", v: "RCN SCOOP IMANE" , col: "suppliersName"},
       { n: "LBA CODE", v: "LBA-006-IMA" , col: "lbaCode"},
-      { n: "FICHE CODE", v: "0401-0007" , col: "ficheCode"},
+      // Shown as "CCA supplier code" (team, 20 Nov 2026): it is the CCA's code for the supplier ("Code de l'acheteur" on the
+      // fiche, "Supplier's Code (CCAK)" in the client's drying report), and "fiche code" read like the fiche's own number.
+      // `n` stays the workbook's column name, which uploads match on.
+      { n: "FICHE CODE", label: "CCA supplier code", v: "0401-0007" , col: "ficheCode"},
       // v: "" — same reasoning as n-gate's RM/FG above: no equivalent column in "Truck Reception".
       { n: "REF.", v: "" , col: "ref"},
       { n: "FICHE", v: "72515" , col: "fiche"},
@@ -124,6 +131,9 @@ export const stages: Stage[] = [
       { n: "Manpower contractor / team", v: "" , col: "manpowerContractor"},
       { n: "Tally Clerk bag count", v: "" , col: "tallyClerkBagCount"},
       { n: "Pallets used (30 bags/pallet)", v: "" , col: "palletsUsed"},
+      // The same sheet's "New Jute Bag Used" (82 of 415 rows, e.g. 11): new bags put on at unloading a truck from the Unit
+      // warehouse. Optional, and only on such a truck (user, 24 Nov 2026).
+      { n: "New Jute Bag Used", v: "11" , col: "newJuteBagsUsed"},
     ],
   },
   {
@@ -134,7 +144,7 @@ export const stages: Stage[] = [
     kind: "system",
     file: "ANAGROCI DATA PROCUREMENT 2026.xlsx",
     sheet: "Truck Reception · 28 columns",
-    note: "System-derived, never typed (domain/receiptMath.ts): NET = Gross − 1 kg per bag, PAID = Net − Refraction — both hold on every one of the real sheet's rows (728/728, 716/716). Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Oct 2026 team feedback (\"automatically calculating Net Weight…\") supersedes the Sept 30 request for the Branch Manager to type NET WT KGS.",
+    note: "Filled in by the system (domain/receiptMath.ts); since 26 Nov 2026 the warehouse may type over either figure, as with the bag totals: NET = Gross − 1 kg per bag, PAID = Net − Refraction — both hold on every one of the real sheet's rows (728/728, 716/716). Doc §4: Gross, Net, GRN and Paid Weight are four separate things Anagroci wants kept apart, not collapsed into one number. Oct 2026 team feedback (\"automatically calculating Net Weight…\") supersedes the Sept 30 request for the Branch Manager to type NET WT KGS.",
     fields: [
       { n: "NET WT KGS", v: "40822" , col: "netWtKgs"},
       { n: "PAID WT", v: "40762" , col: "paidWt"},
@@ -182,8 +192,10 @@ export const stages: Stage[] = [
     sheet: "Truck Reception · 28 columns",
     note: "By this point the row is complete — it is the GRN. Doc §3 also wants the system to show, for any period: total trucks received, accepted & unloaded, GRN completed, pending QA, pending unload after QA, and rejected (with reason). Sept 30 clarification: PRICE is the price the Branch Manager negotiated, submitted via the bm-reception form (data/roles.ts) and applied on Warehouse Incharge approval. AMOUNT is calculated as PRICE × PAID WT (715/715 real rows).",
     fields: [
-      { n: "PRICE", v: "470" , col: "price"},
-      { n: "AMOUNT", v: "19158140" , col: "amount"},
+      // Prices are in West African CFA francs (ISO XOF), per kg — client-confirmed 24 Nov 2026; the workbooks print no
+      // currency. Written "CFA" (26 Nov 2026, user; domain/currency.ts).
+      { n: "PRICE", label: "PRICE (CFA per kg)", v: "470" , col: "price"},
+      { n: "AMOUNT", label: "AMOUNT (CFA)", v: "19158140" , col: "amount"},
       { n: "GRN Weight (kept separate from Gross/Net/Paid)", v: "" , col: "grnWeight"},
     ],
   },
@@ -193,10 +205,11 @@ export const stages: Stage[] = [
     title: "Add this truck to warehouse stock",
     phase: "Phase 2 · Truck arrival & reception",
     kind: "system",
-    note: "Automatic. Stock ledger increments from the completed GRN row.",
+    note: "Stock ledger increments from the completed GRN row. Nov 2026 team decision: Added to stock = net weight − jute bags weight, filled in by itself when the GRN completes (23 Nov 2026; before that, only offered) and changeable by the warehouse (20 Nov 2026), and Total = Closing stock + Added to stock, calculated (domain/receiptMath.ts). Closing stock is the warehouse's stock before this truck, typed by hand for now — how it should be worked out is still to be decided by the team, so it is a new field with no workbook behind it.",
     fields: [
       { n: "Added to stock from this truck (kg)", v: "" , col: "stockLedgerEntry"},
       { n: "Warehouse type (Village/Regional/Factory)", v: "" , col: "warehouseType"},
+      { n: "Closing stock (kg)", v: "" , col: "closingStock"},
       { n: "Total warehouse stock after this truck (kg)", v: "" , col: "currentStockBalance"},
     ],
   },
@@ -224,12 +237,14 @@ export const stages: Stage[] = [
     kind: "gap",
     note: "Doc §5.4: re-bagging of damaged/torn jute bags, destacking, triage and movement between storage locations should all stay linked to the relevant stock/lot and location. Confirmed clarification: triage/cleaning is not the same as simple drying — both quality and moisture can change during triage, so it needs its own quality, quantity and moisture checks recorded, not just a moisture reading. No workbook covers any of this today.",
     fields: [
-      { n: "Re-bagging (damaged/torn bags)", v: "" , col: "rebagging"},
-      { n: "Destacking", v: "" , col: "destacking"},
-      { n: "Triage (quality + quantity + moisture check)", v: "" , col: "triage"},
-      { n: "Movement between locations", v: "" , col: "movementBetweenLocations"},
-      { n: "Linked stock/lot", v: "" , col: "linkedStockLot"},
-      { n: "Linked location", v: "" , col: "linkedLocation"},
+      // 20 Nov 2026 team: what each one holds. Re-bagging and destacking are a number of bags, triage metric tons; the
+      // movement and the linked stock are a Bin, the linked location a warehouse code (picked, domain/fieldRules.ts).
+      { n: "Re-bagging (damaged/torn bags)", label: "Re-bagging (damaged/torn bags), bags", v: "" , col: "rebagging"},
+      { n: "Destacking", label: "Destacking, bags", v: "" , col: "destacking"},
+      { n: "Triage (quality + quantity + moisture check)", label: "Triage (quality + quantity + moisture check), MT", v: "" , col: "triage"},
+      { n: "Movement between locations", label: "Movement between locations (Bin)", v: "" , col: "movementBetweenLocations"},
+      { n: "Linked stock/lot", label: "Linked stock/lot (Bin)", v: "" , col: "linkedStockLot"},
+      { n: "Linked location", label: "Linked location (warehouse code)", v: "" , col: "linkedLocation"},
     ],
   },
   {
@@ -241,7 +256,8 @@ export const stages: Stage[] = [
     note: "Doc §7: the existing activity records at each warehouse — discharge/unloading, mass/weight, reconditioning, destacking, drying, sèches, triage — should be reflected in the system in the same sequence they actually happen, not as disconnected entries.",
     fields: [
       { n: "Activity type (discharge, weight, reconditioning, destacking, drying, triage, sèches)", v: "" , col: "activityType"},
-      { n: "Date/time", v: "" , col: "occurredAt"},
+      // Date AND time, "YYYY-MM-DD HH:mm" (team, 23 Nov 2026): when it happened — now by default, never in the future.
+      { n: "Date/time", v: "" , col: "occurredAt", format: "datetime"},
       { n: "Quantity", v: "" , col: "quantity"},
       { n: "Location", v: "" , col: "location"},
       { n: "Linked Lot/Bin", v: "" , col: "linkedLotBin"},

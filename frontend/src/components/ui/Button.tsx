@@ -8,6 +8,9 @@ const VARIANTS = {
   danger: "bg-danger-700 hover:bg-danger-800 text-white font-bold shadow-sm",
 } as const;
 
+/** The same look for a link that moves to another page (a react-router `<Link>`), so it matches the buttons beside it. */
+export const buttonClass = (variant: keyof typeof VARIANTS = "primary") => `${BASE} ${VARIANTS[variant]}`;
+
 /** The app's button: one size, three variants, so no page varies padding or weight (ui-consistency skill). */
 export function Button({ variant = "primary", icon, children, type = "button", ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: keyof typeof VARIANTS; icon?: string }) {
   return (

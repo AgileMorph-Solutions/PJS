@@ -11,6 +11,8 @@ interface Props {
   submitLabel: string;
   onSubmit: (values: Record<string, string>) => Promise<void>;
   idPrefix: string;
+  /** What a new row starts with, shown filled in and changeable: its S.No, the next number in the table (26 Nov 2026). */
+  defaults?: Record<string, string>;
 }
 
 /** A small, generic add-row form for a production table. Unlike StageForm (which edits a field
@@ -18,8 +20,10 @@ interface Props {
  * them once — production writes are per-record submissions (a receipt line, a cooking run), not
  * per-keystroke stage edits, so there's no coalescing/debounce machinery to reuse from
  * TrackingContext here. */
-export function ProductionRowForm({ fields, submitLabel, onSubmit, idPrefix }: Props) {
+export function ProductionRowForm({ fields, submitLabel, onSubmit, idPrefix, defaults }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
+  // A default shows until the person types over it; a new one (the next S.No after a save) takes its place.
+  const shown = { ...defaults, ...values };
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +31,7 @@ export function ProductionRowForm({ fields, submitLabel, onSubmit, idPrefix }: P
     setSubmitting(true);
     setError(null);
     try {
-      await onSubmit(values);
+      await onSubmit(shown);
       setValues({});
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -43,7 +47,8 @@ export function ProductionRowForm({ fields, submitLabel, onSubmit, idPrefix }: P
           <FieldInput
             key={f.col}
             field={f}
-            value={values[f.n] ?? ""}
+            value={shown[f.n] ?? ""}
+            note={defaults?.[f.n] !== undefined && values[f.n] === undefined ? "The next number in this table. You can change it." : undefined}
             onChange={(v) => setValues((prev) => ({ ...prev, [f.n]: v }))}
             idPrefix={idPrefix}
           />

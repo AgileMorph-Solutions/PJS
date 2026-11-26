@@ -79,6 +79,32 @@ export function isStageBlank(values: Record<string, string> | undefined): boolea
   return Object.values(values).every((v) => !v || !v.trim());
 }
 
+/**
+ * Fields a step can be complete without (Nov 2026: a step is ticked only once every field on it is filled). REMARKS is a
+ * note, there only when there's something to say. S N is the workbook's own row number: the app never asks for it.
+ * REF. is an optional field (Nov 2026).
+ */
+const OPTIONAL_FIELDS: ReadonlySet<string> = new Set(["n-gate/REMARKS", "n-gate/S N", "n-verify/REF."]);
+
+/**
+ * The fields of a reached step still empty: what keeps its green tick away. Only the fields given (the ones this person
+ * is shown), so nobody is told a field they can't see is missing. A calculated field counts once it has been calculated.
+ * This is about the tick only — a stage still counts as reached by presence (getStageProgress), so status and
+ * "In progress" don't move.
+ */
+export function missingStageFields(
+  stageId: string,
+  fields: readonly { n: string; label?: string }[],
+  values: Record<string, string> | undefined,
+  derived?: Record<string, string>,
+  branch?: string,
+): string[] {
+  const filled = (n: string) => Boolean(derived?.[n]?.trim() || values?.[n]?.trim());
+  // The final readings are taken after unloading: a truck failed at quality is never unloaded, so it never has them.
+  const notTaken = (n: string) => stageId === "n-qfs" && branch === "fail" && /^final\b/i.test(n);
+  return fields.filter((f) => !OPTIONAL_FIELDS.has(`${stageId}/${f.n}`) && !notTaken(f.n) && !filled(f.n)).map((f) => f.label ?? f.n);
+}
+
 export const STATUS_LABELS: Record<ReceiptStatus, string> = {
   planned: "Planned",
   arrived: "Arrived",

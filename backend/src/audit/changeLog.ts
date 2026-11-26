@@ -44,7 +44,9 @@ export const isLogged = (model: string | undefined, operation: string): model is
 
 const delegate = (client: Client, model: string) => client[model[0]!.toLowerCase() + model.slice(1)];
 
-const scalars = (m: Model) => m.fields.filter((f) => f.kind === "scalar" || f.kind === "enum");
+// A stored file's bytes (FicheDocument.data) aren't a value anyone reads in a log, and would be megabytes of text in it:
+// they are neither read for the old values nor logged. The file's name and size, logged beside them, say it changed.
+const scalars = (m: Model) => m.fields.filter((f) => (f.kind === "scalar" && f.type !== "Bytes") || f.kind === "enum");
 const keyOf = (m: Model): string[] => m.primaryKey?.fields?.length ? [...m.primaryKey.fields] : m.fields.filter((f) => f.isId).map((f) => f.name);
 /** The scalar columns that point at a parent record (transferId, receiptId…). */
 const foreignKeys = (m: Model): string[] => m.fields.flatMap((f) => (f.kind === "object" ? [...(f.relationFromFields ?? [])] : []));
@@ -111,6 +113,7 @@ async function warehousesOf(client: Client, m: Model, r: Row, depth = 0): Promis
 
 export interface LogRow {
   userId: string | null;
+  byName: string | null;
   via: string;
   action: "create" | "update" | "delete";
   entity: string;
@@ -141,9 +144,9 @@ export function fieldChanges(m: Model, before: Row | null, after: Row): { field:
  */
 export async function loggedWrite(client: Client, model: string, operation: string, args: any, run: (args: any) => Promise<any>): Promise<any> {
   const m = MODELS.get(model)!;
-  const { userId, via } = currentAudit();
+  const { userId, userName, via } = currentAudit();
   const rows: LogRow[] = [];
-  const base = { userId, via, entity: model };
+  const base = { userId, byName: userName ?? null, via, entity: model };
   const one = async (action: LogRow["action"], record: Row, changes: ReturnType<typeof fieldChanges>, summary = false) => {
     const warehouses = await warehousesOf(client, m, record);
     const recordId = recordIdOf(m, record);

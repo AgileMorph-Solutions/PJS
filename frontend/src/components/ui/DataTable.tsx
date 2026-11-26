@@ -15,6 +15,8 @@ export interface Column<T> {
   nowrap?: boolean;
   /** Numbers and kg read best lined up on the right. */
   align?: "right";
+  /** The column's full name, shown on hover when `label` is a shortened one. */
+  title?: string;
   /** Makes the column filterable (a funnel in its header). `render()` returns JSX that can't be read back as
    * text, so say what to filter on: `{ value: (row) => row.status }`, and `kind: "number" | "date"` for ranges. */
   filter?: ColumnFilter<T>;
@@ -64,6 +66,11 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
   }, [rows, kinds]);
   const shownRows = useMemo(() => applyFilters(rows, columns, active, kinds), [rows, columns, active, kinds]);
   const page = usePagination(shownRows, pageSize);
+  // A new filter shows its first page: staying on page 3 of a different set of rows would hide the rows it found first.
+  const filterBy = (next: Record<string, ActiveFilter> | ((prev: Record<string, ActiveFilter>) => Record<string, ActiveFilter>)) => {
+    setActive(next);
+    page.setPage(1);
+  };
   const activeCount = columns.filter((c) => kinds[c.label] && isActive(active[c.label])).length;
   const hasFilters = Object.keys(kinds).length > 0;
 
@@ -88,7 +95,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
             Showing <b className="tabular-nums">{shownRows.length.toLocaleString()}</b> of <b className="tabular-nums">{rows.length.toLocaleString()}</b>
             {" "}· {activeCount} filter{activeCount === 1 ? "" : "s"} on
           </span>
-          <button type="button" onClick={() => setActive({})} className="font-semibold text-brand-700 hover:text-brand-800">Clear filters</button>
+          <button type="button" onClick={() => filterBy({})} className="font-semibold text-brand-700 hover:text-brand-800">Clear filters</button>
         </div>
       )}
       <table className="w-full text-[13px] border-collapse">
@@ -98,6 +105,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
               <th
                 key={c.label}
                 style={c.width ? { width: c.width } : undefined}
+                title={c.title}
                 className={`${align(c)} px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-warmstone-500 whitespace-nowrap`}
               >
                 <span className={`inline-flex items-center gap-1 ${c.align === "right" ? "flex-row-reverse" : ""}`}>
@@ -105,7 +113,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
                   {kinds[c.label] && (
                     <ColumnFilterMenu
                       label={c.label} kind={kinds[c.label]!} options={options[c.label] ?? []}
-                      value={active[c.label]} onChange={(next) => setActive((prev) => ({ ...prev, [c.label]: next }))}
+                      value={active[c.label]} onChange={(next) => filterBy((prev) => ({ ...prev, [c.label]: next }))}
                     />
                   )}
                 </span>
@@ -119,7 +127,7 @@ export function DataTable<T>({ columns, rows, keyFn, rowHref, onRowClick, emptyT
             <tr>
               <td colSpan={columns.length + (anyClickable ? 1 : 0)} className="px-4 py-10 text-center text-[13px] text-warmstone-500">
                 No rows match these filters.{" "}
-                <button type="button" onClick={() => setActive({})} className="font-semibold text-brand-700 hover:text-brand-800">Clear filters</button>
+                <button type="button" onClick={() => filterBy({})} className="font-semibold text-brand-700 hover:text-brand-800">Clear filters</button>
               </td>
             </tr>
           )}

@@ -49,6 +49,9 @@ interface TrackingApi {
   /** `classification` is a new warehouse's `kind` (Village/Regional/Factory) and `type`, its category (UNIT/CENTRAL).
    * Stores under a warehouse aren't offered any more; the API refuses `site`. */
   addWarehouse: (name: string, classification?: { kind?: string; type?: string }) => void;
+  /** Re-reads the masters alone (not the receipts), so a Bin or an origin someone else just added is offered. Called when a
+   * dropdown opens and when the tab comes back into view; at most once every few seconds, and a failed read keeps the list. */
+  refreshMasters: () => void;
 
   /** Flush any buffered edits for a stage immediately — call on blur / before navigating away. */
   /** Sends a step's unsaved edits now; resolves once the server has them (callers that don't need to wait ignore it). */
@@ -67,6 +70,8 @@ interface TrackingApi {
 const TrackingCtx = createContext<TrackingApi | null>(null);
 const EMPTY_MASTERS: Masters = { suppliers: [], warehouses: [], bins: [], origins: [] };
 const FLUSH_MS = 400;
+/** The least time between two masters re-reads: opening several dropdowns in a row costs one request, not one each. */
+const MASTERS_FRESH_MS = 5000;
 
 export function TrackingProvider({ children }: { children: ReactNode }) {
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
@@ -83,6 +88,8 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
   // Monotonic per-key counter: a response older than the latest local edit is discarded, so a slow
   // reply can't clobber text the user has typed since.
   const seq = useRef(new Map<string, number>());
+  // When the masters were last read, so dropdowns opening one after another share one re-read.
+  const mastersReadAt = useRef(0);
 
   const mergeReceipt = useCallback((r: ReceiptRecord) => {
     setReceipts((prev) => (prev.some((x) => x.id === r.id) ? prev.map((x) => (x.id === r.id ? r : x)) : [...prev, r]));
@@ -113,6 +120,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       setSavedRevision((n) => n + 1);
       setLedgerEntries(ls);
       setMasters(ms);
+      mastersReadAt.current = Date.now();
       setError(null);
     } catch (e) {
       fail(e);
@@ -120,6 +128,20 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, [fail]);
+
+  const refreshMasters = useCallback(() => {
+    const now = Date.now();
+    if (now - mastersReadAt.current < MASTERS_FRESH_MS) return;
+    mastersReadAt.current = now;
+    // Quiet on failure: the list on screen is still a good one, and the full refresh reports a real outage.
+    api.masters().then(setMasters, () => { mastersReadAt.current = 0; });
+  }, []);
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") refreshMasters(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshMasters]);
 
   useEffect(() => {
     // The pre-API blob held a full copy of the receipts; leaving it would let stale data shadow
@@ -236,6 +258,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
         setMasters((prev) => ({ ...prev, warehouses: [...prev.warehouses, { name, kind, type, site: null }] }));
         api.addWarehouse(name, classification).catch((e) => { fail(e); void refresh(); });
       },
+      refreshMasters,
 
       flushStage: (id, stageId) => flushKey(`${id}\u0000${stageId}`),
       loading,
@@ -245,7 +268,7 @@ export function TrackingProvider({ children }: { children: ReactNode }) {
       refresh,
       resetAll: () => void refresh(),
     }),
-    [receipts, ledgerEntries, masters, loading, error, warnings, savedRevision, mergeReceipt, fail, refresh, flushKey]
+    [receipts, ledgerEntries, masters, loading, error, warnings, savedRevision, mergeReceipt, fail, refresh, refreshMasters, flushKey]
   );
 
   return <TrackingCtx.Provider value={api_}>{children}</TrackingCtx.Provider>;
@@ -308,6 +331,18 @@ export function useTransfers(warehouse?: string) {
     void refetch().finally(() => setLoading(false));
   }, [refetch]);
   return { transfers, loading, refetch };
+}
+
+/** The lots a Unit warehouse has made out of its Bins to send (24 Nov 2026). Its own hook, like useTransfers. */
+export function useTransferLots(warehouse?: string) {
+  const [lots, setLots] = useState<import("@anagroci/contract/types/receipt").TransferLot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const refetch = useCallback(() => api.listTransferLots(warehouse).then(setLots).catch(() => {}), [warehouse]);
+  useEffect(() => {
+    setLoading(true);
+    void refetch().finally(() => setLoading(false));
+  }, [refetch]);
+  return { lots, loading, refetch };
 }
 
 /**

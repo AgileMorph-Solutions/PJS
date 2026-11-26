@@ -6,7 +6,7 @@
  * batch bin leads back to the Lots in it, their trucks and suppliers.
  */
 import { Prisma } from "@prisma/client";
-import { arrivedLots, BATCH_CODE_PATTERN, batchStatus, keptLotsByBin, planBatch, warehouseBinStock, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
+import { BATCH_CODE_PATTERN, batchStatus, keptLotsByBin, planBatch, type WarehouseBinStock } from "@anagroci/contract/domain/productionBatch";
 import { MOISTURE_DECISION_LABELS, type MoistureDecision } from "@anagroci/contract/domain/rcnReceipt";
 import { weighingTotals } from "@anagroci/contract/domain/rcnWeighing";
 import { SIZING_DECISION_LABELS, samplingPointLabel, siloLabel, sizesTotal, type SamplingPoint, type SiloSize, type SizingDecision } from "@anagroci/contract/domain/calibration";
@@ -18,8 +18,7 @@ import { prisma } from "../../db.js";
 import { resolveSite } from "../../domain/site.js";
 import { ValidationError } from "../../domain/validation.js";
 import { listReceipts } from "../receipts.js";
-import { listTransfers } from "../transfers.js";
-import { dryingRoundsByLot } from "../dryingRounds.js";
+import { siteBinStock } from "../binStock.js";
 import { nextProductionRunId, siteOf } from "../ids.js";
 import { parseSiteId } from "@anagroci/contract/domain/ids";
 import { isUsableSite } from "@anagroci/contract/domain/siteType";
@@ -59,15 +58,8 @@ export async function productionSite(scoped: string | undefined): Promise<string
  * loads production accepted out of it (at their net weight, the same function a load's own page shows).
  */
 export async function procurementBinStock(site: string): Promise<Map<string, WarehouseBinStock>> {
-  const names = await resolveSite(site);
-  const [receipts, transfers, accepted] = await Promise.all([
-    listReceipts(names),
-    listTransfers(names),
-    prisma.rcnReceipt.findMany({ where: { acceptedAt: { not: null }, batch: { warehouse: site } }, select: { binCode: true, pallets: true, emptyPallets: true } }),
-  ]);
-  const rounds = await dryingRoundsByLot(prisma, receipts.filter((r) => r.stageData["n-drying"]).map((r) => r.lotNo ?? ""));
-  const issued = accepted.map((r) => ({ binCode: r.binCode, netKg: weighingTotals(r.pallets, { emptyPallets: r.emptyPallets }).netKg }));
-  return warehouseBinStock(receipts, arrivedLots(transfers.filter((t) => names.includes(t.toWarehouse))), rounds, issued);
+  // The same stock the Warehouse activities pages show, Bin moves (drying, trucks loaded from Bins) included.
+  return siteBinStock(await resolveSite(site), site);
 }
 
 /**

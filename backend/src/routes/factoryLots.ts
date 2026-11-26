@@ -19,7 +19,10 @@ import { runWhere } from "../services/production/batches.js";
 export async function factoryLotRoutes(app: FastifyInstance) {
   const reviewers = { preHandler: requireRole("admin", "production_incharge") };
   // The factory is the production team's to see (canSeeFactory): the warehouse team sees its loads, nothing after.
-  const watchers = { preHandler: requireRole("admin", "production_incharge", "factory_manager") };
+  const watchers = { preHandler: requireRole("admin", "production_incharge", "factory_manager", "qfs_officer") };
+  // A Lot's quality checks: a QFS Officer's wait for the Production Incharge; the floor's own records stay the Incharge's
+  // (addLotEntryIn refuses them to anyone else).
+  const checkers = { preHandler: requireRole("admin", "production_incharge", "qfs_officer") };
 
   app.get("/api/production/batches/:code/lots", watchers, async (req, reply): Promise<BatchLots | undefined> => {
     const { code } = req.params as { code: string };
@@ -51,7 +54,7 @@ export async function factoryLotRoutes(app: FastifyInstance) {
     return moveToCooling(await siteFor(req), code, (req.body ?? {}) as CoolingInput);
   });
 
-  app.post("/api/production/factory-lots/:code/entries", reviewers, async (req, reply) => {
+  app.post("/api/production/factory-lots/:code/entries", checkers, async (req, reply) => {
     const { code } = req.params as { code: string };
     const lot = await addLotEntry(await siteFor(req), currentUser(req), code, (req.body ?? {}) as LotEntryInput);
     return reply.code(201).send(lot);

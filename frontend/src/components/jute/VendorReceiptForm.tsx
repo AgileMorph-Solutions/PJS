@@ -3,6 +3,8 @@ import { parseBags, shortQuantity, shortQuantityLabel, vendorReceiptProblems } f
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { api } from "../../repository/api";
 import { DateInput } from "../ui/DateInput";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
 import { field, inputCls, receivingWarehouseField } from "./receiptFormParts";
 
 const blank = () => ({ vendorName: "", deliveryNoteNo: "", date: todayIso(), invoicedQty: "", receivedQty: "", remarks: "" });
@@ -54,29 +56,22 @@ export function VendorReceiptForm({ warehouse, warehouses, fixed, onWarehouseCha
     <form onSubmit={(e) => void save(e)} className="space-y-4 pt-3">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* A choice when the person has no warehouse of their own; filled in for them otherwise, and then shown last (below). */}
-        {!fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
-        {field("Vendor name *", <input value={v.vendorName} onChange={(e) => set("vendorName", e.target.value)} className={inputCls} />)}
-        {field("Delivery note no. *", <input value={v.deliveryNoteNo} onChange={(e) => set("deliveryNoteNo", e.target.value)} className={inputCls} />)}
+        {!fixed && receivingWarehouseField({ id: "jute-vendor-to", value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
+        {field("Vendor name *", <Input value={v.vendorName} onChange={(e) => set("vendorName", e.target.value)} />)}
+        {field("Delivery note no. *", <Input value={v.deliveryNoteNo} onChange={(e) => set("deliveryNoteNo", e.target.value)} />)}
         {field("Date *", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />)}
-        {field("Invoiced quantity (bags) *", <input inputMode="numeric" value={v.invoicedQty} onChange={(e) => set("invoicedQty", e.target.value)} className={inputCls} />)}
-        {field("Received quantity (bags) *", <input inputMode="numeric" value={v.receivedQty} onChange={(e) => set("receivedQty", e.target.value)} className={inputCls} />)}
+        {field("Invoiced quantity (bags) *", <Input numeric inputMode="numeric" value={v.invoicedQty} onChange={(e) => set("invoicedQty", e.target.value)} />)}
+        {field("Received quantity (bags) *", <Input numeric inputMode="numeric" value={v.receivedQty} onChange={(e) => set("receivedQty", e.target.value)} />)}
       </div>
-      {field("Remarks", <input value={v.remarks} onChange={(e) => set("remarks", e.target.value)} className={inputCls} />)}
+      {field("Remarks", <Input value={v.remarks} onChange={(e) => set("remarks", e.target.value)} />)}
       {/* What the app fills in or works out comes after everything typed (Nov 2026). */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {field("Short quantity", <input readOnly tabIndex={-1} value={short} placeholder="Worked out from the two quantities" className={`${inputCls} bg-warmstone-50`} />)}
-        {fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
+        {field("Short quantity", <input readOnly tabIndex={-1} value={short} placeholder="Worked out from the two quantities" className={`${inputCls} bg-warmstone-100 cursor-default`} />)}
+        {fixed && receivingWarehouseField({ id: "jute-vendor-to", value: warehouse, options: warehouses, fixed, onChange: onWarehouseChange })}
       </div>
       {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
       {notice && <p className="text-[13px] text-success-700">{notice}</p>}
-      <button
-        type="submit"
-        disabled={busy || problems.length > 0}
-        title={problems.join(" ")}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <span className="material-symbols-outlined text-[17px]">add</span>{busy ? "Saving…" : "Save receipt"}
-      </button>
+      <Button type="submit" icon="add" disabled={busy || problems.length > 0} title={problems.join(" ")}>{busy ? "Saving…" : "Save receipt"}</Button>
     </form>
   );
 }

@@ -10,6 +10,8 @@ export type Via = "direct" | "approval" | "import" | "system";
 
 export interface AuditContext {
   userId: string | null;
+  /** Their name as it is now, kept on each log row so the row still says who it was if the account ever goes. */
+  userName?: string | null;
   via: Via;
   /** The open interactive transaction, so the log reads the old values and writes its rows inside it (db.ts). */
   tx?: unknown;

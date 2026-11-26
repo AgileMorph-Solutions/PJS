@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planBatch, suggestBatchCode, warehouseBinStock, splitBinCodes, arrivedLots, productionReadinessGaps, type DryingRoundFacts } from "../src/domain/productionBatch";
+import { planBatch, suggestBatchCode, warehouseBinStock, splitBinCodes, arrivedLots, productionReadinessGaps, binDryingMovements, binTransferMovements, lotsSentOnBkts, lotLinesSentOnBkts, productionLoadStockProblem, type DryingRoundFacts, type BinDryingRoundFacts } from "../src/domain/productionBatch";
 import { GRN_QUANTITY_LABEL } from "../src/domain/receiptStatus";
 import type { ReceiptRecord, TransferRequest } from "../src/types/receipt";
 
@@ -42,15 +42,16 @@ describe("warehouse bin stock, as procurement left it", () => {
       // GRN quantity without a price: the record isn't complete yet, so the Lot isn't stock.
       receipt("C", { "n-bin": { "Bin Number": "BIN-03B" }, "n-grn": { [GRN_QUANTITY_LABEL]: "999" } }),
       receipt("D", { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("500") }, { branches: { ...READY, "n-qfs": "fail" } }),
+      // All of it left on a dispatched BKT.
       receipt("E", { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("500") }, { branches: { ...READY, "n-xferdec": "transfer" } }),
-    ]);
+    ], [], new Map(), [], [], new Map([["E", { kg: 500, unknown: false }]]));
     expect([...stock.keys()]).toEqual(["BIN-03B"]);
     expect(stock.get("BIN-03B")!.kg).toBe(42000.5);
     expect(stock.get("BIN-03B")!.lots.map((l) => l.receiptId)).toEqual(["A", "B"]);
     expect(stock.get("BIN-03B")!.lots[0]!.lotNo).toBe("LOT-YAK-2026-0001");
   });
 
-  it("is strict: a GRN-complete Lot whose transfer or drying question is unanswered is not ready, never assumed to stay", () => {
+  it("counts a Lot in its Bin once quality passed and the GRN is complete: drying and transfer are the Bin's questions now, not the Lot's", () => {
     const inBin = { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("1000") };
     const { "n-xferdec": _x, ...noTransferAnswer } = READY;
     const { "n-drying": _d, ...noDryingAnswer } = READY;
@@ -58,12 +59,94 @@ describe("warehouse bin stock, as procurement left it", () => {
       receipt("READY", inBin),
       receipt("NO-XFER", inBin, { branches: noTransferAnswer }),
       receipt("NO-DRY", inBin, { branches: noDryingAnswer }),
-      // Drying chosen, but the Lot hasn't been issued to drying yet: it's about to leave the bin.
-      receipt("DRY-SOON", inBin, { branches: { ...READY, "n-drying": "indirect" } }),
+      receipt("KEPT", inBin, { branches: { ...READY, "n-xferdec": "stays" } }),
+      // Still out: quality never passed, or it left on a dispatched BKT per Lot (counted where it arrived).
       receipt("QFS-OPEN", inBin, { branches: { "n-drying": "none", "n-xferdec": "production" } }),
+      receipt("SENT-PER-LOT", inBin, { branches: { ...READY, "n-xferdec": "transfer" } }),
+    ], [], new Map(), [], [], new Map([["SENT-PER-LOT", { kg: 1000, unknown: false }]]));
+    expect(stock.get("BIN-03B")!.lots.map((l) => l.receiptId)).toEqual(["READY", "NO-XFER", "NO-DRY", "KEPT"]);
+    expect(stock.get("BIN-03B")!.kg).toBe(4000);
+  });
+
+  // 23 Nov 2026: every Bouaké Bin read empty — a Lot marked "Yes — transfers out", or on a BKT not yet dispatched, counted as
+  // gone, and a Lot split across two trucks vanished whole when the first left.
+  it("keeps a Lot in its Bin until its BKT is dispatched, and takes off only what left", () => {
+    const inBin = { "n-bin": { "Bin Number": "BIN-03B" }, ...grn("39800") };
+    const marked = { branches: { ...READY, "n-xferdec": "transfer" } };
+    const transfers = [
+      { id: "BKT-1", status: "dispatched", fromWarehouse: "S", lines: [{ receiptId: "SPLIT", netWeightKg: 35820 }] },
+      { id: "BKT-2", status: "requested", fromWarehouse: "S", lines: [{ receiptId: "SPLIT", netWeightKg: 3980 }, { receiptId: "WAITING", netWeightKg: 39800 }] },
+      { id: "BKT-3", status: "received", fromWarehouse: "S", lines: [{ receiptId: "OLD", netWeightKg: null }] },
+    ] as unknown as TransferRequest[];
+    const sent = lotsSentOnBkts(transfers, ["S"]);
+    expect(sent.get("WAITING")).toBeUndefined(); // the truck hasn't left
+    const stock = warehouseBinStock([receipt("SPLIT", inBin, marked), receipt("WAITING", inBin, marked), receipt("OLD", inBin, marked)], [], new Map(), [], [], sent);
+    const bin = stock.get("BIN-03B")!;
+    expect(bin.lots.map((l) => [l.receiptId, l.kg, l.sentKg])).toEqual([["SPLIT", 3980, 35820], ["WAITING", 39800, undefined]]);
+    expect(bin.kg).toBe(43780);
+  });
+
+  // 25 Nov 2026: "what is in the Bin" listed only the Lots still there. The Bin's history lists every Lot ever put in, with
+  // what it brought, and each thing that left — without changing the Bin's kg, which still comes from the same facts.
+  it("the Bin's history keeps every Lot put in, even once it left, and lists what left and production took, newest first", () => {
+    // Dated by the unloading, not by when the Bin allocation was finalised (24 Nov 2026 on every real truck).
+    const inBin = (d: string) => ({ "n-unload": { "DATE OF OFFLOADING": d }, "n-bin": { "Bin Number": "BIN-03B", "Bin allocation date": "2026-11-24" }, ...grn("39800") });
+    const transfers = [
+      { id: "BKT-1", status: "dispatched", fromWarehouse: "S", transferDate: "2026-06-05", dispatchedAt: "2026-06-06T08:00:00Z", lines: [{ receiptId: "GONE", netWeightKg: 39800 }] },
+      { id: "BKT-2", status: "requested", fromWarehouse: "S", transferDate: "2026-06-07", dispatchedAt: null, lines: [{ receiptId: "STAYS", netWeightKg: 39800 }] },
+    ] as unknown as TransferRequest[];
+    const stock = warehouseBinStock(
+      [receipt("GONE", inBin("2026-06-02"), { lotNo: "LOT-1" }), receipt("STAYS", inBin("2026-06-03"), { lotNo: "LOT-2" })],
+      [], new Map(), [{ binCode: "BIN-03B", netKg: 1000, date: "2026-06-08", ref: "RR-1" }], [],
+      lotsSentOnBkts(transfers, ["S"]), lotLinesSentOnBkts(transfers, ["S"]),
+    );
+    const bin = stock.get("BIN-03B")!;
+    expect(bin.lots.map((l) => l.receiptId)).toEqual(["STAYS"]); // now: the one that left is gone
+    expect(bin.kg).toBe(38800); // 39,800 still here − 1,000 to production: the history changes nothing
+    expect(bin.history.map((e) => [e.date, e.kind, e.lotNo ?? e.ref, e.kg])).toEqual([
+      ["2026-06-08", "production", "RR-1", -1000],
+      ["2026-06-06", "lot_sent", "LOT-1", -39800], // BKT-2 isn't dispatched: nothing left on it yet
+      ["2026-06-03", "lot_in", "LOT-2", 39800],
+      ["2026-06-02", "lot_in", "LOT-1", 39800], // still listed, with all it brought
     ]);
-    expect(stock.get("BIN-03B")!.lots.map((l) => l.receiptId)).toEqual(["READY"]);
-    expect(stock.get("BIN-03B")!.kg).toBe(1000);
+    expect(bin.history[1]!.ref).toBe("BKT-1");
+  });
+
+  it("takes RCN dried from a Bin out of it when issued, and puts what came back into the new Bin only once the drying passed", () => {
+    const lots = [receipt("A", { "n-bin": { "Bin Number": "BIN-01" }, ...grn("10000") })];
+    const round = (o: Partial<BinDryingRoundFacts>): BinDryingRoundFacts => ({
+      id: "R1", sn: 7, firstBatchId: null, round: 1, status: "IN DRYING", sourceBinNo: "BIN-01", destinationBinNo: null,
+      issuedNetWeightKg: 4000, receivedNetWeightKg: null, date: "2026-11-20", ...o,
+    });
+    const out = warehouseBinStock(lots, [], new Map(), [], binDryingMovements([round({})]));
+    expect(out.get("BIN-01")!.kg).toBe(6000);
+    expect(out.has("BIN-20")).toBe(false);
+    // Re-dried once: round 2 continues from what came back; only its pass puts RCN in the new Bin.
+    const chain = [
+      round({ status: "RE-DRY", receivedNetWeightKg: 3900 }),
+      round({ id: "R2", firstBatchId: "R1", round: 2, status: "PASSED", issuedNetWeightKg: 3900, receivedNetWeightKg: 3850, destinationBinNo: "BIN-20" }),
+    ];
+    const back = warehouseBinStock(lots, [], new Map(), [], binDryingMovements(chain));
+    expect(back.get("BIN-01")!.kg).toBe(6000);
+    expect(back.get("BIN-20")).toMatchObject({ kg: 3850, lots: [], movements: [{ kind: "drying_back", kg: 3850, ref: "Drying #7 · after round 2" }] });
+    // Sent straight to production from the yard: it leaves the Bin and comes back to none.
+    const toProduction = binDryingMovements([round({ status: "SENT TO PRODUCTION", receivedNetWeightKg: 3800 })]);
+    expect(toProduction).toEqual([{ binCode: "BIN-01", kg: -4000, kind: "drying_out", ref: "Drying #7", date: "2026-11-20" }]);
+    // Named by its S.No, never the database id (26 Nov 2026, user: the history showed the primary key).
+    expect([...toProduction, ...binDryingMovements(chain)].every((m) => !m.ref.includes("R1"))).toBe(true);
+  });
+
+  it("moves a truck loaded from a Bin out of it at dispatch, and into the receiving Bin on arrival — never at creation", () => {
+    const line = { id: 1, receiptId: null, lotNumber: null, supplierName: "", vehicleNo: "", fiche: null, bags: 500, netWeightKg: 25000, moisture: 8, kor: 48, nutCount: 190, binCode: "BIN-01", receivedBinCode: null, bagsReceived: null, transferLotId: null, transferLotNo: null, transferLotBins: [], receptionId: null, receivedLotNo: null };
+    const t = (o: Partial<TransferRequest>) => ({ id: "BKT-2026-001", transferDate: "2026-11-20", fromWarehouse: "BOUAKE", toWarehouse: "YAKRO", status: "requested", lines: [line], dispatchedGrossKg: null, bagsReceived: null, receivedGrossKg: null, dispatchedAt: null, receivedAt: null, ...o }) as unknown as TransferRequest;
+    expect(binTransferMovements([t({})], ["BOUAKE"])).toEqual([]);
+    expect(binTransferMovements([t({ status: "dispatched", dispatchedAt: "2026-11-21T08:00:00Z" })], ["BOUAKE"])).toEqual([
+      { binCode: "BIN-01", kg: -25000, kind: "transfer_out", ref: "BKT-2026-001", date: "2026-11-21" },
+    ]);
+    const received = t({ status: "received", dispatchedGrossKg: 25500, bagsReceived: 498, receivedGrossKg: 25400, receivedAt: "2026-11-22T10:00:00Z", lines: [{ ...line, receivedBinCode: "BIN-03B" }] });
+    expect(binTransferMovements([received], ["YAKRO"])).toEqual([{ binCode: "BIN-03B", kg: 24902, kind: "transfer_in", ref: "BKT-2026-001", date: "2026-11-22" }]);
+    // A Bin line is never an arrived Lot: it is counted once, as a movement.
+    expect(arrivedLots([received])).toEqual([]);
   });
 
   it("takes a Lot out of its bin while it is drying, and counts the dried quantity in the bin it came back to", () => {
@@ -137,7 +220,7 @@ describe("a Lot dried in the app is back once its last round passed", () => {
 
 describe("Lots that arrived on a BKT", () => {
   const line = (receiptId: string, receivedBinCode: string | null, bagsReceived: number | null = null) => ({
-    receiptId, lotNumber: `LOT-BKE-2026-${receiptId}`, supplierName: "S", vehicleNo: "V", fiche: null, bags: 100, netWeightKg: null,
+    id: Number(receiptId), receiptId, lotNumber: `LOT-BKE-2026-${receiptId}`, supplierName: "S", vehicleNo: "V", fiche: null, bags: 100, netWeightKg: null,
     moisture: null, kor: null, nutCount: null, binCode: "BKE-002-BIN-01", receivedBinCode, bagsReceived,
   });
   const bkt = (id: string, status: TransferRequest["status"], lines: TransferRequest["lines"]): TransferRequest => ({
@@ -195,5 +278,17 @@ describe("Lots that arrived on a BKT", () => {
       ["BKT-2026-007", "0008", "BIN-03G", 3980],
       ["BKT-2026-007", "0009", "BIN-03G", 15920],
     ]);
+  });
+});
+
+// 25 Nov 2026 (team): production can't take more out of a Bin than it holds, not even by a kilo.
+describe("a production load and its Bin's stock", () => {
+  it("is allowed up to exactly what the Bin holds, and refused beyond it", () => {
+    expect(productionLoadStockProblem("BIN-03B", 5000, 5000)).toBeNull();
+    expect(productionLoadStockProblem("BIN-03B", 5000, 5000.01)).toMatch(/^Bin BIN-03B holds 5,000 kg, less than this load's 5,000.01 kg\./);
+  });
+
+  it("says so when the Bin is already below zero, and never claims it holds less than nothing", () => {
+    expect(productionLoadStockProblem("BIN-10", -2890.25, 100)).toMatch(/^Bin BIN-10 holds 0 kg \(its stock is already -2,890.25 kg\)/);
   });
 });

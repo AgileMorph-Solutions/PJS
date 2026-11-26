@@ -16,6 +16,14 @@ export type ReceivingModule = "reception" | "offloading";
 export const RECEPTION_STAGES = ["n-gate", "n-verify", "n-gross", "n-qfs", "n-reject"] as const;
 export const OFFLOADING_STAGES = ["n-unload", "n-netwt", "n-lot", "n-bin", "n-grn", "n-stock"] as const;
 
+/**
+ * The stages that are not part of receiving a truck (team, 22 Nov 2026): drying, the other activities, the activity ledger,
+ * and the last question — transfer out (Unit) or send to production (Central). Inside the warehouse that work is done per
+ * Bin, on the Warehouse activities page (Sameer, 18 Nov 2026). A truck keeps only its drying straight off the truck onto the
+ * drying yard; the rest stay here so what a Lot recorded on them before is still read (domain/warehouseActivityStages.ts).
+ */
+export const WAREHOUSE_ACTIVITY_STAGES = ["n-drying", "n-otheract", "n-ledger", "n-xferdec"] as const;
+
 export const MODULE_STAGES: Record<ReceivingModule, readonly string[]> = {
   reception: RECEPTION_STAGES,
   offloading: OFFLOADING_STAGES,

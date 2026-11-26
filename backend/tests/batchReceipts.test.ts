@@ -33,7 +33,7 @@ const post = (who: string, payload: unknown) =>
   app.inject({ method: "POST", url: "/api/receipts/batch", payload: payload as any, headers: { cookie: cookies[who] } });
 const truck = (n: number, extra: Record<string, Record<string, string>> = {}) => ({
   "n-gate": { "DATE OF ARRIVAL": "2026-09-30", "VEHICLE NO.": `${VEHICLE}${n}`, "CREDIT/CASH": "CASH" },
-  "n-verify": { "SUPPLIERS NAME": "Batch Supplier", "LBA CODE": "LBA-BATCH", FICHE: `F-${n}` },
+  "n-verify": { "SUPPLIERS NAME": "Batch Supplier", "LBA CODE": "LBA-BATCH" },
   ...extra,
 });
 const batchReceipts = () => prisma.receipt.findMany({ where: { vehicleNo: { startsWith: VEHICLE } }, orderBy: { id: "asc" } });
@@ -76,7 +76,7 @@ describe("POST /api/receipts/batch", () => {
     // Reads back exactly like a wizard-entered receipt: stage data present, status derived.
     const one = (await app.inject({ method: "GET", url: `/api/receipts/${ids[0]}`, headers: { cookie: cookies.wi } })).json();
     expect(one.stageData["n-gate"]).toMatchObject({ "VEHICLE NO.": `${VEHICLE}1`, "CREDIT/CASH": "CASH" });
-    expect(one.stageData["n-verify"]).toMatchObject({ FICHE: "F-1", "LBA CODE": "LBA-BATCH" });
+    expect(one.stageData["n-verify"]).toMatchObject({ "LBA CODE": "LBA-BATCH" });
     expect(one.status).toBe("pending_qa");
     expect(one.timeline[0]).toMatchObject({ status: "planned" });
   });
@@ -168,7 +168,7 @@ describe("POST /api/receipts/batch with delivery plans", () => {
     supplierName: "BATCHTEST Plan Supplier", supplierCode: "LBA-BATCH", expectedQuantityKg: 60000, expectedTrucks: 3,
     expectedArrivalDate: "2026-09-30", destinationWarehouse: "BOUAKE", ...over,
   });
-  const planned = (n: number, code = "LBA-BATCH") => truck(n, { "n-verify": { "SUPPLIERS NAME": "Batch Supplier", "LBA CODE": code, FICHE: `F-${n}` } });
+  const planned = (n: number, code = "LBA-BATCH") => truck(n, { "n-verify": { "SUPPLIERS NAME": "Batch Supplier", "LBA CODE": code } });
   let planId: string;
 
   beforeAll(async () => { planId = (await plan()).id; });

@@ -5,10 +5,11 @@ import { api, type OpeningBalanceRow } from "../../repository/api";
 import { useCanEditDirectly } from "../../state/AuthContext";
 import { useOpeningBalances } from "../../state/TrackingContext";
 import { DateInput } from "../ui/DateInput";
+import { inputClass } from "../ui/Input";
 
-const inputCls =
-  "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-white text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none focus:border-brand-700 focus:ring-2 focus:ring-brand-100";
-const labelCls = "block text-[12.5px] font-semibold text-warmstone-700 mb-1.5";
+// The app's own input look (ui/Input), like every other form (26 Nov 2026).
+const inputCls = inputClass;
+const labelCls = "block text-[12px] font-semibold text-warmstone-700 mb-1.5";
 const boxCls = "mb-4 rounded-xl border border-warmstone-200 bg-warmstone-50 px-4 py-3";
 
 const summary = (o: OpeningBalanceRow) => (
@@ -47,7 +48,7 @@ function AllWarehouses({ rows, warehouses, onSelectWarehouse }: { rows: OpeningB
   return (
     <div className={boxCls}>
       <p className="text-[13px] font-bold text-warmstone-900">Opening stock</p>
-      <p className="mt-0.5 mb-2 text-[12.5px] text-warmstone-500">Each warehouse has its own. Select a warehouse to set or change it.</p>
+      <p className="mt-0.5 mb-2 text-[12px] text-warmstone-500">Each warehouse has its own. Select a warehouse to set or change it.</p>
       <ul className="space-y-1.5">
         {warehouses.map((name) => {
           const opening = rows.find((r) => r.warehouse === name);
@@ -55,7 +56,7 @@ function AllWarehouses({ rows, warehouses, onSelectWarehouse }: { rows: OpeningB
             <li key={name} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-warmstone-600">
               <span className="font-semibold text-warmstone-800">{name}</span>
               <span>{opening ? summary(opening) : "Not set yet"}</span>
-              <button type="button" onClick={() => onSelectWarehouse(name)} className="text-[12.5px] font-semibold text-brand-700 hover:text-brand-800">
+              <button type="button" onClick={() => onSelectWarehouse(name)} className="text-[12px] font-semibold text-brand-700 hover:text-brand-800">
                 Select
               </button>
             </li>
@@ -150,7 +151,7 @@ function OneWarehouse({ warehouse, current, onSaved }: { warehouse: string; curr
               {busy ? "Saving…" : "Save opening stock"}
             </button>
             {editing && (
-              <button type="button" onClick={() => setEditing(false)} className="text-[12.5px] font-semibold text-warmstone-600 hover:text-warmstone-800">
+              <button type="button" onClick={() => setEditing(false)} className="text-[12px] font-semibold text-warmstone-600 hover:text-warmstone-800">
                 Cancel
               </button>
             )}

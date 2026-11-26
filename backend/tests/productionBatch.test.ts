@@ -51,7 +51,8 @@ beforeAll(async () => {
   await lotInBin("PBT-03B", "950400");
   await lotInBin("PBT-10", "878200");
   await lotInBin("PBT-10", "5000", { price: false }); // GRN not complete: not stock yet
-  await lotInBin("PBT-10", "7000", { decided: false }); // GRN complete, drying/transfer unanswered: not ready yet
+  // GRN complete, drying/transfer unanswered: in its Bin all the same (22 Nov 2026 — those are the Bin's questions now).
+  await lotInBin("PBT-10", "7000", { decided: false });
   await login("wi", "warehouse_incharge");
   await login("qfs", "qfs_officer");
 });
@@ -71,7 +72,7 @@ describe("New batch: bins and their stock come from procurement", () => {
     // The Bin masters here have no warehouse (like the imported ones): the warehouse is where the Lots are, and each Lot names its truck.
     expect(res.json().map(({ lots, ...b }: { lots: { receiptId: string }[] }) => ({ ...b, trucks: lots.length }))).toEqual([
       { binCode: "PBT-03B", store: SITE, kg: 2_950_400, lotCount: 2, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true, trucks: 2 },
-      { binCode: "PBT-10", store: SITE, kg: 878_200, lotCount: 1, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true, trucks: 1 },
+      { binCode: "PBT-10", store: SITE, kg: 885_200, lotCount: 2, lotsWithoutKg: 0, lotsKept: 0, inBatch: null, inMaster: true, trucks: 2 },
     ]);
     expect(res.json()[0].lots[0].receiptId).toMatch(/^REC-PBT-/);
   });
@@ -80,17 +81,17 @@ describe("New batch: bins and their stock come from procurement", () => {
     const res = await call("wi", "POST", "/api/production/batches", { code: " pbt-ana-03b ", startDate: "2026-07-19", proposedBy: "Deepak", bins: ["PBT-03B", "PBT-10"] });
     expect(res.statusCode).toBe(201);
     expect(res.json()).toMatchObject({
-      code: expect.stringMatching(/^PR-PBT-2026-\d{3}$/), name: "PBT-ANA-03B", status: "open", plannedKg: 3_828_600, days: 26, endDate: "2026-08-14", proposedBy: "Deepak", createdBy: "wi",
+      code: expect.stringMatching(/^PR-PBT-2026-\d{3}$/), name: "PBT-ANA-03B", status: "open", plannedKg: 3_835_600, days: 26, endDate: "2026-08-14", proposedBy: "Deepak", createdBy: "wi",
     });
     expect(res.json().bins.map((b: { binCode: string; plannedKg: number; lots: unknown[] }) => [b.binCode, b.plannedKg, b.lots.length])).toEqual([
       ["PBT-03B", 2_950_400, 2],
-      ["PBT-10", 878_200, 1],
+      ["PBT-10", 885_200, 2],
     ]);
     // A plan moves nothing: the bins still hold the same stock, now shown as taken.
     const bins = (await call("wi", "GET", "/api/production/batch-bins")).json();
     expect(bins.map((b: { binCode: string; kg: number; inBatch: string }) => [b.binCode, b.kg, b.inBatch])).toEqual([
       ["PBT-03B", 2_950_400, res.json().code],
-      ["PBT-10", 878_200, res.json().code],
+      ["PBT-10", 885_200, res.json().code],
     ]);
   });
 

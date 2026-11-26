@@ -13,13 +13,15 @@ import { DECISION_BRANCHES } from "../src/domain/decisions.js";
 const allStages = [...stages, rejectStage];
 
 describe("stage dictionary", () => {
-  it("covers all 15 stage records and 90 fields", () => {
+  it("covers all 15 stage records and 93 fields", () => {
     expect(allStages.length).toBe(15);
     // 69 + REMARKS/WEEK on n-gate — real "Truck Reception" columns that were fingerprinted but
     // never actually captured until now (see truckReception.ts's parser and stages.ts's n-gate) —
     // + n-gross's loaded truck weight, the reading Gross is now calculated from,
-    // + n-unload's "Reconditioning of torn bags" (Nov 2026; the DISCHARGEMENT sheet's Recon Sacs).
-    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(90);
+    // + n-unload's "Reconditioning of torn bags" (Nov 2026; the DISCHARGEMENT sheet's Recon Sacs)
+    // + n-gate's "Laisse-Passer Entree (Yakro)" and n-unload's "New Jute Bag Used" (24 Nov 2026; the Bouake RCN Receiving at
+    //   Factory sheet, for a truck from the Unit warehouse).
+    expect(allStages.reduce((n, s) => n + s.fields.length, 0)).toBe(93);
     expect(Object.keys(STAGE_FIELD_MAP).length).toBe(15);
   });
 

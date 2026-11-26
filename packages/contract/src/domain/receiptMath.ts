@@ -61,6 +61,17 @@ export interface DerivedRule {
    * result). The typed fallback is then for uploads alone, whose sheet may hold the result without its inputs.
    */
   calculatedOnlyInApp?: boolean;
+  /**
+   * Calculated only once its target's step has been started. Writing a value into a step creates it, and a step's mere
+   * presence moves the truck's status (deriveStatus: n-stock → "in_stock") — so Net and bags alone must not open the stock step.
+   */
+  onlyInStartedStage?: boolean;
+  /**
+   * Filled in by the calculation, but a person may type over it (Nov 2026: the bag totals). The last edit wins: a figure
+   * typed into the field is kept (and Net is worked out from it) until one of its inputs changes, which recalculates it.
+   * Clearing the field hands it back to the calculation.
+   */
+  editable?: boolean;
 }
 
 /** 80 lb of kernels per 1000 g sample, as a factor — the client's own constant in their Warehouse Receiving sheet. */
@@ -83,6 +94,9 @@ const GRN_WEIGHT: FieldRef = ["n-grn", "GRN Weight (kept separate from Gross/Net
 const PRICE: FieldRef = ["n-grn", "PRICE"];
 const AMOUNT: FieldRef = ["n-grn", "AMOUNT"];
 const KOR: FieldRef = ["n-qfs", "KOR"];
+const ADDED_TO_STOCK: FieldRef = ["n-stock", "Added to stock from this truck (kg)"];
+const CLOSING_STOCK: FieldRef = ["n-stock", "Closing stock (kg)"];
+const STOCK_AFTER: FieldRef = ["n-stock", "Total warehouse stock after this truck (kg)"];
 const FINAL_KOR: FieldRef = ["n-qfs", "FINAL KOR"];
 const panel = (name: "Sample" | "Final"): FieldRef[] =>
   (["Good Kernel", "Immature", "Spotted"] as const).map((g) => ["n-qfs", `${name} – ${g} (g)`] as const);
@@ -100,14 +114,21 @@ const korRule = (target: FieldRef, name: "Sample" | "Final"): DerivedRule => ({
 /** In dependency order: each rule may read the targets of the rules above it. */
 export const DERIVED_RULES: readonly DerivedRule[] = [
   // 20 Nov 2026 team decision (reverting the 19 Nov one): good, damp and torn bags are counted and typed; SACS is their total.
-  { target: SACS, inputs: [GOOD, DAMP, TORN], compute: ([g, d, t]) => g! + d! + t!, formula: "Good + damp + torn bags" },
-  { target: TALLY_CLERK_BAGS, inputs: [GOOD, RECONDITIONED], compute: ([g, r]) => g! + r!, formula: "Good bags + reconditioned torn bags" },
+  // 25 Nov 2026: both bag totals are filled in from the counts but may be changed by hand (editable).
+  { target: SACS, inputs: [GOOD, DAMP, TORN], compute: ([g, d, t]) => g! + d! + t!, formula: "Good + damp + torn bags", editable: true },
+  { target: TALLY_CLERK_BAGS, inputs: [GOOD, RECONDITIONED], compute: ([g, r]) => g! + r!, formula: "Good bags + reconditioned torn bags", editable: true },
   { target: GROSS, inputs: [LOADED, TARE], compute: ([l, t]) => l! - t!, formula: "Loaded truck − empty truck" },
-  { target: NET, inputs: [GROSS, SACS], compute: ([g, b]) => g! - b! * BAG_WEIGHT_KG, formula: "Gross − 1 kg per bag" },
-  { target: PAID, inputs: [NET, REFRACTION], compute: ([n, r]) => n! - r!, formula: "Net − refraction" },
+  // 26 Nov 2026 (user): Net and Paid fill themselves in, but the warehouse may type over them, like the bag totals.
+  { target: NET, inputs: [GROSS, SACS], compute: ([g, b]) => g! - b! * BAG_WEIGHT_KG, formula: "Gross − 1 kg per bag", editable: true },
+  { target: PAID, inputs: [NET, REFRACTION], compute: ([n, r]) => n! - r!, formula: "Net − refraction", editable: true },
   { target: AMOUNT, inputs: [PRICE, PAID], compute: ([p, w]) => p! * w!, formula: "Price × paid weight" },
   korRule(KOR, "Sample"),
   korRule(FINAL_KOR, "Final"),
+  // Closing stock is typed for now (the team will decide later how it is worked out); the total follows from it.
+  {
+    target: STOCK_AFTER, inputs: [CLOSING_STOCK, ADDED_TO_STOCK], compute: ([c, a]) => c! + a!,
+    formula: "Closing stock + added to stock from this truck", onlyInStartedStage: true,
+  },
 ];
 
 /**
@@ -118,17 +139,21 @@ export const DERIVED_RULES: readonly DerivedRule[] = [
  */
 export interface PrefillRule {
   target: FieldRef;
-  /** Added up. Every one must be recorded: a sum missing a part would be offered as if it were the whole. */
+  /** Every one must be recorded: a suggestion missing a part would be offered as if it were the whole. */
   sources: readonly FieldRef[];
   /** Shown beside the suggestion so the person knows where it came from. */
   from: string;
-  /** Turns the sum into the suggestion; the sum itself when absent. */
-  compute?: (sum: number) => number;
+  /** Turns the sources' values, in order, into the suggestion; their sum when absent. */
+  compute?: (values: number[]) => number;
 }
 export const PREFILL_RULES: readonly PrefillRule[] = [
   { target: GRN_WEIGHT, sources: [NET], from: "net weight" },
   // 30 bags to a pallet (the label's own rule), so the pallets needed for the bags unloaded, rounded up.
-  { target: PALLETS, sources: [SACS], from: "bags ÷ 30", compute: (bags) => Math.ceil(bags / 30) },
+  { target: PALLETS, sources: [SACS], from: "bags ÷ 30", compute: ([bags]) => Math.ceil(bags! / 30) },
+  // Nov 2026 team decision: what goes into stock is the net weight less the jute bags, at the same 1 kg a bag. Not locked
+  // (20 Nov 2026: the warehouse may need to put in a different figure); filled in by itself when the GRN completes
+  // (23 Nov 2026, stockFillOnGrn), rather than only offered.
+  { target: ADDED_TO_STOCK, sources: [NET, SACS], from: "net weight − 1 kg per bag", compute: ([net, bags]) => net! - bags! * BAG_WEIGHT_KG },
 ];
 
 /** Suggestions for the empty fields of one stage, as {label: {value, from}}. A field that already has a value gets none. */
@@ -139,8 +164,8 @@ export function prefillSuggestions(stageData: StageData, stageId: string): Recor
     if ((stageData[stageId]?.[r.target[1]] ?? "").trim() !== "") continue; // already has a value, typed or imported
     const parts = r.sources.map(([s, l]) => parseQty(stageData[s]?.[l]));
     if (!parts.every((p) => p !== undefined)) continue;
-    const sum = parts.reduce<number>((a, b) => a + b!, 0);
-    out[r.target[1]] = { value: formatQty(r.compute ? r.compute(sum) : sum), from: r.from };
+    const values = parts as number[];
+    out[r.target[1]] = { value: formatQty(r.compute ? r.compute(values) : values.reduce((a, b) => a + b, 0)), from: r.from };
   }
   return out;
 }
@@ -165,6 +190,7 @@ export function isDerivedField(stageId: string, label: string): boolean {
 /** `from`: "app" for a person typing in the app; "upload" for a sheet or script writing what its source recorded. */
 export function derivedRuleInForce(stageData: StageData, stageId: string, label: string, from: "app" | "upload" = "app"): DerivedRule | undefined {
   const rule = derivedRuleFor(stageId, label);
+  if (rule?.editable) return undefined; // calculated, but never locked: a person may type over it
   if (!rule || !rule.fallbackToTyped) return rule;
   if (rule.calculatedOnlyInApp && from === "app") return rule;
   return rule.inputs.every(([s, l]) => parseQty(stageData[s]?.[l]) !== undefined) ? rule : undefined;
@@ -174,19 +200,48 @@ export function derivedRuleInForce(stageData: StageData, stageId: string, label:
  * Every derived value computable from `stageData`, as {stageId: {label: value}}. Rules see the
  * results of earlier rules, so a new loaded/tare reading flows through Gross → Net → Paid → Amount
  * in one call. Rules whose inputs are incomplete are simply absent from the result.
+ *
+ * `before`: the stage data before the write being saved. An editable field (SACS) is recalculated when it is blank or one
+ * of its inputs changed in that write; otherwise what is in it (a person's own figure) stays. Without `before` (a preview),
+ * a filled-in editable field is left as it is.
  */
-export function computeDerivedFields(stageData: StageData): Record<string, Record<string, string>> {
+export function computeDerivedFields(stageData: StageData, before?: StageData): Record<string, Record<string, string>> {
   const working: Record<string, Record<string, string>> = {};
   for (const [stageId, fields] of Object.entries(stageData)) working[stageId] = { ...fields };
   const out: Record<string, Record<string, string>> = {};
 
   for (const rule of DERIVED_RULES) {
+    const [stageId, label] = rule.target;
+    if (rule.onlyInStartedStage && !stageData[stageId]) continue;
+    if (rule.editable && (working[stageId]?.[label] ?? "").trim() && !(before && inputsChanged(rule, before, stageData))) continue;
     const values = rule.inputs.map(([s, l]) => parseQty(working[s]?.[l]));
     if (values.some((v) => v === undefined)) continue;
-    const [stageId, label] = rule.target;
     const value = formatQty(rule.compute(values as number[]));
     (working[stageId] ??= {})[label] = value;
     (out[stageId] ??= {})[label] = value;
+  }
+  return out;
+}
+
+/** Whether a write changed any of a rule's inputs: for an editable total, that is what hands it back to the calculation. */
+function inputsChanged(rule: DerivedRule, before: StageData, after: StageData): boolean {
+  return rule.inputs.some(([s, l]) => (before[s]?.[l] ?? "").trim() !== (after[s]?.[l] ?? "").trim());
+}
+
+/**
+ * What one change does to the editable totals that follow it (SACS, the tally), for the form to save with the change itself:
+ * the total moves as each count is typed, not a round trip later. The same as the server works out (computeDerivedFields with
+ * `before`, staleDerivedFields): a changed count recalculates its totals, or empties them if it can't give one.
+ */
+export function followingTotals(before: StageData, after: StageData): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  const editable = (stageId: string, label: string) => Boolean(derivedRuleFor(stageId, label)?.editable);
+  for (const source of [staleDerivedFields(after, before), computeDerivedFields(after, before)]) {
+    for (const [stageId, fields] of Object.entries(source)) {
+      for (const [label, value] of Object.entries(fields)) {
+        if (editable(stageId, label) && (after[stageId]?.[label] ?? "") !== value) (out[stageId] ??= {})[label] = value;
+      }
+    }
   }
   return out;
 }
@@ -208,6 +263,13 @@ export function staleDerivedFields(stageData: StageData, before: StageData): Rec
     const [stageId, label] = rule.target;
     const stored = (now[stageId]?.[label] ?? "").trim();
     if (!stored || rule.inputs.every(([s, l]) => parseQty(now[s]?.[l]) !== undefined)) continue;
+    // An editable total (SACS) follows its inputs whoever filled it: one of them changed and emptied, so it empties too.
+    if (rule.editable) {
+      if (!inputsChanged(rule, then, now)) continue;
+      (now[stageId] ??= {})[label] = "";
+      (out[stageId] ??= {})[label] = "";
+      continue;
+    }
     const inputsThen = rule.inputs.map(([s, l]) => parseQty(then[s]?.[l]));
     if (inputsThen.some((v) => v === undefined)) continue;
     if (formatQty(rule.compute(inputsThen as number[])) !== (then[stageId]?.[label] ?? "").trim()) continue;
@@ -247,4 +309,16 @@ export function dryingLoss(issuedNetKg: number | undefined, receivedNetKg: numbe
   if (issuedNetKg === undefined || receivedNetKg === undefined || issuedNetKg === 0) return undefined;
   const kg = issuedNetKg - receivedNetKg;
   return { kg, pct: kg / issuedNetKg };
+}
+
+/**
+ * What the stock step gets by itself the moment the truck's GRN is complete (team, 23 Nov 2026: "this should be autofilled,
+ * not just suggested"): Added to stock = net weight − 1 kg per bag, when it is still blank and both are recorded. The stage's
+ * own note says stock increments from the completed GRN, so the truck reads "In stock" from then on. The person may still
+ * change the figure; a value already there (typed, or an upload's) is never replaced. Empty when there is nothing to fill.
+ */
+export function stockFillOnGrn(stageData: StageData, grnComplete: boolean): Record<string, string> {
+  if (!grnComplete) return {};
+  const offered = prefillSuggestions(stageData, ADDED_TO_STOCK[0])[ADDED_TO_STOCK[1]];
+  return offered ? { [ADDED_TO_STOCK[1]]: offered.value } : {};
 }

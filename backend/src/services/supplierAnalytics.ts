@@ -23,7 +23,8 @@ export async function supplierAnalytics({ from, to, site }: SupplierAnalyticsSco
     from || to ? { [field]: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {};
 
   const [receipts, plans, jute, register] = await Promise.all([
-    prisma.receipt.findMany({ where: { ...within("arrivalDate"), ...(site ? { warehouse: { in: site } } : {}) }, select: SUPPLIER_TRUCK_SELECT }),
+    // A truck from the Unit warehouse has no supplier (24 Nov 2026): it is the company's own RCN moving, not a supplier's delivery.
+    prisma.receipt.findMany({ where: { ...within("arrivalDate"), ...(site ? { warehouse: { in: site } } : {}), transferLineId: null }, select: SUPPLIER_TRUCK_SELECT }),
     // A plan belongs to the period it was expected in, and to the site it was expected at; its trucks are all the trucks linked to it.
     prisma.deliveryPlan.findMany({
       where: { ...within("expectedArrivalDate"), ...(site ? { destinationWarehouse: { in: site } } : {}) },

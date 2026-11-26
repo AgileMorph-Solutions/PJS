@@ -319,6 +319,23 @@ describe("Production accepts the warehouse's load", () => {
     expect((await queue("wi")).some((a) => a.kind === "moisture_check" && a.id === check.id)).toBe(false);
   });
 
+  // 25 Nov 2026 (team): production can't take a load bigger than its Bin's stock, not even by a kilo. Here RRT-03B is
+  // brought down to 3,400 kg (sun drying took the rest out of it) against a 4,911.05 kg load; the drying is then undone.
+  it("refuses a load bigger than what its Bin holds, naming the load, the Bin and both weights", async () => {
+    const drying = await prisma.dryingBatch.create({
+      data: { sn: 99001, source: "entered", warehouseSite: SITE, sourceBinNo: "RRT-03B", issuedNetWeightKg: 2_947_000, status: "IN DRYING", dryingDate: new Date("2026-07-20") },
+    });
+    try {
+      expect(await bin()).toMatchObject({ currentKg: 3400 });
+      const res = await call("pi", "POST", `/api/production/rcn-receipts/${id}/accept`);
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error).toMatch(/^RR-RRT-2026-0001: Bin RRT-03B holds 3,400 kg, less than this load's 4,911.05 kg\. It can't be accepted/);
+      expect((await load()).acceptance).toBeNull();
+    } finally {
+      await prisma.dryingBatch.delete({ where: { id: drying.id } });
+    }
+  });
+
   it("before acceptance the warehouse bin still holds the load; after it, the net is out of the bin and the load is Calibrated", async () => {
     expect(await bin()).toMatchObject({ currentKg: 2_950_400, issuedKg: 0 });
     const res = await call("pi", "POST", `/api/production/rcn-receipts/${id}/accept`);
@@ -326,28 +343,27 @@ describe("Production accepts the warehouse's load", () => {
     expect(res.json()).toMatchObject({ status: "calibrated", acceptance: { acceptedBy: "pi" } });
     // Exactly the net the load's own page shows: gross − bags − pallets, before the factory's dust and voids.
     expect(await bin()).toMatchObject({ currentKg: 2_945_488.95, issuedKg: 4911.05 });
+    // The warehouse's own Bin page reads the same stock (25 Nov 2026: it left production's loads out, so a Bin read more
+    // there than here — Yakro BIN-10 and BIN-16).
+    const warehouseView = (await call("wi", "GET", `/api/bins/RRT-03B?warehouse=${encodeURIComponent(SITE)}`)).json();
+    expect(warehouseView).toMatchObject({ kg: 2_945_488.95, issuedKg: 4911.05 });
+    expect(warehouseView.history[0]).toMatchObject({ kind: "production", kg: -4911.05, ref: id });
     const texts = (await call("fm", "GET", "/api/production/batches/RRT-ANA-03B")).json().history.map((h: { text: string; actor: string }) => `${h.text} · ${h.actor}`);
     expect(texts).toContain("BTM 108 accepted by production: net 4,911.05 kg out of RRT-03B, 3,985.35 kg into the silos · pi");
     expect((await call("pi", "POST", `/api/production/rcn-receipts/${id}/accept`)).json().error).toMatch(/already accepted/);
   });
 
-  it("then closes the load to the warehouse — weighing and quality — and only an Admin corrects it", async () => {
+  it("then closes the load to the QFS Officer's checks; the Warehouse Incharge or an Admin corrects its weighing", async () => {
     const [first] = (await load()).pallets;
-    const final = { emptyPallets: [{ weightKg: "374.3" }, { weightKg: "211.2", count: "3" }], dustKg: "925.7" };
-    for (const res of [
-      await call("wi", "POST", `/api/production/rcn-receipts/${id}/pallets`, { grossKg: "1000", bags: "10", factoryBin: "ANA-10" }),
-      await call("wi", "PUT", `/api/production/rcn-pallets/${first.id}`, { grossKg: "2400", bags: "30", factoryBin: "ANA-10" }),
-      await call("wi", "DELETE", `/api/production/rcn-pallets/${first.id}`),
-      await call("wi", "POST", `/api/production/rcn-receipts/${id}/final-weight`, final),
-      await call("qfs", "POST", `/api/production/rcn-receipts/${id}/moisture-checks`, { moisture: "8", nutCount: "180", decision: "ok" }),
-    ]) {
-      expect(res.statusCode).toBe(422);
-      expect(res.json().error).toMatch(/Production has accepted RR-RRT-2026-0001/);
-    }
+    // A moisture check is no longer taken on a load production holds.
+    const late = await call("qfs", "POST", `/api/production/rcn-receipts/${id}/moisture-checks`, { moisture: "8", nutCount: "180", decision: "ok" });
+    expect(late.statusCode).toBe(422);
+    expect(late.json().error).toMatch(/Production has accepted RR-RRT-2026-0001/);
     expect(await bin()).toMatchObject({ issuedKg: 4911.05 });
-    // An Admin's correction moves the bin's debit with it: one number, never a copy.
-    expect((await call("admin", "PUT", `/api/production/rcn-pallets/${first.id}?warehouse=${SITE}`, { grossKg: "2408.9", bags: "30", factoryBin: "ANA-10" })).statusCode).toBe(200);
+    // The Incharge's correction (26 Nov 2026; an Admin's before) moves the bin's debit with it: one number, never a copy.
+    expect((await call("wi", "PUT", `/api/production/rcn-pallets/${first.id}`, { grossKg: "2408.9", bags: "30", factoryBin: "ANA-10" })).statusCode).toBe(200);
     expect(await bin()).toMatchObject({ issuedKg: 5011.05, currentKg: 2_945_388.95 });
+    expect((await call("admin", "PUT", `/api/production/rcn-pallets/${first.id}?warehouse=${SITE}`, { grossKg: "2408.9", bags: "30", factoryBin: "ANA-10" })).statusCode).toBe(200);
   });
 
   it("lets the Factory Manager read the load and change nothing", async () => {

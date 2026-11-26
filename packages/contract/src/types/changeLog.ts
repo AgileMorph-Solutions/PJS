@@ -5,7 +5,8 @@
 export interface ChangeLogRecord {
   id: number;
   at: string;
-  /** Who saved it. Only a signed-in person's changes are logged; "Deleted user" when their account is gone. */
+  /** Who saved it. Only a signed-in person's changes are logged; their name as saved on the row if the account is
+   * gone, "Unknown" on older rows that never recorded it. */
   by: string;
   via: "direct" | "approval" | "import" | "system";
   action: "create" | "update" | "delete";

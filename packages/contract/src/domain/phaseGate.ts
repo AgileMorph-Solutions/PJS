@@ -13,8 +13,11 @@ import type { ReceiptRecord } from "../types/receipt.js";
 import { stages } from "../data/stages.js";
 import { computeDerivedFields, derivedRuleFor } from "./receiptMath.js";
 import { isGrnComplete } from "./recordLock.js";
+import { fieldApplies, isFromTransfer, typedOnRecord } from "./transferReception.js";
 
 type StageData = ReceiptRecord["stageData"];
+/** What the gate reads of a record. `transfer`: a truck from the Unit warehouse (transferReception.ts), whose supplier and payment fields don't apply. */
+type GatedRecord = Pick<ReceiptRecord, "stageData" | "branches"> & { transfer?: unknown };
 type Ref = readonly [stageId: string, label: string];
 
 export interface Phase {
@@ -22,6 +25,8 @@ export interface Phase {
   title: string;
   /** Every field that must be filled for the phase to count as complete. */
   required: readonly Ref[];
+  /** Fields typed on this record though usually calculated (KOR on a truck from the Unit warehouse): missing, they name themselves. */
+  typed?: readonly Ref[];
 }
 
 const ARRIVAL: Phase = {
@@ -115,7 +120,9 @@ const OPENS_AFTER: Record<string, readonly Need[]> = {
   "n-bin": [ARRIVAL, WEIGHT, "pass", UNLOADING],
   "n-grn": [ARRIVAL, WEIGHT, "pass", UNLOADING, BIN, QUALITY_FINAL],
   "n-stock": ["grn"],
-  "n-drying": ["grn"],
+  // A truck's own drying is the one straight off the truck onto the drying yard (Sameer, 18 Nov 2026), so it opens once the
+  // truck is unloaded; drying from a Bin is the Bin's (WarehouseActivities), not the truck's.
+  "n-drying": [ARRIVAL, WEIGHT, "pass", UNLOADING],
   "n-otheract": ["grn"],
   "n-ledger": ["grn"],
   "n-xferdec": ["grn"],
@@ -143,7 +150,8 @@ export function missingFields(stageData: StageData, phase: Phase): string[] {
   return phase.required.filter(blank).flatMap((ref) => {
     // A value nobody types (KOR in the app, the tally) is missing because its inputs are: name those, the fields a person
     // can fill. One a person may type (a fallback outside the app) is named itself.
-    const rule = derivedRuleFor(ref[0], ref[1]);
+    const typed = phase.typed?.some(([s, l]) => s === ref[0] && l === ref[1]);
+    const rule = typed ? undefined : derivedRuleFor(ref[0], ref[1]);
     const locked = rule && (!rule.fallbackToTyped || rule.calculatedOnlyInApp);
     const inputs = locked ? rule.inputs.filter(blank) : [];
     return inputs.length ? inputs.map(label) : [label(ref)];
@@ -169,13 +177,41 @@ const listOf = (xs: string[]) =>
     ? xs.join(", ")
     : `${xs.slice(0, 4).join(", ")} and ${xs.length - 4} more`;
 
+/** What the record alone can't say, read by the caller from elsewhere. */
+export interface GateFacts {
+  /**
+   * The truck was dried straight off the truck on the yard and sent from there to production (sunDrying's
+   * wentStraightToProduction): it never gets a Bin, so its GRN doesn't wait for the Bin step. Every other truck still does.
+   */
+  straightToProduction?: boolean;
+  /**
+   * The truck's RCN is out on the drying yard (sunDrying's onDryingYard): it is in no Bin until it comes back, so the Bin
+   * step waits (23 Nov 2026 — a Bin chosen while the RCN was on the yard put it in two places at once).
+   */
+  onDryingYard?: boolean;
+}
+
+/** A phase as it applies to this record: a truck from the Unit warehouse isn't asked for the supplier's or payment's fields. */
+export const phaseFor = (phase: Phase, r: { transfer?: unknown }): Phase =>
+  isFromTransfer(r)
+    ? { ...phase, required: phase.required.filter(([s, l]) => fieldApplies(r, s, l)), typed: phase.required.filter(([s, l]) => typedOnRecord(r, s, l)) }
+    : phase;
+
 /** Is this stage open on this record, and if not, what must be done first. */
 export function stageGate(
-  r: Pick<ReceiptRecord, "stageData" | "branches">,
+  r: GatedRecord,
   stageId: string,
+  facts: GateFacts = {},
 ): StageGate {
   const title = TITLES[stageId] ?? stageId;
+  if (stageId === "n-bin" && facts.onDryingYard) {
+    return {
+      open: false, waitingFor: "Drying", missing: [],
+      message: "Bin is locked: this truck's RCN is out on the drying yard. Its Bin is chosen when the dried RCN comes back.",
+    };
+  }
   for (const need of OPENS_AFTER[stageId] ?? []) {
+    if (need === BIN && facts.straightToProduction) continue;
     if (need === "pass") {
       if (r.branches["n-qfs"] === "pass") continue;
       return {
@@ -186,9 +222,9 @@ export function stageGate(
       };
     }
     if (need === "grn") {
-      if (isGrnComplete(r.stageData)) continue;
+      if (isGrnComplete(r.stageData, !isFromTransfer(r))) continue;
       const missing = GRN_FIELDS.filter(
-        ([s, l]) => !(r.stageData[s]?.[l] ?? "").trim(),
+        ([s, l]) => fieldApplies(r, s, l) && !(r.stageData[s]?.[l] ?? "").trim(),
       ).map(label);
       return {
         open: false,
@@ -197,7 +233,7 @@ export function stageGate(
         message: `${title} is locked until the GRN is complete. Missing: ${listOf(missing)}.`,
       };
     }
-    const missing = missingFields(r.stageData, need);
+    const missing = missingFields(r.stageData, phaseFor(need, r));
     if (missing.length) {
       return {
         open: false,
@@ -210,9 +246,12 @@ export function stageGate(
   return { open: true, missing: [] };
 }
 
-/** Passing quality needs the sample readings: the reason the Pass option is unavailable, or undefined when it may be chosen. */
-export function passBlocked(stageData: StageData): string | undefined {
-  const missing = missingFields(stageData, QUALITY_SAMPLE);
+/**
+ * Passing quality needs the sample readings (on a truck from the Unit warehouse, its received readings): the reason the Pass
+ * option is unavailable, or undefined when it may be chosen.
+ */
+export function passBlocked(stageData: StageData, r: { transfer?: unknown } = {}): string | undefined {
+  const missing = missingFields(stageData, phaseFor(QUALITY_SAMPLE, r));
   return missing.length
     ? `Can't pass this truck yet. Quality needs ${listOf(missing)} first.`
     : undefined;
@@ -220,19 +259,20 @@ export function passBlocked(stageData: StageData): string | undefined {
 
 /** The decisions that sit inside a gated stage, so a decision is gated like its stage's fields. */
 export function decisionGate(
-  r: Pick<ReceiptRecord, "stageData" | "branches">,
+  r: GatedRecord,
   stageId: string,
   branchId: string,
+  facts: GateFacts = {},
 ): StageGate {
-  const gate = stageGate(r, stageId);
+  const gate = stageGate(r, stageId, facts);
   if (!gate.open) return gate;
   if (stageId === "n-qfs" && branchId === "pass") {
-    const msg = passBlocked(r.stageData);
+    const msg = passBlocked(r.stageData, r);
     if (msg)
       return {
         open: false,
         waitingFor: "Quality",
-        missing: missingFields(r.stageData, QUALITY_SAMPLE),
+        missing: missingFields(r.stageData, phaseFor(QUALITY_SAMPLE, r)),
         message: msg,
       };
   }

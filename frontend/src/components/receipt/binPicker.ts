@@ -1,11 +1,15 @@
-import type { BinProblem } from "@anagroci/contract/domain/binNumber";
+import { binNumberProblems, splitBinNumber } from "@anagroci/contract/domain/binNumber";
 
-/** Said under Bin Number while what's typed isn't a Bin yet. "Not saved yet" first, because nothing
- * is sent to the server until the value is one it would accept (see ReceiptDetailPage's binDraft). */
-export function binProblemMessage(problems: BinProblem[]): string | undefined {
-  const store = problems.find((p) => p.reason === "store");
-  if (store) return `Not saved yet — ${store.code} is a warehouse, not a Bin. Choose a Bin inside it, e.g. ${store.code}-BIN-012.`;
-  const unknown = problems.map((p) => p.code);
-  if (!unknown.length) return undefined;
-  return `Not saved yet — ${unknown.join(", ")} isn't a Bin of this warehouse in Masters › Bins. Pick a Bin from the list, or add it there first.`;
+/**
+ * Said under Bin Number when the saved value isn't one Bin from the list. The field is a dropdown now, so this only
+ * happens to an older value (an upload, or one typed before Nov 2026). It stays as it is until someone picks a Bin.
+ * One Lot goes wholly into one Bin (Sameer, 18 Nov 2026), so an older "BIN-004 / BIN-006" is flagged too.
+ */
+export function binFieldWarning(value: string | undefined, bins: readonly string[], stores: readonly string[]): string | undefined {
+  const v = (value ?? "").trim();
+  if (!v || bins.includes(v)) return undefined;
+  if (splitBinNumber(v).length > 1) return "One Lot goes into one Bin only. Pick the Bin this Lot is in.";
+  const [problem] = binNumberProblems(v, bins, stores);
+  if (problem?.reason === "store") return `${v} is a warehouse, not a Bin. Pick a Bin inside it from the list.`;
+  return `${v} isn't a Bin of this warehouse in Masters › Bins. Pick a Bin from the list, or add it there first.`;
 }

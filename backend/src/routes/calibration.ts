@@ -13,7 +13,9 @@ import { siteFor } from "./productionBatches.js";
 export async function calibrationRoutes(app: FastifyInstance) {
   const reviewers = { preHandler: requireRole("admin", "production_incharge") };
   // The factory is the production team's to see (canSeeFactory): the warehouse team sees its loads, nothing after.
-  const watchers = { preHandler: requireRole("admin", "production_incharge", "factory_manager") };
+  const watchers = { preHandler: requireRole("admin", "production_incharge", "factory_manager", "qfs_officer") };
+  // A QFS Officer's sample waits for the Production Incharge (submitSizingCheckIn); theirs or an Admin's is approved as saved.
+  const checkers = { preHandler: requireRole("admin", "production_incharge", "qfs_officer") };
 
   app.get("/api/production/batches/:code/calibration", watchers, async (req, reply) => {
     const { code } = req.params as { code: string };
@@ -22,7 +24,7 @@ export async function calibrationRoutes(app: FastifyInstance) {
     return found;
   });
 
-  app.post("/api/production/sizing-checks", reviewers, async (req, reply) => {
+  app.post("/api/production/sizing-checks", checkers, async (req, reply) => {
     const check = await submitSizingCheck(await siteFor(req), currentUser(req), (req.body ?? {}) as SizingCheckInput);
     return reply.code(201).send(check);
   });

@@ -40,8 +40,8 @@ export function RcnReceiptPage() {
     return <div className="p-10 text-warmstone-400 text-[13px]">{receipts.loading ? "Loading…" : receipts.error ?? `Load ${id} isn't in production run ${code}.`}</div>;
   }
 
-  // Once production accepts the load, its weighing and quality are closed to the warehouse; only an Admin corrects them.
-  const open = !receipt.acceptance || perm.isAdmin;
+  // Once production accepts the load, its weighing and quality are closed; an Admin or the Warehouse Incharge corrects them (26 Nov 2026).
+  const open = !receipt.acceptance || perm.correctRecords;
   const can: LoadPermissions = {
     canReceive: perm.intake && open,
     canEnterMoisture: perm.moistureCheck && open,

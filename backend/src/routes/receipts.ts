@@ -37,7 +37,7 @@ export function sendError(reply: any, e: unknown) {
  * Every mutating receipt route needs "does this id exist" first — five of them repeated the same
  * lookup-or-404. Centralised so the message and status code can't drift between them.
  */
-async function requireReceipt(id: string, reply: FastifyReply, req: FastifyRequest): Promise<ReceiptRecord | null> {
+export async function requireReceipt(id: string, reply: FastifyReply, req: FastifyRequest): Promise<ReceiptRecord | null> {
   const r = await getReceipt(id);
   if (!r) {
     reply.code(404).send({ error: `Receipt ${id} not found` });
@@ -104,7 +104,7 @@ export async function receiptRoutes(app: FastifyInstance) {
     try { return reply.code(201).send(await startDrying(id, (req.body ?? {}) as StartDryingInput, currentUser(req))); } catch (e) { return sendError(reply, e); }
   });
 
-  // Finalising a bin is for the Warehouse Incharge or admin (auth/policy.ts keeps the narrow roles off it); reopening is admin only.
+  // Finalising a bin is for the Warehouse Incharge or admin (auth/policy.ts keeps the narrow roles off it); so is reopening.
   app.post("/api/receipts/:id/bin/finalise", async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!(await requireReceipt(id, reply, req))) return;
@@ -112,7 +112,8 @@ export async function receiptRoutes(app: FastifyInstance) {
     try { return await finaliseBin(id, { id: u.id, displayName: u.displayName }); } catch (e) { return sendError(reply, e); }
   });
 
-  app.post("/api/receipts/:id/reopen", { preHandler: requireRole("admin") }, async (req, reply) => {
+  // An Admin, or the Warehouse Incharge at their own warehouse (26 Nov 2026; requireReceipt checks the warehouse).
+  app.post("/api/receipts/:id/reopen", { preHandler: requireRole("admin", "warehouse_incharge") }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const { reason } = (req.body ?? {}) as { reason?: string };
     if (!(await requireReceipt(id, reply, req))) return;

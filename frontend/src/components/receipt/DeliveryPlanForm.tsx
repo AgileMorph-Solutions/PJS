@@ -4,11 +4,12 @@ import type { DeliveryPlanPayload } from "../../repository/api";
 import type { DeliveryPlan } from "../../types/receipt";
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { DateInput } from "../ui/DateInput";
+import { SearchSelect } from "../ui/SearchSelect";
+import { Button } from "../ui/Button";
+import { Input, inputClass } from "../ui/Input";
 import { isUnlistedOrigin } from "@anagroci/contract/domain/origin";
 import { UNLISTED_ORIGIN } from "./originPicker";
 
-const inputClass =
-  "w-full px-3 py-2 rounded-xl border border-warmstone-200 bg-warmstone-50 text-[13px] text-warmstone-900 placeholder-warmstone-400 outline-none transition-all focus:border-brand-700 focus:bg-white focus:ring-1 focus:ring-brand-700";
 
 export interface PlanFormState {
   supplierName: string; supplierCode: string; origin: string; store: string;
@@ -44,7 +45,7 @@ export function toPlanPayload(f: PlanFormState): DeliveryPlanPayload {
 
 const field = (id: string, label: string, el: ReactNode) => (
   <div>
-    <label htmlFor={id} className="block text-[12.5px] font-semibold text-warmstone-700 mb-1.5">{label}</label>
+    <label htmlFor={id} className="block text-[12px] font-semibold text-warmstone-700 mb-1.5">{label}</label>
     {el}
   </div>
 );
@@ -61,10 +62,14 @@ interface Props {
 
 /** The Delivery Plan fields, used to add a plan (list page) and to change one (its own page). */
 export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSubmit, onCancel }: Props) {
-  const { masters } = useTracking();
+  const { masters, refreshMasters } = useTracking();
   const [form, setForm] = useState<PlanFormState>(initial);
   const set = <K extends keyof PlanFormState>(k: K, v: PlanFormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const supplierByName = useMemo(() => new Map(masters.suppliers.map((s) => [s.name, s.code])), [masters.suppliers]);
+  // Picked from the supplier master (26 Nov 2026: the shared searchable dropdown, as Origin already is). An older plan's
+  // supplier the master lacks stays shown and kept.
+  const supplierOptions = useMemo(() => masters.suppliers.filter((s) => s.active !== false)
+    .map((s) => ({ value: s.name, label: s.name, detail: s.status === "suspended" ? `${s.code} · suspended` : s.code })), [masters.suppliers]);
   const stores = useMemo(() => masters.warehouses.filter((w) => w.site === warehouseName).map((w) => w.name), [masters.warehouses, warehouseName]);
 
   function pickSupplier(name: string) {
@@ -82,44 +87,33 @@ export function DeliveryPlanForm({ initial, warehouseName, editing, saving, onSu
   return (
     <form onSubmit={handleSubmit} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-3">
       {field("dp-supplier", "Supplier", <>
-        <input id="dp-supplier" list="dp-suppliers" required value={form.supplierName} onChange={(e) => pickSupplier(e.target.value)} className={inputClass} placeholder="Start typing a supplier…" />
-        <datalist id="dp-suppliers">{masters.suppliers.filter((s) => s.active !== false).map((s) => <option key={s.code} value={s.name} label={s.status === "suspended" ? "suspended" : undefined} />)}</datalist>
+        <SearchSelect id="dp-supplier" value={form.supplierName} options={supplierOptions} onOpen={refreshMasters} onChange={pickSupplier} placeholder="Choose a supplier…" clearable={false} />
         {/* Suspended is a warning, not a block (client decision): the plan can still be made. */}
         {masters.suppliers.find((s) => s.name === form.supplierName)?.status === "suspended" && (
-          <p className="mt-1 text-[11.5px] font-semibold text-ambernut-700">This supplier is suspended.</p>
+          <p className="mt-1 text-[12px] font-semibold text-ambernut-700">This supplier is suspended.</p>
         )}
       </>)}
-      {field("dp-code", "Supplier / LBA code", <input id="dp-code" value={form.supplierCode} onChange={(e) => set("supplierCode", e.target.value)} className={inputClass} />)}
+      {field("dp-code", "Supplier / LBA code", <Input id="dp-code" value={form.supplierCode} onChange={(e) => set("supplierCode", e.target.value)} />)}
       {field("dp-origin", "Expected origin", <>
         {/* Picked from Masters › Origins, never typed (Nov 2026). An older plan's town that the master lacks stays listed first. */}
-        <select id="dp-origin" value={form.origin} onChange={(e) => set("origin", e.target.value)} className={inputClass}>
-          <option value="">Choose an origin…</option>
-          {isUnlistedOrigin(form.origin, masters.origins) && <option value={form.origin}>{form.origin}</option>}
-          {masters.origins.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
+        <SearchSelect id="dp-origin" value={form.origin} options={masters.origins} onOpen={refreshMasters} onChange={(v) => set("origin", v)} placeholder="Choose an origin…" />
         {isUnlistedOrigin(form.origin, masters.origins) && <p className="mt-1 text-[12px] font-semibold text-ambernut-700">{UNLISTED_ORIGIN}</p>}
       </>)}
       {/* Only where old store rows still exist under the warehouse (the workbook's WH NO.); otherwise the plan is simply
           for the warehouse itself and there is nothing to pick. */}
       {stores.length > 0 && field("dp-store", "Store (WH NO.)", (
-        <select id="dp-store" value={form.store} onChange={(e) => set("store", e.target.value)} className={inputClass}>
-          <option value="">Anywhere in {warehouseName}</option>
-          {stores.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <SearchSelect id="dp-store" value={form.store} options={stores} onChange={(v) => set("store", v)} placeholder={`Anywhere in ${warehouseName}`} />
       ))}
       {field("dp-start", "Expected delivery from", <DateInput id="dp-start" required value={form.start} onChange={(d) => set("start", d)} className={inputClass} />)}
       {field("dp-end", "Expected delivery until", <DateInput id="dp-end" value={form.end} min={form.start} onChange={(d) => set("end", d)} className={inputClass} />)}
-      {field("dp-qty", "Expected quantity (kg)", <input id="dp-qty" inputMode="decimal" required={!editing || form.quantity.trim() !== ""} value={form.quantity} onChange={(e) => set("quantity", e.target.value)} className={inputClass} />)}
-      {field("dp-trucks", "Expected number of trucks", <input id="dp-trucks" inputMode="numeric" value={form.trucks} onChange={(e) => set("trucks", e.target.value)} className={inputClass} />)}
-      {field("dp-truck", "Expected truck type", <input id="dp-truck" value={form.truckType} onChange={(e) => set("truckType", e.target.value)} className={inputClass} />)}
-      {field("dp-funding", "Purchase / funding reference", <input id="dp-funding" value={form.funding} onChange={(e) => set("funding", e.target.value)} className={inputClass} placeholder="If there is one" />)}
-      {field("dp-remarks", "Remarks", <input id="dp-remarks" value={form.remarks} onChange={(e) => set("remarks", e.target.value)} className={inputClass} />)}
+      {field("dp-qty", "Expected quantity (kg)", <Input id="dp-qty" numeric required={!editing || form.quantity.trim() !== ""} value={form.quantity} onChange={(e) => set("quantity", e.target.value)} />)}
+      {field("dp-trucks", "Expected number of trucks", <Input id="dp-trucks" numeric inputMode="numeric" value={form.trucks} onChange={(e) => set("trucks", e.target.value)} />)}
+      {field("dp-truck", "Expected truck type", <Input id="dp-truck" value={form.truckType} onChange={(e) => set("truckType", e.target.value)} />)}
+      {field("dp-funding", "Purchase / funding reference", <Input id="dp-funding" value={form.funding} onChange={(e) => set("funding", e.target.value)} placeholder="If there is one" />)}
+      {field("dp-remarks", "Remarks", <Input id="dp-remarks" value={form.remarks} onChange={(e) => set("remarks", e.target.value)} />)}
       <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3">
-        <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold transition-all shadow-sm disabled:opacity-50">
-          <span className="material-symbols-outlined text-[17px]">{editing ? "save" : "add"}</span>
-          {editing ? "Save plan" : "Add plan"}
-        </button>
-        {onCancel && <button type="button" onClick={onCancel} className="text-[13px] font-semibold text-warmstone-600 hover:text-warmstone-900">Cancel editing</button>}
+        {onCancel && <Button variant="secondary" onClick={onCancel}>Cancel editing</Button>}
+        <Button type="submit" icon={editing ? "save" : "add"} disabled={saving || !form.supplierName.trim()}>{editing ? "Save plan" : "Add plan"}</Button>
         <span className="text-[12px] text-warmstone-500">{editing ? "The destination warehouse is part of the plan's ID and can't change." : "The plan's ID is issued when you add it."}</span>
       </div>
     </form>

@@ -41,7 +41,7 @@ export function AcceptanceCard({ receipt, canAccept, onChanged }: { receipt: Rcn
           {receipt.acceptance.acceptedBy
             ? <>Accepted by <b>{receipt.acceptance.acceptedBy}</b> on {formatDateTime(receipt.acceptance.acceptedAt)}.</>
             : <>In the silos since {formatDateTime(receipt.acceptance.acceptedAt)}, from before production accepted loads in the app.</>}
-          {" "}Its weighing and quality can no longer change; an Admin can correct them.
+          {" "}Its weighing and quality can no longer change; the Warehouse Incharge or an Admin can correct them.
         </p>
       ) : problem ? (
         <p className="text-[13px] text-warmstone-500">Not ready for production yet. {problem}</p>

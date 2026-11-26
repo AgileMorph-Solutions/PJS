@@ -3,7 +3,9 @@ import { decisionBranchesFor, stageForSite } from "../src/domain/decisions.js";
 import { deriveStatus } from "../src/domain/receiptStatus.js";
 import { siteTypeOf } from "../src/domain/siteType.js";
 import { stageById } from "../src/data/stages.js";
-import { canTransferBetween, formatLotPiece, lineNetAtArrival, lotPieceProblem, lotTransferProgress, pieceChanged, suggestedPiece, readyForTransfer, transferDestinationLabel, transferDestinations, transferVariance, transferState, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
+import { isGrnComplete } from "../src/domain/recordLock.js";
+import { GRN_QUANTITY_LABEL } from "../src/domain/receiptStatus.js";
+import { canTransferBetween, transferFieldProblem, formatLotPiece, lineNetAtArrival, lotPieceProblem, lotTransferProgress, pieceChanged, suggestedPiece, readyForTransfer, transferNeedsBin, transferDestinationLabel, transferDestinations, transferVariance, transferState, transferStateLabel, TRANSFER_STATE_LABELS, TRANSFER_STATE_LABELS_SENDER, TRANSFER_TOLERANCE, type TransferFacts } from "../src/domain/transfers.js";
 
 describe("the last decision depends on the site", () => {
   const ids = (type: string | null) => decisionBranchesFor("n-xferdec", type)!.map((b) => b.id);
@@ -87,18 +89,38 @@ describe("where a BKT can go", () => {
 });
 
 describe("which Lots the Transfers page offers", () => {
-  const passed = { lotNo: "LOT-BKE-2026-0001" };
+  const grn = { [GRN_QUANTITY_LABEL]: "40000", PRICE: "470" };
+  const inBin = { lotNo: "LOT-BKE-2026-0001", binNo: "BKE-BIN-1", stageData: { "n-bin": { "Bin Number": "BKE-BIN-1" }, "n-grn": grn } };
+  const notInStock = { lotNo: "LOT-BKE-2026-0001", binNo: "", stageData: {} };
+
+  it("offers a Lot in its Bin with its GRN complete, without asking \"transfers out?\" first", () => {
+    expect(readyForTransfer({ ...inBin, branches: { "n-qfs": "pass" } })).toBe(true);
+    expect(isGrnComplete(inBin.stageData)).toBe(true);
+    expect(readyForTransfer({ ...notInStock, branches: { "n-qfs": "pass" } })).toBe(false);
+  });
 
   // The bug this guards: "Yes" hid the Lot and "No" showed it, the opposite of what the buttons say.
-  it("offers a Lot marked Yes, and not one marked No or not answered yet", () => {
-    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass", "n-xferdec": "transfer" } })).toBe(true);
-    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass", "n-xferdec": "stays" } })).toBe(false);
-    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "pass" } })).toBe(false);
+  it("keeps an answer given the old way: Yes is offered, No and production are not", () => {
+    expect(readyForTransfer({ ...inBin, branches: { "n-qfs": "pass", "n-xferdec": "transfer" } })).toBe(true);
+    expect(readyForTransfer({ ...inBin, branches: { "n-qfs": "pass", "n-xferdec": "stays" } })).toBe(false);
+    expect(readyForTransfer({ ...inBin, branches: { "n-qfs": "pass", "n-xferdec": "production" } })).toBe(false);
+  });
+
+  // The bug this guards: Lots marked Yes before they had a Bin were offered as "no Bin" and could go onto a truck.
+  it("never offers a Lot whose Bin isn't known, even marked Yes: it waits for its Bin instead", () => {
+    const yes = { ...notInStock, branches: { "n-qfs": "pass", "n-xferdec": "transfer" } };
+    expect(readyForTransfer(yes)).toBe(false);
+    expect(transferNeedsBin(yes)).toBe(true);
+    expect(transferNeedsBin({ ...inBin, branches: { "n-qfs": "pass", "n-xferdec": "transfer" } })).toBe(false);
+    // Waiting for a Bin is only said of a Lot that would otherwise go: not of one that stays, was rejected, or isn't through GRN.
+    expect(transferNeedsBin({ ...notInStock, branches: { "n-qfs": "pass", "n-xferdec": "stays" } })).toBe(false);
+    expect(transferNeedsBin({ ...notInStock, branches: { "n-qfs": "fail", "n-xferdec": "transfer" } })).toBe(false);
+    expect(transferNeedsBin({ ...notInStock, branches: { "n-qfs": "pass" } })).toBe(false);
   });
 
   it("never offers a rejected truck or one with no Lot, even marked Yes", () => {
-    expect(readyForTransfer({ ...passed, branches: { "n-qfs": "fail", "n-xferdec": "transfer" } })).toBe(false);
-    expect(readyForTransfer({ lotNo: undefined, branches: { "n-xferdec": "transfer" } })).toBe(false);
+    expect(readyForTransfer({ ...inBin, branches: { "n-qfs": "fail", "n-xferdec": "transfer" } })).toBe(false);
+    expect(readyForTransfer({ ...inBin, lotNo: undefined, branches: { "n-xferdec": "transfer" } })).toBe(false);
   });
 });
 
@@ -248,5 +270,41 @@ describe("a BKT line starts from the Lot's own figures, and a change is noticed"
   it("reads a piece the way the page and the timeline write it", () => {
     expect(formatLotPiece({ bags: 150, netWeightKg: 30000 })).toBe("150 bags · 30,000 kg");
     expect(formatLotPiece({ bags: null, netWeightKg: 9800 })).toBe("9,800 kg");
+  });
+});
+
+describe("how a value on a BKT's dispatch or arrival is written", () => {
+  it("wants digits for the W/R No. (453 in the client's sheet), a whole number for bags and nuts, a number for weights and quality", () => {
+    expect(transferFieldProblem("receiptNo", "754")).toBeNull();
+    expect(transferFieldProblem("receiptNo", "WR-004")).toBe("Numbers only.");
+    expect(transferFieldProblem("number", "sdsd")).toBe("Numbers only.");
+    expect(transferFieldProblem("number", "48 880,5")).toBeNull(); // the sheets' French decimals
+    expect(transferFieldProblem("number", "8.5")).toBeNull();
+    expect(transferFieldProblem("number", "-1")).toBe("Numbers only.");
+    expect(transferFieldProblem("wholeNumber", "200")).toBeNull();
+    expect(transferFieldProblem("wholeNumber", "200.5")).toBe("Whole numbers only.");
+    expect(transferFieldProblem("wholeNumber", "sds")).toBe("Whole numbers only.");
+  });
+
+  it("wants a name for the transporter, and leaves a blank to the required rule", () => {
+    expect(transferFieldProblem("name", "KONE & FILS")).toBeNull();
+    expect(transferFieldProblem("name", "Transport 2000")).toBeNull();
+    expect(transferFieldProblem("name", "12345")).toMatch(/name/);
+    expect(transferFieldProblem("receiptNo", "  ")).toBeNull();
+  });
+});
+
+// 25 Nov 2026: "Being received" read oddly at the Unit warehouse, which sends the truck. Each end reads the state its own way.
+describe("a BKT's state, as each warehouse reads it", () => {
+  const bkt = { state: "receiving" as const, fromWarehouse: "BOUAKE" };
+
+  it("the sending warehouse reads it in its own words; the receiving one keeps the usual ones", () => {
+    expect(transferStateLabel(bkt, "BOUAKE")).toBe("Arrived, being checked in");
+    expect(transferStateLabel(bkt, "YAKRO FACTORY")).toBe("Being received");
+    expect(transferStateLabel({ state: "in_transit", fromWarehouse: "BOUAKE" }, "BOUAKE")).toBe("On the road");
+  });
+
+  it("has a sender's word for every state", () => {
+    expect(Object.keys(TRANSFER_STATE_LABELS_SENDER).sort()).toEqual(Object.keys(TRANSFER_STATE_LABELS).sort());
   });
 });

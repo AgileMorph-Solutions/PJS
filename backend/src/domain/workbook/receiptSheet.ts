@@ -184,7 +184,7 @@ export async function planReceipts(ctx: Ctx, sheet: ParsedSheet, _fileKeys: File
         const decision = BRANCH_HEADER.get(c.column);
         return c.column.startsWith("Receipt.") || (stage !== undefined && LOCKED_STAGES.has(stage)) || (decision !== undefined && LOCKED_DECISIONS.has(decision));
       });
-      if (closed) err(`is locked (its GRN is complete) — an Admin can reopen it in the app, then upload again`, closed.column);
+      if (closed) err(`is locked (its GRN is complete) — the Warehouse Incharge or an Admin can reopen it in the app, then upload again`, closed.column);
     }
 
     // Keep the stage twin of a changed receipt column in step — for a new receipt always, for an

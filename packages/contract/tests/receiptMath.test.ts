@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, storedFormulaMismatches, staleDerivedFields, KOR_FACTOR,
+  computeDerivedFields, isDerivedField, parseQty, formatQty, dryingLoss, DERIVED_RULES, derivedRuleInForce, prefillSuggestions, stockFillOnGrn, storedFormulaMismatches, staleDerivedFields, followingTotals, KOR_FACTOR,
 } from "../src/domain/receiptMath.js";
 import { STAGE_FIELD_MAP } from "../src/generated/stageFieldMap.js";
 
@@ -90,9 +90,52 @@ describe("bags at unloading", () => {
     expect(out["n-unload"]).toEqual({ "SACS (bags)": "478", "Tally Clerk bag count": "473" }); // 463 + 0 + 15; 463 + 10
   });
 
-  it("locks SACS in the app from the start, even before its counts are in", () => {
-    expect(derivedRuleInForce(unload({}), "n-unload", "SACS (bags)")?.formula).toBe("Good + damp + torn bags");
-    expect(derivedRuleInForce(unload({}), "n-unload", "BON SACS (good bags)")).toBeUndefined();
+  // 25 Nov 2026: both bag totals are filled in from the counts, but a person may type their own.
+  it("never locks SACS or the tally: a person may type over them", () => {
+    const counts = unload({ "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "10" });
+    expect(derivedRuleInForce(counts, "n-unload", "SACS (bags)")).toBeUndefined();
+    expect(derivedRuleInForce(counts, "n-unload", "Tally Clerk bag count")).toBeUndefined();
+  });
+
+  const counts = (good: string) => ({ "BON SACS (good bags)": good, "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15", "Reconditioning of torn bags": "10" });
+
+  it("keeps the calculated total up to date while nobody has typed over it", () => {
+    const before = unload({ ...counts("463"), "SACS (bags)": "478", "Tally Clerk bag count": "473" });
+    const after = unload({ ...counts("470"), "SACS (bags)": "478", "Tally Clerk bag count": "473" });
+    expect(computeDerivedFields(after, before)["n-unload"]).toEqual({ "SACS (bags)": "485", "Tally Clerk bag count": "480" });
+  });
+
+  it("keeps a total a person typed while its counts stay as they are, and works Net out from it", () => {
+    const typed = { ...unload({ ...counts("463"), "SACS (bags)": "480", "Tally Clerk bag count": "475" }), "n-gross": { "GROSS WT KGS": "30000" } };
+    const out = computeDerivedFields(typed, { ...typed, "n-gross": {} }); // something else changed, not the counts
+    expect(out["n-unload"]).toBeUndefined();
+    expect(out["n-netwt"]?.["NET WT KGS"]).toBe("29520"); // 30000 − 480 bags at 1 kg
+  });
+
+  // The last edit wins (25 Nov 2026): a typed total holds only until a count changes.
+  it("recalculates a typed total once one of its counts changes", () => {
+    const typed = { "SACS (bags)": "480", "Tally Clerk bag count": "475" };
+    const out = computeDerivedFields(unload({ ...counts("470"), ...typed }), unload({ ...counts("463"), ...typed }));
+    expect(out["n-unload"]).toEqual({ "SACS (bags)": "485", "Tally Clerk bag count": "480" });
+  });
+
+  // What the form saves with each keystroke of a count, so the total moves as it is typed.
+  it("followingTotals: a changed count moves its totals as it is typed, or empties them", () => {
+    const calc = unload({ ...counts("463"), "SACS (bags)": "478", "Tally Clerk bag count": "473" });
+    const typing = (good: string, from = calc) => followingTotals(from, unload({ ...from["n-unload"], "BON SACS (good bags)": good }));
+    expect(typing("47")).toEqual({ "n-unload": { "SACS (bags)": "62", "Tally Clerk bag count": "57" } });
+    expect(typing("")).toEqual({ "n-unload": { "SACS (bags)": "", "Tally Clerk bag count": "" } });
+    // The screenshot of 25 Nov 2026: Tally stuck at 12 after good bags went to 2 with no reconditioned bags. It follows now.
+    const stuck = unload({ "BON SACS (good bags)": "12", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "5", "Reconditioning of torn bags": "0", "SACS (bags)": "17", "Tally Clerk bag count": "12" });
+    expect(typing("2", { "n-unload": { ...stuck["n-unload"], "Tally Clerk bag count": "99" } }))
+      .toEqual({ "n-unload": { "SACS (bags)": "7", "Tally Clerk bag count": "2" } });
+    // A count the total doesn't use leaves it alone: reconditioning doesn't touch SACS.
+    expect(followingTotals(stuck, unload({ ...stuck["n-unload"], "Reconditioning of torn bags": "3" }))).toEqual({ "n-unload": { "Tally Clerk bag count": "15" } });
+  });
+
+  it("clearing a typed total hands it back to the calculation", () => {
+    const before = unload({ ...counts("463"), "SACS (bags)": "480" });
+    expect(computeDerivedFields(unload({ ...counts("463"), "SACS (bags)": "" }), before)["n-unload"]?.["SACS (bags)"]).toBe("478");
   });
 
   it("keeps an imported total that disagrees with its parts, and reports it rather than correcting it", () => {
@@ -140,7 +183,7 @@ describe("KOR from the cut test", () => {
     // Final panel is separate: sample grams don't lock FINAL KOR in an upload.
     expect(derivedRuleInForce(sample("270", "30", "20"), "n-qfs", "FINAL KOR", "upload")).toBeUndefined();
     // A rule with no fallback is locked regardless of its inputs.
-    expect(derivedRuleInForce({}, "n-netwt", "NET WT KGS")).toBeDefined();
+    expect(derivedRuleInForce({}, "n-gross", "GROSS WT KGS")).toBeDefined();
   });
 
   it("never blanks an imported typed KOR that has no grams behind it", () => {
@@ -234,5 +277,76 @@ describe("a calculated value whose input is cleared", () => {
     };
     const after = { ...before, "n-gross": { ...before["n-gross"], "Tare / empty truck weight (kg)": "" } };
     expect(staleDerivedFields(after, before)).toEqual({ "n-gross": { "GROSS WT KGS": "" }, "n-netwt": { "NET WT KGS": "", "PAID WT": "" } });
+  });
+});
+
+describe("warehouse stock step (Nov 2026)", () => {
+  const ready = { "n-netwt": { "NET WT KGS": "40762" }, "n-unload": { "SACS (bags)": "478" } };
+
+  const ADDED = "Added to stock from this truck (kg)";
+
+  it("offers net weight less the jute bags as what is added to stock, and the person may type another figure", () => {
+    expect(prefillSuggestions(ready, "n-stock")[ADDED]).toEqual({ value: "40284", from: "net weight − 1 kg per bag" });
+    expect(derivedRuleInForce({ ...ready, "n-stock": {} }, "n-stock", ADDED)).toBeUndefined();
+    // Once a figure is there, typed or taken, nothing is offered over it.
+    expect(prefillSuggestions({ ...ready, "n-stock": { [ADDED]: "40000" } }, "n-stock")[ADDED]).toBeUndefined();
+  });
+
+  it("totals closing stock with whatever was added, typed or taken from the suggestion", () => {
+    const out = computeDerivedFields({ ...ready, "n-stock": { "Closing stock (kg)": "100000", [ADDED]: "40000" } });
+    expect(out["n-stock"]).toEqual({ "Total warehouse stock after this truck (kg)": "140000" });
+  });
+
+  it("leaves the total blank until closing stock is typed", () => {
+    expect(computeDerivedFields({ ...ready, "n-stock": { [ADDED]: "40284" } })["n-stock"]).toBeUndefined();
+  });
+
+  // Writing into a step creates it, and its presence alone makes the truck "in_stock" — a net weight must not do that.
+  it("never starts the stock step on its own", () => {
+    expect(computeDerivedFields(ready)["n-stock"]).toBeUndefined();
+  });
+
+  it("the total is read-only; closing stock and what was added are typed", () => {
+    expect(derivedRuleInForce({}, "n-stock", "Total warehouse stock after this truck (kg)")).toBeDefined();
+    expect(derivedRuleInForce({}, "n-stock", "Closing stock (kg)")).toBeUndefined();
+  });
+});
+
+describe("stock filled in when the GRN completes (23 Nov 2026)", () => {
+  const data = { "n-netwt": { "NET WT KGS": "40000" }, "n-unload": { "SACS (bags)": "420" } };
+  it("is the net weight less 1 kg a bag, once the GRN is complete", () => {
+    expect(stockFillOnGrn(data, true)).toEqual({ "Added to stock from this truck (kg)": "39580" });
+    expect(stockFillOnGrn(data, false)).toEqual({});
+  });
+  it("never replaces a figure already there, and needs both readings", () => {
+    expect(stockFillOnGrn({ ...data, "n-stock": { "Added to stock from this truck (kg)": "39000" } }, true)).toEqual({});
+    expect(stockFillOnGrn({ "n-netwt": { "NET WT KGS": "40000" } }, true)).toEqual({});
+  });
+});
+
+// 26 Nov 2026 (user): Net and Paid fill themselves in but stay editable; a typed figure stands until an input changes.
+describe("net and paid weight: calculated, but the warehouse may type over them", () => {
+  const truck = { "n-gross": { "GROSS WT KGS": "41300" }, "n-unload": { "SACS (bags)": "478", Refraction: "60" } };
+  it("are filled in from gross, bags and refraction", () => {
+    expect(computeDerivedFields(truck)["n-netwt"]).toEqual({ "NET WT KGS": "40822", "PAID WT": "40762" });
+  });
+  it("are never locked, so a person can type them", () => {
+    expect(derivedRuleInForce(truck, "n-netwt", "NET WT KGS")).toBeUndefined();
+    expect(derivedRuleInForce(truck, "n-netwt", "PAID WT")).toBeUndefined();
+  });
+  it("a typed net is kept, and paid and the amount follow it", () => {
+    const before = { ...truck, "n-netwt": { "NET WT KGS": "40822", "PAID WT": "40762" }, "n-grn": { PRICE: "470" } };
+    const after = { ...before, "n-netwt": { "NET WT KGS": "40000", "PAID WT": "40762" } };
+    const out = computeDerivedFields(after, before);
+    expect(out["n-netwt"]?.["NET WT KGS"]).toBeUndefined(); // the person's figure stays
+    expect(out["n-netwt"]?.["PAID WT"]).toBe("39940");
+    expect(out["n-grn"]?.AMOUNT).toBe(String(39940 * 470));
+  });
+  it("a typed paid weight is kept until net or refraction changes", () => {
+    const before = { ...truck, "n-netwt": { "NET WT KGS": "40822", "PAID WT": "40762" } };
+    const typed = { ...before, "n-netwt": { "NET WT KGS": "40822", "PAID WT": "40700" } };
+    expect(computeDerivedFields(typed, before)["n-netwt"]?.["PAID WT"]).toBeUndefined();
+    const refr = { ...typed, "n-unload": { ...truck["n-unload"], Refraction: "100" } };
+    expect(computeDerivedFields(refr, typed)["n-netwt"]?.["PAID WT"]).toBe("40722");
   });
 });

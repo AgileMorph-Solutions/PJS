@@ -665,7 +665,7 @@ async function acceptFinishedLoads(ctx: ProductionCtx, notices: string[]) {
     if (status === "calibrated") continue;
     const problem = acceptanceProblem(status);
     if (problem) notices.push(`${id} is not accepted by production yet: ${problem}`);
-    else await acceptRcnReceiptIn(ctx.tx, ctx.site, ctx.actor, id);
+    else await acceptRcnReceiptIn(ctx.tx, ctx.site, ctx.actor, id, { fromUpload: true });
   }
 }
 

@@ -3,6 +3,9 @@ import { emptyBagReceiptProblems } from "@anagroci/contract/domain/juteEmptyBagR
 import { todayIso } from "@anagroci/contract/domain/dateFormat";
 import { api } from "../../repository/api";
 import { DateInput } from "../ui/DateInput";
+import { Button } from "../ui/Button";
+import { Input } from "../ui/Input";
+import { SearchSelect } from "../ui/SearchSelect";
 import { field, inputCls, receivingWarehouseField } from "./receiptFormParts";
 
 interface Props {
@@ -80,30 +83,20 @@ export function EmptyBagReceiptForm({ warehouse, warehouses, sources, fixed, onW
     <form onSubmit={(e) => void save(e)} className="space-y-4 pt-3">
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {field("From warehouse *", (
-          <select value={v.fromWarehouse} onChange={(e) => set("fromWarehouse", e.target.value)} className={inputCls}>
-            <option value="">Choose a warehouse…</option>
-            {fromOptions.map((w) => <option key={w} value={w}>{w}</option>)}
-          </select>
+          <SearchSelect id="jute-empty-from" value={v.fromWarehouse} options={fromOptions} onChange={(w) => set("fromWarehouse", w)} placeholder="Choose a warehouse…" clearable={false} />
         ))}
         {/* A choice when the person has no warehouse of their own; filled in for them otherwise, and then shown last. */}
-        {!fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
+        {!fixed && receivingWarehouseField({ id: "jute-empty-to", value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
         {field("Date received *", <DateInput value={v.date} onChange={(d) => set("date", d)} className={inputCls} />)}
-        {field("Bags received *", <input inputMode="numeric" value={v.bagsReceived} onChange={(e) => set("bagsReceived", e.target.value)} className={inputCls} />)}
-        {field("Truck number", <input value={v.truckNumber} onChange={(e) => set("truckNumber", e.target.value)} className={inputCls} />)}
-        {field("Warehouse receipt no.", <input value={v.warehouseReceiptNo} onChange={(e) => set("warehouseReceiptNo", e.target.value)} className={inputCls} />)}
-        {field("Responsible person/team *", <input value={v.responsibleParty} onChange={(e) => set("responsibleParty", e.target.value)} className={inputCls} />)}
-        {fixed && receivingWarehouseField({ value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
+        {field("Bags received *", <Input numeric inputMode="numeric" value={v.bagsReceived} onChange={(e) => set("bagsReceived", e.target.value)} />)}
+        {field("Truck number", <Input value={v.truckNumber} onChange={(e) => set("truckNumber", e.target.value)} />)}
+        {field("Warehouse receipt no.", <Input value={v.warehouseReceiptNo} onChange={(e) => set("warehouseReceiptNo", e.target.value)} />)}
+        {field("Responsible person/team *", <Input value={v.responsibleParty} onChange={(e) => set("responsibleParty", e.target.value)} />)}
+        {fixed && receivingWarehouseField({ id: "jute-empty-to", value: warehouse, options: warehouses, fixed, onChange: chooseWarehouse })}
       </div>
       {error && <p role="alert" className="text-[13px] font-medium text-danger-700 bg-danger-100 rounded-lg px-3 py-2">{error}</p>}
       {notice && <p className="text-[13px] text-success-700">{notice}</p>}
-      <button
-        type="submit"
-        disabled={busy || problems.length > 0}
-        title={problems.join(" ")}
-        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white text-[13px] font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <span className="material-symbols-outlined text-[17px]">add</span>{busy ? "Saving…" : "Save receipt"}
-      </button>
+      <Button type="submit" icon="add" disabled={busy || problems.length > 0} title={problems.join(" ")}>{busy ? "Saving…" : "Save receipt"}</Button>
     </form>
   );
 }

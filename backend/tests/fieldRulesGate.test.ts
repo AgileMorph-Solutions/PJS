@@ -60,7 +60,9 @@ describe("phase order", () => {
     await expect(setStageFields(id, "n-unload", { "BON SACS (good bags)": "463" }, { actor: person })).rejects.toThrow(/must pass Quality first/);
     await setBranch(id, "n-qfs", "pass", undefined, { actor: person });
     await setStageFields(id, "n-unload", { "BON SACS (good bags)": "463" }, { actor: person });
-    await expect(setStageFields(id, "n-drying", { "Moisture % — before drying": "12" }, { actor: person })).rejects.toThrow(/locked until the GRN is complete/);
+    // A truck's own drying is the one straight off the truck onto the yard: it waits for the unloading, not for a Bin or GRN.
+    await expect(setStageFields(id, "n-drying", { "Moisture % — before drying": "12" }, { actor: person })).rejects.toThrow(/Drying is locked\. Please finish Unloading first/);
+    await expect(setStageFields(id, "n-otheract", { Destacking: "4" }, { actor: person })).rejects.toThrow(/locked until the GRN is complete/);
   });
 
   it("a Fail needs only the weight, not the sample readings (a reason is still required)", async () => {
@@ -105,6 +107,16 @@ describe("auto-fill", () => {
     const verify = await prisma.stageVerifyDocs.findUnique({ where: { receiptId: id } });
     expect(verify?.lbaCode).toBe("LBA-GATE-001");
     await expect(setStageFields(id, "n-verify", { "LBA CODE": "LBA-999-XXX" }, { actor: person })).rejects.toThrow(/isn't GATE SUPPLIER's code/);
+  });
+
+  it("the LBA code always follows the supplier: a stale code is replaced, and clearing the supplier clears it", async () => {
+    const id = await arrived();
+    // A code left over from before (or sent by an older form) is replaced by the supplier's own when the supplier is saved.
+    await prisma.stageVerifyDocs.update({ where: { receiptId: id }, data: { lbaCode: "LBA-OLD-999" } });
+    await setStageFields(id, "n-verify", { "SUPPLIERS NAME": "GATE SUPPLIER" }, { actor: person });
+    expect((await prisma.stageVerifyDocs.findUnique({ where: { receiptId: id } }))?.lbaCode).toBe("LBA-GATE-001");
+    await setStageFields(id, "n-verify", { "SUPPLIERS NAME": "" }, { actor: person });
+    expect((await prisma.stageVerifyDocs.findUnique({ where: { receiptId: id } }))?.lbaCode).toBe("");
   });
 
   it("the week fills itself from the arrival date", async () => {

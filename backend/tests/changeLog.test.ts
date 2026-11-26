@@ -11,6 +11,7 @@ import { prisma as logged } from "../src/db.js";
 import { createReceipt, setBranch, setStageFields } from "../src/services/receipts.js";
 import { viaForPath, withAudit } from "../src/audit/context.js";
 import { fieldLabel } from "../src/audit/labels.js";
+import { listChangeLog } from "../src/services/changeLog.js";
 
 const prisma = new PrismaClient();
 const app = buildApp();
@@ -43,6 +44,7 @@ async function lot(): Promise<string> {
   await setBranch(id, "n-qfs", "pass");
   await setStageFields(id, "n-unload", { "SACS (bags)": "200" }, { bypassValidation: true });
   await setStageFields(id, "n-netwt", { "NET WT KGS": "39800" }, { bypassValidation: true });
+  await setStageFields(id, "n-bin", { "Bin Number": "CLTEST-BIN-1" }, { bypassValidation: true }); // A Lot goes on a BKT only from a known Bin (23 Nov 2026).
   await setBranch(id, "n-xferdec", "transfer");
   return id;
 }
@@ -82,13 +84,15 @@ describe("a save through the app is logged against whoever made it", () => {
       ["create", "netWeightKg", null, "30000"],
     ]));
     expect(line.every((r) => r.userId === senderId && r.via === "direct" && r.recordId === `${bkt} · ${receiptId}`)).toBe(true);
+    // The name is kept on the row too, so the log still says who it was if the account is ever deleted.
+    expect(line.every((r) => r.byName === "cl sender")).toBe(true);
     // A BKT belongs to both ends, so both can read its log.
     expect(line[0]!.warehouses.sort()).toEqual([A, B]);
     expect((await logOf("TransferRequest", bkt)).some((r) => r.field === "toWarehouse" && r.newValue === B)).toBe(true);
   });
 
   it("logs each field a dispatch changed: old → new", async () => {
-    const res = await as("sender", "POST", `/api/transfers/${bkt}/dispatch`, { whReceiptNo: "WR-1", truckNo: "CL-RIG", transporter: "T", driver: "Kone", driverPhone: "01", dispatchedGrossKg: 30150 });
+    const res = await as("sender", "POST", `/api/transfers/${bkt}/dispatch`, { whReceiptNo: "9011", truckNo: "CL-RIG", transporter: "T", driver: "Kone", driverPhone: "01", dispatchedGrossKg: 30150 });
     expect(res.statusCode).toBe(200);
     const header = await logOf("TransferRequest", bkt);
     const updates = header.filter((r) => r.action === "update");
@@ -136,6 +140,17 @@ describe("what the log never does", () => {
     // A user belongs to no warehouse: only an admin reads their log.
     expect(rows.every((r) => r.userId === senderId && r.warehouses.length === 0)).toBe(true);
     await prisma.changeLog.deleteMany({ where: { entity: "User", recordId: u.id } });
+  });
+
+  it("never says \"Deleted user\": a removed account's rows still name the person who saved them", async () => {
+    const gone = await prisma.user.create({ data: { username: "cltest-gone", displayName: "cl gone", role: "admin", passwordHash: hashPassword(PW) } });
+    const made = await withAudit({ userId: gone.id, userName: gone.displayName, via: "direct" }, async () =>
+      await logged.user.create({ data: { username: "cltest-made", displayName: "made", role: "admin", passwordHash: hashPassword(PW) } }));
+    await prisma.user.delete({ where: { id: gone.id } });
+    const rows = (await listChangeLog(undefined)).filter((r) => r.recordId === made.id);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.by === "cl gone")).toBe(true);
+    await prisma.changeLog.deleteMany({ where: { recordId: made.id } });
   });
 
   it("logs only a person's changes: a write nobody signed in made (scripts, the seeder) leaves no row", async () => {

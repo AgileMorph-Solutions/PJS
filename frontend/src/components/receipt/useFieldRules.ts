@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ReceiptRecord } from "@anagroci/contract/types/receipt";
 import { issuesByLabel, recordIssues, type FieldIssue } from "@anagroci/contract/domain/fieldRules";
-import { passBlocked, stageGate, type StageGate } from "@anagroci/contract/domain/phaseGate";
+import { passBlocked, stageGate, type GateFacts, type StageGate } from "@anagroci/contract/domain/phaseGate";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const OPEN: StageGate = { open: true, missing: [] };
@@ -12,7 +12,7 @@ const OPEN: StageGate = { open: true, missing: [] };
  *
  * Records imported from the 2026 workbooks aren't gated (the server doesn't gate them either): they never had most fields.
  */
-export function useFieldRules(receipt: ReceiptRecord | undefined, save: (stageId: string, label: string, value: string) => void) {
+export function useFieldRules(receipt: ReceiptRecord | undefined, save: (stageId: string, label: string, value: string) => void, facts: GateFacts = {}) {
   const ctx = useMemo(
     // An imported truck's createdAt is the import day, not the day anyone typed it in: leaving it out keeps "a past date"
     // from firing on every record of the 2026 workbooks.
@@ -27,8 +27,8 @@ export function useFieldRules(receipt: ReceiptRecord | undefined, save: (stageId
     issuesOf: (stageId: string) => issuesByLabel(issues, stageId),
     change: save,
     /** Whether a stage is open yet, and the sentence to show when it isn't. */
-    gateOf: (stageId: string): StageGate => (gated && receipt ? stageGate(receipt, stageId) : OPEN),
+    gateOf: (stageId: string): StageGate => (gated && receipt ? stageGate(receipt, stageId, facts) : OPEN),
     /** Why Pass can't be chosen yet, if it can't. */
-    passBlocked: gated ? passBlocked(receipt!.stageData) : undefined,
+    passBlocked: gated ? passBlocked(receipt!.stageData, receipt!) : undefined,
   };
 }

@@ -6,8 +6,9 @@ import { useEffect, useState, type SyntheticEvent } from "react";
  * and React flipped `open` to false. Here the active step opens on its own (on load, and whenever it moves on), but
  * nothing is ever closed except by the person.
  */
-export function useOpenPanels(activeId: string | undefined) {
-  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set(activeId ? [activeId] : []));
+export function useOpenPanels(activeId: string | undefined, alsoOpen?: string) {
+  // alsoOpen: a panel a link asked for (?stage=), open from the start alongside the active one.
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set([activeId, alsoOpen].filter((x): x is string => Boolean(x))));
   useEffect(() => {
     if (activeId) setOpen((prev) => (prev.has(activeId) ? prev : new Set(prev).add(activeId)));
   }, [activeId]);

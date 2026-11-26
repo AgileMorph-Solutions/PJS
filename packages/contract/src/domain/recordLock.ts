@@ -14,10 +14,13 @@ const PRICE_LABEL = "PRICE";
 
 const filled = (v: string | undefined) => (v ?? "").trim() !== "";
 
-/** Both the GRN quantity and the price are recorded. */
-export function isGrnComplete(stageData: Record<string, Record<string, string>>): boolean {
+/**
+ * Both the GRN quantity and the price are recorded. A truck from the Unit warehouse (`priced: false`) has no price — nobody
+ * is paid for RCN moved between the company's own warehouses — so its GRN is complete with the quantity alone (24 Nov 2026).
+ */
+export function isGrnComplete(stageData: Record<string, Record<string, string>>, priced = true): boolean {
   const grn = stageData["n-grn"];
-  return filled(grn?.[GRN_QUANTITY_LABEL]) && filled(grn?.[PRICE_LABEL]);
+  return filled(grn?.[GRN_QUANTITY_LABEL]) && (!priced || filled(grn?.[PRICE_LABEL]));
 }
 
 /**
@@ -30,8 +33,8 @@ export const LOCKED_STAGES: ReadonlySet<string> = new Set([...RECEPTION_STAGES, 
 export const LOCKED_DECISIONS: ReadonlySet<string> = new Set(["n-qfs"]);
 
 export const LOCKED_MESSAGE =
-  "This record is locked: its GRN is complete, so it can no longer be changed. An Admin can reopen it with a reason.";
+  "This record is locked: its GRN is complete, so it can no longer be changed. The Warehouse Incharge or an Admin can reopen it with a reason.";
 
-/** Bin allocation, once finalised, is closed to changes as well, until an Admin reopens it. */
+/** Bin allocation, once finalised, is closed to changes as well, until the Warehouse Incharge or an Admin reopens it. */
 export const BIN_FINALISED_MESSAGE =
-  "The bin allocation has been finalised and can no longer be changed. An Admin can reopen it with a reason.";
+  "The bin allocation has been finalised and can no longer be changed. The Warehouse Incharge or an Admin can reopen it with a reason.";
