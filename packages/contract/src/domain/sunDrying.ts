@@ -190,23 +190,19 @@ export function dryingFieldProblem(key: string, raw: string | undefined) {
 }
 
 /**
- * The average weight of one bag of this RCN, from pieces that recorded both a net weight and a bag count: a truck's own net and
- * bags, or every Lot's in a Bin. Null when none did, so no estimate is made up from nothing.
+ * One bag of RCN as the drying form counts it: 82 kg (26 Nov 2026, user). A fixed standard, not an average of the Bin's or truck's
+ * records: an average was pulled far off by a single mistyped truck (49 kg a bag), and the estimate is only a starting figure.
  */
-export function averageKgPerBag(pieces: readonly { netKg?: number | null; bags?: number | null }[]): number | null {
-  const known = pieces.filter((p) => (p.netKg ?? 0) > 0 && (p.bags ?? 0) > 0);
-  const bags = known.reduce((a, p) => a + p.bags!, 0);
-  return bags > 0 ? known.reduce((a, p) => a + p.netKg!, 0) / bags : null;
-}
+export const STANDARD_BAG_KG = 82;
 
 /**
- * "Weight before drying" estimated from the bags issued (26 Nov 2026, user): bags × the RCN's average kg per bag, rounded to the
- * kg. Only an estimate the form fills in: the person can type the weighed figure over it. Undefined when either is missing.
+ * "Weight before drying" estimated from the bags issued (26 Nov 2026, user): bags × the standard bag, to the kg. Only an estimate
+ * the form fills in: the person types the weighed figure over it. Undefined until a whole number of bags is entered.
  */
-export function estimatedIssuedKg(bagsRaw: string | undefined, kgPerBag: number | null): string | undefined {
+export function estimatedIssuedKg(bagsRaw: string | undefined): string | undefined {
   const bags = Number(String(bagsRaw ?? "").trim());
-  if (!kgPerBag || !String(bagsRaw ?? "").trim() || !Number.isInteger(bags) || bags <= 0) return undefined;
-  return String(Math.round(bags * kgPerBag));
+  if (!String(bagsRaw ?? "").trim() || !Number.isInteger(bags) || bags <= 0) return undefined;
+  return String(bags * STANDARD_BAG_KG);
 }
 
 /** The cut test is of a 1000 g sample: grams adding up to more can't be right (the server refuses it, dryingQualityProblem). */

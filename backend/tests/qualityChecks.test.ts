@@ -18,7 +18,6 @@ import { createReceipt, setBranch, setStageFields } from "../src/services/receip
 /** What a QFS Officer calls to take each section's checks. */
 const ROUTES: Record<QualitySection, [method: string, path: string][]> = {
   reception: [["GET", "/api/receipts/REC-X"], ["POST", "/api/receipts/REC-X/submissions"]],
-  unloading: [["POST", "/api/receipts/REC-X/submissions"]],
   unit_reception: [["GET", "/api/receipts/REC-X"], ["POST", "/api/receipts/REC-X/submissions"]],
   drying: [["POST", "/api/quality-submissions"]],
   transfer_lot: [["POST", "/api/quality-submissions"]],
@@ -103,8 +102,13 @@ describe("the QFS Officer's list", () => {
   it("names the sections of their warehouse: a Unit warehouse has no production", async () => {
     const view = await list();
     expect(view).toMatchObject({ warehouse: UNIT, siteType: "UNIT" });
-    expect(view.sections).toEqual(["reception", "unloading", "drying", "transfer_lot"]);
+    expect(view.sections).toEqual(["reception", "drying", "transfer_lot"]);
     expect((await list("cqfs")).sections).toContain("production");
+  });
+
+  it("is open to the warehouse's Incharge to read (26 Nov 2026), who still can't send a check", async () => {
+    expect((await list("wi"))).toMatchObject({ warehouse: UNIT, sections: ["reception", "drying", "transfer_lot"] });
+    expect((await call("wi", "POST", "/api/quality-submissions", { kind: "transfer_lot", targetId: "1", values: { moisture: "9" } })).statusCode).toBe(403);
   });
 });
 
@@ -116,7 +120,7 @@ describe("drying, checked by the QFS Officer", () => {
     expect(res.statusCode).toBe(201);
     round = res.json().id;
     const item = await find((i) => i.key === `drying_before-${round}`);
-    expect(item).toMatchObject({ section: "drying", state: "to_do", reference: `Drying round 1 of Bin ${BIN}`, link: { kind: "form", submissionKind: "drying_before", targetId: round } });
+    expect(item).toMatchObject({ section: "drying", state: "to_do", reference: `Drying round 1 of Bin ${BIN}`, link: { kind: "form", submissionKind: "drying_before", targetId: round, place: { kind: "bin", binCode: BIN } } });
   });
 
   it("holds the QFS Officer's reading until the Incharge approves it, one at a time", async () => {
@@ -154,7 +158,7 @@ describe("a transfer lot's quality, by the QFS Officer", () => {
     const lot = (await call("wi", "POST", "/api/transfer-lots", { warehouse: UNIT, lotDate: "2026-11-20", bins: [{ binCode: BIN, bags: 50 }] })).json();
     const weighed = (await call("wi", "POST", `/api/transfer-lots/${lot.id}/weighing`, { grossWeightKg: "4050" })).json();
     expect(weighed).toMatchObject({ status: "waiting_quality", moisture: null });
-    expect(await find((i) => i.key === `transfer_lot-${lot.id}`)).toMatchObject({ section: "transfer_lot", reference: `Transfer lot ${lot.lotNo}` });
+    expect(await find((i) => i.key === `transfer_lot-${lot.id}`)).toMatchObject({ section: "transfer_lot", reference: `Transfer lot ${lot.lotNo}`, link: { place: { kind: "transfers" } } });
 
     expect((await call("qfs", "POST", "/api/quality-submissions", { kind: "transfer_lot", targetId: String(lot.id), values: { moisture: "9" } })).json().error).toMatch(/KOR: Required/);
     const sent = (await call("qfs", "POST", "/api/quality-submissions", { kind: "transfer_lot", targetId: String(lot.id), values: { moisture: "9", kor: "47", nutCount: "190" } })).json();

@@ -35,6 +35,7 @@ import { assembleStageData } from "../stageStore.js";
 import { siteOf } from "./ids.js";
 import { resolveSite } from "../domain/site.js";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
+import { settleAfterRequest, settleBeforeRequest } from "./qualityRequests.js";
 
 type Actor = { id: string; displayName?: string };
 type Tx = Prisma.TransactionClient;
@@ -56,6 +57,8 @@ export interface StartDryingInput extends QualityFields<"input"> {
   dryType?: string;
   issuedBags?: number | string | null;
   issuedNetKg?: number | string | null;
+  /** The live quality request the form opened with (services/qualityRequests.ts): what the QFS Officer sent goes to Approvals. */
+  qualityRequestId?: number | string | null;
 }
 /** Drying from a Bin: the Bin is the one in the URL, so there is no route and no source to give. */
 export type StartBinDryingInput = Omit<StartDryingInput, "route" | "sourceBin">;
@@ -156,10 +159,12 @@ function readStart(input: StartBinDryingInput) {
   // written on the Incharge's approval (setDryingInputQuality). Given here, it is checked as before.
   const before = noQuality(input as Record<string, unknown>, "input") ? null : readQuality(input as Record<string, unknown>, "input");
   const date = blank(input.date) ? today() : String(input.date).trim();
+  const requestId = blank(input.qualityRequestId) ? undefined : Number(input.qualityRequestId);
+  if (requestId !== undefined && !Number.isInteger(requestId)) throw new ValidationError("That quality request doesn't exist.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(`${date}T00:00:00Z`).getTime())) throw new ValidationError("The drying date must be a real date, YYYY-MM-DD.");
   // RCN can't go onto the yard tomorrow (26 Nov 2026, user); the form's calendar stops at today too.
   if (date > today()) throw new ValidationError(`The drying date ${formatDate(date)} is in the future. Use today or an earlier day.`);
-  return { issuedKg, bags, before, date };
+  return { issuedKg, bags, before, date, requestId };
 }
 
 /**
@@ -172,7 +177,7 @@ export async function startBinDrying(binCode: string, site: readonly string[], i
   const code = binCode.trim().toUpperCase();
   const problem = binDryingProblem(code, input.destinationBin);
   if (problem) throw new ValidationError(problem);
-  const { issuedKg, bags, before, date } = readStart(input);
+  const { issuedKg, bags, before, date, requestId } = readStart(input);
 
   return prisma.$transaction(async (tx) => {
     const notHere = await binSiteProblem(site, code);
@@ -186,7 +191,7 @@ export async function startBinDrying(binCode: string, site: readonly string[], i
     const short = binDryingStockProblem(code, held, issuedKg);
     if (short) throw new ValidationError(short);
     const sn = await nextDryingSn(tx, warehouseSite, bin.warehouseName);
-    return tx.dryingBatch.create({
+    const round = await tx.dryingBatch.create({
       data: {
         sn, round: 1, dryingDate: new Date(`${date}T00:00:00Z`), dryingDateRaw: date, warehouseSite, warehouse: bin.warehouseName,
         sourceBinNo: code, destinationBinNo: blank(input.destinationBin) ? null : input.destinationBin!.trim().toUpperCase(),
@@ -196,6 +201,8 @@ export async function startBinDrying(binCode: string, site: readonly string[], i
         startedBy: actor.displayName ?? null, source: "entered",
       },
     });
+    await settleBeforeRequest(tx, requestId, { kind: "bin", binCode: code }, round, Boolean(before));
+    return round;
   });
 }
 
@@ -229,7 +236,7 @@ async function chainSource(tx: Tx, batch: { firstBatchId: string | null; sourceB
 export async function startDrying(receiptId: string, input: StartDryingInput, actor: Actor) {
   const route = input.route ?? "";
   if (!DECISION_BRANCHES["n-drying"]!.some((b) => b.id === route && b.id !== "none")) throw new ValidationError("Choose how the Lot goes to drying: direct, or via the warehouse.");
-  const { issuedKg, bags, before, date } = readStart(input);
+  const { issuedKg, bags, before, date, requestId } = readStart(input);
 
   await prisma.$transaction(async (tx) => {
     const row = await loadReceiptRow(receiptId, tx);
@@ -249,7 +256,7 @@ export async function startDrying(receiptId: string, input: StartDryingInput, ac
     const open = (await tx.dryingBatch.findMany({ where: { lotNo: lot, warehouseSite: row.warehouse }, select: { status: true } })).some((b) => isOpenRound(b.status));
     if (open) throw new ValidationError(`Lot ${lot} is already in drying. Finish that drying (its return and quality check) first.`);
     const sn = await nextDryingSn(tx, row.warehouse, (stages["n-gate"]?.["WH NO."] ?? "").trim() || null);
-    await tx.dryingBatch.create({
+    const round = await tx.dryingBatch.create({
       data: {
         sn, round: 1, dryingDate: new Date(`${date}T00:00:00Z`), dryingDateRaw: date, warehouseSite: row.warehouse,
         warehouse: (stages["n-gate"]?.["WH NO."] ?? "").trim() || null,
@@ -264,6 +271,7 @@ export async function startDrying(receiptId: string, input: StartDryingInput, ac
         startedBy: actor.displayName ?? null, source: "entered",
       },
     });
+    await settleBeforeRequest(tx, requestId, { kind: "receipt", receiptId }, round, Boolean(before));
     // The decision, and the drying step existing: that existence is what makes the truck "in drying" (receiptStatus.ts).
     const a = { id: actor.id, via: "direct" as const };
     await applyBranch(tx, receiptId, "n-drying", route, undefined, { actor: a });
@@ -319,7 +327,15 @@ export async function returnDrying(batchId: string, input: ReturnDryingInput, ac
  * Lot back out as the next round, issued with what came back and starting from the quality just measured.
  */
 export async function checkDrying(batchId: string, input: CheckDryingInput, actor: Actor) {
-  return prisma.$transaction((tx) => checkDryingIn(tx, batchId, input, actor));
+  return prisma.$transaction(async (tx) => {
+    // The QFS Officer's check of this round is waiting: deciding it is approving or rejecting it, so the round can't be
+    // checked twice with two different readings.
+    const waiting = await tx.qualitySubmission.findFirst({ where: { kind: "drying_after", targetId: batchId, status: "submitted" }, select: { id: true } });
+    if (waiting) throw new ValidationError("The QFS Officer's check after drying for this round is waiting in Approvals. Approve or reject it there.");
+    const result = await checkDryingIn(tx, batchId, input, actor);
+    await settleAfterRequest(tx, batchId);
+    return result;
+  });
 }
 
 /** checkDrying inside the caller's transaction: a QFS Officer's check is applied with its approval, as one write. */

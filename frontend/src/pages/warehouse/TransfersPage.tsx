@@ -324,7 +324,7 @@ export function TransfersPage() {
           binOptions={binOptions}
           saving={saving}
           onClose={() => setPuttingBack(null)}
-          onSave={(d) => run(() => api.putBackTransferLot(puttingBack.id, d))}
+          onSave={(d) => run(() => api.putBackTransferLot(puttingBack.id, { binCode: d.binCode, bags: d.bags, date: d.date, netWeightKg: d.netKg }))}
         />
       )}
 

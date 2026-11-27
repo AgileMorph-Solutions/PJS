@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DRYING_STATUS, averageKgPerBag, estimatedIssuedKg, binDryingStockProblem, canSendDryingToProduction, dryingFieldProblem, dryingGramsTotalProblem, dryingKor, dryingPhase, dryingQualityProblem, isOpenRound, onDryingYard, truckDryingBlocker, type DryingQuality } from "../src/domain/sunDrying";
+import { DRYING_STATUS, STANDARD_BAG_KG, estimatedIssuedKg, binDryingStockProblem, canSendDryingToProduction, dryingFieldProblem, dryingGramsTotalProblem, dryingKor, dryingPhase, dryingQualityProblem, isOpenRound, onDryingYard, truckDryingBlocker, type DryingQuality } from "../src/domain/sunDrying";
 import { stageGate } from "../src/domain/phaseGate";
 
 const q = (over: Partial<DryingQuality> = {}): DryingQuality => ({
@@ -99,19 +99,16 @@ describe("what the drying form checks", () => {
 
 // 26 Nov 2026 (user): weight before drying is estimated from the bags issued.
 describe("weight before drying, estimated from the bags issued", () => {
-  it("averages kg per bag over the pieces that recorded both", () => {
-    expect(averageKgPerBag([{ netKg: 40822, bags: 478 }])).toBeCloseTo(85.4, 1);
-    // A Bin's Lots: one with no bag count is left out rather than counted as 0 bags.
-    expect(averageKgPerBag([{ netKg: 8000, bags: 100 }, { netKg: 9000, bags: 100 }, { netKg: 5000, bags: null }])).toBe(85);
-    expect(averageKgPerBag([{ netKg: 5000 }])).toBeNull();
-    expect(averageKgPerBag([])).toBeNull();
+  // 26 Nov 2026 (user): a fixed 82 kg bag, never an average of the records (a mistyped truck once made it 49 kg).
+  it("is bags × the standard 82 kg bag", () => {
+    expect(STANDARD_BAG_KG).toBe(82);
+    expect(estimatedIssuedKg("20")).toBe("1640");
+    expect(estimatedIssuedKg("120")).toBe("9840");
   });
-  it("is bags × kg per bag, to the kg; nothing without both", () => {
-    expect(estimatedIssuedKg("120", 85)).toBe("10200");
-    expect(estimatedIssuedKg("478", 40822 / 478)).toBe("40822"); // the whole truck gives back its net
-    expect(estimatedIssuedKg("", 85)).toBeUndefined();
-    expect(estimatedIssuedKg("12.5", 85)).toBeUndefined();
-    expect(estimatedIssuedKg("0", 85)).toBeUndefined();
-    expect(estimatedIssuedKg("120", null)).toBeUndefined();
+  it("is nothing until a whole number of bags is entered", () => {
+    expect(estimatedIssuedKg("")).toBeUndefined();
+    expect(estimatedIssuedKg("12.5")).toBeUndefined();
+    expect(estimatedIssuedKg("0")).toBeUndefined();
+    expect(estimatedIssuedKg("abc")).toBeUndefined();
   });
 });

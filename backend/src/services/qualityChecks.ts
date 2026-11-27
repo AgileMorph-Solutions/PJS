@@ -7,7 +7,7 @@
 import { missingFields, phaseFor, PHASES, stageGate } from "@anagroci/contract/domain/phaseGate";
 import {
   QUALITY_SUBMISSION_INFO, formSubmissionSection, sectionsAt, sortQualityItems,
-  type QualityCheckItem, type QualityChecksView, type QualitySection, type QualitySubmissionKind,
+  type QualityCheckItem, type QualityCheckPlace, type QualityChecksView, type QualitySection, type QualitySubmissionKind,
 } from "@anagroci/contract/domain/qualityChecks";
 import { canSendDryingToProduction, dryingPhase } from "@anagroci/contract/domain/sunDrying";
 import { classifyActivity } from "@anagroci/contract/data/warehouseActivities";
@@ -22,6 +22,8 @@ import { listReceipts } from "./receipts.js";
 import { dryingRoundName } from "./dryingBatches.js";
 import { listTransferLots } from "./transferLots.js";
 import { listQualitySubmissions } from "./qualitySubmissions.js";
+import { listQualityRequests } from "./qualityRequests.js";
+import { requestTargetId, type QualityRequestView } from "@anagroci/contract/domain/qualityRequests";
 import { listSubmissions } from "./submissions.js";
 import { siteTypeOf } from "./ids.js";
 import { listRcnReceipts } from "./production/rcnReceipts.js";
@@ -29,10 +31,10 @@ import { listLots } from "./production/factoryLots.js";
 import { listSizingChecks } from "./production/calibration.js";
 
 const QFS_FORM = formById("qfs-jute-check")!;
-/** The bag counts the QFS Officer's form takes at unloading (contract ROLE_FORMS). */
-const UNLOADING_LABELS = QFS_FORM.stages.find((s) => s.stageId === "n-unload")!.labels.filter((l) => l !== "Reconditioning of torn bags");
 /** Rejected checks stay on the list this long, so the QFS Officer sees why. */
 const REJECTED_DAYS = 14;
+/** Checks withdrawn because the Incharge cancelled the drying form: said for a few days, not kept. */
+const CANCELLED_DAYS = 3;
 
 const fmt = (n: unknown, unit = "") => (n === null || n === undefined || n === "" ? "-" : `${Number(n).toLocaleString("en-US")}${unit}`);
 
@@ -43,7 +45,7 @@ function truckReference(r: ReceiptRecord): string {
   return [r.id, lot && `Lot ${lot}`, r.vehicleNo || r.stageData["n-gate"]?.["VEHICLE NO."], r.supplierName].filter(Boolean).join(" · ");
 }
 
-/** The reception and unloading checks of the warehouse's trucks: what the QFS Officer's form still has empty. */
+/** The reception checks of the warehouse's trucks: what the QFS Officer's form still has empty. */
 function receptionItems(receipts: ReceiptRecord[], waitingFor: Set<string>): QualityCheckItem[] {
   const out: QualityCheckItem[] = [];
   for (const r of receipts) {
@@ -59,21 +61,30 @@ function receptionItems(receipts: ReceiptRecord[], waitingFor: Set<string>): Qua
     if (decided !== "pass") continue;
     const final = missingFields(r.stageData, phaseFor(PHASES.QUALITY_FINAL, r));
     if (final.length) out.push({ ...base, key: `rec-final-${r.id}`, section, title: "Final quality readings (after unloading)", missing: final, link: { kind: "receipt", receiptId: r.id, stageId: "n-qfs" } });
-    if (stageGate(r, "n-unload").open) {
-      const bags = UNLOADING_LABELS.filter((l) => !(r.stageData["n-unload"]?.[l] ?? "").trim());
-      if (bags.length) out.push({ ...base, key: `unload-${r.id}`, section: "unloading", title: "Bag check: good, damp and torn bags", missing: bags, link: { kind: "receipt", receiptId: r.id, stageId: "n-unload" } });
-    }
   }
   return out;
 }
 
 /** The warehouse checks that are submitted on this page (drying, transfer lot), still to take. */
-async function warehouseFormItems(names: string[], siteType: WarehouseType | null, waiting: Set<string>): Promise<QualityCheckItem[]> {
+async function warehouseFormItems(
+  names: string[], siteType: WarehouseType | null, waiting: Set<string>, liveAfter: Map<string, QualityRequestView>, startedFrom: Map<string, QualityRequestView>,
+): Promise<QualityCheckItem[]> {
   const out: QualityCheckItem[] = [];
   const pending = (kind: QualitySubmissionKind, id: string) => waiting.has(`${kind}:${id}`);
-  const form = (kind: QualitySubmissionKind, targetId: string) => ({ kind: "form" as const, submissionKind: kind, targetId });
+  const form = (kind: QualitySubmissionKind, targetId: string, place?: QualityCheckPlace) => ({ kind: "form" as const, submissionKind: kind, targetId, ...(place ? { place } : {}) });
 
   const rounds = await prisma.dryingBatch.findMany({ where: { warehouseSite: { in: names }, source: "entered" }, orderBy: [{ dryingDate: "asc" }, { sn: "asc" }] });
+  // Where each drying is recorded: a truck dried on the yard on its truck's page (found by its Lot), a Bin's on that Bin's
+  // page (the chain's first round names the Bin it was taken from; later rounds name the first).
+  const byId = new Map(rounds.map((b) => [b.id, b]));
+  const lotNos = [...new Set(rounds.map((b) => b.lotNo).filter((l): l is string => Boolean(l)))];
+  const truckOfLot = new Map((lotNos.length ? await prisma.stageLotAssignment.findMany({ where: { lotNumber: { in: lotNos } }, select: { lotNumber: true, receiptId: true } }) : [])
+    .map((a) => [a.lotNumber!, a.receiptId]));
+  const dryingPlace = (b: (typeof rounds)[number]): QualityCheckPlace | undefined => {
+    if (b.lotNo) { const receiptId = truckOfLot.get(b.lotNo); return receiptId ? { kind: "receipt", receiptId } : undefined; }
+    const bin = (b.firstBatchId ? byId.get(b.firstBatchId)?.sourceBinNo : b.sourceBinNo) ?? b.sourceBinNo;
+    return bin ? { kind: "bin", binCode: bin } : undefined;
+  };
   for (const b of rounds) {
     const phase = dryingPhase(b.status);
     if (phase !== "in_drying" && phase !== "quality_check") continue;
@@ -86,17 +97,22 @@ async function warehouseFormItems(names: string[], siteType: WarehouseType | nul
       production: canSendDryingToProduction(siteType) ? "yes" : "",
     };
     if (b.inputMoisturePct === null && !pending("drying_before", b.id)) {
+      // Started from a form that asked: the same line, under the request's key, so a QFS form open on it stays open.
+      const asked = startedFrom.get(b.id);
       out.push({
-        key: `drying_before-${b.id}`, section: "drying", title: QUALITY_SUBMISSION_INFO.drying_before.title, reference, warehouse, state: "to_do",
+        key: asked ? `request-${asked.id}` : `drying_before-${b.id}`, section: "drying", title: QUALITY_SUBMISSION_INFO.drying_before.title, reference, warehouse, state: "to_do",
         context: `${fmt(b.issuedNetWeightKg, " kg")} issued on ${b.dryingDateRaw ?? "-"}${b.sourceBinNo ? ` from Bin ${b.sourceBinNo}` : " straight off the truck"}`,
-        missing: ["Moisture before drying"], since: b.dryingDate?.toISOString() ?? null, link: form("drying_before", b.id), facts,
+        missing: ["Moisture before drying"], since: b.dryingDate?.toISOString() ?? null, facts,
+        link: { ...form("drying_before", b.id, dryingPlace(b)), ...(asked ? { requestId: asked.id } : {}) },
       });
     }
     if (phase === "quality_check" && !pending("drying_after", b.id)) {
+      const asked = liveAfter.get(b.id);
       out.push({
+        ...(asked ? { live: { by: asked.openedBy, since: asked.openedAt } } : {}),
         key: `drying_after-${b.id}`, section: "drying", title: QUALITY_SUBMISSION_INFO.drying_after.title, reference, warehouse, state: "to_do",
         context: `${fmt(b.receivedNetWeightKg, " kg")} came back of ${fmt(b.issuedNetWeightKg, " kg")} · before: moisture ${fmt(b.inputMoisturePct, "%")}, KOR ${fmt(b.inputKor)}`,
-        missing: ["Moisture after drying", "Result"], since: b.returnedAt?.toISOString() ?? null, link: form("drying_after", b.id), facts,
+        missing: ["Moisture after drying", "Result"], since: b.returnedAt?.toISOString() ?? null, link: form("drying_after", b.id, dryingPlace(b)), facts,
       });
     }
   }
@@ -107,12 +123,32 @@ async function warehouseFormItems(names: string[], siteType: WarehouseType | nul
       out.push({
         key: `transfer_lot-${lot.id}`, section: "transfer_lot", title: QUALITY_SUBMISSION_INFO.transfer_lot.title, reference: `Transfer lot ${lot.lotNo}`, warehouse: lot.warehouse, state: "to_do",
         context: `${fmt(lot.bags)} bags from ${lot.bins.map((b) => b.binCode).join(", ")}${lot.netKg !== null ? ` · ${fmt(lot.netKg, " kg")} net` : " · not weighed yet"}`,
-        missing: ["Moisture", "KOR", "Nut count"], since: lot.createdAt, link: form("transfer_lot", String(lot.id)),
+        missing: ["Moisture", "KOR", "Nut count"], since: lot.createdAt, link: form("transfer_lot", String(lot.id), { kind: "transfers" }),
         facts: { bags: String(lot.bags), netKg: lot.netKg === null ? "" : String(lot.netKg) },
       });
     }
   }
 
+  return out;
+}
+
+/**
+ * The Incharge's open drying forms asking for the quality going onto the yard (services/qualityRequests.ts), still to take.
+ * Once the QFS Officer sends the reading it is a check in Approvals, listed with the others they sent.
+ */
+function requestItems(requests: QualityRequestView[], waiting: Set<string>): QualityCheckItem[] {
+  const out: QualityCheckItem[] = [];
+  for (const r of requests) {
+    // A used one is its round's check now: warehouseFormItems lists it with the round. An answered one is approved.
+    if (r.kind !== "drying_before" || r.scope.kind === "round" || r.status !== "open" || waiting.has(`drying_before:${requestTargetId(r.id)}`)) continue;
+    const place: QualityCheckPlace = r.scope.kind === "receipt" ? { kind: "receipt", receiptId: r.scope.receiptId } : { kind: "bin", binCode: r.scope.binCode };
+    out.push({
+      key: `request-${r.id}`, section: "drying", title: QUALITY_SUBMISSION_INFO.drying_before.title, reference: r.reference, warehouse: r.warehouse,
+      state: "to_do", live: { by: r.openedBy, since: r.openedAt }, missing: ["Moisture before drying"], since: r.openedAt,
+      context: "The drying form is open. The round starts when the Warehouse Incharge saves it.",
+      link: { kind: "form", submissionKind: "drying_before", targetId: requestTargetId(r.id), requestId: r.id, place },
+    });
+  }
   return out;
 }
 
@@ -171,15 +207,18 @@ export async function qualityChecks(site: string, userId: string): Promise<Quali
 
   // Waiting: anyone's at this warehouse (the check is taken, whoever sent it). Rejected: this person's own, lately.
   const recent = <T extends { status: string; reviewedAt: string | null; submittedAt: string }>(rows: T[]) => rows.filter((x) => new Date(x.reviewedAt ?? x.submittedAt) >= since);
-  const [receipts, formWaiting, formRejected, qualityWaitingRows, qualityRejected] = await Promise.all([
+  const [receipts, formWaiting, formRejected, qualityWaitingRows, qualityRejected, qualityCancelled, requests] = await Promise.all([
     listReceipts(names),
     listSubmissions({ site: names, status: "submitted" }),
     listSubmissions({ site: names, status: "rejected", submittedById: userId }),
     listQualitySubmissions({ site: [site, ...names], status: "submitted" }),
     listQualitySubmissions({ site: [site, ...names], status: "rejected", submittedById: userId }),
+    listQualitySubmissions({ site: [site, ...names], status: "cancelled", submittedById: userId }),
+    listQualityRequests([site, ...names]),
   ]);
   const qfsForms = [...formWaiting, ...recent(formRejected)].filter((s) => s.formId === QFS_FORM.id);
-  const qualitySubs = [...qualityWaitingRows, ...recent(qualityRejected)];
+  const cancelledSince = new Date(Date.now() - CANCELLED_DAYS * 86_400_000);
+  const qualitySubs = [...qualityWaitingRows, ...recent(qualityRejected), ...qualityCancelled.filter((q) => new Date(q.reviewedAt ?? q.submittedAt) >= cancelledSince)];
   const byId = new Map(receipts.map((r) => [r.id, r]));
 
   const items: QualityCheckItem[] = [];
@@ -200,7 +239,7 @@ export async function qualityChecks(site: string, userId: string): Promise<Quali
   for (const q of qualitySubs) {
     items.push({
       key: `quality-${q.id}`, section: q.section, title: QUALITY_SUBMISSION_INFO[q.kind].title, reference: q.reference, warehouse: q.warehouse,
-      state: q.status === "submitted" ? "waiting_approval" : "rejected", note: q.rejectReason ?? undefined, missing: [],
+      state: q.status === "submitted" ? "waiting_approval" : q.status === "cancelled" ? "cancelled" : "rejected", note: q.rejectReason ?? undefined, missing: [],
       context: Object.entries(q.values).map(([k, v]) => `${k} ${v}`).slice(0, 4).join(" · "),
       since: q.submittedAt, link: { kind: "form", submissionKind: q.kind, targetId: q.targetId },
     });
@@ -208,7 +247,11 @@ export async function qualityChecks(site: string, userId: string): Promise<Quali
   const qualityWaiting = new Set(qualityWaitingRows.map((q) => `${q.kind}:${q.targetId}`));
 
   items.push(...receptionItems(receipts, receiptsWaiting));
-  items.push(...await warehouseFormItems([site, ...names], siteType, qualityWaiting));
+  const liveAfter = new Map(requests.filter((r) => r.kind === "drying_after" && r.status === "open" && r.scope.kind === "round")
+    .map((r) => [r.scope.kind === "round" ? r.scope.roundId : "", r] as const));
+  items.push(...requestItems(requests, qualityWaiting));
+  const startedFrom = new Map(requests.filter((r) => r.status === "used" && r.roundId).map((r) => [r.roundId!, r] as const));
+  items.push(...await warehouseFormItems([site, ...names], siteType, qualityWaiting, liveAfter, startedFrom));
   if (siteType === "CENTRAL") items.push(...await productionItems(site));
 
   return { warehouse: site, siteType, sections: sectionsAt(siteType), items: sortQualityItems(items) };

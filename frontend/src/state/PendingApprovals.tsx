@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { useMe } from "./AuthContext";
 import { useSubmissions, useSupplierRequests, type Loaded } from "./userManagement";
 import { useLoaded } from "./useLoaded";
+import { useLiveVersion } from "./LiveUpdates";
 import { api } from "../repository/api";
 import { canAccessProduction } from "../data/roles";
 import { productionApprovalKinds, type ProductionApproval } from "@anagroci/contract/domain/productionApprovals";
@@ -37,9 +38,9 @@ const POLL_MS = 60_000;
  * Everything waiting for this person's decision, held once so the sidebar badge and ApprovalsPage can never disagree:
  * the count is derived from the very rows the page lists. Each step goes up to the role above it — a Branch Manager's or
  * QFS Officer's entry to the Warehouse Incharge, the warehouse's weighed load and the factory's QFS checks to the
- * Production Incharge. The endpoints already scope to the person's own warehouse (admin: all). There is no push
- * channel, so it re-reads on a slow poll, when the tab comes back into focus, and on each navigation; a failed read
- * keeps the last rows rather than emptying them.
+ * Production Incharge. The endpoints already scope to the person's own warehouse (admin: all). It re-reads on each
+ * live update (state/LiveUpdates.tsx), and, in case the stream is down, on a slow poll, when the tab comes back into
+ * focus, and on each navigation; a failed read keeps the last rows rather than emptying them.
  */
 export function PendingApprovalsProvider({ children }: { children: ReactNode }) {
   const me = useMe();
@@ -64,6 +65,10 @@ export function PendingApprovalsProvider({ children }: { children: ReactNode }) 
     if (!any) return;
     void Promise.all([refetchSubs(), refetchReqs(), refetchProduction(), refetchQuality()]);
   }, [any, refetchSubs, refetchReqs, refetchProduction, refetchQuality]);
+
+  const live = useLiveVersion();
+  const heard = useRef(live);
+  useEffect(() => { if (heard.current === live) return; heard.current = live; refresh(); }, [live, refresh]);
 
   useEffect(() => {
     if (!any) return;

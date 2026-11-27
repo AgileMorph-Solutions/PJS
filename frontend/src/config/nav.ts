@@ -1,4 +1,4 @@
-import { CENTRAL_ONLY_ROLES, canAccessProduction, type Role } from "../data/roles";
+import { CENTRAL_ONLY_ROLES, QUALITY_CHECK_VIEWERS, canAccessProduction, type Role } from "../data/roles";
 import type { UserView } from "../types/user";
 
 /** Everyone with an Approvals queue: procurement's reviewers, and the Production Incharge (state/PendingApprovals.tsx). */
@@ -56,7 +56,8 @@ export const NAV: NavSection[] = [
       { label: "Delivery plans", sitePath: "delivery-plans", icon: "event_upcoming", roles: ["admin", "warehouse_incharge"] },
       // Procurement's trucks: not the factory's roles, whom the API keeps off them (they carry prices).
       // The QFS Officer's work, every section's quality checks in one list (26 Nov 2026): first, since it is where they start.
-      { label: "Quality checks", sitePath: "quality-checks", icon: "science", roles: ["qfs_officer", "admin"] },
+      // The Warehouse Incharge sees it too, read-only (contract QUALITY_CHECK_VIEWERS).
+      { label: "Quality checks", sitePath: "quality-checks", icon: "science", roles: [...QUALITY_CHECK_VIEWERS] },
       { label: "Reception", sitePath: "receipts", icon: "receipt_long", allow: (me) => !CENTRAL_ONLY_ROLES.includes(me.role) },
       // What happens inside the warehouse once Reception has put RCN in a Bin (22 Nov 2026): per Bin, since its Lots can't be
       // told apart — drying, the labour activities, then transfer / production. Between Reception and Transfers, the order it happens in.

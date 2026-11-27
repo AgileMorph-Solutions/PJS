@@ -17,7 +17,7 @@ import { transferNumberProblem } from "./transferLot.js";
 
 /** The parts of the app a quality check is taken in, in the order RCN goes through them. */
 export type QualitySection =
-  | "reception" | "unloading" | "unit_reception" | "drying" | "transfer_lot" | "production_intake" | "production";
+  | "reception" | "unit_reception" | "drying" | "transfer_lot" | "production_intake" | "production";
 
 /** Who approves a QFS Officer's check in this section. */
 export type QualityApprover = "warehouse_incharge" | "production_incharge";
@@ -35,7 +35,6 @@ export interface QualitySectionInfo {
 
 export const QUALITY_SECTIONS: Record<QualitySection, QualitySectionInfo> = {
   reception: { label: "Reception", where: "Reception › the truck › Quality", icon: "receipt_long", approver: "warehouse_incharge", siteTypes: ["UNIT", "CENTRAL"] },
-  unloading: { label: "Unloading", where: "Reception › the truck › Unloading", icon: "move_to_inbox", approver: "warehouse_incharge", siteTypes: ["UNIT", "CENTRAL"] },
   unit_reception: { label: "Reception from Unit warehouse", where: "Reception › From Unit warehouse › the lot › Quality", icon: "local_shipping", approver: "warehouse_incharge", siteTypes: ["CENTRAL"] },
   drying: { label: "Drying", where: "Sun drying: a truck on the yard, or a Bin in Warehouse activities", icon: "wb_sunny", approver: "warehouse_incharge", siteTypes: ["UNIT", "CENTRAL"] },
   transfer_lot: { label: "Transfer lot", where: "Transfers › Lots to send", icon: "inventory_2", approver: "warehouse_incharge", siteTypes: ["UNIT"] },
@@ -43,7 +42,7 @@ export const QUALITY_SECTIONS: Record<QualitySection, QualitySectionInfo> = {
   production: { label: "Production", where: "Production runs › the run › its stage", icon: "precision_manufacturing", approver: "production_incharge", siteTypes: ["CENTRAL"] },
 };
 
-export const QUALITY_SECTION_ORDER: readonly QualitySection[] = ["reception", "unloading", "unit_reception", "drying", "transfer_lot", "production_intake", "production"];
+export const QUALITY_SECTION_ORDER: readonly QualitySection[] = ["reception", "unit_reception", "drying", "transfer_lot", "production_intake", "production"];
 
 export const APPROVER_LABEL: Record<QualityApprover, string> = { warehouse_incharge: "Warehouse Incharge", production_incharge: "Production Incharge" };
 
@@ -69,7 +68,8 @@ export const QUALITY_SUBMISSION_INFO: Record<QualitySubmissionKind, { section: Q
   transfer_lot: { section: "transfer_lot", title: "Transfer lot quality" },
 };
 
-export type QualitySubmissionStatus = "submitted" | "approved" | "rejected";
+/** cancelled: withdrawn while waiting, because the drying form that asked for it was cancelled (domain/qualityRequests.ts). */
+export type QualitySubmissionStatus = "submitted" | "approved" | "rejected" | "cancelled";
 
 /** One QFS check waiting for (or past) its approval, as the screens show it. */
 export interface QualitySubmissionView {
@@ -152,10 +152,17 @@ export function qualitySubmissionProblem(kind: QualitySubmissionKind, values: Re
 // ── The QFS Officer's list ───────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Where a check is filled: a page the app already has, or the form on the Quality checks page itself. */
+/**
+ * The page a record taken on the Quality checks page lives on, where the Warehouse Incharge or an Admin can also enter it
+ * directly (26 Nov 2026): a truck dried on the yard, a Bin's sun drying, the warehouse's transfer lots.
+ */
+export type QualityCheckPlace = { kind: "receipt"; receiptId: string } | { kind: "bin"; binCode: string } | { kind: "transfers" };
+
 export type QualityCheckLink =
   | { kind: "receipt"; receiptId: string; stageId: string }
   | { kind: "run"; runCode: string; stage: string; loadId?: string }
-  | { kind: "form"; submissionKind: QualitySubmissionKind; targetId: string };
+  // requestId: a live request from the Incharge's open drying form (domain/qualityRequests.ts): the readings answer it.
+  | { kind: "form"; submissionKind: QualitySubmissionKind; targetId: string; place?: QualityCheckPlace; requestId?: number };
 
 /**
  * One line of the QFS Officer's list: a check still to take, or one of theirs waiting for approval or rejected. `missing`
@@ -170,9 +177,12 @@ export interface QualityCheckItem {
   /** One line of what is known already: the weights, the reading before drying… */
   context?: string;
   missing: string[];
-  state: "to_do" | "waiting_approval" | "rejected";
-  /** For "rejected": why. */
+  /** cancelled: a check withdrawn while waiting, because the Incharge cancelled the drying form that asked for it. */
+  state: "to_do" | "waiting_approval" | "rejected" | "cancelled";
+  /** For "rejected" and "cancelled": why. */
   note?: string;
+  /** The Incharge has this check's form open right now, waiting for it (domain/qualityRequests.ts): who, since when. */
+  live?: { by: string | null; since: string };
   warehouse: string;
   /** ISO: since when it has been due, or sent. */
   since: string | null;
@@ -188,20 +198,24 @@ export interface QualityChecksView {
   items: QualityCheckItem[];
 }
 
-/** To do first, then what is waiting; inside each, by the order RCN goes through the sections, oldest first. */
+/**
+ * To do first, then what is waiting; inside each, a check the Incharge is waiting for right now first, then by the order RCN
+ * goes through the sections, oldest first.
+ */
 export function sortQualityItems(items: readonly QualityCheckItem[]): QualityCheckItem[] {
-  const stateRank = { rejected: 0, to_do: 1, waiting_approval: 2 } as const;
+  const stateRank = { rejected: 0, cancelled: 1, to_do: 2, waiting_approval: 3 } as const;
   return [...items].sort((a, b) =>
     stateRank[a.state] - stateRank[b.state]
+    || Number(Boolean(b.live)) - Number(Boolean(a.live))
     || QUALITY_SECTION_ORDER.indexOf(a.section) - QUALITY_SECTION_ORDER.indexOf(b.section)
     || (a.since ?? "").localeCompare(b.since ?? ""));
 }
 
 /**
- * The section a reception form's submission is from: a lot from the Unit warehouse's reception, the bag check alone (Unloading),
- * or the truck's quality (Reception). The QFS Officer's list and the Approvals page name it the same way.
+ * The section a reception form's submission is from: a lot from the Unit warehouse's reception, or the truck's quality
+ * (Reception). The QFS Officer's list and the Approvals page name it the same way. The bag count at unloading isn't the QFS
+ * Officer's (26 Nov 2026), so there is no Unloading section; an older submission that carried it reads as Reception.
  */
-export function formSubmissionSection(stageIds: readonly string[], fromTransfer: boolean): QualitySection {
-  if (fromTransfer) return "unit_reception";
-  return stageIds.length > 0 && stageIds.every((s) => s === "n-unload") ? "unloading" : "reception";
+export function formSubmissionSection(_stageIds: readonly string[], fromTransfer: boolean): QualitySection {
+  return fromTransfer ? "unit_reception" : "reception";
 }

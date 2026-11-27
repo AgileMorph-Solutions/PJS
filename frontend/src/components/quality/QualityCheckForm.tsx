@@ -15,6 +15,8 @@ interface Props {
   targetId: string;
   /** What the record already says, from the list (contract QualityCheckItem.facts). */
   facts?: Record<string, string>;
+  /** The Incharge's open drying form this answers (contract domain/qualityRequests.ts): sent to Approvals all the same. */
+  requestId?: number;
   onSent: () => void;
   onCancel: () => void;
 }
@@ -24,7 +26,7 @@ interface Props {
  * are the ones the Incharge's own form has (DryingQualityInputs, the transfer number rules), so both read the same; the
  * server refuses what the contract's qualitySubmissionProblem refuses here.
  */
-export function QualityCheckForm({ kind, targetId, facts = {}, onSent, onCancel }: Props) {
+export function QualityCheckForm({ kind, targetId, facts = {}, requestId, onSent, onCancel }: Props) {
   const [values, setValues] = useState<Record<string, string>>(kind === "drying_after" ? { decision: "pass" } : {});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +44,10 @@ export function QualityCheckForm({ kind, targetId, facts = {}, onSent, onCancel 
     const problem = qualitySubmissionProblem(kind, sent);
     if (problem) { setError(problem); return; }
     setBusy(true); setError(null);
-    try { await api.submitQualityCheck(kind, targetId, sent); onSent(); } catch (err) { setError(err instanceof Error ? err.message : String(err)); } finally { setBusy(false); }
+    try {
+      await (requestId !== undefined ? api.answerQualityRequest(requestId, sent) : api.submitQualityCheck(kind, targetId, sent));
+      onSent();
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); } finally { setBusy(false); }
   }
 
   const transferBox = (key: "moisture" | "kor" | "nutCount", label: string, hint?: string) => (
@@ -90,7 +95,11 @@ export function QualityCheckForm({ kind, targetId, facts = {}, onSent, onCancel 
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button type="submit" icon="send" disabled={busy || blocked}>{busy ? "Sending…" : "Send for approval"}</Button>
-        <span className="text-[12px] text-warmstone-500">The {approver} approves it; nothing changes on the record before that.</span>
+        <span className="text-[12px] text-warmstone-500">
+          {requestId !== undefined
+            ? `The ${approver} approves it in Approvals; only then does it fill the drying form.`
+            : `The ${approver} approves it; nothing changes on the record before that.`}
+        </span>
       </div>
     </form>
   );

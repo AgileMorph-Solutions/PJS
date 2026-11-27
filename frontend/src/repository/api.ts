@@ -5,6 +5,7 @@
  * needs CORS and there is no API base URL to configure per environment.
  */
 import type { QualityChecksView, QualitySubmissionKind, QualitySubmissionView } from "@anagroci/contract/domain/qualityChecks";
+import type { QualityRequestKind, QualityRequestScope, QualityRequestView } from "@anagroci/contract/domain/qualityRequests";
 import type { TransferDestination } from "@anagroci/contract/domain/transfers";
 import type {
   ReceiptRecord, LedgerRow, LedgerEntries, Masters, Supplier, DryingJob, DeliveryPlan, DeliveryPlanDetail, UploadIssueRecord, FieldChangeRecord, SiteFieldChangeRecord, SupplierReferences, SupplierDetail, SupplierAnalytics, ReceiptPlanInfo, TransferRequest, TransferLot,
@@ -210,6 +211,18 @@ export const api = {
   /** A QFS Officer's drying, transfer lot or triage check, sent for the Warehouse Incharge's approval. */
   submitQualityCheck: (kind: QualitySubmissionKind, targetId: string, values: Record<string, string>) =>
     request<QualitySubmissionView>("/quality-submissions", { method: "POST", body: JSON.stringify({ kind, targetId, values }) }),
+  /** The Incharge's drying form opened: asks the QFS Officer for its quality at once (contract domain/qualityRequests.ts). */
+  openQualityRequest: (kind: QualityRequestKind, scope: QualityRequestScope) =>
+    request<QualityRequestView>("/quality-requests", { method: "POST", body: JSON.stringify({ kind, scope }) }),
+  /** The drying form still open for a truck, Bin or round, if any: the page opens it again. */
+  findQualityRequest: (kind: QualityRequestKind, scope: QualityRequestScope) =>
+    request<{ request: QualityRequestView | null }>("/quality-requests/find", { method: "POST", body: JSON.stringify({ kind, scope }) }),
+  getQualityRequest: (id: number) => request<QualityRequestView>(`/quality-requests/${id}`),
+  /** The Incharge clicked Cancel on the drying form. */
+  cancelQualityRequest: (id: number) => request<QualityRequestView>(`/quality-requests/${id}/cancel`, { method: "POST" }),
+  /** The QFS Officer's reading for an open drying form: sent to Approvals. */
+  answerQualityRequest: (id: number, values: Record<string, string>) =>
+    request<QualitySubmissionView>(`/quality-requests/${id}/answer`, { method: "POST", body: JSON.stringify({ values }) }),
   listQualitySubmissions: (q: { status?: string } = {}) => request<QualitySubmissionView[]>(`/quality-submissions${q.status ? `?status=${encodeURIComponent(q.status)}` : ""}`),
   approveQualityCheck: (id: number, body: { destinationBin?: string } = {}) =>
     request<{ ok: boolean }>(`/quality-submissions/${id}/approve`, { method: "POST", body: JSON.stringify(body) }),
@@ -398,7 +411,7 @@ export const api = {
     request<TransferLot>(`/transfer-lots/${id}/weighing`, { method: "POST", body: JSON.stringify(p) }),
   deleteTransferLot: (id: number) => request<void>(`/transfer-lots/${id}`, { method: "DELETE" }),
   /** Bags of a lot not on a truck put back in a Bin of its warehouse. */
-  putBackTransferLot: (id: number, p: { binCode: string; bags: string; date: string }) =>
+  putBackTransferLot: (id: number, p: { binCode: string; bags: string; date: string; netWeightKg: string }) =>
     request<unknown>(`/transfer-lots/${id}/put-back`, { method: "POST", body: JSON.stringify(p) }),
   /** An Admin undoes a put-back made by mistake. */
   undoPutBack: (id: number, returnId: number) => request<unknown>(`/transfer-lots/${id}/put-back/${returnId}`, { method: "DELETE" }),
@@ -713,6 +726,8 @@ export type DryingQualityPayload<P extends string> = Partial<Record<`${P}${"Mois
 export type DryingStartPayload = DryingQualityPayload<"input"> & {
   route: "direct" | "indirect"; date?: string; sourceBin?: string; destinationBin?: string; dryType: string;
   issuedBags?: string; issuedNetKg: string;
+  /** The live quality request the form opened with: what the QFS Officer sent goes to Approvals once the round starts. */
+  qualityRequestId?: number;
 };
 export interface DryingReturnPayload { receivedBags?: string; receivedNetKg: string; destinationBin?: string }
 /** "pass": into its new Bin. "redry": back out as the next round. "production": straight to production, no new Bin. */

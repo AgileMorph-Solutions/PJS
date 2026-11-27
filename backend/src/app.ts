@@ -7,6 +7,8 @@ import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/users.js";
 import { submissionRoutes } from "./routes/submissions.js";
 import { qualityCheckRoutes } from "./routes/qualityChecks.js";
+import { qualityRequestRoutes } from "./routes/qualityRequests.js";
+import { eventRoutes, registerChangeEvents } from "./routes/events.js";
 import { supplierAccessRoutes } from "./routes/supplierAccess.js";
 import { receiptRoutes } from "./routes/receipts.js";
 import { ficheRoutes } from "./routes/fiche.js";
@@ -98,10 +100,14 @@ export function buildApp() {
   // log's context opens first, so auth can fill in who the request is for.
   registerAuditContext(app);
   registerAuth(app);
+  // After auth, so each announced change knows whose warehouse it was at.
+  registerChangeEvents(app);
+  app.register(eventRoutes);
   app.register(authRoutes);
   app.register(userRoutes);
   app.register(submissionRoutes);
   app.register(qualityCheckRoutes);
+  app.register(qualityRequestRoutes);
   app.register(supplierAccessRoutes);
 
   app.register(receiptRoutes);

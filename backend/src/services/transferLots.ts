@@ -54,7 +54,9 @@ const INCLUDE = {
 
 type Row = Prisma.TransferLotGetPayload<{ include: typeof INCLUDE }>;
 
-const num = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
+// A missing value is "none", never NaN: undefined (a column an older database client doesn't know, 26 Nov 2026) once read as
+// NaN and made a Bin's whole stock NaN, which the Transfers page couldn't show.
+const num = (d: Prisma.Decimal | null | undefined) => (d === null || d === undefined ? null : Number(d));
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 
 export function toWire(r: Row): TransferLot {
@@ -63,7 +65,8 @@ export function toWire(r: Row): TransferLot {
   const netKg = lotNetKg(grossWeightKg, bags);
   const shares = shareByBags(netKg, r.bins.map((b) => b.bags));
   const pieces = r.lines.map((l) => ({ transferId: l.transferId, bags: l.bags ?? 0, netKg: num(l.netWeightKg) ?? pieceNetKg(netKg, bags, l.bags ?? 0), status: l.transfer.status as TransferStatus }));
-  const returns = r.returns.map((x) => ({ id: x.id, binCode: x.binCode, bags: x.bags, netKg: pieceNetKg(netKg, bags, x.bags), date: x.returnDate, by: x.creator?.displayName ?? null }));
+  // The weight put back as weighed; a put-back from before that was asked for gives back its share by bags.
+  const returns = r.returns.map((x) => ({ id: x.id, binCode: x.binCode, bags: x.bags, netKg: num(x.netWeightKg) ?? pieceNetKg(netKg, bags, x.bags), date: x.returnDate, by: x.creator?.displayName ?? null }));
   const left = lotLeft(bags, netKg, pieces, returns);
   return {
     id: r.id,
@@ -272,12 +275,14 @@ export interface PutBackInput {
   bags?: number | string | null;
   /** The day the bags went back in. Blank: today. */
   date?: string | null;
+  /** What the bags put back weighed (kg net): what the Bin gets back. */
+  netWeightKg?: number | string | null;
 }
 
 /**
  * Puts bags of a lot back in a Bin instead of on a truck (26 Nov 2026, user: "half lot is still there and I want to put it
  * back"). Only bags not on a truck nor already put back, of a weighed lot, into a Bin of the lot's warehouse. The Bin's stock
- * goes up by those bags' share of the lot's net (contract binLotMovements); what is left to load goes down by the bags.
+ * goes up by the weight put back, as weighed (contract binLotMovements); what is left to load goes down by the bags.
  */
 export async function putBackTransferLot(id: number, input: PutBackInput, opts: WriteOpts = {}): Promise<TransferLot> {
   const today = new Date().toISOString().slice(0, 10);
@@ -285,20 +290,20 @@ export async function putBackTransferLot(id: number, input: PutBackInput, opts: 
     const lot = await tx.transferLot.findUnique({ where: { id }, include: INCLUDE });
     if (!lot) throw Object.assign(new Error("Transfer lot not found"), { code: "P2025" });
     const wire = toWire(lot);
-    const draft = { binCode: str(input.binCode).trim().toUpperCase(), bags: str(input.bags), date: str(input.date).trim() || today };
-    refuseHard(putBackProblems(draft, { weighed: wire.netKg !== null, leftBags: wire.leftBags }, today), (k) => PUT_BACK_LABELS[k] ?? k);
+    const draft = { binCode: str(input.binCode).trim().toUpperCase(), bags: str(input.bags), date: str(input.date).trim() || today, netKg: str(input.netWeightKg) };
+    refuseHard(putBackProblems(draft, { weighed: wire.netKg !== null, leftBags: wire.leftBags, netKg: wire.netKg, bags: wire.bags, pieces: wire.pieces, returns: wire.returns }, today), (k) => PUT_BACK_LABELS[k] ?? k);
     const bin = await tx.bin.findUnique({ where: { code: draft.binCode }, select: { warehouseName: true } });
     if (!bin) throw new ValidationError(`Bin "${draft.binCode}" isn't in the Bin master — add it in Masters › Bins first.`);
     if (!bin.warehouseName || !(await resolveSite(lot.warehouse)).includes(bin.warehouseName)) {
       throw new ValidationError(`Bin ${draft.binCode} isn't a Bin of ${lot.warehouse}. Put the bags back in one of its own Bins.`);
     }
-    await tx.transferLotReturn.create({ data: { lotId: id, binCode: draft.binCode, bags: readNumber(draft.bags)!, returnDate: draft.date, createdBy: opts.actor?.id ?? null } });
+    await tx.transferLotReturn.create({ data: { lotId: id, binCode: draft.binCode, bags: readNumber(draft.bags)!, netWeightKg: new Prisma.Decimal(readNumber(draft.netKg)!), returnDate: draft.date, createdBy: opts.actor?.id ?? null } });
     return tx.transferLot.findUniqueOrThrow({ where: { id }, include: INCLUDE });
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   return toWire(row);
 }
 
-const PUT_BACK_LABELS: Record<string, string> = { binCode: "Bin", bags: "Bags", date: "Date" };
+const PUT_BACK_LABELS: Record<string, string> = { binCode: "Bin", bags: "Bags", date: "Date", netKg: "Weight put back" };
 
 /**
  * Undoes a put-back made by mistake: an Admin's (25 Nov 2026: an Admin corrects any record once created). The bags are the

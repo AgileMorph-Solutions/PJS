@@ -460,6 +460,9 @@ model TransferLotReturn {
   binCode    String
   bin        Bin         @relation(fields: [binCode], references: [code])
   bags       Int
+  /// The weight put back, as weighed (26 Nov 2026): what the Bin gets back. Null on a put-back from before it was asked for:
+  /// that one gives back its bags' share of the lot's weighing.
+  netWeightKg Decimal?
   returnDate String
   createdAt  DateTime    @default(now())
   createdBy  String?
@@ -2833,6 +2836,8 @@ model User {
   reviewedSubmissions FormSubmission[]        @relation("SubmissionReviewer")
   qualitySubmissions  QualitySubmission[]     @relation("QualitySubmissionAuthor")
   reviewedQuality     QualitySubmission[]     @relation("QualitySubmissionReviewer")
+  openedQualityRequests   QualityRequest[]    @relation("QualityRequestOpener")
+  answeredQualityRequests QualityRequest[]    @relation("QualityRequestAnswerer")
   fieldChanges        StageFieldChange[]
   changeLogs          ChangeLog[]
   timeline            TimelineEntry[]
@@ -2951,6 +2956,35 @@ model QualitySubmission {
 
   @@index([kind, targetId])
   @@index([warehouse, status])
+}
+
+/// A live quality request (27 Nov 2026): the Incharge's drying form is open and asks the QFS Officer for its quality
+/// (contract domain/qualityRequests.ts). It stays until the Incharge cancels the form. The QFS Officer's reading is a
+/// QualitySubmission, approved in Approvals; before drying, the approved reading is kept here to fill the form.
+model QualityRequest {
+  id           Int       @id @default(autoincrement())
+  /// "drying_before" | "drying_after"
+  kind         String
+  /// What the form is about (contract scopeKey): "receipt:REC-…", "bin:BKE-BIN-08", "round:<drying batch id>".
+  scope        String
+  warehouse    String
+  reference    String
+  /// "open" | "answered" | "used" | "cancelled"
+  status       String    @default("open")
+  openedById   String
+  openedBy     User      @relation("QualityRequestOpener", fields: [openedById], references: [id])
+  /// drying_before: the QFS Officer's reading, once approved.
+  values       Json?
+  answeredById String?
+  answeredBy   User?     @relation("QualityRequestAnswerer", fields: [answeredById], references: [id])
+  answeredAt   DateTime?
+  /// The round the form started, when its quality is still the QFS Officer's to measure. A soft reference.
+  roundId      String?
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([warehouse, status])
+  @@index([kind, scope, status])
 }
 
 /// Audit of every stage-field change made by a user: who, when, old -> new.

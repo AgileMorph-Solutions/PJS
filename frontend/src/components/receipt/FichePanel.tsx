@@ -279,12 +279,14 @@ function OriginRow({ hint, inForm, canFix, was, onUse, onPutBack, onAdd }: {
 }) {
   const [adding, setAdding] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
+  // Said once the town is in the master: the row then reads as any matched Origin, and this says what just happened.
+  const [added, setAdded] = useState<string | null>(null);
   const said = hint.places.map((p) => `${LEVEL_WORD[p.level]} ${p.name}`).join(" · ");
   const m = hint.match;
   const state: RowState = !m || !m.exact ? "unread" : !inForm ? "empty" : inForm === m.origin ? "match" : "different";
   const add = (name: string) => {
-    setAdding(name); setAddError(null);
-    onAdd(name).catch((e) => setAddError(e instanceof Error ? e.message : String(e))).finally(() => setAdding(null));
+    setAdding(name); setAddError(null); setAdded(null);
+    onAdd(name).then(() => setAdded(name), (e) => setAddError(e instanceof Error ? e.message : String(e))).finally(() => setAdding(null));
   };
   return (
     <tr className="align-top">
@@ -300,6 +302,12 @@ function OriginRow({ hint, inForm, canFix, was, onUse, onPutBack, onAdd }: {
           <>
             <FormCell state={state} inForm={inForm} canFix={canFix} onFix={() => onUse(m.origin)} />
             <WasCell was={was} inForm={inForm} canFix={canFix} onPutBack={onPutBack} />
+            {added && (
+              <p role="status" className="flex items-start gap-1 mt-1 text-[12px] font-semibold text-success-700">
+                <span aria-hidden="true" className="material-symbols-outlined text-[16px]">check_circle</span>
+                Added {added} to Masters › Origins and used it.
+              </p>
+            )}
           </>
         ) : (
           <div className="space-y-1">

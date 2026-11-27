@@ -84,7 +84,16 @@ export function useFiche(receiptId: string | undefined, enabled: boolean, onFill
     if (error?.retry === "load") { setError(null); setLoadCount((n) => n + 1); }
   }, [error, upload, reread]);
 
-  return { view, loaded, busy, progress, error, upload, reread, retry, dismissError: () => setError(null) };
+  /**
+   * Reads the fiche's view again, quietly (no "loading" in between): what the server works out from the masters changes when
+   * a master does — an Origin just added is no longer "not in Masters" (26 Nov 2026).
+   */
+  const refreshView = useCallback(async () => {
+    if (!receiptId || !enabled) return;
+    setView(await api.fiche(receiptId));
+  }, [receiptId, enabled]);
+
+  return { view, loaded, busy, progress, error, upload, reread, retry, refreshView, dismissError: () => setError(null) };
 }
 
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));

@@ -24,6 +24,8 @@ const cookies: Record<string, string> = {};
 
 // The smallest file that passes the type check: a JPEG's first bytes.
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 0x4a, 0x46, 0x49, 0x46, 0, 1]);
+/** A village no Origin has yet: added from the fiche panel (26 Nov 2026). */
+const NEW_TOWN = "FICHETEST-NEWTOWN";
 const READING = {
   isCcaTransferFiche: true, ficheNumber: "00076601", buyerCode: "9901-0004 LT-NOVAREA", storeName: "NOVAREA PF3",
   subPrefecture: "FICHETEST-SP", department: "FICHETEST-DEPT", village: "FICHETEST-VILLE", unclear: "",
@@ -54,12 +56,13 @@ const upload = (u: string, receiptId: string, file: Buffer, filename = "fiche.jp
 };
 const wi = async () => ({ id: (await prisma.user.findFirstOrThrow({ where: { username: P + "wi" } })).id });
 const get = (u: string, url: string) => app.inject({ method: "GET", url, headers: { cookie: cookies[u]! } });
+const post = (u: string, url: string, payload: object) => app.inject({ method: "POST", url, payload, headers: { cookie: cookies[u]!, "content-type": "application/json" } });
 
 async function cleanup() {
   await prisma.receipt.deleteMany({ where: { warehouse: { in: [SITE, OTHER] } } });
   await prisma.user.deleteMany({ where: { username: { startsWith: P } } });
   await prisma.supplier.deleteMany({ where: { code: SUPPLIER.code } });
-  await prisma.origin.deleteMany({ where: { name: ORIGIN } });
+  await prisma.origin.deleteMany({ where: { name: { in: [ORIGIN, NEW_TOWN] } } });
   await prisma.warehouse.deleteMany({ where: { name: { in: [SITE, OTHER] } } });
 }
 
@@ -109,6 +112,16 @@ describe("fiche upload", () => {
     expect(view.originHint?.match).toEqual({ origin: ORIGIN, level: "Village", exact: true });
     // Saved as the uploader's own edit, so the truck's history says who and when.
     expect(await prisma.stageFieldChange.count({ where: { receiptId: truck, stageId: "n-verify", label: "FICHE" } })).toBeGreaterThan(0);
+  });
+
+  // 26 Nov 2026 (user): after "Add … to Origins", the panel still said "Not in Masters". The fiche is matched against the master
+  // each time it is read, so reading it again (what the panel now does after adding) shows the town as matched.
+  it("reads a village not in Origins as not matched, and as matched once it has been added to Origins", async () => {
+    const newTown = async () => ({ reading: { ...READING, village: NEW_TOWN }, model: "stub" });
+    expect((await rereadFiche(truck, await wi(), newTown))!.originHint?.places[0]).toEqual({ level: "Village", name: NEW_TOWN });
+    expect((await getFiche(truck)).originHint?.match?.exact).not.toBe(true);
+    expect((await post("wi", "/api/masters/origins", { name: NEW_TOWN.toLowerCase() })).statusCode).toBe(201);
+    expect((await getFiche(truck)).originHint?.match).toEqual({ origin: NEW_TOWN, level: "Village", exact: true });
   });
 
   // Team, 23 Nov 2026: the form follows the fiche; what it held before is kept so the difference shows and can be put back.

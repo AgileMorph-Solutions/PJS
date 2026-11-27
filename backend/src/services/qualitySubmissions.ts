@@ -14,6 +14,7 @@ import {
   type QualitySubmissionKind, type QualitySubmissionStatus, type QualitySubmissionView,
 } from "@anagroci/contract/domain/qualityChecks";
 import { dryingPhase } from "@anagroci/contract/domain/sunDrying";
+import { requestIdOfTarget, scopeKey } from "@anagroci/contract/domain/qualityRequests";
 import { classifyActivity } from "@anagroci/contract/data/warehouseActivities";
 import { prisma } from "../db.js";
 import { ValidationError } from "../domain/validation.js";
@@ -36,6 +37,15 @@ async function targetState(db: Db, kind: QualitySubmissionKind, targetId: string
   switch (kind) {
     case "drying_before":
     case "drying_after": {
+      // Before drying, from the Incharge's open form: the round doesn't exist yet, the check is the request's.
+      const requestId = kind === "drying_before" ? requestIdOfTarget(targetId) : null;
+      if (requestId !== null) {
+        const r = await db.qualityRequest.findUnique({ where: { id: requestId }, select: { warehouse: true, reference: true, status: true } });
+        if (!r) throw new ValidationError("That drying form doesn't exist.");
+        if (r.status === "answered") return { warehouse: r.warehouse, reference: r.reference, blocked: `The quality going onto the yard for ${r.reference} is already approved.` };
+        if (r.status !== "open") return { warehouse: r.warehouse, reference: r.reference, blocked: `The drying form for ${r.reference} is no longer open.` };
+        return { warehouse: r.warehouse, reference: r.reference };
+      }
       const b = await db.dryingBatch.findUnique({ where: { id: targetId } });
       if (!b) throw new ValidationError("That drying round doesn't exist.");
       const warehouse = b.warehouseSite ?? b.warehouse ?? "";
@@ -70,8 +80,8 @@ export async function qualityTarget(kind: unknown, targetId: unknown): Promise<Q
   return { warehouse, reference };
 }
 
-/** Only the check's own keys, trimmed, blanks left out. */
-function cleanValues(kind: QualitySubmissionKind, raw: unknown): Record<string, string> {
+/** Only the check's own keys, trimmed, blanks left out. Refuses what the contract's qualitySubmissionProblem refuses. */
+export function cleanQualityValues(kind: QualitySubmissionKind, raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== "object") throw new ValidationError("values is required.");
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
@@ -86,7 +96,7 @@ function cleanValues(kind: QualitySubmissionKind, raw: unknown): Record<string, 
 export async function submitQualityCheck(user: Person, kind: unknown, targetId: unknown, raw: unknown): Promise<QualitySubmissionView> {
   if (!isQualitySubmissionKind(kind)) throw new ValidationError("Choose which quality check this is.");
   const id = String(targetId ?? "").trim();
-  const values = cleanValues(kind, raw);
+  const values = cleanQualityValues(kind, raw);
   const row = await prisma.$transaction(async (tx) => {
     const target = await targetState(tx, kind, id);
     if (target.blocked) throw new ValidationError(target.blocked);
@@ -141,18 +151,27 @@ export async function qualitySubmissionWarehouse(id: number): Promise<string> {
 export interface ApproveQualityInput { destinationBin?: string }
 
 /** Applies the readings through the record's own service, as the reviewer, naming who took them. */
-async function applyCheck(tx: Tx, row: { kind: string; targetId: string; values: Prisma.JsonValue }, reviewer: Person, submitter: string, extra: ApproveQualityInput) {
+async function applyCheck(tx: Tx, row: { kind: string; targetId: string; values: Prisma.JsonValue; submittedById: string }, reviewer: Person, submitter: string, extra: ApproveQualityInput) {
   const values = (row.values ?? {}) as Record<string, string>;
   const kind = row.kind as QualitySubmissionKind;
   // The round says who checked it: the QFS Officer who did, approved by the Incharge.
   const actor = { id: reviewer.id, displayName: `${submitter} (approved by ${reviewer.displayName ?? "the Warehouse Incharge"})` };
   switch (kind) {
-    case "drying_before":
+    case "drying_before": {
+      // Approved for an open form: the reading fills it (services/qualityRequests.ts), and is saved with the round.
+      const requestId = requestIdOfTarget(row.targetId);
+      if (requestId !== null) {
+        await tx.qualityRequest.update({ where: { id: requestId }, data: { status: "answered", values, answeredById: row.submittedById, answeredAt: new Date() } });
+        return;
+      }
       await setDryingInputQuality(tx, row.targetId, values, actor);
       return;
+    }
     case "drying_after": {
       const destinationBin = (extra.destinationBin ?? "").trim() || values.destinationBin;
       await checkDryingIn(tx, row.targetId, { ...values, decision: values.decision, ...(destinationBin ? { destinationBin } : {}) }, actor);
+      // The round is checked: an Incharge's form still open for it is done (services/qualityRequests.ts settleAfterRequest).
+      await tx.qualityRequest.updateMany({ where: { kind, scope: scopeKey({ kind: "round", roundId: row.targetId }), status: { in: ["open", "answered"] } }, data: { status: "used", roundId: row.targetId, closedAt: new Date() } });
       return;
     }
     case "transfer_lot":
