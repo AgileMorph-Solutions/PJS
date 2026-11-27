@@ -17,8 +17,8 @@ describe("the quality sections", () => {
   });
 
   it("gives a Unit warehouse its own checks and the factory's to the Central one", () => {
-    expect(sectionsAt("UNIT")).toEqual(["reception", "unloading", "drying", "transfer_lot"]);
-    expect(sectionsAt("CENTRAL")).toEqual(["reception", "unloading", "unit_reception", "drying", "production_intake", "production"]);
+    expect(sectionsAt("UNIT")).toEqual(["reception", "drying", "transfer_lot"]);
+    expect(sectionsAt("CENTRAL")).toEqual(["reception", "unit_reception", "drying", "production_intake", "production"]);
     expect(sectionsAt(null)).toEqual([]);
   });
 
@@ -30,10 +30,11 @@ describe("the quality sections", () => {
     for (const k of QUALITY_SUBMISSION_KINDS) expect(QUALITY_SECTIONS[QUALITY_SUBMISSION_INFO[k].section].approver).toBe("warehouse_incharge");
   });
 
-  it("names a reception form by what it fills: the truck's quality, the bag check alone, or a lot from the Unit warehouse", () => {
+  it("names a reception form by where it is from: the truck's quality, or a lot from the Unit warehouse (no Unloading: bags aren't QFS)", () => {
     expect(formSubmissionSection(["n-qfs"], false)).toBe("reception");
     expect(formSubmissionSection(["n-qfs", "n-unload"], false)).toBe("reception");
-    expect(formSubmissionSection(["n-unload"], false)).toBe("unloading");
+    expect(formSubmissionSection(["n-unload"], false)).toBe("reception"); // an older submission that carried the bags
+    expect(QUALITY_SECTION_ORDER).not.toContain("unloading");
     expect(formSubmissionSection(["n-qfs"], true)).toBe("unit_reception");
   });
 

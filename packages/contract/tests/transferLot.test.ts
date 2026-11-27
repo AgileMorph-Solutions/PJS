@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   binDrawProblem, suggestedScaleWeightKg, lotBinsProblems, lotLeft, lotNetKg, lotNoProblem, lotPieceProblem, lotWeighingProblems, normalizeLotNo, pieceNetKg, pieceWeightProblem,
-  putBackProblems, shareByBags, transferLotStatus, transferNumberProblem,
+  lotRemainingKg, putBackProblems, putBackShareKg, shareByBags, transferLotStatus, transferNumberProblem,
 } from "../src/domain/transferLot";
 import { dispatchWeightProblem, transferState } from "../src/domain/transfers";
 import { dispatchedNotes, fieldApplies, hiddenOnRecord, sentVsReceived, stageDifferences, typedOnRecord } from "../src/domain/transferReception";
@@ -218,16 +218,55 @@ describe("the truck and its driver, written one way", () => {
 // 26 Nov 2026 (user): half a lot went on the truck and the rest stays — the bags not on a truck can be put back in a Bin.
 describe("putting a lot's bags back in a Bin", () => {
   const today = "2026-11-26";
-  const ok = { binCode: "BKE-001-BIN-008", bags: "20", date: today };
+  // A lot of 100 bags weighed at 8,000 kg net: 20 bags are 1,600 kg by its weighing.
+  const ok = { binCode: "BKE-001-BIN-008", bags: "20", date: today, netKg: "1600" };
+  const lot = (leftBags: number, weighed = true) => ({ weighed, leftBags, netKg: weighed ? 8000 : null, bags: 100 });
   it("takes only bags not on a truck, of a weighed lot, into a chosen Bin, on a day not in the future", () => {
-    expect(putBackProblems(ok, { weighed: true, leftBags: 20 }, today)).toEqual({});
-    expect(putBackProblems({ ...ok, bags: "21" }, { weighed: true, leftBags: 20 }, today).bags?.message).toMatch(/Only 20 bags of this lot aren't on a truck/);
-    expect(putBackProblems(ok, { weighed: true, leftBags: 0 }, today).bags?.message).toMatch(/Every bag of this lot is on a truck or already put back/);
-    expect(putBackProblems({ ...ok, bags: "2.5" }, { weighed: true, leftBags: 20 }, today).bags).toBeDefined();
-    expect(putBackProblems({ ...ok, binCode: " " }, { weighed: true, leftBags: 20 }, today).binCode).toBeDefined();
-    expect(putBackProblems({ ...ok, date: "2026-11-27" }, { weighed: true, leftBags: 20 }, today).date?.message).toMatch(/future/);
+    expect(putBackProblems(ok, lot(20), today)).toEqual({});
+    expect(putBackProblems({ ...ok, bags: "21" }, lot(20), today).bags?.message).toMatch(/Only 20 bags of this lot aren't on a truck/);
+    expect(putBackProblems(ok, lot(0), today).bags?.message).toMatch(/Every bag of this lot is on a truck or already put back/);
+    expect(putBackProblems({ ...ok, bags: "2.5" }, lot(20), today).bags).toBeDefined();
+    expect(putBackProblems({ ...ok, binCode: " " }, lot(20), today).binCode).toBeDefined();
+    expect(putBackProblems({ ...ok, date: "2026-11-27" }, lot(20), today).date?.message).toMatch(/future/);
     // Not weighed: its Bins haven't lost any kg yet, so nothing is given back — the lot is changed or deleted instead.
-    expect(putBackProblems(ok, { weighed: false, leftBags: 100 }, today).bags?.message).toMatch(/Weigh the lot first/);
+    expect(putBackProblems(ok, lot(100, false), today).bags?.message).toMatch(/Weigh the lot first/);
+  });
+
+  // 26 Nov 2026 (user): the weight put back is weighed and typed; it is what the Bin gets back.
+  it("needs the weight put back: a positive number; far from the bags' share only warns", () => {
+    expect(putBackProblems({ ...ok, netKg: "" }, lot(20), today).netKg).toEqual({ message: "Required.", soft: false });
+    expect(isHard(putBackProblems({ ...ok, netKg: "abc" }, lot(20), today).netKg)).toBe(true);
+    expect(isHard(putBackProblems({ ...ok, netKg: "0" }, lot(20), today).netKg)).toBe(true);
+    expect(isHard(putBackProblems({ ...ok, netKg: "-5" }, lot(20), today).netKg)).toBe(true);
+    expect(putBackProblems({ ...ok, netKg: "1650" }, lot(20), today).netKg).toBeUndefined(); // within 5 % of 1,600
+    expect(putBackProblems({ ...ok, netKg: "1600,5" }, lot(20), today).netKg).toBeUndefined(); // the decimal comma
+    const far = putBackProblems({ ...ok, netKg: "2000" }, lot(20), today).netKg;
+    expect(isSoft(far)).toBe(true);
+    expect(far!.message).toMatch(/1,600 kg/);
+    expect(putBackShareKg({ netKg: 8000, bags: 100 }, "20")).toBe(1600);
+  });
+
+  // 26 Nov 2026 (user): a lot of 10 bags, 800 kg net; 5 bags (400 kg) went on a truck. Its 5 bags left can go back, and at
+  // most the 400 kg left of it: more would give the Bin stock that never existed.
+  it("never takes more bags, nor more weight, than is left of the lot", () => {
+    const tenBags = { weighed: true, leftBags: 5, netKg: 800, bags: 10, pieces: [{ netKg: 400 }], returns: [] };
+    const draft = { binCode: "BKE-001-BIN-008", bags: "5", date: today, netKg: "400" };
+    expect(lotRemainingKg(tenBags)).toBe(400);
+    expect(putBackProblems(draft, tenBags, today)).toEqual({});
+    expect(putBackProblems({ ...draft, bags: "6" }, tenBags, today).bags?.message).toMatch(/Only 5 bags of this lot aren't on a truck/);
+    const tooHeavy = putBackProblems({ ...draft, netKg: "401" }, tenBags, today).netKg;
+    expect(isHard(tooHeavy)).toBe(true);
+    expect(tooHeavy!.message).toMatch(/Only 400 kg of this lot isn't on a truck or put back already/);
+    // Lighter than the share only warns: RCN can weigh less on a second scale.
+    expect(isSoft(putBackProblems({ ...draft, netKg: "360" }, tenBags, today).netKg)).toBe(true);
+    // An earlier put-back counts at its own weighed kg: 2 bags put back at 150 kg leave 250 kg.
+    const after = { ...tenBags, leftBags: 3, returns: [{ netKg: 150 }] };
+    expect(lotRemainingKg(after)).toBe(250);
+    expect(isHard(putBackProblems({ ...draft, bags: "3", netKg: "260" }, after, today).netKg)).toBe(true);
+    expect(putBackProblems({ ...draft, bags: "3", netKg: "245" }, after, today).netKg).toBeUndefined();
+    // Everything gone: nothing to weigh back.
+    expect(putBackProblems({ ...draft, netKg: "10" }, { ...tenBags, pieces: [{ netKg: 800 }] }, today).netKg?.message).toMatch(/Nothing of this lot's weight is left/);
+    expect(putBackShareKg({ netKg: null, bags: 100 }, "20")).toBeNull();
   });
 
   it("leaves less to load, and ends the lot on trucks, back in Bins, or both", () => {

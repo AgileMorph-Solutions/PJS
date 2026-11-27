@@ -9,10 +9,11 @@ import { LogsPage } from "./pages/warehouse/LogsPage";
 import { SupplierAssignmentPage } from "./pages/masters/SupplierAssignmentPage";
 import { MySuppliersPage } from "./pages/MySuppliersPage";
 import { MySubmissionsPage } from "./pages/MySubmissionsPage";
-import { canAccessProduction, type Role } from "./data/roles";
+import { QUALITY_CHECK_VIEWERS, canAccessProduction, type Role } from "./data/roles";
 import { Layout } from "./components/Layout";
 import { TrackingProvider, useTracking } from "./state/TrackingContext";
 import { PendingApprovalsProvider } from "./state/PendingApprovals";
+import { LiveUpdatesProvider } from "./state/LiveUpdates";
 import { APPROVERS } from "./config/nav";
 import { SiteLayout } from "./state/SiteContext";
 import { ProductionFactoryLayout } from "./state/productionFactory";
@@ -129,8 +130,8 @@ function AppRoutes() {
                   header comment and receiptLinks.ts, whose /links route deliberately never accepts
                   ?warehouse=). Only the breadcrumb reads useSite(). */}
               <Route path="receipts/:id" element={<ReceiptDetailPage />} />
-              {/* The QFS Officer's list of every quality check at their warehouse, by section (26 Nov 2026). */}
-              <Route element={<RequireRole roles={["qfs_officer", "admin"]} />}>
+              {/* The QFS Officer's list of every quality check at their warehouse, by section (26 Nov 2026); the Incharge reads it too. */}
+              <Route element={<RequireRole roles={[...QUALITY_CHECK_VIEWERS]} />}>
                 <Route path="quality-checks" element={<QualityChecksPage />} />
               </Route>
               <Route element={<RequireRole roles={REVIEWERS} />}>
@@ -254,13 +255,15 @@ function AuthGate() {
   if (status === "anonymous" || !me) return <LoginPage />;
   return (
     <TrackingProvider key={me.id}>
-      <PendingApprovalsProvider>
-        <Layout>
-          <LoadGate>
-            <AppRoutes />
-          </LoadGate>
-        </Layout>
-      </PendingApprovalsProvider>
+      <LiveUpdatesProvider>
+        <PendingApprovalsProvider>
+          <Layout>
+            <LoadGate>
+              <AppRoutes />
+            </LoadGate>
+          </Layout>
+        </PendingApprovalsProvider>
+      </LiveUpdatesProvider>
     </TrackingProvider>
   );
 }

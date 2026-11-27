@@ -452,23 +452,25 @@ describe("An Admin or the Incharge corrects a BKT and a lot on a truck", () => {
 });
 
 // 26 Nov 2026 (user): "half lot is still there and I want to put it back in the Bin". The bags of a lot not on a truck can be
-// put back in a Bin of its warehouse; the Bin gets their share of the lot's net, and they can't go on a truck any more.
+// put back in a Bin of its warehouse; the Bin gets the weight put back, as weighed (26 Nov 2026), and they can't go on a truck any more.
 describe("putting a lot's bags back in a Bin", () => {
   const putBack = (who: string, lotId: number, body: object) => as(who, "POST", `/api/transfer-lots/${lotId}/put-back`, body);
   const kgIn = async (bin: string) => (await siteBinStock(await resolveSite(U))).get(bin)?.kg ?? 0;
   const today = new Date().toISOString().slice(0, 10);
 
-  it("puts back the bags not on a truck: the Bin goes up by their share of the net, less is left to load", async () => {
-    const lot = await weighedLot(); // 500 bags, 41,000 kg net: 82 kg a bag
+  it("puts back the bags not on a truck: the Bin goes up by the weight put back, as weighed; less is left to load", async () => {
+    const lot = await weighedLot(); // 500 bags, 41,000 kg net: 82 kg a bag, so 150 bags are 12,300 kg by its weighing
     await sendOnTruck([{ lotId: lot.id, bags: 300 }], "TL-PB-01");
     const before = await kgIn(BIN_B);
-    const res = await putBack("sender", lot.id, { binCode: BIN_B.toLowerCase(), bags: 150 });
+    const res = await putBack("sender", lot.id, { binCode: BIN_B.toLowerCase(), bags: 150, netWeightKg: "12250" });
     expect(res.statusCode, res.body).toBe(200);
-    expect(res.json()).toMatchObject({ leftBags: 50, status: "part_loaded", returns: [{ binCode: BIN_B, bags: 150, netKg: 12300, date: today, by: "sender" }] });
-    expect(await kgIn(BIN_B)).toBe(before + 12300);
+    expect(res.json()).toMatchObject({ leftBags: 50, status: "part_loaded", returns: [{ binCode: BIN_B, bags: 150, netKg: 12250, date: today, by: "sender" }] });
+    expect(await kgIn(BIN_B)).toBe(before + 12250); // the weighed figure, not the 12,300 kg share
     // What is left can still go back in another of the warehouse's Bins; then the lot is done: loaded, the rest put back.
-    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 60 })).json().error).toMatch(/Only 50 bags of this lot aren't on a truck/);
-    const done = (await putBack("sender", lot.id, { binCode: BIN_A, bags: 50 })).json();
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 60, netWeightKg: 4920 })).json().error).toMatch(/Only 50 bags of this lot aren't on a truck/);
+    // 41,000 − 24,600 on the truck − 12,250 put back = 4,150 kg left: more weight than that can't go back.
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 50, netWeightKg: 4200 })).json().error).toMatch(/Only 4,150 kg of this lot isn't on a truck or put back already/);
+    const done = (await putBack("sender", lot.id, { binCode: BIN_A, bags: 50, netWeightKg: 4100 })).json();
     expect(done).toMatchObject({ leftBags: 0, status: "closed" });
     // And the bags put back can't go on a truck as well.
     await expect(createTransfer({ transferDate: D, fromWarehouse: U, toWarehouse: C, lines: [{ transferLotId: lot.id, bags: 1 }] })).rejects.toThrow(/Nothing of this lot is left to load/);
@@ -476,26 +478,30 @@ describe("putting a lot's bags back in a Bin", () => {
 
   it("puts a whole lot back when none of it went on a truck", async () => {
     const lot = await weighedLot();
-    const res = (await putBack("sender", lot.id, { binCode: BIN_A, bags: 500 })).json();
+    const res = (await putBack("sender", lot.id, { binCode: BIN_A, bags: 500, netWeightKg: 41000 })).json();
     expect(res).toMatchObject({ leftBags: 0, status: "put_back" });
     expect(res.returns[0].netKg).toBe(41000);
   });
 
   it("refuses an unweighed lot, another warehouse's Bin, more than is left, a future day — and saves nothing", async () => {
     const unweighed = await createTransferLot({ warehouse: U, lotDate: D, bins: [{ binCode: BIN_A, bags: 40 }] });
-    expect((await putBack("sender", unweighed.id, { binCode: BIN_A, bags: 10 })).json().error).toMatch(/Weigh the lot first/);
+    expect((await putBack("sender", unweighed.id, { binCode: BIN_A, bags: 10, netWeightKg: 820 })).json().error).toMatch(/Weigh the lot first/);
     const lot = await weighedLot();
-    expect((await putBack("sender", lot.id, { binCode: BIN_OTHER, bags: 10 })).json().error).toMatch(/isn't a Bin of TLTEST-UNIT/);
-    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 501 })).json().error).toMatch(/Only 500 bags/);
-    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: "2.5" })).json().error).toMatch(/Bags/);
-    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 5, date: "2099-01-01" })).json().error).toMatch(/Date: Can't be in the future/);
-    expect((await putBack("other", lot.id, { binCode: BIN_A, bags: 5 })).statusCode).toBe(403);
+    expect((await putBack("sender", lot.id, { binCode: BIN_OTHER, bags: 10, netWeightKg: 820 })).json().error).toMatch(/isn't a Bin of TLTEST-UNIT/);
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 501, netWeightKg: 41082 })).json().error).toMatch(/Only 500 bags/);
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: "2.5", netWeightKg: 205 })).json().error).toMatch(/Bags/);
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 5, netWeightKg: 410, date: "2099-01-01" })).json().error).toMatch(/Date: Can't be in the future/);
+    // The weight is required and must be a positive number (26 Nov 2026); far from the share only warns, on the form.
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 5 })).json().error).toMatch(/Weight put back: Required/);
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 5, netWeightKg: "0" })).json().error).toMatch(/Weight put back/);
+    expect((await putBack("sender", lot.id, { binCode: BIN_A, bags: 5, netWeightKg: "five" })).json().error).toMatch(/Weight put back/);
+    expect((await putBack("other", lot.id, { binCode: BIN_A, bags: 5, netWeightKg: 410 })).statusCode).toBe(403);
     expect((await getTransferLot(lot.id))!.returns).toEqual([]);
   });
 
   it("can't then be deleted or have its bags changed, except by the Incharge or an Admin undoing the put-back first", async () => {
     const lot = await weighedLot();
-    const put = (await putBack("sender", lot.id, { binCode: BIN_A, bags: 100 })).json();
+    const put = (await putBack("sender", lot.id, { binCode: BIN_A, bags: 100, netWeightKg: 8200 })).json();
     await expect(deleteTransferLot(lot.id)).rejects.toThrow(/were put back in a Bin, so it can't be deleted/);
     await expect(updateTransferLot(lot.id, { bins: [{ binCode: BIN_A, bags: 400 }] }, { actor: { id: "x", via: "direct", role: "branch_manager" } } as WriteOpts)).rejects.toThrow(/only the Warehouse Incharge or an Admin can change it/);
     expect((await as("other", "DELETE", `/api/transfer-lots/${lot.id}/put-back/${put.returns[0].id}`)).statusCode).toBe(403);

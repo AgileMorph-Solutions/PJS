@@ -22,6 +22,8 @@ const READ_RECEIPTS: Rule[] = [
 const SIGN_IN: Rule[] = [
   { method: "GET", path: /^\/api\/auth\/me$/ },
   { method: "POST", path: /^\/api\/auth\/logout$/ },
+  // Live updates (27 Nov 2026): "something changed at your warehouse", and nothing else (routes/events.ts).
+  { method: "GET", path: /^\/api\/events$/ },
 ];
 
 const MASTERS: Rule = { method: "GET", path: /^\/api\/masters$/ };
@@ -62,6 +64,8 @@ const ALLOWED: Partial<Record<Role, Rule[]>> = {
     { method: "GET", path: /^\/api\/quality-checks$/ },
     { method: "GET", path: /^\/api\/quality-submissions$/ },
     { method: "POST", path: /^\/api\/quality-submissions$/ },
+    // The readings for the Incharge's open drying form (27 Nov 2026, routes/qualityRequests.ts). Opening and closing it is the Incharge's.
+    { method: "POST", path: /^\/api\/quality-requests\/\d+\/answer$/ },
   ],
   // The factory's two roles (Nov 2026) see Production, not procurement: no receipts (and so no prices), no ledgers. They
   // must stay listed — an unlisted role falls through to "everything" below.

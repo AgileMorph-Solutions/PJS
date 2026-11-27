@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { dryingLoss } from "@anagroci/contract/domain/dryingLoss";
-import { averageKgPerBag, binDryingProblem, canSendDryingToProduction, estimatedIssuedKg, DRYING_PHASE_LABELS, DRYING_YARD, dryingFieldProblem, dryingPhase, isOpenRound, truckDryingBlocker } from "@anagroci/contract/domain/sunDrying";
+import { STANDARD_BAG_KG, binDryingProblem, canSendDryingToProduction, estimatedIssuedKg, DRYING_PHASE_LABELS, DRYING_YARD, dryingFieldProblem, dryingPhase, isOpenRound, truckDryingBlocker } from "@anagroci/contract/domain/sunDrying";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
 import { useTracking } from "../../state/TrackingContext";
 import { Link } from "react-router-dom";
@@ -15,6 +15,8 @@ import { Field, Input, inputClass } from "../ui/Input";
 import { SearchSelect } from "../ui/SearchSelect";
 import { DryingQualityInputs } from "../quality/DryingQualityInputs";
 import { hasHardProblem, qualityKeys } from "../quality/dryingQuality";
+import { useQualityRequest } from "../../state/useQualityRequest";
+import type { QualityRequestScope } from "@anagroci/contract/domain/qualityRequests";
 
 const n = (v: number | null | undefined, unit = "") => (v === null || v === undefined ? "-" : `${Number(v).toLocaleString()}${unit}`);
 const num = (s: string | undefined) => (s === undefined || s.trim() === "" || Number.isNaN(Number(s.replace(",", "."))) ? null : Number(s.replace(",", ".")));
@@ -31,8 +33,7 @@ export type DryingScope =
   // A truck is asked Yes or No (26 Nov 2026, after a Yes-only spell from 25 Nov): No is kept, and can be changed to Yes.
   | { kind: "truck"; receipt: ReceiptRecord }
   // A Bin is asked "Does this Bin need drying?" Yes or No (25 Nov 2026): `decision` is the answer kept, `onAnswer` gives one.
-  // `kgPerBag`: the average bag of the Bin's Lots (contract averageKgPerBag), for estimating the weight from the bags issued.
-  | { kind: "bin"; binCode: string; warehouse: string; binKg: number; kgPerBag: number | null; decision: "yes" | "no" | null; onAnswer: (answer: "yes" | "no") => Promise<void> };
+  | { kind: "bin"; binCode: string; warehouse: string; binKg: number; decision: "yes" | "no" | null; onAnswer: (answer: "yes" | "no") => Promise<void> };
 
 interface Props {
   scope: DryingScope;
@@ -73,6 +74,50 @@ export function DryingPanel({ scope, batches, dryTypes, bins, canEdit, onBinsOpe
   const emptyBin = scope.kind === "bin" && !open && scope.binKg <= 0;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Opening a drying form asks the QFS Officer for its quality at once; closing it takes the request back (27 Nov 2026,
+  // user; contract domain/qualityRequests.ts). What they send still waits for approval in Approvals.
+  const formScope: QualityRequestScope = scope.kind === "bin" ? { kind: "bin", binCode: scope.binCode } : { kind: "receipt", receiptId: scope.receipt.id };
+  const beforeAsk = useQualityRequest("drying_before", canEdit && mode === "start" ? formScope : null);
+  const afterAsk = useQualityRequest("drying_after", canEdit && mode === "check" && open ? { kind: "round", roundId: open.id } : null);
+  const formKey = scope.kind === "bin" ? `bin:${scope.binCode}` : `receipt:${scope.receipt.id}`;
+
+  // A form left open stays open (user, 27 Nov 2026: only Cancel closes it): coming back to the page opens it again.
+  useEffect(() => {
+    if (!canEdit) return;
+    let current = true;
+    const roundId = open && dryingPhase(open.status) === "quality_check" ? open.id : null;
+    void (async () => {
+      const after = roundId ? (await api.findQualityRequest("drying_after", { kind: "round", roundId })).request : null;
+      const before = !after && !open ? (await api.findQualityRequest("drying_before", formScope)).request : null;
+      if (!current) return;
+      if (after) setMode((m) => (m === "idle" ? "check" : m));
+      else if (before) setMode((m) => (m === "idle" ? "start" : m));
+    })().catch(() => {});
+    return () => { current = false; };
+    // Looked up once per truck or Bin, and when its open round changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canEdit, formKey, open?.id, open?.status]);
+
+  // The QFS Officer's reading, once approved in Approvals, fills the form: the boxes still empty take it.
+  const approved = beforeAsk.request?.status === "answered" ? beforeAsk.request.values : null;
+  useEffect(() => {
+    if (!approved) return;
+    setForm((f) => ({ ...f, ...Object.fromEntries(Object.entries(approved).filter(([k]) => !(f[k] ?? "").trim())) }));
+  }, [approved]);
+
+  // The form ended elsewhere: cancelled in another tab, or the check after drying recorded by approving the QFS Officer's.
+  const afterStatus = afterAsk.request?.status;
+  const beforeStatus = beforeAsk.request?.status;
+  useEffect(() => {
+    if (afterStatus === "used" || afterStatus === "cancelled" || beforeStatus === "cancelled") { setMode("idle"); onChanged(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [afterStatus, beforeStatus]);
+
+  /** Cancel: the only way the form closes without saving, and the QFS Officer's request with it. */
+  async function cancelForm(ask: { cancel: () => Promise<void> }) {
+    setBusy(true); setError(null);
+    try { await ask.cancel(); setMode("idle"); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+  }
 
   const sd = truck?.stageData;
   const qfs = sd?.["n-qfs"];
@@ -83,21 +128,18 @@ export function DryingPanel({ scope, batches, dryTypes, bins, canEdit, onBinsOpe
     ? { issuedNetKg: sd?.["n-netwt"]?.["NET WT KGS"] ?? "", issuedBags: sd?.["n-unload"]?.["SACS (bags)"] ?? "" }
     : { issuedNetKg: "", issuedBags: "" }), [truck, sd]);
   const [form, setForm] = useState<Record<string, string>>({ dryType: dryTypes[0] ?? "SUN DRYING", date: todayIso(), ...defaults });
-  // Weight before drying follows the bags issued (26 Nov 2026, user): bags × the RCN's average kg a bag, until the person types
-  // a weight of their own, which then stays.
-  const kgPerBag = useMemo(() => (truck
-    ? averageKgPerBag([{ netKg: num(sd?.["n-netwt"]?.["NET WT KGS"]), bags: num(sd?.["n-unload"]?.["SACS (bags)"]) }])
-    : scope.kind === "bin" ? scope.kgPerBag : null), [truck, sd, scope]);
+  // Weight before drying follows the bags issued (26 Nov 2026, user): bags × the standard 82 kg bag (contract STANDARD_BAG_KG),
+  // until the person types a weight of their own, which then stays.
   const [weightTyped, setWeightTyped] = useState(false);
-  const estimate = estimatedIssuedKg(form.issuedBags, kgPerBag);
+  const estimate = estimatedIssuedKg(form.issuedBags);
   const setBagsIssued = (bags: string) => setForm((f) => ({
-    ...f, issuedBags: bags, ...(weightTyped ? {} : { issuedNetKg: estimatedIssuedKg(bags, kgPerBag) ?? defaults.issuedNetKg }),
+    ...f, issuedBags: bags, ...(weightTyped ? {} : { issuedNetKg: estimatedIssuedKg(bags) ?? defaults.issuedNetKg }),
   }));
   const weightHint = !weightTyped && estimate
-    ? `Estimated: ${n(num(form.issuedBags))} bags × ${n(Math.round(kgPerBag! * 10) / 10)} kg a bag (${truck ? "this truck's" : "this Bin's Lots'"} average). Change it to the weighed figure.`
+    ? `Estimated: ${n(num(form.issuedBags))} bags × ${STANDARD_BAG_KG} kg a bag (standard bag). Change it to the weighed figure.`
     : defaults.issuedNetKg && !weightTyped && form.issuedNetKg === defaults.issuedNetKg ? "Filled from the truck's net weight"
     : weightTyped ? undefined
-    : kgPerBag ? "Fills itself when you enter the bags issued." : "Type it: no bag weight is recorded to estimate it from the bags.";
+    : "Fills itself when you enter the bags issued.";
   const [back, setBack] = useState<Record<string, string>>({});
   const [check, setCheck] = useState<Record<string, string>>({ decision: "pass" });
   // Out of a Bin, the dried RCN goes into a NEW Bin: the source Bin isn't offered. `bins` is the warehouse's own Bins only
@@ -234,7 +276,10 @@ export function DryingPanel({ scope, batches, dryTypes, bins, canEdit, onBinsOpe
             e.preventDefault();
             const common = {
               date: form.date, dryType: form.dryType ?? "",
-              issuedBags: form.issuedBags, issuedNetKg: form.issuedNetKg ?? "", ...quality(form, "input"),
+              issuedBags: form.issuedBags, issuedNetKg: form.issuedNetKg ?? "",
+              // The QFS Officer's reading, once sent, is the one that goes to Approvals: the form's own boxes are hidden then.
+              ...quality(form, "input"),
+              ...(beforeAsk.request ? { qualityRequestId: beforeAsk.request.id } : {}),
             };
             void run(() => scope.kind === "bin"
               ? api.startBinDrying(scope.binCode, scope.warehouse, common)
@@ -259,7 +304,7 @@ export function DryingPanel({ scope, batches, dryTypes, bins, canEdit, onBinsOpe
           </div>
           <DryingQualityInputs prefix="input" optional values={form} onChange={(k, v) => setForm((f) => ({ ...f, [k]: v }))} />
           <div className="flex items-center gap-3">
-            <Button variant="secondary" onClick={() => { setMode("idle"); setError(null); }}>Cancel</Button>
+            <Button variant="secondary" disabled={busy} onClick={() => void cancelForm(beforeAsk)}>Cancel</Button>
             <Button type="submit" disabled={busy || hasHardProblem(form, ["issuedNetKg", "issuedBags"]) || hasHardProblem(form, qualityKeys("input"), "input")}>{busy ? "Saving…" : "Start sun drying"}</Button>
           </div>
         </form>
@@ -338,7 +383,7 @@ export function DryingPanel({ scope, batches, dryTypes, bins, canEdit, onBinsOpe
           )}
           {passProblem && <p role="status" className="text-[12px] text-ambernut-800">{passProblem}</p>}
           <div className="flex items-center gap-3">
-            <Button variant="secondary" onClick={() => { setMode("idle"); setError(null); }}>Cancel</Button>
+            <Button variant="secondary" disabled={busy} onClick={() => void cancelForm(afterAsk)}>Cancel</Button>
             <Button type="submit" disabled={busy || Boolean(passProblem) || hasHardProblem(check, qualityKeys("output"), "output") || (check.decision === "production" && !toProduction)}>
               {busy ? "Saving…" : check.decision === "redry" ? "Save and re-dry" : check.decision === "production" ? "Save: sent to production" : "Save: passed"}
             </Button>

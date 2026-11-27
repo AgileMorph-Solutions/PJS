@@ -317,15 +317,24 @@ describe("Branch Manager submission → Warehouse Incharge approval", () => {
 });
 
 describe("QFS Officer submission and terminal rejection", () => {
-  // The total (SACS) isn't submitted: it is calculated from the three counts.
-  const form = { values: { "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } } };
+  // The truck has passed quality, so its sample readings are in: the final ones are still the QFS Officer's to send.
+  const form = { values: { "n-qfs": { "Final moisture (%)": "9.4", "Final nut count": "180" } } };
+  const moisture = async () => (await as(P + "wi", "GET", `/api/receipts/${receiptB}`)).json().stageData["n-qfs"]?.["Final moisture (%)"];
   let id: string;
 
-  it("stores the jute check as pending", async () => {
+  // 26 Nov 2026 (user): counting bags at unloading isn't the QFS Officer's; the Warehouse Incharge records it.
+  it("refuses the bag count from the QFS Officer: it isn't on their form any more", async () => {
+    const bags = { values: { "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } } };
+    const res = await as(P + "qfs", "POST", `/api/receipts/${receiptB}/submissions`, bags);
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/isn't part of the QFS Officer — quality analysis form/);
+  });
+
+  it("stores the quality reading as pending", async () => {
     const res = await as(P + "qfs", "POST", `/api/receipts/${receiptB}/submissions`, form);
     expect(res.statusCode).toBe(201);
     id = res.json().id;
-    expect((await as(P + "wi", "GET", `/api/receipts/${receiptB}`)).json().stageData["n-unload"]).toBeUndefined();
+    expect(await moisture()).toBeUndefined();
   });
 
   it("requires a reason to reject", async () => {
@@ -334,7 +343,7 @@ describe("QFS Officer submission and terminal rejection", () => {
 
   it("rejects terminally: nothing applied, no resubmission", async () => {
     expect((await as(P + "wi", "POST", `/api/submissions/${id}/reject`, { reason: "Count doesn't match the tally sheet" })).statusCode).toBe(200);
-    expect((await as(P + "wi", "GET", `/api/receipts/${receiptB}`)).json().stageData["n-unload"]).toBeUndefined();
+    expect(await moisture()).toBeUndefined();
     const again = await as(P + "qfs", "POST", `/api/receipts/${receiptB}/submissions`, form);
     expect(again.statusCode).toBe(422);
     expect(again.json().error).toMatch(/rejected/);
@@ -359,10 +368,8 @@ describe("QFS Officer quality analysis", () => {
     createdReceipts.push(receiptId);
   });
 
-  it("takes the measurements together with the bag counts in one submission", async () => {
-    const res = await as(P + "qfs", "POST", `/api/receipts/${receiptId}/submissions`, {
-      values: { "n-qfs": quality, "n-unload": { "BON SACS (good bags)": "463", "HUMID SACS (damp bags)": "0", "Sacs déchirés (torn bags)": "15" } },
-    });
+  it("takes the measurements in one submission (the bag counts are no longer theirs, 26 Nov 2026)", async () => {
+    const res = await as(P + "qfs", "POST", `/api/receipts/${receiptId}/submissions`, { values: { "n-qfs": quality } });
     expect(res.statusCode).toBe(201);
     submissionId = res.json().id;
   });
@@ -374,8 +381,6 @@ describe("QFS Officer quality analysis", () => {
     expect((await as(P + "wi", "POST", `/api/submissions/${submissionId}/approve`)).statusCode).toBe(200);
     const after = (await as(P + "wi", "GET", `/api/receipts/${receiptId}`)).json();
     expect(after.stageData["n-qfs"]).toMatchObject(quality);
-    // Approval wrote the three counts; the total is the system's own sum of them.
-    expect(after.stageData["n-unload"]["SACS (bags)"]).toBe("478");
     // The decision is the Warehouse Incharge's: the approval leaves the one they took as it was.
     expect(after.branches["n-qfs"]).toBe(before.branches["n-qfs"]);
   });

@@ -4,12 +4,12 @@ _Generated from the application's own definitions (`npm run gen` in packages/con
 
 ## 1. The form
 
-**"QFS Officer — quality analysis & jute bag check"** is the form the QFS Officer fills for a truck. It is a form of the **Quality analysis (QFS)** step.
+**"QFS Officer — quality analysis"** is the form the QFS Officer fills for a truck. It is a form of the **Quality analysis (QFS)** step.
 
 | Part | Fields |
 |---|---|
 | Quality readings and cut test | Sample moisture (%), Sample nut count, Final moisture (%), Final nut count, Sample – Good Kernel (g), Sample – Immature (g), Sample – Spotted (g), Sample – Rejection (g), Sample – Void (g), Sample – Oil (g), Sample – Shell (g), KOR, Final – Good Kernel (g), Final – Immature (g), Final – Spotted (g), Final – Rejection (g), Final – Void (g), Final – Oil (g), Final – Shell (g), FINAL KOR |
-| Jute bags | HUMID SACS (damp bags), Sacs déchirés (torn bags), BON SACS (good bags), Reconditioning of torn bags |
+| Jute bags |  |
 
 The **Pass / Fail** decision is **not** part of this form: the Warehouse Incharge records it, because a Fail rejects the truck
 (a reason is then required, and the rejected truck stays on record).

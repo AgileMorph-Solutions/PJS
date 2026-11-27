@@ -75,9 +75,11 @@ export const ROLE_FORMS: RoleForm[] = [
   },
   {
     // id keeps its original name: it's stored on every FormSubmission, so renaming it would orphan
-    // existing submissions. The form grew from the jute check alone to include quality analysis.
+    // existing submissions. The form grew from the jute check alone to include quality analysis; the bag count at unloading
+    // (good, damp, torn, reconditioned) left it on 26 Nov 2026 (user): counting bags isn't the QFS Officer's, the Warehouse
+    // Incharge records it on the Unloading step.
     id: "qfs-jute-check",
-    title: "QFS Officer — quality analysis & jute bag check",
+    title: "QFS Officer — quality analysis",
     role: "qfs_officer",
     stages: [
       // The measurements only. The Pass/Fail decision (n-qfs's branch) is NOT part of this form — the
@@ -108,11 +110,6 @@ export const ROLE_FORMS: RoleForm[] = [
           "Final – Shell (g)",
           "FINAL KOR",
         ],
-      },
-      // SACS (good + damp + torn) and the tally (good + reconditioned) are calculated (domain/receiptMath.ts), so neither is here.
-      {
-        stageId: "n-unload",
-        labels: ["HUMID SACS (damp bags)", "Sacs déchirés (torn bags)", "BON SACS (good bags)", "Reconditioning of torn bags"],
       },
     ],
   },
@@ -186,6 +183,14 @@ export function canChangeRecordedValue(role: Role): boolean {
 export function canCorrectRecords(role: Role | null | undefined): boolean {
   return role === "admin" || role === "warehouse_incharge";
 }
+
+/**
+ * Who sends a check from the Quality checks page (drying, transfer lot) for approval: the QFS Officer, and an Admin. The page
+ * is also open to the Warehouse Incharge (26 Nov 2026, user), read-only: they see what is due and approve in Approvals.
+ */
+export const QUALITY_CHECK_TAKERS: readonly Role[] = ["admin", "qfs_officer"];
+/** Who opens the Quality checks page. */
+export const QUALITY_CHECK_VIEWERS: readonly Role[] = ["admin", "qfs_officer", "warehouse_incharge"];
 
 /** A value someone tried to change after it was recorded. */
 export interface RecordedConflict {

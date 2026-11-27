@@ -17,8 +17,6 @@ import { buttonClass } from "../../components/ui/Button";
 import { formatKg, formatTonnes } from "../../components/production/batchUi";
 import { binsAtSite } from "@anagroci/contract/domain/binNumber";
 import { siteTypeOf } from "@anagroci/contract/domain/siteType";
-import { averageKgPerBag } from "@anagroci/contract/domain/sunDrying";
-import { parseQty } from "@anagroci/contract/domain/receiptMath";
 import { formatDate } from "@anagroci/contract/domain/dateFormat";
 import { BIN_HISTORY_LABELS, type BinHistoryEntry, type LotInBin } from "@anagroci/contract/domain/productionBatch";
 
@@ -45,15 +43,6 @@ export function WarehouseActivityDetailPage() {
   // This warehouse's Bins: where dried RCN can go, and where a move can go to.
   const siteBins = useMemo(() => binsAtSite(masters.binInfo ?? [], masters.warehouses, masters.aliases, site.warehouseName), [masters.binInfo, masters.warehouses, masters.aliases, site.warehouseName]);
   const visible = useMemo(() => new Set(receipts.map((r) => r.id)), [receipts]);
-  // The average bag of the RCN in this Bin, from each of its Lots' own truck: net weight ÷ bags. Drying estimates the weight
-  // issued from it (26 Nov 2026, user). A Lot whose truck isn't visible here, or recorded no bags, is left out.
-  const kgPerBag = useMemo(() => {
-    const byId = new Map(receipts.map((r) => [r.id, r]));
-    return averageKgPerBag((bin?.lots ?? []).map((l) => {
-      const sd = byId.get(l.receiptId)?.stageData;
-      return { netKg: parseQty(sd?.["n-netwt"]?.["NET WT KGS"]), bags: parseQty(sd?.["n-unload"]?.["SACS (bags)"]) };
-    }));
-  }, [bin?.lots, receipts]);
   const dryTypes = useMemo(() => [...new Set(["SUN DRYING", ...(bin?.dryings ?? []).map((d) => (d.dryType ?? "").trim()).filter(Boolean)])], [bin?.dryings]);
 
   // The Bin's history (25 Nov 2026): every Lot ever put in and everything that came in or went out, not only what is in it
@@ -145,7 +134,7 @@ export function WarehouseActivityDetailPage() {
             <div className="pt-3">
               <DryingPanel
                 scope={{
-                  kind: "bin", binCode: bin.binCode, warehouse: site.warehouseName, binKg: bin.kg, kgPerBag,
+                  kind: "bin", binCode: bin.binCode, warehouse: site.warehouseName, binKg: bin.kg,
                   decision: bin.dryingDecision?.answer ?? null,
                   onAnswer: async (answer) => { await api.setBinDryingDecision(bin.binCode, site.warehouseName, answer); },
                 }}

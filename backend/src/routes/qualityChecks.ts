@@ -5,6 +5,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { currentSite, currentUser, requireRole } from "../auth/plugin.js";
+import { QUALITY_CHECK_TAKERS } from "@anagroci/contract/data/roles";
 import { assertWarehouseAccess, scopedSite } from "../auth/scope.js";
 import { ValidationError } from "../domain/validation.js";
 import { prisma } from "../db.js";
@@ -24,7 +25,7 @@ async function listSite(req: FastifyRequest): Promise<string> {
 }
 
 export async function qualityCheckRoutes(app: FastifyInstance) {
-  const takers = { preHandler: requireRole("admin", "qfs_officer") };
+  const takers = { preHandler: requireRole(...QUALITY_CHECK_TAKERS) };
   const reviewers = { preHandler: requireRole("admin", "warehouse_incharge") };
 
   app.get("/api/quality-checks", async (req) => qualityChecks(await listSite(req), currentUser(req).id));

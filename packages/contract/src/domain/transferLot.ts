@@ -136,8 +136,16 @@ export function transferLotStatus(weighed: boolean, leftBags: number, pieces: nu
  * Putting bags of a lot back in a Bin (26 Nov 2026, user: half a lot went on the truck, the rest stays). Only bags not on a
  * truck, and only once the lot is weighed: before that its Bins haven't lost any kg, so nothing is to be given back — change the
  * lot's bags or delete it instead. A Bin of the lot's own warehouse is checked by the server.
+ *
+ * The weight put back is weighed and typed (26 Nov 2026, user), and is what the Bin gets back: required, a positive number,
+ * and never more than what is left of the lot (lotRemainingKg) — more would give a Bin stock that never existed. More than 5 %
+ * from these bags' share of the lot's weighing only warns (pieceWeightProblem, as a lot's piece on a truck).
  */
-export function putBackProblems(d: { binCode: string; bags: string; date: string }, lot: { weighed: boolean; leftBags: number }, today: string): Record<string, FieldProblem> {
+export function putBackProblems(
+  d: { binCode: string; bags: string; date: string; netKg: string },
+  lot: { weighed: boolean; leftBags: number; netKg: number | null; bags: number; pieces?: readonly { netKg: number | null }[]; returns?: readonly { netKg: number | null }[] },
+  today: string,
+): Record<string, FieldProblem> {
   const out: Record<string, FieldProblem> = {};
   if (!lot.weighed) out.bags = hard("Weigh the lot first. Until then its Bins haven't lost anything: change its bags or delete it instead.");
   if (!d.binCode.trim()) out.binCode = hard("Choose the Bin the bags go into.");
@@ -149,8 +157,35 @@ export function putBackProblems(d: { binCode: string; bags: string; date: string
   const date = d.date.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) out.date = hard("Enter the date.");
   else if (date > today) out.date = hard("Can't be in the future.");
+  // Judged against the share only when the bag count is right; a wrong count is said under the bags.
+  const share = out.bags ? null : putBackShareKg(lot, d.bags);
+  const weight = pieceWeightProblem(d.netKg, share);
+  const remaining = lotRemainingKg(lot);
+  const kg = readNumber(d.netKg);
+  if (weight && !weight.soft) out.netKg = weight;
+  else if (kg !== null && remaining !== null && kg > remaining) {
+    out.netKg = hard(remaining > 0
+      ? `Only ${remaining.toLocaleString("en-US", { maximumFractionDigits: 2 })} kg of this lot isn't on a truck or put back already. The weight can't be more.`
+      : "Nothing of this lot's weight is left: it is all on trucks or put back already.");
+  } else if (weight) out.netKg = weight;
   return out;
 }
+
+/**
+ * The kg of a lot not on a truck nor put back yet: its net less what each piece on a BKT and each put-back took, at their own
+ * recorded weight (a weighed put-back, a typed piece). Null until the lot is weighed.
+ */
+export function lotRemainingKg(lot: { netKg: number | null; pieces?: readonly { netKg: number | null }[]; returns?: readonly { netKg: number | null }[] }): number | null {
+  if (lot.netKg === null) return null;
+  const taken = [...(lot.pieces ?? []), ...(lot.returns ?? [])].reduce((a, p) => a + (p.netKg ?? 0), 0);
+  return round2(lot.netKg - taken);
+}
+
+/** What `bags` of the lot weigh by its weighing (its net shared by bags): the weight a put-back starts from. */
+export const putBackShareKg = (lot: { netKg: number | null; bags: number }, bagsRaw: string): number | null => {
+  const bags = readNumber(bagsRaw);
+  return bags === null ? null : pieceNetKg(lot.netKg, lot.bags, bags);
+};
 
 // ── The forms ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 

@@ -241,7 +241,8 @@ export function StageCard({ receipt, ctx, stage: rawStage, done, isActive, open,
                   onFieldChange("ORIGIN", added.name);
                   await flushStage(receipt.id, stage.id);
                   // The full refresh, not refreshMasters: that one skips a re-read made moments ago, and the new town must show.
-                  await refresh();
+                  // The fiche is read again too: whether its place is in Origins is worked out from the master, now changed.
+                  await Promise.all([refresh(), fiche.refreshView()]);
                 }}
               />
             )}
